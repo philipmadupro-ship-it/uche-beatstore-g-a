@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 
 import { SkipForward, SkipBack } from 'lucide-react';
+import { ShareTrackRow, type ShareRowDownload } from '@/components/share/ShareTrackRow';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 
 interface CreatorProfile {
@@ -37,9 +38,13 @@ interface Props {
   isPlaying?: boolean;
   /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
   actions?: ReactNode;
+  /** The page's one audio engine renders its waveform here, under the vinyl. */
+  waveRef?: React.RefObject<HTMLDivElement | null>;
+  /** Download on the row itself, beside the beat it belongs to. */
+  rowDownload?: ShareRowDownload;
 }
 
-export function FriendShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions }: Props) {
+export function FriendShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions, waveRef, rowDownload }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) || tracks[0];
   const displayName = creator?.display_name || project.name;
 
@@ -85,6 +90,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
             playingId={playingId}
             onTogglePlay={(t) => onPlay(t)}
             size="large"
+            waveRef={waveRef}
           />
         </div>
 
@@ -115,41 +121,22 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
 
         {/* Tracks list */}
         {tracks.length > 1 && (
-          <div className="w-full bg-[#0e0c09] border border-white/10 rounded-2xl overflow-hidden max-h-52 overflow-y-auto">
+          <div className="w-full bg-[#0e0c09] border border-white/10 rounded-2xl overflow-hidden max-h-96 overflow-y-auto">
             <div className="px-4 py-2.5 border-b border-white/10">
               <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/40">{tracks.length} tracks</p>
             </div>
-            <div className="divide-y divide-white/10">
-              {tracks.map((t, i) => {
-                const active = playingId === t.id;
-                const dur = t.duration_seconds ?? 0;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => onPlay(t)}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.015] transition-colors text-left ${
-                      active ? 'bg-white/[0.04]' : ''
-                    }`}
-                  >
-                    <span className="font-mono text-[9px] text-white/40 w-5 shrink-0 tabular-nums">{i + 1}</span>
-                    <span className={`flex-1 text-[11px] font-medium truncate ${active ? 'text-white' : 'text-white/80'}`}>
-                      {t.title}
-                    </span>
-                    {dur > 0 && (
-                      <span className="text-[9px] font-mono text-white/40 tabular-nums shrink-0">
-                        {Math.floor(dur / 60)}:{String(Math.floor(dur % 60)).padStart(2, '0')}
-                      </span>
-                    )}
-                    {active && isPlaying && (
-                      <span className="flex gap-0.5 items-end h-2 shrink-0 ml-1">
-                        <span className="w-0.5 h-1 bg-white animate-[pulse_0.6s_ease-in-out_infinite]" />
-                        <span className="w-0.5 h-2 bg-white animate-[pulse_0.8s_ease-in-out_infinite]" />
-                        <span className="w-0.5 h-1.5 bg-white animate-[pulse_0.7s_ease-in-out_infinite]" />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+            <div className="space-y-2 p-2">
+              {tracks.map((t) => (
+                <ShareTrackRow
+                  key={t.id}
+                  track={t}
+                  active={playingId === t.id}
+                  isPlaying={!!isPlaying}
+                  onPlay={() => onPlay(t)}
+                  download={rowDownload}
+                  compact
+                />
+              ))}
             </div>
           </div>
         )}

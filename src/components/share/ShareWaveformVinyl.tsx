@@ -62,10 +62,14 @@ function toPlayerTrack(track: Track): PlayerTrack {
  *
  * The vinyl spins via tailwind's animate-spin keyframe; it only
  * runs when the parent says `isPlaying && playingId === track.id`.
- * The waveform underneath uses the existing WavePlayer which
- * integrates with the global PlayerBar so a click promotes the
- * track to the persistent bottom player. Both surfaces stay in
- * sync because they both read `usePlayer`.
+ *
+ * On a share page, pass `waveRef`: the page's own WaveSurfer — the one
+ * engine that actually makes the sound — draws its waveform into that
+ * container, so the disc, the waveform and the audio run off one clock.
+ * Without it the component falls back to a standalone `WavePlayer`, which
+ * is a SECOND player bound to the global `usePlayer` store, not to the
+ * page's `isPlaying`: the variants used to take that path, so the vinyl
+ * spun on the page's state while the waveform advanced on another's.
  */
 export function ShareWaveformVinyl({
   track,
@@ -91,7 +95,7 @@ export function ShareWaveformVinyl({
       {/* Vinyl disc — concentric grooves, cover in the center label,
           spindle hole drawn in the middle of the label so the spin
           looks anchored. */}
-      <div className={`relative ${dim.vinyl} rounded-full bg-[#0c0907] border border-black/40 shadow-[0_20px_60px_rgba(0,0,0,0.5),inset_0_0_40px_rgba(0,0,0,0.6)] flex items-center justify-center group mb-6 ${
+      <div data-testid="share-vinyl-disc" data-spinning={spinning} className={`relative ${dim.vinyl} rounded-full bg-[#0c0907] border border-black/40 shadow-[0_20px_60px_rgba(0,0,0,0.5),inset_0_0_40px_rgba(0,0,0,0.6)] flex items-center justify-center group mb-6 ${
         spinning ? 'animate-[spin_8s_linear_infinite]' : ''
       }`}>
         {/* Concentric grooves — thin opacities so the disc doesn't read
@@ -157,7 +161,7 @@ export function ShareWaveformVinyl({
           Otherwise fall back to the standalone WavePlayer component. */}
       <div className="w-full max-w-2xl bg-white/[0.02] rounded-lg p-2 border border-white/[0.02]">
         {waveRef ? (
-          <div ref={waveRef} className="w-full" style={{ minHeight: 48 }} />
+          <div ref={waveRef} data-testid="share-vinyl-wave" className="w-full" style={{ minHeight: 48 }} />
         ) : (
           <WavePlayer
             url={track.audio_url}

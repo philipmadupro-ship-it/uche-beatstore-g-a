@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { Edit3 } from 'lucide-react';
+import { ShareTrackRow, type ShareRowDownload } from '@/components/share/ShareTrackRow';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
 
@@ -39,9 +40,13 @@ interface Props {
   isPlaying?: boolean;
   /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
   actions?: ReactNode;
+  /** The page's one audio engine renders its waveform here, under the vinyl. */
+  waveRef?: React.RefObject<HTMLDivElement | null>;
+  /** Download on the row itself, beside the beat it belongs to. */
+  rowDownload?: ShareRowDownload;
 }
 
-export function RapperShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions }: Props) {
+export function RapperShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions, waveRef, rowDownload }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) || tracks[0];
   const displayName = creator?.display_name || project.name;
 
@@ -75,6 +80,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
             playingId={playingId ?? null}
             onTogglePlay={onPlay}
             size="compact"
+            waveRef={waveRef}
           />
         </div>
       )}
@@ -188,23 +194,18 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
           {tracks.length > 1 && (
             <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
               <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3">Workspace Tracks</p>
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                {tracks.map((t, i) => {
-                  const active = playingId === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => onPlay(t)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.02] transition-colors text-left text-xs ${
-                        active ? 'bg-white/[0.04] border border-white/10' : 'border border-transparent'
-                      }`}
-                    >
-                      <span className="font-mono text-white/60">{String(i + 1).padStart(2, '0')}</span>
-                      <span className={`flex-1 font-medium truncate ${active ? 'text-white' : 'text-white/80'}`}>{t.title}</span>
-                      <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider">{t.key || 'Key'}</span>
-                    </button>
-                  );
-                })}
+              <div className="max-h-80 space-y-2 overflow-y-auto">
+                {tracks.map((t) => (
+                  <ShareTrackRow
+                    key={t.id}
+                    track={t}
+                    active={playingId === t.id}
+                    isPlaying={!!isPlaying}
+                    onPlay={() => onPlay(t)}
+                    download={rowDownload}
+                    compact
+                  />
+                ))}
               </div>
             </div>
           )}

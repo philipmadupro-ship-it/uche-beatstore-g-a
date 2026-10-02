@@ -60,7 +60,13 @@ function fmtBytes(b: number): string {
 // + decode worker) at once. A 100+ file drop without this cap creates 100+
 // concurrent AudioContexts, which browsers throttle or refuse outright.
 // Module-level, not per-instance: the resource pressure is tab-wide.
-const ANALYSIS_CONCURRENCY = 6;
+//
+// Two, not six: every analysis reads its whole file into memory and decodes it
+// (a 30 MB WAV is ~100 MB of floats), and the same tab is pushing the bytes up.
+// Six at once starved the uploads of CPU and memory on a 10-WAV drop. The
+// upload does not wait for analysis (it is collected at /complete, with a
+// grace period), so a shorter analysis queue costs nothing on the critical path.
+const ANALYSIS_CONCURRENCY = 2;
 let analysisActive = 0;
 const analysisQueue: (() => void)[] = [];
 

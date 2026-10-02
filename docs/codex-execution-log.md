@@ -9285,3 +9285,45 @@ Changes (no schema, API or contract change; validation at read time also covers 
 Tests: `social-links.test.ts` (resolver: shapes, hostile schemes, userinfo, mailto injection, empties); `creator-link-guard.test.ts` (source guard: fails on any raw handle/URL/mailto interpolation — names 17+ sites on the old code); `components/store/creator-links.test.tsx` (hero + ProducerProfile hrefs); `e2e/creator-links.spec.ts` (producer page at 1280 and 390: every link clicked and its popup URL checked, `javascript:` renders nothing and nothing executes, no Links panel when nothing is usable — fails on the old page).
 
 Not changed: the profile editor still accepts any text (a save-time "this isn't a link" hint would be the follow-up); handles keep Instagram's / X's own character rules, so a handle those networks would reject shows no link.
+
+## 2026-10-01 - Upload round trips, one player under the share vinyl, Download on the row (SHARE-02)
+
+Reported: ten WAVs (~200–300 MB) took ~10 minutes to upload; the vinyl and waveform on a share page were not one player; Download should be on the beat; share track rows should look like the library's.
+
+**Upload.** Not reproduced: no timing was taken, and 300 MB in 10 minutes (~0.5 MB/s) may simply be the producer's uplink, in which case no code makes it faster. What the code did show: every 8 MiB chunk made two JSON calls (sign, confirm), each with a session lookup and a Supabase auth check, and `DropZone` ran up to 6 whole-file decodes in the same tab as the transfer. Changes: `POST /api/upload/part` accepts `partNumbers` and signs a file's chunks in one request (the manager asks once per file, falls back to per-chunk signing on any failure, and drops a cached URL when its chunk fails so the retry signs fresh); analysis concurrency 6 -> 2. Chunk size, parallelism, `/complete` and resume are unchanged on purpose.
+
+**Share vinyl.** `ShareWaveformVinyl` only drew the page's waveform when given `waveRef`; producer / rapper / friend never passed it, so it mounted a second `WavePlayer` (global `usePlayer`) while the sound and the disc ran off the page's `useWaveSurfer`. The variants now take `waveRef` and the page no longer mounts the hidden duplicate container for them.
+
+**Rows.** `components/share/ShareTrackRow` replaces the hand-drawn lists in all four variants (client included) and is laid out like the library's All tracks row: bordered row, 48px cover with the play glyph, semibold title, BPM | key | type line, a Time column, and a Download button on the row when the share allows it (a sibling of Play, not nested). Narrow lists (the producer sidebar) pass `compact`: no Time column, the length rides the meta line. The client variant keeps its split (cover plays, title opens the licence drawer) and passes its price/licence pill as `trailing`. `ShareActions` keeps its block (playback label, downloads-off notice, collaboration entry).
+
+Tests: part route batch cases; `ShareTrackRow.test.tsx`; `e2e/share-options.spec.ts` +9 (disc spins and there is one vinyl waveform; Download on the row; no row download when off) — 37 passing.
+
+**Store.** `/store` now follows the same row and card anatomy. `StoreListView`: each beat is its own bordered row (48px cover with the play glyph, semibold title, BPM | key | type line) instead of dividers inside one panel; the Time and Buy columns are wider (76px / 272px) because two prices were running into the length. `BeatCard`: cover with hover play + BPM/key badges, title and type BELOW the art (it was overlaid on a scrim), buy strip under the meta; wishlist heart, Sold/Free tag and the momentum line are the store's additions. `BandcampRemixCard` (remix type) is unchanged. E2E hooks kept: `[id^="beat-"]`, `li ... p.truncate.font-semibold`, the "Lease" label.
+
+Not done: any measured before/after of upload time. Prompt: `docs/prompts/upload-speed-and-share-player.md`.
+
+## 2026-09-30 - Save-time warning for links the storefront will not show (PROFILE-02 follow-up)
+
+PR #48 made the storefront refuse unusable handles / URLs / emails instead of rendering dead links. The other half: the producer only found out when a visitor could not click. The profile is still stored exactly as typed (a half-filled form must not lose its other fields), but saving now says which links are hidden.
+
+- `lib/store/social-links.ts`: `unusableCreatorLinks(fields)` (labels of filled fields that `resolveCreatorLink` rejects) and `unusableLinksWarning(fields)` (toast copy, or null). Same resolver as the storefront, so the warning cannot disagree with what renders.
+- `/profile` fires it after "Profile saved"; `/store-editor` fires it as soon as the profile PATCH succeeds, so it also shows when a later playlist/project update partly fails.
+
+Tests: `social-links.test.ts` (labels, silence for empty/valid, toast wording); `e2e/profile-link-warning.spec.ts` at 1280 and 390 px through the real page (save still posts the typed value; a pasted profile link, `@handle` and bare domain stay silent; fails without the change). The Store Editor call site is covered by the shared helper and `tsc`, not by its own e2e.
+
+## 2026-10-01 - Favorites and buyer accounts: the signed-in marker follows the auth cookie
+
+Reported: favorites and buyer accounts "don't show up" — hearts tapped while signed in did not save to the account or come back on another device.
+
+**Traced, not reproduced against a database.** `/api/store/me`, the `set_favorite` action, `buyer_favorites` (mig 060, applied) and `/api/store/account/me` all read correctly, and the unit suites around them passed. The break is on the client, in how a device knows a buyer is signed in. `buyerIdentityQuery()` returns the session identity only when a `localStorage` marker (`antigravity-buyer-session-mode`) is set, and the only place that ever set it was `/store/account/me`. The Supabase session lives in a cookie and outlives that flag: Safari purges `localStorage` after a week without a visit, a site-data clear removes it, and `dispatch` / `fetchBuyerLibrary` delete it on any 400, including one transient auth refresh. With the cookie alive and the marker gone, `setFavorite` returned `No buyer session` (swallowed — the heart still fills locally) and `syncWithAccount` found no identity and never pulled the account's hearts in. The buyer looked signed in everywhere except to the code that writes the favourites.
+
+Root cause: a second, weaker copy of "is a buyer signed in" kept in `localStorage` and written from one page, instead of reading the auth session that already exists.
+
+Changes (no schema, API or contract change):
+- `lib/buyer-session.ts#reconcileSessionMarker(hasSession)` — makes the marker agree with the session, returns whether it changed.
+- `StoreLayoutClient` reads `auth.getSession()` (a local cookie read, no network) on every store navigation and reconciles the marker before `syncWithAccount` runs. A transient 400 that cleared the marker is now repaired on the next navigation, and a signed-out device drops a stale marker.
+- A legacy delivery token still works, and the session still outranks it (`buyerIdentityQuery` unchanged).
+
+Tests: `buyer-session.test.ts` (3 new): a lost marker with a live session is restored and the next heart POSTs to `?session=1`; a gone session clears it; agreement reports no change.
+
+Not changed: the session is shared with the producer's dashboard login, so a producer browsing `/store` while signed in now syncs hearts under their own email and `upsertLeadContact` creates a lead for them (as opening `/store/account/me` already did). Skipping that needs the server to know the producer's email; left for a follow-up. `syncedIdentity` is keyed on the query string (`session=1`), not the user id, so switching accounts without signing out through `/store/account/me` would not re-sync until reload.

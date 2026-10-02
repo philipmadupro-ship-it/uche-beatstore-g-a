@@ -69,6 +69,24 @@ function hasPersistentBuyerSession(): boolean {
   }
 }
 
+/**
+ * Make the device's "a buyer is signed in" marker agree with the Supabase
+ * session cookie, which is the real source of truth.
+ *
+ * The marker was only ever written by /store/account/me, so it was lost
+ * whenever localStorage was (Safari purges it after a week of no visits; a
+ * cleared site-data prompt) or cleared by one transient 400, while the auth
+ * cookie lived on. The buyer then looked signed in everywhere except to
+ * `buyerIdentityQuery`: hearts were dropped with "No buyer session" and the
+ * account's hearts never came back. Called from the store layout on every
+ * navigation, before the wishlist syncs. Returns true when it changed.
+ */
+export function reconcileSessionMarker(hasSession: boolean): boolean {
+  if (hasPersistentBuyerSession() === hasSession) return false;
+  setPersistentBuyerSession(hasSession);
+  return true;
+}
+
 interface BuyerActionResult {
   ok: boolean;
   data?: unknown;

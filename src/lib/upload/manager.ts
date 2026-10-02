@@ -139,6 +139,9 @@ const successCallbacks: Record<string, ((track: UploadedTrack) => void) | undefi
 const pendingAnalysis: Record<string, Promise<UploadAnalysis | null> | undefined> = {};
 const inFlightBytes: Record<string, Record<number, number>> = {};
 const lastProgressPush: Record<string, number> = {};
+// Part URLs signed in one request per file, keyed by upload session. A part
+// that fails drops its entry so the retry signs a fresh URL (they expire).
+const presignedUrls: Record<string, Record<number, string>> = {};
 
 /* ─────────── persistence ─────────── */
 
@@ -202,29 +205,39 @@ async function directOrProxiedPart(opts: {
   signal?: AbortSignal;
 }): Promise<{ ok: boolean; status: number; error?: string }> {
   try {
-    const signRes = await fetch('/api/upload/part', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: opts.signal,
-      body: JSON.stringify({ sessionId: opts.sessionId, partNumber: opts.partNumber }),
-    });
-    const signed = await signRes.json() as {
-      direct?: boolean;
-      url?: string | null;
-      error?: string;
-    };
-    if (!signRes.ok) {
-      return { ok: false, status: signRes.status, error: signed.error || 'part signing failed' };
+    const cached = presignedUrls[opts.sessionId]?.[opts.partNumber];
+    let url: string | null = cached ?? null;
+    if (!url) {
+      const signRes = await fetch('/api/upload/part', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: opts.signal,
+        body: JSON.stringify({ sessionId: opts.sessionId, partNumber: opts.partNumber }),
+      });
+      const signed = await signRes.json() as {
+        direct?: boolean;
+        url?: string | null;
+        error?: string;
+      };
+      if (!signRes.ok) {
+        return { ok: false, status: signRes.status, error: signed.error || 'part signing failed' };
+      }
+      if (!signed.direct || !signed.url) return proxiedPart(opts);
+      url = signed.url;
     }
-    if (!signed.direct || !signed.url) return proxiedPart(opts);
 
     const uploaded = await directPart({
-      url: signed.url,
+      url,
       blob: opts.blob,
       onProgress: opts.onProgress,
       signal: opts.signal,
     });
-    if (!uploaded.ok || !uploaded.etag) return uploaded;
+    if (!uploaded.ok || !uploaded.etag) {
+      // Whatever went wrong, do not retry against the same URL: it may be the
+      // reason (expired), and a fresh signature costs one cheap request.
+      if (cached) delete presignedUrls[opts.sessionId]?.[opts.partNumber];
+      return uploaded;
+    }
 
     const confirmRes = await fetch('/api/upload/part', {
       method: 'PATCH',
@@ -766,6 +779,8 @@ async function runUpload(id: string) {
       return;
     }
 
+    await presignParts(sessionId!, pending, ac.signal);
+
     // Reset start clock so speed/ETA reflect this run. `baselineBytes` keeps
     // resumed bytes out of the throughput maths.
     m._patch(id, {
@@ -860,6 +875,8 @@ async function runUpload(id: string) {
     useUploadManager.getState()._patch(id, { status: 'error', error: errorMessage(err) || 'upload failed' });
   } finally {
     delete abortControllers[id];
+    const sid = useUploadManager.getState().uploads[id]?.sessionId;
+    if (sid) delete presignedUrls[sid];
     startQueuedUploads();
   }
 }
@@ -950,7 +967,36 @@ async function postComplete(
   }
 }
 
+/**
+ * Sign every pending part of a file in one request instead of one request per
+ * part, in series with each PUT. Best-effort: on any failure the parts sign
+ * themselves one at a time exactly as before.
+ */
+async function presignParts(sessionId: string, parts: number[], signal: AbortSignal) {
+  if (parts.length < 2) return;
+  try {
+    const res = await fetch('/api/upload/part', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({ sessionId, partNumbers: parts }),
+    });
+    if (!res.ok) return;
+    const json = await res.json() as { direct?: boolean; urls?: Record<string, string> };
+    if (!json.direct || !json.urls) return;
+    const map: Record<number, string> = {};
+    for (const [n, url] of Object.entries(json.urls)) {
+      if (typeof url === 'string') map[Number(n)] = url;
+    }
+    presignedUrls[sessionId] = map;
+  } catch {
+    // Falls back to per-part signing.
+  }
+}
+
 function cleanupSideChannels(id: string) {
+  const sid = useUploadManager.getState().uploads[id]?.sessionId;
+  if (sid) delete presignedUrls[sid];
   delete successCallbacks[id];
   delete pendingAnalysis[id];
   delete inFlightBytes[id];

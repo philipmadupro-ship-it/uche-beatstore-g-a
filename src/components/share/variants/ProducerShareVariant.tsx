@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { Music, Play, Pause, SkipBack, SkipForward, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { SkipBack, SkipForward, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShareTrackRow, type ShareRowDownload } from '@/components/share/ShareTrackRow';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
-import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 /**
  * Producer / loop-pack collab variant.
@@ -72,14 +72,13 @@ interface Props {
   isPlaying?: boolean;
   /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
   actions?: ReactNode;
+  /** The page's one audio engine renders its waveform here, under the vinyl. */
+  waveRef?: React.RefObject<HTMLDivElement | null>;
+  /** Download on the row itself, beside the beat it belongs to. */
+  rowDownload?: ShareRowDownload;
 }
 
-function fmt(s: number) {
-  if (!s || !isFinite(s)) return '—';
-  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-}
-
-export function ProducerShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions }: Props) {
+export function ProducerShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions, waveRef, rowDownload }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) ?? tracks[0];
   const displayName = creator?.display_name || project.name;
   const [bpmCopied, setBpmCopied] = useState(false);
@@ -155,6 +154,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                   playingId={playingId ?? null}
                   onTogglePlay={onPlay}
                   size="large"
+                  waveRef={waveRef}
                 />
                 {/* Prev / Next */}
                 {tracks.length > 1 && (
@@ -286,62 +286,18 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                   Pack · {tracks.length}
                 </p>
               </div>
-              <div className="divide-y divide-white/10">
-                {visibleTracks.map((t, i) => {
-                  const active = playingId === t.id;
-                  const tIsMinor = t.scale === 'minor';
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => onPlay(t)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.04] transition-colors text-left group ${
-                        active ? 'bg-white/[0.04]' : ''
-                      }`}
-                    >
-                      <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-[#090907] border border-white/10 shrink-0">
-                        <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="36px" className="object-cover">
-                          <Music size={12} aria-hidden="true" />
-                        </ArtworkFallback>
-                        {active && (
-                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                            {isPlaying ? (
-                              <Pause size={10} fill="currentColor" className="text-white" />
-                            ) : (
-                              <Play size={10} fill="currentColor" className="text-white ml-0.5" />
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-[11px] font-medium truncate ${active ? 'text-white' : 'text-white/85 group-hover:text-white'}`}>
-                          {t.title}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          {t.bpm && (
-                            <span className="text-[9px] font-mono text-white/40">{t.bpm} bpm</span>
-                          )}
-                          {t.key && (
-                            <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded uppercase tracking-wider leading-none ${
-                              tIsMinor
-                                ? 'text-[#c8a47a] bg-[#1f1a10]/50'
-                                : 'text-[#c8a47a] bg-[#1f1a10]/50'
-                            }`}>
-                              {t.key}{tIsMinor ? 'm' : ''}
-                            </span>
-                          )}
-                          {t.duration_seconds && (
-                            <span className="text-[9px] font-mono text-white/30">{fmt(t.duration_seconds)}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <span className="text-[10px] font-mono text-white/30 tabular-nums shrink-0">
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className="space-y-2 p-2">
+                {visibleTracks.map((t) => (
+                  <ShareTrackRow
+                    key={t.id}
+                    track={t}
+                    active={playingId === t.id}
+                    isPlaying={!!isPlaying}
+                    onPlay={() => onPlay(t)}
+                    download={rowDownload}
+                    compact
+                  />
+                ))}
               </div>
 
               {tracks.length > 6 && (

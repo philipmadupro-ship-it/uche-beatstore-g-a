@@ -3,16 +3,15 @@
 /**
  * StoreListView — list-mode renderer for /store.
  *
- * Quiet-luxury architecture (see docs/design-direction.md): one flat panel,
- * one hairline edge, one accent. Row anatomy matches BeatCard so the grid and
- * list modes read as the same product.
+ * Rows are laid out like the library's All tracks list (`tracks/TrackCard`):
+ * each beat is its own bordered row with a 48px cover that takes the play
+ * glyph, a semibold title, and the BPM | key | type line beneath it. The store
+ * adds what the library has no use for — the buy buttons, the heart and the
+ * ⋯ menu — in the columns on the right.
  *
- * Deliberate reductions from the previous revision: the blurred hovered-cover
- * backdrop and its gradient overlay (two stacked decorative layers), the
- * panel's backdrop-blur — which forced GPU repaints on a scrolling container —
- * and the heavy drop shadow. Price actions are single-line rather than stacked
- * number-over-microlabel, and the decorative accent tint on tags is gone so the
- * accent means "primary action or active row" only.
+ * Kept from the earlier revision: no blurred backdrop or panel backdrop-blur
+ * (they forced GPU repaints on a scrolling container), single-line price
+ * actions, and the accent meaning only "the previewed beat".
  */
 
 import { useState } from 'react';
@@ -56,10 +55,10 @@ export function StoreListView({
   const [hovered, setHovered] = useState<string | null>(null);
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.04]">
+    <div className="relative">
 
-      {/* Header row */}
-      <div className="relative hidden md:grid grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-4 px-4 md:px-6 py-2.5 border-b border-white/[0.05] text-[9px] font-mono uppercase tracking-[0.18em] text-white/40">
+      {/* Header row — same weight as the library's column heads */}
+      <div className="relative hidden h-8 md:grid grid-cols-[48px_minmax(0,1.5fr)_minmax(0,1fr)_76px_272px_32px_32px] items-center gap-4 border border-transparent px-3 text-[9px] font-mono uppercase tracking-wider text-white/40">
         <span />
         <span>Title</span>
         <span>Tags · Rating</span>
@@ -69,7 +68,7 @@ export function StoreListView({
         <span />
       </div>
 
-      <ul className="relative">
+      <ul className="relative space-y-2">
         {tracks.map((t) => {
           const isCur = currentTrackId === t.id;
           const isCurPlaying = isCur && isPlaying;
@@ -97,21 +96,25 @@ export function StoreListView({
               }}
               onMouseEnter={() => setHovered(t.id)}
               onMouseLeave={() => setHovered((v) => (v === t.id ? null : v))}
-              className={`relative grid grid-cols-[44px_minmax(0,1fr)_32px] md:grid-cols-[44px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-x-3 gap-y-2 md:gap-4 items-center px-4 md:px-6 py-3 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/60 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
-              style={isPreview ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : isCur ? { boxShadow: `inset 2px 0 0 ${accentColor}80` } : {}}
+              className={`relative grid min-h-[64px] grid-cols-[48px_minmax(0,1fr)_32px] md:grid-cols-[48px_minmax(0,1.5fr)_minmax(0,1fr)_76px_272px_32px_32px] gap-x-3 gap-y-2 md:gap-4 items-center rounded-xl border px-2 md:px-3 py-2 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/60 ${
+                isCur || isPreview
+                  ? 'border-white/30 bg-white/[0.08]'
+                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.05]'
+              }`}
+              style={isPreview ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : {}}
             >
               {/* Cover w/ hover-play */}
               <div
                 data-row-action
                 onClick={(e) => { e.stopPropagation(); onPlay(t); }}
-                className="relative size-11 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-[#090907]"
+                className="relative size-12 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-[#090907] ring-1 ring-inset ring-white/[0.06]"
               >
                 <ArtworkFallback
                   src={t.cover_url}
                   seed={t.id}
                   kind="track"
                   tags={artworkTagsOf(t.tags)}
-                  sizes="44px"
+                  sizes="48px"
                   className="object-cover"
                 >
                   <Music size={13} aria-hidden="true" />
@@ -119,7 +122,7 @@ export function StoreListView({
                 {(isHov || isCur) && (
                   <span
                     aria-hidden
-                    className="absolute inset-0 flex items-center justify-center bg-black/55 text-white"
+                    className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px] text-white"
                   >
                     {isCurPlaying
                       ? <PauseGlyph size={13} />
@@ -128,20 +131,19 @@ export function StoreListView({
                 )}
               </div>
 
-              {/* Title — meta line shows BPM/key only (no type label) so the
-                  visible info is title + tags + rating + price. */}
+              {/* Title + the library's BPM | key | type line. */}
               <div className="min-w-0">
-                <p
-                  className="truncate text-[14px] font-semibold leading-snug"
-                  style={isCur || isPreview ? { color: accentColor } : { color: '#FFFFFF' }}
-                >
+                <p className="truncate text-[14px] font-semibold leading-tight tracking-[-0.01em] text-white">
                   {t.title}
                 </p>
-                {(t.bpm != null || t.key) && (
-                  <p className="truncate text-[9px] font-mono uppercase tracking-[0.14em] text-white/45">
-                    {[t.bpm ? `${t.bpm} BPM` : null, t.key ? `${t.key}${t.scale === 'minor' ? 'm' : ''}` : null].filter(Boolean).join(' · ')}
-                  </p>
-                )}
+                <p className="mt-1 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden whitespace-nowrap text-[9px] font-mono uppercase tracking-[0.14em] text-white/40">
+                  {[
+                    t.bpm ? <span key="bpm" className="shrink-0 tabular-nums text-white/55">{t.bpm}<span className="text-white/30"> BPM</span></span> : null,
+                    t.key ? <span key="key" className="shrink-0 text-white/55">{t.key}{t.scale === 'minor' ? 'm' : ''}</span> : null,
+                    t.type ? <span key="type" className="truncate">{t.type}</span> : null,
+                  ].filter(Boolean).flatMap((node, i) => (i === 0 ? [node] : [<span key={`d${i}`} aria-hidden className="h-2 w-px shrink-0 bg-white/15" />, node]))}
+                  {!t.bpm && !t.key && !t.type ? <span>—</span> : null}
+                </p>
               </div>
 
               {/* Tags + rating — surface the actual genre/mood tags (up to

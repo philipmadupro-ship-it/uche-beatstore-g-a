@@ -4,6 +4,7 @@ import {
   clearBuyerToken,
   fetchBuyerFavoriteIds,
   logPlay,
+  reconcileSessionMarker,
   setBuyerToken,
   setFavorite,
   setPersistentBuyerSession,
@@ -163,5 +164,30 @@ describe('buyer session precedence', () => {
 
     expect((await logPlay('11111111-1111-4111-8111-111111111111')).ok).toBe(true);
     expect(fetchSpy).toHaveBeenLastCalledWith('/api/store/me?token=live-token', expect.objectContaining({ method: 'POST' }));
+  });
+});
+
+describe('reconcileSessionMarker', () => {
+  it('restores the marker when the auth session exists but localStorage lost it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    expect(await logPlay('11111111-1111-4111-8111-111111111111')).toMatchObject({ ok: false });
+
+    expect(reconcileSessionMarker(true)).toBe(true);
+
+    const result = await setFavorite('11111111-1111-4111-8111-111111111111', true);
+    expect(result.ok).toBe(true);
+    expect(fetch).toHaveBeenCalledWith('/api/store/me?session=1', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('clears the marker when the auth session is gone', () => {
+    setPersistentBuyerSession(true);
+    expect(reconcileSessionMarker(false)).toBe(true);
+    expect(storage['antigravity-buyer-session-mode']).toBeUndefined();
+  });
+
+  it('reports no change when marker and session already agree', () => {
+    expect(reconcileSessionMarker(false)).toBe(false);
+    setPersistentBuyerSession(true);
+    expect(reconcileSessionMarker(true)).toBe(false);
   });
 });
