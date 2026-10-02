@@ -20,6 +20,7 @@ import {
 import {
   findLiveDuplicate, bytesFromParts, displayedBytes, computeSpeedBps,
   computeEtaSec, backoffMs, isRetriableStatus,
+  isPresignedUrlFresh, shouldResignPart,
 } from './progress';
 
 type UploadAnalysis = {
@@ -139,9 +140,10 @@ const successCallbacks: Record<string, ((track: UploadedTrack) => void) | undefi
 const pendingAnalysis: Record<string, Promise<UploadAnalysis | null> | undefined> = {};
 const inFlightBytes: Record<string, Record<number, number>> = {};
 const lastProgressPush: Record<string, number> = {};
-// Part URLs signed in one request per file, keyed by upload session. A part
-// that fails drops its entry so the retry signs a fresh URL (they expire).
-const presignedUrls: Record<string, Record<number, string>> = {};
+// Part URLs signed in one request per file, keyed by upload session. They
+// expire, so each carries its signing time: a stale one is never used, and a
+// part that fails on a batch URL re-signs once on the spot (`shouldResignPart`).
+const presignedUrls: Record<string, Record<number, { url: string; signedAt: number }>> = {};
 
 /* ─────────── persistence ─────────── */
 
@@ -205,8 +207,12 @@ async function directOrProxiedPart(opts: {
   signal?: AbortSignal;
 }): Promise<{ ok: boolean; status: number; error?: string }> {
   try {
-    const cached = presignedUrls[opts.sessionId]?.[opts.partNumber];
-    let url: string | null = cached ?? null;
+    const entry = presignedUrls[opts.sessionId]?.[opts.partNumber];
+    // Taken out of the cache either way: a URL is good for one PUT, and a
+    // retry must never reach back for one that may have expired meanwhile.
+    if (entry) delete presignedUrls[opts.sessionId]?.[opts.partNumber];
+    const cached = entry && isPresignedUrlFresh(entry.signedAt, Date.now()) ? entry.url : null;
+    let url: string | null = cached;
     if (!url) {
       const signRes = await fetch('/api/upload/part', {
         method: 'POST',
@@ -233,9 +239,12 @@ async function directOrProxiedPart(opts: {
       signal: opts.signal,
     });
     if (!uploaded.ok || !uploaded.etag) {
-      // Whatever went wrong, do not retry against the same URL: it may be the
-      // reason (expired), and a fresh signature costs one cheap request.
-      if (cached) delete presignedUrls[opts.sessionId]?.[opts.partNumber];
+      // A batch URL may simply have expired (403, or a CORS-less error that
+      // surfaces as status 0). One fresh signature costs one cheap request;
+      // without it the 403 reads as permanent and ends the whole upload.
+      if (!opts.signal?.aborted && shouldResignPart({ fromBatch: cached !== null, status: uploaded.status })) {
+        return directOrProxiedPart(opts);
+      }
       return uploaded;
     }
 
@@ -984,9 +993,10 @@ async function presignParts(sessionId: string, parts: number[], signal: AbortSig
     if (!res.ok) return;
     const json = await res.json() as { direct?: boolean; urls?: Record<string, string> };
     if (!json.direct || !json.urls) return;
-    const map: Record<number, string> = {};
+    const signedAt = Date.now();
+    const map: Record<number, { url: string; signedAt: number }> = {};
     for (const [n, url] of Object.entries(json.urls)) {
-      if (typeof url === 'string') map[Number(n)] = url;
+      if (typeof url === 'string') map[Number(n)] = { url, signedAt };
     }
     presignedUrls[sessionId] = map;
   } catch {
