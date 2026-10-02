@@ -57,14 +57,16 @@ export type OrgAudioStem = (typeof ORG_AUDIO_STEMS)[number];
 
 export type OrgAudioVariant =
   | { kind: 'preview' }
+  /** The waveform peaks sidecar (LABEL-14: private for org recordings, so it is served here). Same capability as the audio. */
+  | { kind: 'peaks' }
   | { kind: 'full' }
   | { kind: 'wav' }
   | { kind: 'stem'; stem: OrgAudioStem };
 
-/** `preview` | `full` | `wav` | `stem:<vocals|drums|bass|other>`; absent = `full`. Anything else → null. */
+/** `preview` | `peaks` | `full` | `wav` | `stem:<vocals|drums|bass|other>`; absent = `full`. Anything else → null. */
 export function parseOrgAudioVariant(raw: string | null | undefined): OrgAudioVariant | null {
   if (raw === null || raw === undefined || raw === '' || raw === 'full') return { kind: 'full' };
-  if (raw === 'preview' || raw === 'wav') return { kind: raw };
+  if (raw === 'preview' || raw === 'wav' || raw === 'peaks') return { kind: raw };
   const m = /^stem:([a-z]+)$/.exec(raw);
   if (m && (ORG_AUDIO_STEMS as readonly string[]).includes(m[1])) return { kind: 'stem', stem: m[1] as OrgAudioStem };
   return null;
@@ -165,6 +167,7 @@ export interface OrgAudioSourceRow {
   audio_url: string | null;
   wav_url: string | null;
   preview_url: string | null;
+  peaks_url?: string | null;
 }
 
 export type OrgAudioStemRow = Partial<Record<`${OrgAudioStem}_url`, string | null>>;
@@ -183,6 +186,8 @@ export function orgAudioSource(
   switch (variant.kind) {
     case 'preview':
       return pick(track.preview_url);
+    case 'peaks':
+      return pick(track.peaks_url);
     case 'full':
       return pick(track.audio_url);
     case 'wav':
@@ -199,10 +204,24 @@ export function orgAudioSource(
   }
 }
 
+/**
+ * D8 (LABEL-14): an org recording's files — master, preview, peaks, stems —
+ * live in the PRIVATE bucket, so that is the only bucket the route streams
+ * an org row's reference from. `lib/audio/stream-source` alone also accepts
+ * the public bucket (it serves the producer's previews), which is exactly
+ * where an org preview must never resolve. Without a private bucket (local
+ * development: no R2) the local fallback path is all there is.
+ */
+export function orgAudioSourceAllowed(source: string, privateBucket: string | null | undefined): boolean {
+  const m = /^r2:\/\/([^/]+)\/./.exec(source);
+  if (m) return !!privateBucket && m[1] === privateBucket;
+  return !privateBucket && source.startsWith('/uploads/') && !source.includes('..');
+}
+
 /** A download filename from the title and variant; the extension from the stored reference. */
 export function orgAudioFilename(title: string | null, variant: OrgAudioVariant, source: string): string {
   const base = safeName(title ?? '');
   const ext = /\.([a-z0-9]{2,5})(?:$|[?#])/i.exec(source.split('/').pop() ?? '')?.[1]?.toLowerCase();
-  const suffix = variant.kind === 'stem' ? ` - ${variant.stem}` : variant.kind === 'preview' ? ' - preview' : '';
+  const suffix = variant.kind === 'stem' ? ` - ${variant.stem}` : variant.kind === 'preview' ? ' - preview' : variant.kind === 'peaks' ? ' - peaks' : '';
   return `${base}${suffix}${ext ? `.${ext}` : ''}`;
 }

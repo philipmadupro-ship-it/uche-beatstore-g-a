@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import fs from 'node:fs';
 import path from 'node:path';
 import { isR2Configured } from '@/lib/local-store';
+import { isOrgMasterRef } from '@/lib/labelos/org-upload';
 
 export const r2 = new S3Client({
   region: 'auto',
@@ -150,6 +151,7 @@ export async function uploadPublicPreview(
 ): Promise<string | null> {
   // The 75 s clip, never the whole track — this used to transcode the full
   // master and publish it as the "preview". See lib/audio/preview-clip.
+  refuseOrgMaster(sourceRef);
   const { buildPreviewClip } = await import('@/lib/audio/preview-clip');
   const clip = await buildPreviewClip(source, sourceRef ?? null, durationSeconds ?? null);
   if (!clip) return null;
@@ -157,11 +159,20 @@ export async function uploadPublicPreview(
 }
 
 /**
+ * D8 / R-05 (LABEL-14): an org recording is private until released, so the
+ * public bucket never gets a clip of one — whichever producer route, cron or
+ * button asked. Its private preview is lib/storage/org-media's.
+ */
+function refuseOrgMaster(sourceRef: string | null | undefined): void {
+  if (isOrgMasterRef(sourceRef)) throw new Error('An organization recording never gets a public preview');
+}
+
+/**
  * Upload an already-truncated preview clip (produced by makeTruncatedPreview)
  * to the PUBLIC bucket and return its public URL. `sourceRef` is the master
  * the preview derives from — kept in the signature for traceability; the
  * stored object always gets a fresh public key so the private master is never
- * exposed via the preview URL.
+ * exposed via the preview URL. An org master is refused outright.
  */
 export async function uploadPreviewAsset(
   sourceRef: string,
@@ -169,7 +180,7 @@ export async function uploadPreviewAsset(
   ext: string,
   contentType: string,
 ): Promise<string> {
-  void sourceRef;
+  refuseOrgMaster(sourceRef);
   const safeExt = (ext || 'mp3').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'mp3';
   return uploadPublicAudioAsset(previewBuffer, `preview.${safeExt}`, contentType, 'previews');
 }
@@ -221,6 +232,8 @@ async function uploadJsonSidecar(
   label: string,
 ): Promise<string | null> {
   try {
+    // An org recording's peaks are private (lib/storage/org-media).
+    if (isOrgMasterRef(audioUrl)) return null;
     if (!isR2Configured()) {
       // Local dev: write next to the audio file in /public/uploads.
       const m = audioUrl.match(/^\/uploads\/(.+)$/);

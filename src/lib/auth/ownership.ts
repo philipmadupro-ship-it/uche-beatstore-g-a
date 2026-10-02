@@ -39,6 +39,9 @@ export type OwnershipOk = {
 export type OwnershipFail = { ok: false; res: NextResponse };
 export type OwnershipResult = OwnershipOk | OwnershipFail;
 
+/** Tables whose rows may belong to a Label OS org (`org_id`, migration 141). */
+export const ORG_SCOPED_TABLES: ReadonlySet<string> = new Set(['tracks', 'projects']);
+
 /**
  * Resolve the caller and confirm they own a row in `table` with `id`.
  * Returns the admin client + user id for follow-up writes, or a 401/403/404
@@ -54,15 +57,22 @@ export async function requireRowOwnership(
     return { ok: false, res: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) };
   }
   const admin = createServiceClient();
-  const { data: row, error } = await admin
+  // Org tables (LABEL-12/14): an org row carries the uploading member's
+  // user_id (NOT NULL), so when the producer uploaded it, user_id alone would
+  // hand a Label OS recording to every producer route — edit, list in the
+  // store, analyze, delete. Producer routes own producer rows only.
+  const orgScoped = ORG_SCOPED_TABLES.has(table);
+  const columns: string = orgScoped ? 'user_id, org_id' : 'user_id';
+  const { data, error } = await admin
     .from(table)
-    .select('user_id')
+    .select(columns)
     .eq('id', id)
     .maybeSingle();
+  const row = data as { user_id?: string | null; org_id?: string | null } | null;
   if (error) {
     return { ok: false, res: NextResponse.json({ error: error.message }, { status: 500 }) };
   }
-  if (!row) {
+  if (!row || (orgScoped && row.org_id)) {
     return { ok: false, res: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
   }
   if (!row.user_id || row.user_id !== user.id) {

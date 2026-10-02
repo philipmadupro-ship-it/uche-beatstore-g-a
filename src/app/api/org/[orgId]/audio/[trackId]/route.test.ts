@@ -171,7 +171,7 @@ function member(user: string, role: string, functions: string[] = [], scope = 'o
 function track(key: TrackKey, type: string, org: string | null, extra: Record<string, unknown> = {}) {
   const id = T[key];
   return {
-    id, org_id: org, user_id: org ? OWN : PRODUCER, title: key, type, song_stage: null,
+    id, org_id: org, user_id: org ? null : PRODUCER, title: key, type, song_stage: null,
     audio_url: `r2://priv/${key}.mp3`, wav_url: `r2://priv/${key}.wav`, preview_url: `r2://priv/${key}.preview.mp3`,
     ...extra,
   };
@@ -182,6 +182,9 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'eyJtest';
   process.env.R2_PRIVATE_BUCKET_NAME = 'priv';
   process.env.R2_BUCKET_NAME = 'pub';
+  process.env.R2_ACCOUNT_ID = 'test-account-id';
+  process.env.R2_ACCESS_KEY_ID = 'test-access-key';
+  process.env.R2_SECRET_ACCESS_KEY = 'test-secret-key';
   current = null;
   r2Gets.length = 0;
   const link = (from: TrackKey, to: TrackKey, relation: string) => ({ from_track_id: T[from], to_track_id: T[to], relation, position: 0 });
@@ -450,6 +453,44 @@ describe('Range', () => {
 
   it('a refused caller never reaches storage, Range or not', async () => {
     expect((await get(MK, L, T.loop, '', { range: 'bytes=0-9' })).status).toBe(403);
+    expect(r2Gets).toEqual([]);
+  });
+});
+
+describe('private org previews and peaks (LABEL-14, D8, R-05)', () => {
+  const ORG_PREVIEW = `r2://priv/orgs/${L}/previews/abc123.mp3`;
+  const ORG_PEAKS = `r2://priv/orgs/${L}/peaks/abc123.json`;
+
+  it('streams an org preview from the private bucket under orgs/<org>/previews/ (the stream-source allowlist accepts it)', async () => {
+    Object.assign(db.tables.tracks.find((t) => t.id === T.master)!, { preview_url: ORG_PREVIEW });
+    const res = await get(MK, L, T.master, '?variant=preview');
+    expect(res.status).toBe(200);
+    expect((await res.text()).startsWith(`BYTES:orgs/${L}/previews/abc123.mp3`)).toBe(true);
+    expect(r2Gets).toEqual([{ key: `orgs/${L}/previews/abc123.mp3`, range: null }]);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(res.headers.get('location')).toBeNull();
+  });
+
+  it('serves peaks with exactly the audio capability: marketing gets a master\'s, not a topline\'s', async () => {
+    Object.assign(db.tables.tracks.find((t) => t.id === T.master)!, { peaks_url: ORG_PEAKS });
+    Object.assign(db.tables.tracks.find((t) => t.id === T.topline)!, { peaks_url: `r2://priv/orgs/${L}/peaks/top.json` });
+    const ok = await get(MK, L, T.master, '?variant=peaks');
+    expect(ok.status).toBe(200);
+    expect((await ok.text()).startsWith(`BYTES:orgs/${L}/peaks/abc123.json`)).toBe(true);
+    expect((await get(MK, L, T.topline, '?variant=peaks')).status).toBe(403);
+    expect((await get(AR, L, T.topline, '?variant=peaks')).status).toBe(200);
+  });
+
+  it('a track without peaks answers 404, never a fallback', async () => {
+    expect((await get(OWN, L, T.master, '?variant=peaks')).status).toBe(404);
+  });
+
+  it('an org preview never resolves to the public bucket: a public reference is refused outright', async () => {
+    // What a bug (or the producer pipeline) writing a public clip onto an
+    // org row would look like. The route does not stream it.
+    Object.assign(db.tables.tracks.find((t) => t.id === T.master)!, { preview_url: `r2://pub/previews/leaked.mp3` });
+    const res = await get(OWN, L, T.master, '?variant=preview');
+    expect(res.status).toBe(403);
     expect(r2Gets).toEqual([]);
   });
 });

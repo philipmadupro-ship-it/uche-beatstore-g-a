@@ -12,6 +12,14 @@
 -- can't guess attribution.
 --
 -- Idempotent: a second run finds no orphans and does nothing.
+--
+-- Label OS (142) amendment: an org track has user_id NULL on purpose
+-- (tracks_org_or_owner) and is NOT an orphan. scripts/apply-migrations.sh replays every
+-- file, so the backfill below skips rows with an org_id. `to_jsonb(row) ->>
+-- 'org_id'` is used instead of the column because on a fresh database this
+-- file runs before 141 adds it (a missing key reads as NULL). On a database
+-- without org rows — production when this was written — the effect is
+-- unchanged. Same pattern as LABEL-10's amendment of 111.
 
 DO $$
 DECLARE
@@ -28,9 +36,9 @@ BEGIN
     WHERE display_name IS NOT NULL
     LIMIT 1;
 
-    UPDATE tracks
+    UPDATE tracks t
     SET user_id = real_user_id
-    WHERE user_id IS NULL;
+    WHERE t.user_id IS NULL AND (to_jsonb(t) ->> 'org_id') IS NULL;
 
     RAISE NOTICE 'Reconciled orphan tracks to %', real_user_id;
   ELSE

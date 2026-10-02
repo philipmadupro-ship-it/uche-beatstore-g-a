@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
-import { abortMultipart, initMultipart, DEFAULT_PART_SIZE, MAX_PARTS, MIN_PART_SIZE } from '@/lib/storage/multipart';
+import { abortMultipart, initMultipart } from '@/lib/storage/multipart';
+import { ALLOWED_EXT, MAX_BYTES, detectContentType, pickPartSize } from '@/lib/upload/audio-rules';
 import { createSession } from '@/lib/storage/upload-sessions';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
@@ -10,29 +11,6 @@ import { requireProducer } from '@/lib/auth/ownership';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
-
-const MAX_BYTES = 500 * 1024 * 1024; // raised cap for chunked path
-const ALLOWED_EXT = ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'ogg'];
-
-function detectContentType(ext: string, fallback: string): string {
-  switch (ext) {
-    case 'mp3':  return 'audio/mpeg';
-    case 'wav':  return 'audio/wav';
-    case 'flac': return 'audio/flac';
-    case 'aif':
-    case 'aiff': return 'audio/aiff';
-    case 'm4a':  return 'audio/mp4';
-    case 'ogg':  return 'audio/ogg';
-    default:     return fallback || 'application/octet-stream';
-  }
-}
-
-function pickPartSize(fileSize: number): number {
-  // Stay above the 5 MiB R2 minimum and below the 10k part limit
-  const want = Math.max(MIN_PART_SIZE, DEFAULT_PART_SIZE);
-  const minNeeded = Math.ceil(fileSize / MAX_PARTS);
-  return Math.max(want, minNeeded);
-}
 
 export async function POST(req: NextRequest) {
   try {

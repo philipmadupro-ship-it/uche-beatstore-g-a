@@ -1,5 +1,5 @@
 /**
- * GET /api/org/[orgId]/audio/[trackId]?variant=preview|full|wav|stem:<name>[&download=1]
+ * GET /api/org/[orgId]/audio/[trackId]?variant=preview|peaks|full|wav|stem:<name>[&download=1]
  * (LABEL-13) — stream one org recording to a member who may hear THAT
  * recording. The per-object twin of the producer's `/api/audio`, which stays
  * unchanged: that route takes any `src` and trusts the caller because there
@@ -16,9 +16,11 @@
  *     (lib/labelos/org-audio), and the member needs every audio
  *     capability those kinds — and a stem variant — call for. Unclassified
  *     material needs a capability nobody has: 403 for everyone.
+ *     `peaks` (the waveform sidecar, LABEL-14) needs what the audio needs.
  *  3. The variant names a column of the row (or a `stems` row). Its stored
  *     reference is streamed through lib/audio/stream-source, which forwards
- *     Range (206 + Content-Range from R2). Nothing is presigned, so no URL —
+ *     Range (206 + Content-Range from R2), and only from the PRIVATE bucket
+ *     (orgAudioSourceAllowed, D8). Nothing is presigned, so no URL —
  *     private or public — ever reaches the client, in JSON or a Location.
  *
  * External project members (LABEL-21) do not exist yet: anyone who is not
@@ -35,10 +37,12 @@ import {
   orgAudioAllowed,
   orgAudioFilename,
   orgAudioSource,
+  orgAudioSourceAllowed,
   parseOrgAudioVariant,
   requiredAudioCapabilities,
   type OrgAudioStemRow,
 } from '@/lib/labelos/org-audio';
+import { isR2Configured } from '@/lib/local-store';
 import { createLogger } from '@/lib/log';
 
 export const dynamic = 'force-dynamic';
@@ -56,6 +60,7 @@ type TrackRow = {
   audio_url: string | null;
   wav_url: string | null;
   preview_url: string | null;
+  peaks_url: string | null;
 };
 
 const json = (status: number, error: string) =>
@@ -79,7 +84,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     const [trackRes, beatsRes, linksRes, mainBeatRes, stemsRes] = await Promise.all([
       admin
         .from('tracks')
-        .select('id, title, type, song_stage, audio_url, wav_url, preview_url')
+        .select('id, title, type, song_stage, audio_url, wav_url, preview_url, peaks_url')
         .eq('id', trackId)
         .eq('org_id', org)
         .maybeSingle(),
@@ -113,6 +118,12 @@ export async function GET(req: NextRequest, { params }: Params) {
     const stems = (stemsRes.data ?? []) as OrgAudioStemRow[];
     const source = orgAudioSource(track, variant, stems);
     if (!source) return json(404, 'No audio for this variant');
+    // Private until released (D8): never stream an org file from the public bucket.
+    // "No private bucket" means what storage means by it: R2 not configured.
+    if (!orgAudioSourceAllowed(source, isR2Configured() ? process.env.R2_PRIVATE_BUCKET_NAME : null)) {
+      log.warn('org audio source outside the private bucket', { orgId: org, trackId, variant: variant.kind });
+      return json(403, 'Source not allowed');
+    }
 
     const upstream =
       query.data.download === '1'

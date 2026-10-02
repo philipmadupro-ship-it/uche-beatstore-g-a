@@ -21,7 +21,8 @@
 --   LP2 Inbox of C2: S2 song in `inbox`
 --   LP3 no artist: T3 beat (S1 is built on it)
 --   T4 a song in no project
--- L2's rows: XP1 with XT1 (a song uploaded by P, so its user_id is P's).
+-- L2's rows: XP1 with XT1 (a song uploaded by P: created_by P, and — as every
+--   org row since 142 — no user_id).
 
 \set P   '''0b0e1a57-0000-4000-8000-000000000001'''
 \set B   '''0b0e1a57-0000-4000-8000-0000000000b1'''
@@ -101,18 +102,19 @@ INSERT INTO public.artist_messages (user_id, contact_id, author, body) VALUES (:
 INSERT INTO public.contact_track_states (user_id, contact_id, track_id, decision) VALUES (:P, :PC1, :PT1, 'interested');
 INSERT INTO public.project_comments (project_id, track_id, author_name, body) VALUES (:PP1, :PT1, 'Guest', 'nice');
 
--- L's rows. Written as the service role would; user_id is the org owner's.
+-- L's rows. Written as the service role would: no user_id (142), the
+-- uploader in created_by.
 INSERT INTO public.projects (id, user_id, org_id, name, inbox_for_contact_id) VALUES
-  (:LP1, :O, :L, 'Nova EP', NULL),
-  (:LP2, :O, :L, 'Inbox · Kilo', :C2),
-  (:LP3, :O, :L, 'Beat pool', NULL);
+  (:LP1, NULL, :L, 'Nova EP', NULL),
+  (:LP2, NULL, :L, 'Inbox · Kilo', :C2),
+  (:LP3, NULL, :L, 'Beat pool', NULL);
 INSERT INTO public.tracks (id, user_id, org_id, created_by, title, type, audio_url, song_stage) VALUES
-  (:T3, :O, :L, :O, 'Pool beat', 'beat', 'r2://private/t3', NULL),
-  (:S1, :O, :L, :AR, 'Nova single', 'song', 'r2://private/s1', 'selected'),
-  (:S1M, :O, :L, :AR, 'Nova single (master)', 'song', 'r2://private/s1m', NULL),
-  (:S1D, :O, :L, :AR, 'Nova single (demo)', 'song', 'r2://private/s1d', NULL),
-  (:S2, :O, :L, :O, 'Kilo demo', 'song', 'r2://private/s2', 'inbox'),
-  (:T4, :O, :L, :O, 'Loose song', 'song', 'r2://private/t4', 'inbox');
+  (:T3, NULL, :L, :O, 'Pool beat', 'beat', 'r2://private/t3', NULL),
+  (:S1, NULL, :L, :AR, 'Nova single', 'song', 'r2://private/s1', 'selected'),
+  (:S1M, NULL, :L, :AR, 'Nova single (master)', 'song', 'r2://private/s1m', NULL),
+  (:S1D, NULL, :L, :AR, 'Nova single (demo)', 'song', 'r2://private/s1d', NULL),
+  (:S2, NULL, :L, :O, 'Kilo demo', 'song', 'r2://private/s2', 'inbox'),
+  (:T4, NULL, :L, :O, 'Loose song', 'song', 'r2://private/t4', 'inbox');
 UPDATE public.tracks SET beat_track_id = :T3 WHERE id = :S1;
 INSERT INTO public.project_tracks (project_id, track_id, position) VALUES
   (:LP1, :S1, 0), (:LP1, :S1M, 1), (:LP1, :S1D, 2), (:LP2, :S2, 0), (:LP3, :T3, 0);
@@ -124,7 +126,7 @@ INSERT INTO public.project_assets (user_id, project_id, kind, url) VALUES
   (:O, :LP1, 'document', 'r2://private/ld'), (:O, :LP1, 'audio', 'r2://private/lau');
 INSERT INTO public.song_beats (song_track_id, beat_track_id, user_id) VALUES (:S1, :T3, :O);
 INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES
-  (:S1, :S1M, :O, 'master'), (:S1, :S1D, :O, 'demo');
+  (:S1, :S1M, NULL, 'master'), (:S1, :S1D, NULL, 'demo');
 INSERT INTO public.artist_messages (user_id, contact_id, project_id, author, body) VALUES
   (:O, :C1, NULL, 'producer', 'welcome'),
   (:O, :C1, :LP3, 'producer', 'about the beat pool');
@@ -136,10 +138,10 @@ INSERT INTO public.project_comments (project_id, track_id, author_name, body, sh
   (:LP1, :S1D, 'A&R', 'on the demo', NULL),
   (:LP1, NULL, 'Guest', 'via a share link', 'l-share-141');
 
--- L2's rows: P uploaded XT1 there, so its user_id is P's.
-INSERT INTO public.projects (id, user_id, org_id, name) VALUES (:XP1, :X, :L2, 'L2 project');
+-- L2's rows: P uploaded XT1 there (created_by P, no user_id).
+INSERT INTO public.projects (id, user_id, org_id, name) VALUES (:XP1, NULL, :L2, 'L2 project');
 INSERT INTO public.tracks (id, user_id, org_id, created_by, title, type, audio_url) VALUES
-  (:XT1, :P, :L2, :P, 'L2 song', 'song', 'r2://private/x1');
+  (:XT1, NULL, :L2, :P, 'L2 song', 'song', 'r2://private/x1');
 INSERT INTO public.project_tracks (project_id, track_id) VALUES (:XP1, :XT1);
 
 CREATE FUNCTION public.check_eq(label text, got anyelement, want anyelement) RETURNS void
@@ -416,7 +418,7 @@ RESET ROLE;
 UPDATE public.org_members SET cap_grants = '{}' WHERE user_id = :MKT;
 
 -- Class follows the links: a working link onto the master makes it working.
-INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES (:S2, :S1M, :O, 'version');
+INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES (:S2, :S1M, NULL, 'version');
 SET ROLE authenticated;
 SELECT public.as_user(:MKT);
 SELECT public.check_eq('a master that is also linked as working material is hidden from marketing',
@@ -424,13 +426,13 @@ SELECT public.check_eq('a master that is also linked as working material is hidd
 RESET ROLE;
 DELETE FROM public.track_links WHERE from_track_id = :S2;
 
--- The guards: an org row's user_id (the member who wrote it) is not a
--- read grant. AR "uploaded" a demo and a file; once AR leaves L, or is
--- narrowed out of the project's artists, the owner policies alone
--- would still match — the guards say no.
-UPDATE public.tracks SET user_id = :AR WHERE id = :S1D;
+-- The guards: writing a row is not a read grant. AR "uploaded" a demo and a
+-- file. Since 142 an org track and its links carry no user_id at all (AR is
+-- only its created_by), so no owner policy can match them and these hold
+-- trivially; the file (project_assets, still owner-stamped until a later
+-- task writes org rows there) is the case the guards themselves decide.
+UPDATE public.tracks SET created_by = :AR WHERE id = :S1D;
 UPDATE public.project_assets SET user_id = :AR WHERE kind = 'document' AND project_id = :LP1;
-UPDATE public.track_links SET user_id = :AR WHERE to_track_id = :S1D;
 SET ROLE authenticated;
 SELECT public.as_user(:AR);
 SELECT public.check_eq('AR, still in L, reads what they wrote', (SELECT count(*) FROM public.tracks WHERE id = :S1D), 1::bigint);
@@ -466,9 +468,11 @@ UPDATE public.organizations SET deleted_at = NULL WHERE id = :L;
 
 -- ── Writes: org rows only through the service role ──────────────────────
 -- P is the producer (owner_only's WITH CHECK passes for them) and an A&R
--- member of L2; XT1 in L2 carries P's user_id. XP2 is an L2 project P
--- created, with a share and a comment carrying its token.
-INSERT INTO public.projects (id, user_id, org_id, name) VALUES ('d1410000-0000-4000-8000-000000000022', :P, :L2, 'P''s L2 project');
+-- member of L2; P uploaded XT1 in L2 (created_by P). XP2 is an L2 project P
+-- created, with a share and a comment carrying its token. Since 142 neither
+-- carries P's user_id, so the owner policies cannot reach them at all: the
+-- "author" checks below hold trivially and are kept as a guard on that.
+INSERT INTO public.projects (id, user_id, org_id, name) VALUES ('d1410000-0000-4000-8000-000000000022', NULL, :L2, 'P''s L2 project');
 INSERT INTO public.project_shares (project_id, token) VALUES ('d1410000-0000-4000-8000-000000000022', 'x-share-141');
 INSERT INTO public.project_comments (project_id, author_name, body, share_token) VALUES
   ('d1410000-0000-4000-8000-000000000022', 'Guest', 'x share comment', 'x-share-141');
@@ -480,12 +484,10 @@ SELECT public.check_raises('the producer cannot insert a track into an org they 
 SELECT public.check_raises('… nor into an org they are in',
   $$INSERT INTO public.projects (user_id, org_id, name) VALUES ('0b0e1a57-0000-4000-8000-000000000001', 'b1410000-0000-4000-8000-000000000002', 'injected')$$,
   'written through /api/org only');
-SELECT public.check_raises('the author cannot update their org track through PostgREST',
-  $$UPDATE public.tracks SET song_stage = 'selected' WHERE id = 'e1410000-0000-4000-8000-000000000021'$$,
-  'written through /api/org only');
-SELECT public.check_raises('the author cannot delete their org track through PostgREST',
-  $$DELETE FROM public.tracks WHERE id = 'e1410000-0000-4000-8000-000000000021'$$,
-  'written through /api/org only');
+SELECT public.check_eq('the author (created_by) cannot update their org track through PostgREST',
+  public.rows_changed($$UPDATE public.tracks SET song_stage = 'selected' WHERE id = 'e1410000-0000-4000-8000-000000000021'$$), 0);
+SELECT public.check_eq('the author (created_by) cannot delete their org track through PostgREST',
+  public.rows_changed($$DELETE FROM public.tracks WHERE id = 'e1410000-0000-4000-8000-000000000021'$$), 0);
 SELECT public.check_raises('linking an org project to an artist (widening scope) is refused',
   $$INSERT INTO public.project_contacts (user_id, project_id, contact_id) VALUES ('0b0e1a57-0000-4000-8000-000000000001', 'd1410000-0000-4000-8000-000000000022', 'c1410000-0000-4000-8000-0000000000d1')$$,
   'written through /api/org only');
@@ -502,8 +504,8 @@ SELECT public.check_eq('… nor its track list (no org read path on project_trac
 SELECT public.check_ok('producer rows stay writable through RLS',
   $$INSERT INTO public.project_tracks (project_id, track_id, position) VALUES ('d1410000-0000-4000-8000-000000000001', 'e1410000-0000-4000-8000-000000000003', 2)$$);
 RESET ROLE;
--- Without share.external, the share-token comment on P's own org project
--- is hidden even though owner_via_project (p.user_id = P) would match it.
+-- Without share.external, the share-token comment on P's org project is
+-- hidden (no owner policy can match it: the project has no user_id).
 UPDATE public.org_members SET cap_revokes = '{share.external}' WHERE org_id = :L2 AND user_id = :P;
 SET ROLE authenticated;
 SELECT public.as_user(:P);
@@ -613,10 +615,10 @@ SELECT public.check_raises('an org track cannot leave its org',
 SELECT public.check_raises('an org project cannot move to another org',
   $$UPDATE public.projects SET org_id = 'b1410000-0000-4000-8000-000000000002' WHERE id = 'd1410000-0000-4000-8000-000000000011'$$, 'organization cannot change');
 SELECT public.check_raises('one Inbox per artist',
-  $$INSERT INTO public.projects (user_id, org_id, name, inbox_for_contact_id) VALUES ('a1410000-0000-4000-8000-000000000001', 'b1410000-0000-4000-8000-000000000001', 'dup', 'c1410000-0000-4000-8000-0000000000c2')$$,
+  $$INSERT INTO public.projects (user_id, org_id, name, inbox_for_contact_id) VALUES (NULL, 'b1410000-0000-4000-8000-000000000001', 'dup', 'c1410000-0000-4000-8000-0000000000c2')$$,
   'projects_inbox_for_contact_uniq');
 SELECT public.check_raises('an Inbox for another org''s contact is refused',
-  $$INSERT INTO public.projects (user_id, org_id, name, inbox_for_contact_id) VALUES ('a1410000-0000-4000-8000-000000000001', 'b1410000-0000-4000-8000-000000000001', 'x', 'c1410000-0000-4000-8000-0000000000d1')$$,
+  $$INSERT INTO public.projects (user_id, org_id, name, inbox_for_contact_id) VALUES (NULL, 'b1410000-0000-4000-8000-000000000001', 'x', 'c1410000-0000-4000-8000-0000000000d1')$$,
   'not a contact of the project''s organization');
 SELECT public.check_raises('a producer project cannot be an Inbox',
   $$UPDATE public.projects SET inbox_for_contact_id = 'c1410000-0000-4000-8000-0000000000a1' WHERE id = 'd1410000-0000-4000-8000-000000000001'$$,
