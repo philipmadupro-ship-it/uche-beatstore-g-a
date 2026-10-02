@@ -660,6 +660,85 @@ describe('POST /api/stripe/webhook — fulfillment branches', () => {
     expect(relist!.payload).toMatchObject({ exclusive_sold: false, store_listed: true });
   });
 
+  it('charge.refunded (partial): keeps downloads, does not re-list the exclusive, and tells the producer', async () => {
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_partial',
+      type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_lp', refunded: false, amount: 30000, amount_refunded: 1000 } },
+    });
+    const writes = installDb(({ table, op }) => {
+      if (table === 'license_purchases' && op === 'select') return {
+        data: { seller_user_id: SELLER, amount_usd: 300, buyer_email: 'b@x.com',
+          line_items: [{ track_id: 't1', license_type: 'exclusive' }], track_ids: ['t1'] },
+      };
+      return { data: null, error: null };
+    });
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+
+    expect(writes.filter((w) => w.table === 'license_purchases' && w.op === 'update')).toEqual([]);
+    expect(writes.filter((w) => w.table === 'project_access_links' && w.op === 'update')).toEqual([]);
+    expect(writes.filter((w) => w.table === 'tracks' && w.op === 'update')).toEqual([]);
+    const note = writes.find((w) => w.table === 'notifications' && w.op === 'insert');
+    expect(note!.payload).toMatchObject({ kind: 'refund', title: 'Partial refund — $10.00 of $300.00' });
+  });
+
+  it('charge.refunded (full, with amounts): revokes as before', async () => {
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_full',
+      type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_lp', refunded: true, amount: 30000, amount_refunded: 30000 } },
+    });
+    const writes = installDb(() => ({ data: null, error: null }));
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    expect(writes.find((w) => w.table === 'license_purchases' && w.op === 'update')!.payload)
+      .toMatchObject({ status: 'refunded', download_unlocked: false });
+  });
+
+  it('charge.dispute.created: revokes whatever the charge fields say', async () => {
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_dispute',
+      type: 'charge.dispute.created',
+      data: { object: { payment_intent: 'pi_lp', refunded: false, amount: 30000, amount_refunded: 0 } },
+    });
+    const writes = installDb(() => ({ data: null, error: null }));
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    expect(writes.find((w) => w.table === 'license_purchases' && w.op === 'update')!.payload)
+      .toMatchObject({ status: 'disputed', download_unlocked: false });
+  });
+
+  it('charge.refunded: refunding the LOSER of a double sale does not re-list a track the winner still holds', async () => {
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_loser_refund',
+      type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_loser', refunded: true, amount: 30000, amount_refunded: 30000 } },
+    });
+    const winner = {
+      track_ids: ['t1'], line_items: [{ track_id: 't1', license_type: 'exclusive' }],
+      license_type: 'exclusive', download_unlocked: true, needs_refund_review: false,
+    };
+    const writes = installDb(({ table, op, columns }) => {
+      if (table === 'license_purchases' && op === 'select') {
+        if (columns?.includes('download_unlocked')) return { data: [winner], error: null };
+        return { data: { seller_user_id: SELLER, amount_usd: 300, buyer_email: 'loser@x.com',
+          line_items: [{ track_id: 't1', license_type: 'exclusive' }], track_ids: ['t1'] }, error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+
+    expect(writes.find((w) => w.table === 'license_purchases' && w.op === 'update')!.payload)
+      .toMatchObject({ status: 'refunded', download_unlocked: false });
+    expect(writes.filter((w) => w.table === 'tracks' && w.op === 'update')).toEqual([]);
+  });
+
   it.each(['charge.refunded', 'charge.dispute.created'])('%s: revokes project bundle access by expiring the link', async (type) => {
     mockConstructEvent.mockReturnValue({ id: `evt_${type}_proj`, type, data: { object: { payment_intent: 'pi_proj' } } });
     const writes = installDb(() => ({ data: null, error: null }));

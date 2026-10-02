@@ -9343,7 +9343,7 @@ Task: make the post-purchase download path (`/store/download` → `/api/store/de
 
 Tests: `purchase-access.test.ts`, `download-failure.test.ts`, route tests for both routes (+12), `page.test.tsx` (jsdom), `e2e/store-download.spec.ts` (1280 and 390 px, API stubbed, real browser download event and filename). Not run against a real database: both routes use the service client, so RLS does not apply to them; the authorization is the route code, which the route tests exercise.
 
-Not changed (see report): a lease bought on a WAV-only master has nothing to download (no MP3 derivative exists); `charge.refunded` revokes on a partial refund too; no download audit log or rate limit.
+Not changed (see report): a lease bought on a WAV-only master has nothing to download (no MP3 derivative exists); no download audit log or rate limit.
 
 Follow-up (same PR): `/api/store/projects/access/[token]/download` now logs the detail and returns a fixed "Download failed" on a 500 (new `route.test.ts`; also covers 404 for unknown/expired token).
 
@@ -9352,3 +9352,9 @@ Follow-up (same PR): the flagged buyer's email. `runFulfillment` step 4 re-reads
 **A hazard this exposed, fixed here:** the webhook decided "double sale" from a failed conditional claim alone. A re-delivered event re-runs fulfilment for a purchase that already claimed the track, the claim fails against itself, and the legitimate winner was flagged. Harmless while the flag was a badge; with the flag now holding downloads and triggering this email it would lock out the buyer who paid first. `lib/store/exclusive-claim.ts#trackHeldByAnotherBuyer` now requires another LIVE exclusive purchase of the track (unlocked and not itself flagged — the loser's row also names the track) before the flag is written; if that lookup errors it falls back to the old behaviour (flag). Tests: webhook loser and winner-retry cases (both failed on the old code), `exclusive-claim.test.ts`.
 
 Not changed: the license PDF is still generated and stored on a flagged row (just not emailed); `/api/sales/resend` and `/api/store/orders/resend` will still email the download link to a flagged buyer, which then shows the hold message.
+
+Follow-up (same PR): the partial-refund rule. `charge.refunded` fires for every refund, and the handler treated each as a full one: status `refunded`, downloads revoked, bundle link expired and, for an exclusive, the track re-listed (`exclusive_sold = false`) while the buyer still held the license. `lib/store/refund-rule.ts#refundAccessEffect` now decides: dispute → revoke; `refunded: true` or `amount_refunded >= amount` → revoke; a partial refund → keep. A kept partial refund changes nothing in the DB and writes a producer notification ("Partial refund — $10.00 of $300.00 … refund the rest in Stripe to revoke them"). An event whose shape cannot be read revokes, as before. The last of several partial refunds arrives with `refunded: true` and revokes then.
+
+Found alongside, same branch: refunding the LOSER of a double sale — the way a held purchase is resolved — re-listed the track for sale while the winner still held it exclusively. The re-list now skips any track another live exclusive purchase holds (`trackHeldByAnotherBuyer`).
+
+Tests: `refund-rule.test.ts`; webhook cases for partial (no writes but the notification), full-with-amounts, dispute, and loser refund (the partial and loser cases fail on the old handler). Not changed: a dispute later won (`charge.dispute.closed`) still does not restore access.

@@ -3,6 +3,7 @@ import { getAppUrl } from '@/lib/env';
 import { Resend } from 'resend';
 import { trackHeldByAnotherBuyer, type OtherPurchase } from '@/lib/store/exclusive-claim';
 import { buildHeldPurchaseEmail } from '@/lib/store/held-purchase-email';
+import { refundAccessEffect } from '@/lib/store/refund-rule';
 import { getStripe } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
@@ -49,6 +50,9 @@ type WebhookEvent = {
 };
 type WebhookCharge = {
   payment_intent?: string | null;
+  refunded?: boolean | null;
+  amount?: number | null;
+  amount_refunded?: number | null;
 };
 type TrackTitleRow = {
   id: string;
@@ -1133,10 +1137,46 @@ export async function POST(req: NextRequest) {
       }
 
       // ── charge.refunded / charge.dispute.created ───────────────────────────
-      // Both events revoke download access. The purchase row is kept for audit.
+      // A full refund or a dispute revokes download access; a PARTIAL refund
+      // leaves the sale in force (lib/store/refund-rule.ts). The purchase row
+      // is kept for audit either way.
       case 'charge.refunded':
       case 'charge.dispute.created': {
         const charge = event.data.object as WebhookCharge;
+
+        if (refundAccessEffect(event.type, charge) === 'keep') {
+          // Nothing is revoked, re-listed or re-statused: the buyer still holds
+          // what they paid for. The producer is told so the refund is not
+          // mistaken for a cancelled sale.
+          log.info('partial refund — access kept', {
+            payment_intent: charge.payment_intent,
+            amount_refunded: charge.amount_refunded ?? null,
+          });
+          try {
+            const { data: partialPurchase } = await admin
+              .from('license_purchases')
+              .select('seller_user_id, amount_usd, buyer_email')
+              .eq('stripe_payment_intent', charge.payment_intent)
+              .maybeSingle();
+            const partial = partialPurchase as PurchaseNotificationRow | null;
+            if (partial?.seller_user_id) {
+              const refunded = typeof charge.amount_refunded === 'number'
+                ? `$${(charge.amount_refunded / 100).toFixed(2)}`
+                : 'Part';
+              await admin.from('notifications').insert({
+                user_id: partial.seller_user_id,
+                kind: 'refund',
+                title: `Partial refund — ${refunded} of $${Number(partial.amount_usd ?? 0).toFixed(2)}`,
+                body: `${partial.buyer_email ?? 'The buyer'} keeps their downloads. Refund the rest in Stripe to revoke them.`,
+                data: { payment_intent: charge.payment_intent, amount_refunded: charge.amount_refunded ?? null },
+              });
+            }
+          } catch (ne) {
+            log.warn('notification insert failed on partial refund', { error: errorMessage(ne) });
+          }
+          break;
+        }
+
         const newStatus = event.type === 'charge.refunded' ? 'refunded' : 'disputed';
 
         const { error } = await admin
@@ -1232,12 +1272,26 @@ export async function POST(req: NextRequest) {
                 .map(parsePurchaseLineItem)
                 .filter((li: PurchaseLineItem | null): li is PurchaseLineItem => li?.license_type === 'exclusive')
                 .map((li) => li.track_id);
+              // Refunding the LOSER of a double sale (how a hold is resolved)
+              // must not re-open a track the winner still holds exclusively.
+              let relistable = exclusiveTracks;
               if (exclusiveTracks.length > 0) {
+                const { data: others, error: othersError } = await admin
+                  .from('license_purchases')
+                  .select('track_ids, line_items, license_type, download_unlocked, needs_refund_review')
+                  .neq('stripe_payment_intent', charge.payment_intent)
+                  .overlaps('track_ids', exclusiveTracks);
+                if (!othersError && Array.isArray(others)) {
+                  relistable = exclusiveTracks.filter((id) =>
+                    !trackHeldByAnotherBuyer(id, others as OtherPurchase[]));
+                }
+              }
+              if (relistable.length > 0) {
                 await admin
                   .from('tracks')
                   .update({ exclusive_sold: false, store_listed: true })
-                  .in('id', exclusiveTracks);
-                log.info('refunded exclusive tracks re-listed', { track_ids: exclusiveTracks });
+                  .in('id', relistable);
+                log.info('refunded exclusive tracks re-listed', { track_ids: relistable });
               }
             }
           } catch (err) {
