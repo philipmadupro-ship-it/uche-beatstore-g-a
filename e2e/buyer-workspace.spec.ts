@@ -26,12 +26,23 @@ const BEATS = [
   beat(ASK, { title: 'Asked For', status: 'requested', license: null, openUrl: null, bpm: 120, since: '2026-09-12T00:00:00Z', offer: { status: 'pending', price_usd: 300 } }),
 ];
 
+/**
+ * @supabase/ssr reads the session from `sb-<first label of the Supabase host>-auth-token`.
+ * CI points NEXT_PUBLIC_SUPABASE_URL at http://127.0.0.1:54321 (cookie `sb-127-…`); a
+ * local run may use https://stub.supabase.co (`sb-stub-…`). A hardcoded name only
+ * matched one of them, so the page bounced to /store/account and every test failed.
+ */
+function authCookieName(): string {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://stub.supabase.co';
+  return `sb-${new URL(url).hostname.split('.')[0]}-auth-token`;
+}
+
 async function stub(page: Page, context: import('@playwright/test').BrowserContext, beats: unknown[] = BEATS) {
   const session = {
     access_token: 'a.b.c', refresh_token: 'r', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
     token_type: 'bearer', user: { id: 'u1', email: 'rapper@example.com', aud: 'authenticated' },
   };
-  await context.addCookies([{ name: 'sb-stub-auth-token', value: `base64-${Buffer.from(JSON.stringify(session)).toString('base64url')}`, url: 'http://localhost:3457' }]);
+  await context.addCookies([{ name: authCookieName(), value: `base64-${Buffer.from(JSON.stringify(session)).toString('base64url')}`, url: 'http://localhost:3457' }]);
   await page.route('**/auth/v1/user', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(session.user) }));
   await page.route('**/api/store/account/me', (r) => r.fulfill({
     contentType: 'application/json',
