@@ -3,14 +3,17 @@
  *
  * Two stores feed one model:
  *   - song_beats (mig 132): a song built on beats          → relation 'beat'
- *   - track_links (mig 133): instrumental / loop / topline / version
+ *   - track_links (mig 133): instrumental / loop / topline / version, plus
+ *     master / demo (mig 140, Label OS: a song's mastered file and its early
+ *     idea). The producer's routes never write those two; they are read, and
+ *     labelled, like the rest.
  * A link reads "to is from's <relation>" (the song's beat, the beat's loop).
  * The drawer, the zip download and "send all" all see the same list through
  * `mergeLinks`, so a song opened anywhere shows its beat, its instrumental and
  * its loops, and a loop shows the beats that use it.
  */
 
-export const STORED_RELATIONS = ['instrumental', 'loop', 'topline', 'version'] as const;
+export const STORED_RELATIONS = ['instrumental', 'loop', 'topline', 'version', 'master', 'demo'] as const;
 export type StoredRelation = (typeof STORED_RELATIONS)[number];
 export type LinkRelation = 'beat' | StoredRelation;
 
@@ -36,17 +39,22 @@ export interface LinkedItem {
 export function linkLabel(relation: LinkRelation, direction: 'out' | 'in'): string {
   const out: Record<LinkRelation, string> = {
     beat: 'Beat', instrumental: 'Instrumental', loop: 'Loop', topline: 'Topline', version: 'Version',
+    master: 'Master', demo: 'Demo',
   };
   const inn: Record<LinkRelation, string> = {
     beat: 'Song on it', instrumental: 'Song', loop: 'Used in', topline: 'Written on', version: 'Version of',
+    master: 'Master of', demo: 'Demo of',
   };
   return direction === 'out' ? out[relation] : inn[relation];
 }
 
-/** Display order of groups in the drawer and the zip. */
+/**
+ * Display order of groups in the drawer and the zip. Master sits next to the
+ * beat and demo comes last; the order of the original five is unchanged.
+ */
 const ORDER: Array<[LinkRelation, 'out' | 'in']> = [
-  ['beat', 'out'], ['instrumental', 'out'], ['topline', 'out'], ['loop', 'out'], ['version', 'out'],
-  ['beat', 'in'], ['instrumental', 'in'], ['topline', 'in'], ['loop', 'in'], ['version', 'in'],
+  ['beat', 'out'], ['master', 'out'], ['instrumental', 'out'], ['topline', 'out'], ['loop', 'out'], ['version', 'out'], ['demo', 'out'],
+  ['beat', 'in'], ['master', 'in'], ['instrumental', 'in'], ['topline', 'in'], ['loop', 'in'], ['version', 'in'], ['demo', 'in'],
 ];
 
 export interface RawLinks {
@@ -90,7 +98,8 @@ export function mergeLinks(trackId: string, raw: RawLinks, tracks: ReadonlyMap<s
  * The relation a new link most likely is, from the two tracks' types, as
  * "to is from's <relation>". The drawer pre-selects it; the producer can
  * change it. A song linking a beat is 'beat' (song_beats); everything else
- * lands in track_links.
+ * lands in track_links. Never 'master' or 'demo': both are audio of the song
+ * itself, so the types cannot tell them apart — they are picked by hand.
  */
 export function suggestRelation(fromType: string | null, toType: string | null): LinkRelation {
   if (toType === 'beat' && fromType === 'song') return 'beat';
@@ -101,11 +110,16 @@ export function suggestRelation(fromType: string | null, toType: string | null):
   return 'version';
 }
 
-/** Relations the drawer offers for linking from a track of `fromType`. */
-export function relationChoices(fromType: string | null): LinkRelation[] {
-  return fromType === 'song'
-    ? ['beat', 'instrumental', 'topline', 'loop', 'version']
-    : ['loop', 'topline', 'instrumental', 'version'];
+/**
+ * Relations the drawer offers for linking from a track of `fromType`. The
+ * producer's drawer passes no options and gets exactly the original set;
+ * `labelOs` (an org song) adds master and demo, which only songs have.
+ */
+export function relationChoices(fromType: string | null, opts: { labelOs?: boolean } = {}): LinkRelation[] {
+  if (fromType !== 'song') return ['loop', 'topline', 'instrumental', 'version'];
+  return opts.labelOs
+    ? ['beat', 'master', 'instrumental', 'topline', 'loop', 'version', 'demo']
+    : ['beat', 'instrumental', 'topline', 'loop', 'version'];
 }
 
 /* ── The picker ───────────────────────────────────────────────────────── */
@@ -145,9 +159,16 @@ export function linkSearchParams(query: string, relation: LinkRelation | 'auto')
   return params;
 }
 
-/** Candidates in picker order: types that fit this track first, otherwise as the server sent them (newest first). */
-export function rankCandidates<T extends { type: string | null }>(fromType: string | null, rows: T[]): T[] {
-  const fit = fittingTypes(fromType);
+/** Relations whose linked file is another take of the song, so song-type files fit best. */
+const SONG_TAKE_RELATIONS: ReadonlySet<LinkRelation | 'auto'> = new Set(['master', 'demo']);
+
+/**
+ * Candidates in picker order: types that fit this track first, otherwise as
+ * the server sent them (newest first). A picked master or demo puts songs
+ * first; any other relation (or none) ranks as it always has.
+ */
+export function rankCandidates<T extends { type: string | null }>(fromType: string | null, rows: T[], relation: LinkRelation | 'auto' = 'auto'): T[] {
+  const fit = SONG_TAKE_RELATIONS.has(relation) ? ['song'] : fittingTypes(fromType);
   const rank = (t: string | null) => { const i = fit.indexOf(t ?? ''); return i === -1 ? fit.length : i; };
   return rows.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r.type) - rank(b.r.type) || a.i - b.i).map(({ r }) => r);
 }
