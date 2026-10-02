@@ -9343,4 +9343,6 @@ Task: make the post-purchase download path (`/store/download` → `/api/store/de
 
 Tests: `purchase-access.test.ts`, `download-failure.test.ts`, route tests for both routes (+12), `page.test.tsx` (jsdom), `e2e/store-download.spec.ts` (1280 and 390 px, API stubbed, real browser download event and filename). Not run against a real database: both routes use the service client, so RLS does not apply to them; the authorization is the route code, which the route tests exercise.
 
-Not changed (see report): a lease bought on a WAV-only master has nothing to download (no MP3 derivative exists); `/api/store/projects/access/[token]/download` still returns `errorMessage(err)` on a 500; `charge.refunded` revokes on a partial refund too; no download audit log or rate limit.
+Not changed (see report): a lease bought on a WAV-only master has nothing to download (no MP3 derivative exists); `charge.refunded` revokes on a partial refund too; no download audit log or rate limit.
+
+Follow-up (same PR): `/api/store/projects/access/[token]/download` now logs the detail and returns a fixed "Download failed" on a 500 (new `route.test.ts`; also covers 404 for unknown/expired token).
