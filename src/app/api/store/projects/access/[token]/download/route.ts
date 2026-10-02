@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
 import { streamAudioSource } from '@/lib/audio/stream-source';
 
+const log = createLogger('api.store.projects.access.download');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -63,6 +65,8 @@ export async function GET(
     const filename = `${track?.title || 'track'}.${ext}`;
     return streamAudioSource(req, source, filename);
   } catch (err) {
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    // Public route: log the detail, never return it (DB/storage internals).
+    log.error('project download failed', { trackId, error: errorMessage(err) });
+    return NextResponse.json({ error: 'Download failed' }, { status: 500 });
   }
 }

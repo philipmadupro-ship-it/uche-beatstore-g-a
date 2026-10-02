@@ -409,6 +409,8 @@ interface DbContext {
   table: string;
   op: DbOperation;
   payload?: unknown;
+  /** The column list passed to `.select()`, to tell two reads of one table apart. */
+  columns?: string;
 }
 
 interface SupabaseTestChain extends PromiseLike<unknown> {
@@ -422,6 +424,8 @@ interface SupabaseTestChain extends PromiseLike<unknown> {
   gte: (...args: unknown[]) => SupabaseTestChain;
   lt: (...args: unknown[]) => SupabaseTestChain;
   gt: (...args: unknown[]) => SupabaseTestChain;
+  neq: (...args: unknown[]) => SupabaseTestChain;
+  overlaps: (...args: unknown[]) => SupabaseTestChain;
   or: (...args: unknown[]) => SupabaseTestChain;
   not: (...args: unknown[]) => SupabaseTestChain;
   order: (...args: unknown[]) => SupabaseTestChain;
@@ -438,14 +442,16 @@ function installDb(responder: (ctx: DbContext) => unknown) {
   mockFrom.mockImplementation((table: string) => {
     let op: DbOperation = 'select';
     let payload: unknown;
-    const settle = () => Promise.resolve(responder({ table, op, payload }) ?? { data: null, error: null });
+    let columns: string | undefined;
+    const settle = () => Promise.resolve(responder({ table, op, payload, columns }) ?? { data: null, error: null });
     const chain: SupabaseTestChain = {
-      select: () => chain,
+      select: (cols?: unknown) => { if (typeof cols === 'string') columns = cols; return chain; },
       insert: (p: unknown) => { op = 'insert'; payload = p; writes.push({ table, op, payload: p }); return chain; },
       upsert: (p: unknown) => { op = 'upsert'; payload = p; writes.push({ table, op, payload: p }); return chain; },
       update: (p: unknown) => { op = 'update'; payload = p; writes.push({ table, op, payload: p }); return chain; },
       delete: () => { op = 'delete'; writes.push({ table, op }); return chain; },
       eq: () => chain, in: () => chain, gte: () => chain, lt: () => chain, gt: () => chain,
+      neq: () => chain, overlaps: () => chain,
       or: () => chain, not: () => chain, order: () => chain, limit: () => chain,
       maybeSingle: () => settle(),
       single: () => settle(),
@@ -457,6 +463,77 @@ function installDb(responder: (ctx: DbContext) => unknown) {
   mockRpc.mockResolvedValue({ data: 1, error: null });
   return writes;
 }
+
+describe('POST /api/stripe/webhook — exclusive that sold twice', () => {
+  const exclusiveEvent = () => ({
+    id: 'evt_excl',
+    type: 'checkout.session.completed',
+    data: { object: {
+      id: 'cs_excl', amount_total: 30000, payment_intent: 'pi_excl', customer: 'cus_3',
+      metadata: {
+        purchase_kind: 'track_license',
+        seller_user_id: SELLER,
+        buyer_email: 'buyer@example.com',
+        cart_items: JSON.stringify([{ track_id: 't1', license_id: 'exclusive', license_type: 'exclusive' }]),
+      },
+    } },
+  });
+
+  /** Both buyers' rows name t1; `others` is what the claim check finds, `flagged` what step 4 re-reads. */
+  function setup(others: unknown[], flagged: boolean) {
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.RESEND_FROM_EMAIL = 'sales@example.test';
+    mockConstructEvent.mockReturnValue(exclusiveEvent());
+    mockRenderContractPdf.mockResolvedValue(Buffer.from('pdf'));
+    mockUploadContractPdf.mockResolvedValue(null);
+    mockResendSend.mockResolvedValue({ data: { id: 'email_1' }, error: null });
+    return installDb(({ table, op, columns }) => {
+      if (table === 'processed_stripe_events' && op === 'insert') return { error: null, count: null };
+      if (table === 'license_purchases' && op === 'upsert') return { data: [{ id: 'lp_excl' }], error: null };
+      if (table === 'license_purchases' && op === 'select') {
+        if (columns?.includes('download_unlocked')) return { data: others, error: null };
+        if (columns?.includes('needs_refund_review')) return { data: { fulfillment_email_sent: false, needs_refund_review: flagged }, error: null };
+        return { data: null, error: null };
+      }
+      // The conditional claim returns no rows: the track was already sold.
+      if (table === 'tracks' && op === 'update') return { data: [], error: null };
+      return { data: null, error: null };
+    });
+  }
+
+  const winnersRow = {
+    track_ids: ['t1'], line_items: [{ track_id: 't1', license_type: 'exclusive' }],
+    license_type: 'exclusive', download_unlocked: true, needs_refund_review: false,
+  };
+
+  it('flags the losing buyer and tells them the purchase is on hold, with no download link or contract', async () => {
+    const writes = setup([winnersRow], true);
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+
+    expect(writes.find((w) => w.table === 'license_purchases' && w.op === 'update'
+      && (w.payload as Record<string, unknown>).needs_refund_review === true)).toBeTruthy();
+    expect(mockResendSend).toHaveBeenCalledTimes(1);
+    const mail = mockResendSend.mock.calls[0][0] as { subject: string; html: string; attachments?: unknown };
+    expect(mail.subject).toBe('Your purchase is being reviewed');
+    expect(mail.html).not.toMatch(/ready to download|Download your files|store\/download/);
+    expect(mail.attachments).toBeUndefined();
+  });
+
+  it('does not flag the winner when a re-delivered event finds the track already sold by their own first run', async () => {
+    // The only other row naming t1 is the loser, already flagged: nobody else holds it.
+    const writes = setup([{ ...winnersRow, needs_refund_review: true }], false);
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+
+    expect(writes.find((w) => w.table === 'license_purchases' && w.op === 'update'
+      && (w.payload as Record<string, unknown>).needs_refund_review === true)).toBeUndefined();
+    const mail = mockResendSend.mock.calls[0][0] as { subject: string };
+    expect(mail.subject).toBe('Your license is ready');
+  });
+});
 
 describe('POST /api/stripe/webhook — fulfillment branches', () => {
   it('track_license: upserts a paid license_purchases row with the frozen amount', async () => {

@@ -232,6 +232,134 @@ describe('GET /api/store/download-file', () => {
   });
 });
 
+describe('GET /api/store/download-file entitlement', () => {
+  const mp3Lease = {
+    track_id: 'track-1',
+    license_id: 'lease',
+    license_type: 'lease',
+    file_types: ['MP3'],
+    stems_included: false,
+    is_exclusive: false,
+  };
+
+  function mockPurchase(
+    purchase: Record<string, unknown> | null,
+    opts: { error?: { message: string } | null } = {},
+  ) {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'license_purchases') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: purchase, error: opts.error ?? null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'project_access_links') {
+        return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
+      }
+      if (table === 'tracks') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({
+                data: { title: 'Night Shift', audio_url: 'https://cdn.example.test/beat.mp3', wav_url: 'https://cdn.example.test/beat.wav' },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    });
+  }
+
+  const paid = {
+    download_unlocked: true,
+    needs_refund_review: false,
+    license_type: 'lease',
+    track_ids: ['track-1'],
+    line_items: [mp3Lease],
+  };
+
+  it('streams the purchased file to the buyer who paid for it', async () => {
+    mockPurchase(paid);
+    const mod = await loadRoute();
+    const res = await mod.GET(req('mp3'));
+
+    expect(res.status).toBe(200);
+    expect(mockStreamAudioSource).toHaveBeenCalledWith(
+      expect.anything(),
+      'https://cdn.example.test/beat.mp3',
+      'Night Shift.mp3',
+    );
+  });
+
+  it('refuses a refunded or disputed purchase', async () => {
+    mockPurchase({ ...paid, download_unlocked: false });
+    const mod = await loadRoute();
+    const res = await mod.GET(req('mp3'));
+
+    expect(res.status).toBe(403);
+    expect(mockStreamAudioSource).not.toHaveBeenCalled();
+  });
+
+  it('holds the files of an exclusive that sold twice until the producer has reviewed it', async () => {
+    // The webhook lets the second buyer's payment through, flags the row and
+    // leaves download_unlocked true. Without this gate that buyer can pull the
+    // WAV and stems of a beat whose exclusive rights belong to someone else.
+    mockPurchase({
+      ...paid,
+      needs_refund_review: true,
+      license_type: 'exclusive',
+      line_items: [{ ...mp3Lease, license_type: 'exclusive', file_types: ['MP3', 'WAV', 'STEMS'], stems_included: true, is_exclusive: true }],
+    });
+    const mod = await loadRoute();
+    const res = await mod.GET(req('wav'));
+
+    expect(res.status).toBe(403);
+    expect(mockStreamAudioSource).not.toHaveBeenCalled();
+  });
+
+  it('refuses a track that is not part of this purchase', async () => {
+    mockPurchase({ ...paid, track_ids: ['someone-elses-track'] });
+    const mod = await loadRoute();
+    const res = await mod.GET(req('mp3'));
+
+    expect(res.status).toBe(403);
+    expect(mockStreamAudioSource).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 for a session that matches no purchase and no bundle', async () => {
+    mockPurchase(null);
+    const mod = await loadRoute();
+    const res = await mod.GET(req('mp3'));
+
+    expect(res.status).toBe(404);
+    expect(mockStreamAudioSource).not.toHaveBeenCalled();
+  });
+
+  it('answers 400 when the session or track is missing', async () => {
+    const mod = await loadRoute();
+    const noTrack = await mod.GET(new NextRequest('http://localhost/api/store/download-file?session_id=cs_test'));
+    const noSession = await mod.GET(new NextRequest('http://localhost/api/store/download-file?track_id=track-1'));
+
+    expect(noTrack.status).toBe(400);
+    expect(noSession.status).toBe(400);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed purchase lookup as a server error, not as "purchase not found"', async () => {
+    mockPurchase(null, { error: { message: 'column needs_refund_review does not exist' } });
+    const mod = await loadRoute();
+    const res = await mod.GET(req('mp3'));
+
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).not.toContain('needs_refund_review');
+  });
+});
+
 describe('GET /api/store/download-file errors', () => {
   it('does not echo internal error text to the buyer', async () => {
     mockFrom.mockImplementation(() => {

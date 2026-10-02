@@ -9327,3 +9327,28 @@ Changes (no schema, API or contract change):
 Tests: `buyer-session.test.ts` (3 new): a lost marker with a live session is restored and the next heart POSTs to `?session=1`; a gone session clears it; agreement reports no change.
 
 Not changed: the session is shared with the producer's dashboard login, so a producer browsing `/store` while signed in now syncs hearts under their own email and `upsertLeadContact` creates a lead for them (as opening `/store/account/me` already did). Skipping that needs the server to know the producer's email; left for a follow-up. `syncedIdentity` is keyed on the query string (`session=1`), not the user id, so switching accounts without signing out through `/store/account/me` would not re-sync until reload.
+
+## 2026-10-02 - Buyer download system: held exclusives, quiet failures, same-origin URLs (BUYER-05)
+
+Task: make the post-purchase download path (`/store/download` → `/api/store/delivery` → `/api/store/download-file`) demonstrably tied to purchase and permission.
+
+**Audited, already correct (tests added, no change needed):** unknown session → 404, missing params → 400, track outside the purchase → 403, refunded/disputed (`download_unlocked = false`) → 403, MP3-only tier cannot reach WAV/stems, a WAV master cannot be streamed through an MP3 entitlement, an expired/refunded project link → 403, and `download-file` already hid internal errors.
+
+**Reproduced and fixed** (route tests failed before the change):
+- **A double-sold exclusive stayed downloadable.** The webhook claims exclusivity with a conditional UPDATE; the loser's `license_purchases` row is flagged `needs_refund_review` but written with `download_unlocked = true`, and neither route read the flag. Both routes now ask `lib/store/purchase-access.ts#purchaseAccess`; a flagged row answers 403 with a "producer is reviewing this" message. The hold ends when the producer marks the sale reviewed on /sales (documented as "once you've refunded") or when the refund webhook clears `download_unlocked`. The /sales badge tooltip says so.
+- **`/api/store/delivery` returned `errorMessage(err)` on a 500**, i.e. DB/storage internals on a public route. `download-file` had been fixed already; delivery now logs the detail and returns a fixed sentence.
+- **`download-file` ignored a failed purchase lookup** and fell through to the project branch, answering 404 "Purchase not found" for a paid buyer on a transient (or missing-column) error. It now throws → 500.
+- **The page saved silently on failure.** An `<a download>` at a route that answers 403 JSON shows nothing on the page (Chrome files a failed download). `lib/store/download-failure.ts#probeDownload` asks the route for one byte (`Range: bytes=0-0`) first; a refusal toasts the route's own sentence (4xx only; a 5xx gets a fixed line), a pass saves.
+- **Download URLs are relative** (they were `NEXT_PUBLIC_APP_URL`-prefixed). The pre-check is a `fetch`, which a different origin (www vs apex, a preview alias) would block by CORS, and the file should come from the origin the buyer is on anyway.
+
+Tests: `purchase-access.test.ts`, `download-failure.test.ts`, route tests for both routes (+12), `page.test.tsx` (jsdom), `e2e/store-download.spec.ts` (1280 and 390 px, API stubbed, real browser download event and filename). Not run against a real database: both routes use the service client, so RLS does not apply to them; the authorization is the route code, which the route tests exercise.
+
+Not changed (see report): a lease bought on a WAV-only master has nothing to download (no MP3 derivative exists); `charge.refunded` revokes on a partial refund too; no download audit log or rate limit.
+
+Follow-up (same PR): `/api/store/projects/access/[token]/download` now logs the detail and returns a fixed "Download failed" on a 500 (new `route.test.ts`; also covers 404 for unknown/expired token).
+
+Follow-up (same PR): the flagged buyer's email. `runFulfillment` step 4 re-reads `needs_refund_review` and, when set, sends `lib/store/held-purchase-email.ts` ("Your purchase is being reviewed": payment received, exclusive sold at the same moment, producer will be in touch) instead of "your files are ready" — no download button, no license PDF attached. Same `deliverFulfillmentEmail` job key, so retries stay idempotent.
+
+**A hazard this exposed, fixed here:** the webhook decided "double sale" from a failed conditional claim alone. A re-delivered event re-runs fulfilment for a purchase that already claimed the track, the claim fails against itself, and the legitimate winner was flagged. Harmless while the flag was a badge; with the flag now holding downloads and triggering this email it would lock out the buyer who paid first. `lib/store/exclusive-claim.ts#trackHeldByAnotherBuyer` now requires another LIVE exclusive purchase of the track (unlocked and not itself flagged — the loser's row also names the track) before the flag is written; if that lookup errors it falls back to the old behaviour (flag). Tests: webhook loser and winner-retry cases (both failed on the old code), `exclusive-claim.test.ts`.
+
+Not changed: the license PDF is still generated and stored on a flagged row (just not emailed); `/api/sales/resend` and `/api/store/orders/resend` will still email the download link to a flagged buyer, which then shows the hold message.
