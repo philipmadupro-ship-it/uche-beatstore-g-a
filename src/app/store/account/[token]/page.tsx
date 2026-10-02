@@ -9,14 +9,20 @@ import {
 } from 'lucide-react';
 import { setBuyerToken } from '@/lib/buyer-session';
 import { toast } from '@/hooks/useToast';
-import { BuyerLibraryTile, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
+import { BuyerLibraryTile, BuyerPlayButton, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
+import { useBuyerPlayback } from '@/hooks/useBuyerPlayback';
+import { purchasedItemSummary } from '@/lib/store/buyer-playback';
 import { CoverImage } from '@/components/ui/CoverImage';
 import type { BuyerLibraryShape, BuyerLibraryPlaylist } from '@/lib/store/buyer-library';
 
 interface TrackLicense {
   id: string;
   kind: 'track';
-  items: Array<{ track_id: string; license_id: string; license_type: string; title?: string | null }>;
+  items: Array<{
+    track_id: string; license_id: string; license_type: string; title?: string | null;
+    cover_url?: string | null; type?: string | null; bpm?: number | null;
+    key?: string | null; scale?: string | null; duration_seconds?: number | null;
+  }>;
   amount_usd: number;
   created_at: string;
   status: string | null;
@@ -55,6 +61,8 @@ function fmtMoney(n: number) {
 
 export default function AccountPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
+  // This page is identified by its link, so audio and play logs ask as the token.
+  const { isPlayingTrack, play } = useBuyerPlayback(`token=${encodeURIComponent(token)}`);
   const [data, setData] = useState<AccountData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -238,10 +246,29 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-medium text-white truncate">
-                            {r.items.map((i) => i.title).filter(Boolean).join(' · ')
-                              || `${r.items.length} track${r.items.length === 1 ? '' : 's'}`}
-                          </p>
+                          {r.access_revoked || r.items.length === 0 ? (
+                            <p className="text-[11px] font-medium text-white truncate">
+                              {r.items.map((i) => i.title).filter(Boolean).join(' · ')
+                                || `${r.items.length} track${r.items.length === 1 ? '' : 's'}`}
+                            </p>
+                          ) : (
+                            <ul className="space-y-1">
+                              {r.items.map((i, n) => {
+                                const itemTitle = i.title?.trim() || 'Untitled beat';
+                                return (
+                                  <li key={`${i.track_id}-${n}`} className="flex items-center gap-1.5 min-w-0">
+                                    <BuyerPlayButton
+                                      title={itemTitle}
+                                      playing={isPlayingTrack(i.track_id)}
+                                      onToggle={() => play(purchasedItemSummary(i), r.items.map(purchasedItemSummary))}
+                                      className="size-7 shrink-0 rounded-md border border-white/10 hover:border-white/20 hover:bg-white/[0.06]"
+                                    />
+                                    <span className="text-[11px] font-medium text-white truncate">{itemTitle}</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
                           <p className="text-[10px] font-mono text-white/40 mt-0.5">
                             {fmtDate(r.created_at)} · {fmtMoney(r.amount_usd)}
                             {r.items[0]?.license_type ? ` · ${r.items[0].license_type}` : ''}
@@ -321,6 +348,7 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
 
 function BuyerLibrary({ token }: { token: string }) {
   const queryClient = useQueryClient();
+  const { isPlayingTrack, play } = useBuyerPlayback(`token=${encodeURIComponent(token)}`);
 
   const { data, isLoading } = useQuery({
     queryKey: ['buyerLibrary', token],
@@ -399,6 +427,8 @@ function BuyerLibrary({ token }: { token: string }) {
                 <BuyerLibraryTile
                   track={r.track}
                   subline={new Date(r.played_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                  playing={r.track ? isPlayingTrack(r.track.id) : false}
+                  onPlay={r.track ? () => play(r.track!, recentHistory.map((h) => h.track)) : undefined}
                 />
               </li>
             ))}
@@ -418,7 +448,11 @@ function BuyerLibrary({ token }: { token: string }) {
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
             {data.favorites.map((f) => (
               <li key={f.track_id}>
-                <BuyerLibraryTile track={f.track} />
+                <BuyerLibraryTile
+                  track={f.track}
+                  playing={f.track ? isPlayingTrack(f.track.id) : false}
+                  onPlay={f.track ? () => play(f.track!, data.favorites.map((x) => x.track)) : undefined}
+                />
               </li>
             ))}
           </ul>

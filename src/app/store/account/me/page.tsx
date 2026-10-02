@@ -20,15 +20,15 @@ import {
   ArrowLeft, Loader2, AlertCircle, Music, Layers, Download, ExternalLink,
   CreditCard, Heart, History, ListMusic, Plus, Trash2, LogOut, X,
 } from 'lucide-react';
-import { usePlayer } from '@/hooks/usePlayer';
+import { useBuyerPlayback } from '@/hooks/useBuyerPlayback';
 import { createClient } from '@/lib/supabase/client';
 import { toast, confirmToast } from '@/hooks/useToast';
-import { clearBuyerIdentity, logPlay, setPersistentBuyerSession } from '@/lib/buyer-session';
+import { clearBuyerIdentity, setPersistentBuyerSession } from '@/lib/buyer-session';
 import { useWishlistStore } from '@/hooks/useWishlist';
 import { BuyerLibraryTile, BuyerPlayButton, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
 import { CoverImage } from '@/components/ui/CoverImage';
-import type { BuyerLibraryShape, BuyerLibraryPlaylist, BuyerLibraryTrackSummary } from '@/lib/store/buyer-library';
-import { buyerPlayerQueue, buyerPlayerTrack } from '@/lib/store/buyer-playback';
+import type { BuyerLibraryShape, BuyerLibraryPlaylist } from '@/lib/store/buyer-library';
+import { purchasedItemSummary } from '@/lib/store/buyer-playback';
 
 interface TrackLicense {
   id: string;
@@ -66,20 +66,6 @@ interface AccountData {
   project_bundles: ProjectBundle[];
 }
 
-/** A purchased line item as the library summary the player builder takes. */
-function ownedSummary(item: TrackLicense['items'][number]): BuyerLibraryTrackSummary {
-  return {
-    id: item.track_id,
-    title: item.title ?? null,
-    cover_url: item.cover_url ?? null,
-    type: item.type ?? null,
-    bpm: item.bpm ?? null,
-    key: item.key ?? null,
-    scale: item.scale ?? null,
-    duration_seconds: item.duration_seconds ?? null,
-  };
-}
-
 function fmtDate(iso: string) {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -91,34 +77,9 @@ function fmtMoney(n: number) {
 /** The page is session-gated, so its audio is always asked for as the session. */
 const ACCOUNT_IDENTITY = 'session=1';
 
-/**
- * Plays a beat from the account through the app's one global player
- * (`usePlayer` → the `PlayerBar` the store layout mounts). Pressing the beat
- * that is already loaded toggles it; any other beat replaces the queue with
- * the list it was pressed in, so Next walks that list.
- */
-function useAccountPlayback() {
-  const { currentTrack, isPlaying, setTrack, setQueue, togglePlay } = usePlayer();
-  const isPlayingTrack = (id: string) => currentTrack?.id === id && isPlaying;
-  const play = (track: BuyerLibraryTrackSummary, list: Array<BuyerLibraryTrackSummary | null>) => {
-    if (currentTrack?.id === track.id) {
-      togglePlay();
-      return;
-    }
-    setQueue(buyerPlayerQueue(list, ACCOUNT_IDENTITY));
-    setTrack(buyerPlayerTrack(track, ACCOUNT_IDENTITY));
-    // Starting a different beat is a play; pause/resume above is not. The
-    // store's grid logs through trackStoreEvent, which this page never calls,
-    // so this is the only write (no double count). Best-effort: logPlay
-    // swallows failures, and an owned exclusive is accepted by the route.
-    void logPlay(track.id);
-  };
-  return { isPlayingTrack, play };
-}
-
 export default function BuyerMePage() {
   const router = useRouter();
-  const { isPlayingTrack, play } = useAccountPlayback();
+  const { isPlayingTrack, play } = useBuyerPlayback(ACCOUNT_IDENTITY);
   const [authChecked, setAuthChecked] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -319,13 +280,13 @@ export default function BuyerMePage() {
                             <ul className="space-y-1">
                               {r.items.map((i, n) => {
                                 const itemTitle = i.title?.trim() || 'Untitled beat';
-                                const summary = ownedSummary(i);
+                                const summary = purchasedItemSummary(i);
                                 return (
                                   <li key={`${i.track_id}-${n}`} className="flex items-center gap-1.5 min-w-0">
                                     <BuyerPlayButton
                                       title={itemTitle}
                                       playing={isPlayingTrack(i.track_id)}
-                                      onToggle={() => play(summary, r.items.map(ownedSummary))}
+                                      onToggle={() => play(summary, r.items.map(purchasedItemSummary))}
                                       className="size-7 shrink-0 rounded-md border border-white/10 hover:border-white/20 hover:bg-white/[0.06]"
                                     />
                                     <span className="text-[11px] font-medium text-white truncate">{itemTitle}</span>
@@ -402,7 +363,7 @@ export default function BuyerMePage() {
 
 function SessionLibrary() {
   const queryClient = useQueryClient();
-  const { isPlayingTrack, play } = useAccountPlayback();
+  const { isPlayingTrack, play } = useBuyerPlayback(ACCOUNT_IDENTITY);
   const [newPlaylistName, setNewPlaylistName] = useState('');
 
   const { data, isLoading } = useQuery({
