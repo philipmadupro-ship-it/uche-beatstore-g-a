@@ -522,7 +522,7 @@ Flag off.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-09
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-10)
 
 ## Objective
 The artist roster is the org's contacts in workspace mode (`17` R3), and members can be limited to some artists.
@@ -541,7 +541,7 @@ The artist roster is the org's contacts in workspace mode (`17` R3), and members
   - **No change to producer rows** (`org_id IS NULL`) or to existing policies.
 - **Routes:**
   - `/api/org/[orgId]/contacts[/id]` CRUD for org contacts.
-  - Roster = the org contacts that `isWorkspaceMode` accepts, plus any contact with an artist role in an org (Q2 default: label orgs have their own directory).
+  - Roster = the org contacts that `isWorkspaceMode` accepts, plus any contact with an artist role in an org (Q2 answered yes on 2026-10-02: label orgs have their own directory).
 - **Artist orgs (D1):** creating an `artist`-kind org creates one contact for the owner, which is that org's single roster entry.
 - **Wiring:** `requireObjectAccess` artist scope becomes live (by `contact_id`). Invitations accept `contact_ids` (renamed from `artist_ids`).
 
@@ -606,7 +606,7 @@ Use `main`'s song model (a `tracks` row with `type = 'song'`, plus `song_beats` 
 - **Pure module `lib/labelos/recording-kind.ts`:**
   - `recordingKindOf(track, relationFromSong)` per the `17` R1 table, feeding `recordingClass` / `audioCapabilityFor` from `capabilities.ts`;
   - `songRecordings(song, mergeLinksResult)` returns the classified list.
-- **Rule helper:** `ensureInboxProject(org, contact)` makes sure every org song belongs to ≥1 project (Q1 default: one "Inbox" project per artist contact).
+- **Rule helper:** `ensureInboxProject(org, contact)` makes sure every org song belongs to ≥1 project (Q1 answered yes on 2026-10-02: one "Inbox" project per artist contact).
 - **Links code:** `lib/tracks/links.ts` learns the two new relations: labels, `suggestRelation`, and `rankCandidates`.
 
 ## Starting Code Surfaces

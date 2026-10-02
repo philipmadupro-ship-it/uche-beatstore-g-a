@@ -17,7 +17,7 @@
 | D9 | Everyday activity history retention | **2 years.** Security/audit records kept for the life of the org | LABEL-39 |
 | D10 | Grace period before an org is permanently deleted | **30 days** | LABEL-39 |
 
-**Assumption D1a** (correct it if wrong): before an artist is signed, their demos stay in the **artist's own org** and a label sees them only through the connection. Projects and releases the label creates live in the **label org**.
+**D1a (confirmed by the owner on 2026-10-02):** before an artist is signed, their demos stay in the **artist's own org** and a label sees them only through the connection. Projects and releases the label creates live in the **label org**.
 
 ## LABEL-02 follow-up (decided by the owner on 2026-09-30)
 
@@ -80,7 +80,18 @@ Royalty accounting and delivery to streaming services: **no**.
 
 ## Reconciliation with the Artist Workspace (2026-10-01)
 
-The owner asked for the plan to be updated to build on `main`'s #44 instead of duplicating it. Decisions R1–R12 are in `17-reconciliation-with-artist-workspace.md`. Two open questions there (Q1 inbox project per artist, Q2 label orgs keep their own contacts) run on their defaults until answered.
+The owner asked for the plan to be updated to build on `main`'s #44 instead of duplicating it. Decisions R1–R12 are in `17-reconciliation-with-artist-workspace.md`. Its two open questions were answered on 2026-10-02: Q1 yes (every artist gets an inbox project for their demos), Q2 yes (a label org keeps its own contacts directory).
+
+## Phase 1 close-out (answered by the owner on 2026-10-02)
+
+| Question | Answer |
+|---|---|
+| 17 Q1: an inbox project per artist | **Yes** |
+| 17 Q2: label orgs keep their own contacts | **Yes** |
+| D1a: demos stay in the artist's org until signing | **Yes** (confirmed) |
+| Join link format (`/join/<token>` vs `/join#<token>`) | **Keep as built** (`/join/<token>`). The app never logs the token; only platform request logs can see it, as with share links |
+| Child-session decisions (per-member tweaks; always test migrations on a local database) | **Confirmed** as the owner's |
+| Start Phase 2 | **Yes** |
 
 ## Phase 8 — Later (not in the backlog yet; each needs its own short discovery first)
 

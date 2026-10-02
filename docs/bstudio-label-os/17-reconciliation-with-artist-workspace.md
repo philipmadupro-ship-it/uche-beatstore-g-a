@@ -153,6 +153,6 @@ Every #44 table is **owner-only** (`user_id = auth.uid()` + `is_producer()`), wi
 - **LABEL-03 (#49, in review):** unchanged. It creates only org tables, at migration 136.
 - **Backlog:** tasks 10–17, 21, 22, 24–28, 32, 41 rewritten in `14-engineering-backlog.md` per R1–R12. Numbering and order are unchanged.
 
-## Open questions for the owner (defaults are applied until answered)
-- **Q1:** should demos an artist uploads go into a per-artist "Inbox" project automatically (R1)? *Default: yes.*
-- **Q2:** label orgs keep their own contacts directory (R3), separate from the producer's 500+ contacts. A label sees nothing of the producer's CRM unless something is shared. *Default: yes.*
+## Owner answers (2026-10-02; were open questions)
+- **Q1:** should demos an artist uploads go into a per-artist "Inbox" project automatically (R1)? **Answered: yes.**
+- **Q2:** label orgs keep their own contacts directory (R3), separate from the producer's 500+ contacts. A label sees nothing of the producer's CRM unless something is shared. **Answered: yes.**
