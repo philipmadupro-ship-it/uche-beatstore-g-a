@@ -1,4 +1,8 @@
 /**
+ * GET /api/org/[orgId]/invitations — the pending invitations (LABEL-09: the
+ * members page lists them with Revoke). Capability `members.manage`, the
+ * same as 136's read policy. Never the token or its hash.
+ *
  * POST /api/org/[orgId]/invitations — invite someone to the org (LABEL-08,
  * 04-core-workflows.md W1). Capability `members.manage`.
  *
@@ -54,6 +58,25 @@ function toView(row: InvitationRow) {
     revoked_at: row.revoked_at,
     created_at: row.created_at,
   };
+}
+
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
+  const { orgId } = await params;
+  const access = await requireOrgCapability(orgId, 'members.manage');
+  if (!access.ok) return access.res;
+  try {
+    const { data, error } = await scopedOrgQuery(access.admin, 'org_invitations', access, VIEW_COLUMNS)
+      .is('accepted_at', null)
+      .is('revoked_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as unknown as InvitationRow[];
+    return NextResponse.json({ invitations: rows.map(toView) }, { headers: { 'Cache-Control': 'no-store' } });
+  } catch (err) {
+    log.error('list invitations failed', { orgId: access.orgId, error: errorMessage(err) });
+    return NextResponse.json({ error: 'Could not list invitations' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {

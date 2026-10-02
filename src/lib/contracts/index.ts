@@ -881,3 +881,30 @@ export const OrgJoinBodySchema = z.object({
   action: z.enum(['preview', 'accept']).optional().default('accept'),
 }).strict();
 export type OrgJoinBody = z.infer<typeof OrgJoinBodySchema>;
+
+// ── Label OS org settings + members (LABEL-09) ───────────────────────────
+
+/** PATCH /api/org/[orgId]. The name only: the slug never changes. */
+export const OrgPatchBodySchema = z.object({
+  name: z.string().trim().min(1, 'Name the organization').max(80),
+}).strict();
+export type OrgPatchBody = z.infer<typeof OrgPatchBodySchema>;
+
+/**
+ * PATCH /api/org/[orgId]/members. Which roles, functions, scopes and
+ * switches are allowed is decided per org kind and per actor by
+ * `planMemberChange` (lib/labelos/members), so here they are only bounded
+ * strings. At least one field besides `user_id`.
+ */
+export const OrgMemberPatchBodySchema = z.object({
+  user_id: z.string().uuid(),
+  role: z.string().min(1).max(40).optional(),
+  functions: z.array(z.string().min(1).max(40)).max(9).optional(),
+  scope: z.string().min(1).max(20).optional(),
+  cap_grants: z.array(z.string().min(1).max(60)).max(40).optional(),
+  cap_revokes: z.array(z.string().min(1).max(60)).max(40).optional(),
+}).strict().refine(
+  (b) => b.role !== undefined || b.functions !== undefined || b.scope !== undefined || b.cap_grants !== undefined || b.cap_revokes !== undefined,
+  { message: 'Nothing to change' },
+);
+export type OrgMemberPatchBody = z.infer<typeof OrgMemberPatchBodySchema>;
