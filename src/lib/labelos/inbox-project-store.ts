@@ -40,9 +40,9 @@ async function inboxesOf(admin: Admin, orgId: string, contactId: string): Promis
  */
 export async function ensureInboxProject(
   admin: Admin,
-  opts: { orgId: string; contactId: string; actorId: string },
+  opts: { orgId: string; contactId: string },
 ): Promise<{ projectId: string; created: boolean }> {
-  const { orgId, contactId, actorId } = opts;
+  const { orgId, contactId } = opts;
   const { data: contact, error: contactError } = await admin
     .from('contacts')
     .select('id, org_id, name')
@@ -71,8 +71,9 @@ export async function ensureInboxProject(
       const { data, error } = await admin
         .from('projects')
         .insert({
-          // user_id is NOT NULL; 141's guards keep it from granting a read.
-          user_id: actorId,
+          // An org row has no owner (142, projects_org_or_owner), so no
+          // producer route — all filter on user_id — can ever reach it.
+          user_id: null,
           org_id: plan.project.orgId,
           inbox_for_contact_id: plan.project.inboxForContactId,
           name: plan.project.name,

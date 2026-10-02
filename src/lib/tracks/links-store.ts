@@ -98,14 +98,14 @@ export async function removeLink(admin: Admin, userId: string, trackId: string, 
  * the caller's access to the song; this checks that both tracks are rows of
  * `orgId` (migration 141's trigger refuses a cross-org pair as well).
  * Positions count every link of the song, whoever wrote it — unlike the
- * producer's, they are not filtered by user. `actorId` is the row's
- * `user_id` (NOT NULL), which 141's guards keep from granting any read.
+ * producer's, they are not filtered by user. The row has no `user_id`: an
+ * org link has no owner (142's track_links trigger requires it NULL).
  */
 export async function addOrgLink(
   admin: Admin,
-  opts: { orgId: string; actorId: string; fromId: string; toId: string; relation: StoredRelation },
+  opts: { orgId: string; fromId: string; toId: string; relation: StoredRelation },
 ): Promise<void> {
-  const { orgId, actorId, fromId, toId, relation } = opts;
+  const { orgId, fromId, toId, relation } = opts;
   if (fromId === toId) throw new Error('A track cannot be linked to itself');
   const both = await admin.from('tracks').select('id').in('id', [fromId, toId]).eq('org_id', orgId);
   if (both.error) throw both.error;
@@ -117,7 +117,7 @@ export async function addOrgLink(
   }
   const position = ((existing.data ?? []) as Array<{ position: number }>).reduce((m, r) => Math.max(m, r.position + 1), 0);
   const { error } = await admin.from('track_links')
-    .upsert({ from_track_id: fromId, to_track_id: toId, user_id: actorId, relation, position }, { onConflict: 'from_track_id,to_track_id' });
+    .upsert({ from_track_id: fromId, to_track_id: toId, user_id: null, relation, position }, { onConflict: 'from_track_id,to_track_id' });
   if (error) {
     if (isMissingSchema(error)) throw new TrackLinksNotReadyError('133');
     throw error;

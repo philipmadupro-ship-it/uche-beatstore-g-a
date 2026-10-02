@@ -7,8 +7,9 @@
  *  2. The multipart upload is finalised and the bytes are sniffed, exactly as
  *     the producer's `/api/upload/complete` does (same lib helpers).
  *  3. The track row is written by the service role (migration 141 refuses an
- *     org row to any API role): `org_id`, `created_by` and `user_id` = the
- *     uploader, the type and stage from the intent (lib/labelos/org-upload).
+ *     org row to any API role): `org_id`, `created_by` = the uploader and NO
+ *     `user_id` (142: an org row has no owner, so no producer route reaches
+ *     it), the type and stage from the intent (lib/labelos/org-upload).
  *  4. It is placed, in the same request:
  *       - a new song → its artist's Inbox project (ensureInboxProject, Q1);
  *       - material → a `track_links` row from the song (links-store
@@ -140,7 +141,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { data, error } = await admin
       .from('tracks')
       .insert({
-        user_id: access.userId,
+        user_id: null,
         org_id: org,
         created_by: access.userId,
         title: titleMeta.title,
@@ -159,10 +160,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     trackId = row.id;
 
     if (body.as.kind === 'song') {
-      const inbox = await ensureInboxProject(admin, { orgId: org, contactId: body.as.contactId, actorId: access.userId });
+      const inbox = await ensureInboxProject(admin, { orgId: org, contactId: body.as.contactId });
       projectIds = [inbox.projectId];
     } else {
-      await addOrgLink(admin, { orgId: org, actorId: access.userId, fromId: body.as.songId, toId: row.id, relation: body.as.relation });
+      await addOrgLink(admin, { orgId: org, fromId: body.as.songId, toId: row.id, relation: body.as.relation });
       projectIds = await orgProjectsOfTrack(admin, org, body.as.songId);
     }
     await addTrackToOrgProjects(admin, { orgId: org, trackId: row.id, projectIds });

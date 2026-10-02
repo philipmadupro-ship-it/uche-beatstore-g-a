@@ -28,7 +28,7 @@ function chain(table: string) {
     return { data: [], error: null };
   };
   const api: Record<string, unknown> = {};
-  for (const m of ['select', 'update', 'insert', 'eq', 'lt', 'or', 'is', 'in']) {
+  for (const m of ['select', 'update', 'insert', 'eq', 'lt', 'or', 'is', 'in', 'match']) {
     api[m] = (...a: unknown[]) => { q.ops.push([m, ...a]); return api; };
   }
   api.maybeSingle = async () => resolve();
@@ -88,6 +88,9 @@ describe('processing: where an upload\'s derived files go', () => {
       peaks_url: 'r2://masters/orgs/o1/peaks/p.json',
       preview_status: 'ready',
     });
+    // An org track has no owner (142): addressed by its org, never by user_id.
+    expect(trackUpdate()?.ops).toContainEqual(['match', { org_id: 'o1' }]);
+    expect(trackUpdate()?.ops.some((o) => o[0] === 'eq' && o[1] === 'user_id')).toBe(false);
   });
 
   it('a producer track (org_id NULL): exactly the public path as before', async () => {
@@ -99,6 +102,7 @@ describe('processing: where an upload\'s derived files go', () => {
     expect(storage.uploadOrgPeaks).not.toHaveBeenCalled();
     expect(audd.getAuddFeatures).toHaveBeenCalledTimes(1);
     expect(trackUpdate()?.ops[0][1]).toMatchObject({ preview_url: 'https://pub.example/previews/x.mp3' });
+    expect(trackUpdate()?.ops).toContainEqual(['match', { user_id: 'u1' }]);
   });
 
   it('the org read failing fails the job (retried later) — never a public fallback', async () => {

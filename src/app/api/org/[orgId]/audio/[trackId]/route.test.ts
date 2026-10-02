@@ -171,7 +171,7 @@ function member(user: string, role: string, functions: string[] = [], scope = 'o
 function track(key: TrackKey, type: string, org: string | null, extra: Record<string, unknown> = {}) {
   const id = T[key];
   return {
-    id, org_id: org, user_id: org ? OWN : PRODUCER, title: key, type, song_stage: null,
+    id, org_id: org, user_id: org ? null : PRODUCER, title: key, type, song_stage: null,
     audio_url: `r2://priv/${key}.mp3`, wav_url: `r2://priv/${key}.wav`, preview_url: `r2://priv/${key}.preview.mp3`,
     ...extra,
   };

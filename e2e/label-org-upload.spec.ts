@@ -123,7 +123,8 @@ test('1 · the uploads tray: 3 files → 3 songs in the artist\'s Inbox, private
   const { inboxes, songs } = await inboxSongs(ctx.request, NOVA);
   expect(inboxes).toEqual([{ id: inboxes[0].id, org_id: ORG, name: `Inbox · Nova ${run}` }]);
   for (const s of songs) {
-    expect(s).toMatchObject({ org_id: ORG, type: 'song', song_stage: 'inbox', user_id: PRODUCER_ID, created_by: PRODUCER_ID });
+    // No owner (142): the uploader is created_by only, so the producer's own routes never see it.
+    expect(s).toMatchObject({ org_id: ORG, type: 'song', song_stage: 'inbox', user_id: null, created_by: PRODUCER_ID });
   }
   expect(songs.map((s) => s.title).sort()).toEqual([`First ${run}`, `Second ${run}`, `Third ${run}`]);
 

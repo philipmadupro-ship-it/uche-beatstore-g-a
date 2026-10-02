@@ -121,8 +121,8 @@ beforeEach(() => {
         { id: PC1, org_id: null, user_id: OWN, name: 'CRM artist', category: 'artist' },
       ],
       projects: [
-        { id: LP1, org_id: L, user_id: OWN, name: 'Nova EP', inbox_for_contact_id: null, status: 'in_progress', created_at: '2026-01-01' },
-        { id: XP1, org_id: L2, user_id: X, name: 'L2', inbox_for_contact_id: null, status: 'in_progress', created_at: '2026-01-01' },
+        { id: LP1, org_id: L, user_id: null, name: 'Nova EP', inbox_for_contact_id: null, status: 'in_progress', created_at: '2026-01-01' },
+        { id: XP1, org_id: L2, user_id: null, name: 'L2', inbox_for_contact_id: null, status: 'in_progress', created_at: '2026-01-01' },
       ],
       project_contacts: [{ project_id: LP1, contact_id: C1 }],
       project_tracks: [
@@ -132,12 +132,12 @@ beforeEach(() => {
         { project_id: XP1, track_id: XS1, position: 0 },
       ],
       tracks: [
-        { id: S1, org_id: L, user_id: OWN, type: 'song', song_stage: 'in_review', title: 'Nova single', created_at: '2026-01-02' },
-        { id: B1, org_id: L, user_id: OWN, type: 'beat', song_stage: null, title: 'Pool beat', created_at: '2026-01-01' },
-        { id: S1M, org_id: L, user_id: OWN, type: 'song', song_stage: null, title: 'Nova single (master)', created_at: '2026-01-03' },
-        { id: XS1, org_id: L2, user_id: X, type: 'song', song_stage: 'inbox', title: 'L2 song', created_at: '2026-01-01' },
+        { id: S1, org_id: L, user_id: null, type: 'song', song_stage: 'in_review', title: 'Nova single', created_at: '2026-01-02' },
+        { id: B1, org_id: L, user_id: null, type: 'beat', song_stage: null, title: 'Pool beat', created_at: '2026-01-01' },
+        { id: S1M, org_id: L, user_id: null, type: 'song', song_stage: null, title: 'Nova single (master)', created_at: '2026-01-03' },
+        { id: XS1, org_id: L2, user_id: null, type: 'song', song_stage: 'inbox', title: 'L2 song', created_at: '2026-01-01' },
       ],
-      track_links: [{ from_track_id: S1, to_track_id: S1M, user_id: OWN, relation: 'master', position: 0 }],
+      track_links: [{ from_track_id: S1, to_track_id: S1M, user_id: null, relation: 'master', position: 0 }],
       upload_sessions: [],
     },
     unique: {
@@ -241,11 +241,12 @@ describe('complete: a new song lands in its artist\'s Inbox', () => {
     }
     const inboxes = db.tables.projects.filter((p) => p.inbox_for_contact_id === C2);
     expect(inboxes).toHaveLength(1);
-    expect(inboxes[0]).toMatchObject({ org_id: L, name: 'Inbox · Kilo', status: 'in_progress', user_id: AR });
+    // No owner (142): no producer route — all filter on user_id — can reach it.
+    expect(inboxes[0]).toMatchObject({ org_id: L, name: 'Inbox · Kilo', status: 'in_progress', user_id: null });
     expect(tracksOf(inboxes[0].id as string)).toEqual(ids);
     const rows = db.tables.tracks.filter((t) => ids.includes(t.id as string));
     expect(rows.map((t) => [t.org_id, t.user_id, t.created_by, t.type, t.song_stage])).toEqual(
-      ids.map(() => [L, AR, AR, 'song', 'inbox']),
+      ids.map(() => [L, null, AR, 'song', 'inbox']),
     );
     // The filename is metadata here too.
     expect(rows[0]).toMatchObject({ title: 'One', bpm: 140, key: 'F' });
@@ -260,7 +261,7 @@ describe('complete: a new song lands in its artist\'s Inbox', () => {
   });
 
   it('reuses an archived Inbox, reopening it', async () => {
-    db.tables.projects.push({ id: '40000000-0000-4000-8000-0000000000c9', org_id: L, user_id: OWN, name: 'Inbox · Nova', inbox_for_contact_id: C1, status: 'archived', created_at: '2026-01-01' });
+    db.tables.projects.push({ id: '40000000-0000-4000-8000-0000000000c9', org_id: L, user_id: null, name: 'Inbox · Nova', inbox_for_contact_id: C1, status: 'archived', created_at: '2026-01-01' });
     const res = await upload(OWN, song(C1));
     expect(res.status).toBe(200);
     expect(db.tables.projects.filter((p) => p.inbox_for_contact_id === C1).map((p) => p.status)).toEqual(['in_progress']);
@@ -280,7 +281,7 @@ describe('complete: material is linked to its song in the same request', () => {
     expect(res.status).toBe(200);
     const { track } = await res.json();
     expect(track.linkedTo).toEqual({ songId: S1, relation });
-    expect(db.tables.track_links.find((l) => l.to_track_id === track.id)).toMatchObject({ from_track_id: S1, relation, user_id: AR, position: 1 });
+    expect(db.tables.track_links.find((l) => l.to_track_id === track.id)).toMatchObject({ from_track_id: S1, relation, user_id: null, position: 1 });
     expect(db.tables.tracks.find((t) => t.id === track.id)).toMatchObject({ org_id: L, type, song_stage: null });
     // In the song's project, so an artist-scoped member reaches it like the song.
     expect(tracksOf(LP1)).toContain(track.id);

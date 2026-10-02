@@ -249,7 +249,8 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
         preview_status: previewUrl ? 'ready' : 'none',
       })
       .eq('id', job.track_id)
-      .eq('user_id', job.user_id);
+      // An org track has no owner (142): it is addressed by its org instead.
+      .match(orgId ? { org_id: orgId } : { user_id: job.user_id });
     if (trackError) throw new Error(`Track update failed: ${trackError.message}`);
 
     // Tempo and harmony are compare-and-set: written only if the row still
@@ -258,8 +259,9 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
     // BPM or key themselves — one click in the uploads tray, or the track
     // drawer. Overwriting that with a detector's reading is exactly the
     // silent guess this pipeline must not make.
-    await compareAndSet(admin, job, { bpm }, { bpm: written.bpm });
-    await compareAndSet(admin, job, { key, scale }, { key: written.key, scale: written.scale });
+    const target = { ...job, org_id: orgId };
+    await compareAndSet(admin, target, { bpm }, { bpm: written.bpm });
+    await compareAndSet(admin, target, { key, scale }, { key: written.key, scale: written.scale });
 
     const { error: doneError } = await admin
       .from('upload_processing_jobs')
@@ -300,19 +302,21 @@ async function trackOrgId(admin: ServiceClient, trackId: string): Promise<string
 }
 
 /**
- * `UPDATE tracks SET <next> WHERE id AND user_id AND <each column = expected>`.
+ * `UPDATE tracks SET <next> WHERE id AND user_id AND <each column = expected>`
+ * (an org track, which has no owner, by `org_id` instead of `user_id`).
  * One statement, so there is no read-then-write window. A null expectation
  * matches with `IS NULL` (`= NULL` matches nothing in SQL).
  */
 export async function compareAndSet(
   admin: ServiceClient,
-  job: Pick<UploadProcessingJob, 'track_id' | 'user_id'>,
+  job: Pick<UploadProcessingJob, 'track_id' | 'user_id'> & { org_id?: string | null },
   next: Record<string, Scalar>,
   expected: Record<string, Scalar>,
 ): Promise<boolean> {
   const unchanged = Object.keys(next).every((k) => next[k] === expected[k]);
   if (unchanged) return true;
-  let query = admin.from('tracks').update(next).eq('id', job.track_id).eq('user_id', job.user_id);
+  let query = admin.from('tracks').update(next).eq('id', job.track_id);
+  query = job.org_id ? query.eq('org_id', job.org_id) : query.eq('user_id', job.user_id);
   for (const [column, value] of Object.entries(expected)) {
     query = value == null ? query.is(column, null) : query.eq(column, value);
   }
