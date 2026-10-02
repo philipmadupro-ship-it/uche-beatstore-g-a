@@ -23,7 +23,7 @@ import {
 import { usePlayer } from '@/hooks/usePlayer';
 import { createClient } from '@/lib/supabase/client';
 import { toast, confirmToast } from '@/hooks/useToast';
-import { clearBuyerIdentity, setPersistentBuyerSession } from '@/lib/buyer-session';
+import { clearBuyerIdentity, logPlay, setPersistentBuyerSession } from '@/lib/buyer-session';
 import { useWishlistStore } from '@/hooks/useWishlist';
 import { BuyerLibraryTile, BuyerPlayButton, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
 import { CoverImage } from '@/components/ui/CoverImage';
@@ -107,6 +107,11 @@ function useAccountPlayback() {
     }
     setQueue(buyerPlayerQueue(list, ACCOUNT_IDENTITY));
     setTrack(buyerPlayerTrack(track, ACCOUNT_IDENTITY));
+    // Starting a different beat is a play; pause/resume above is not. The
+    // store's grid logs through trackStoreEvent, which this page never calls,
+    // so this is the only write (no double count). Best-effort: logPlay
+    // swallows failures, and an owned exclusive is accepted by the route.
+    void logPlay(track.id);
   };
   return { isPlayingTrack, play };
 }

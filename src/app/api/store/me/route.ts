@@ -6,6 +6,7 @@ import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { normalizeEmail } from '@/lib/contacts/email';
 import { resolveBuyerEmail as resolveEmail } from '@/lib/store/buyer-identity';
+import { buyerOwnsTrack } from '@/lib/store/buyer-ownership';
 import {
   buildBuyerLibraryShape,
   collectBuyerLibraryTrackIds,
@@ -246,7 +247,13 @@ export async function POST(req: NextRequest) {
       case 'log_play': {
         // Append-only history. We do NOT dedupe — repeated plays are
         // signal, not noise. Trim handled at read time via LIMIT.
-        if (!(await isStoreListedTrack(admin, parsed.data.track_id))) return trackNotFound();
+        // A beat the buyer owns counts even when the sale delisted it (an
+        // exclusive does), so playing it from the account can be logged.
+        // Anything else still has to be on the store: owned-or-listed only.
+        const { track_id } = parsed.data;
+        const loggable = (await isStoreListedTrack(admin, track_id))
+          || (await buyerOwnsTrack(admin, email, track_id));
+        if (!loggable) return trackNotFound();
         const { error } = await admin
           .from('buyer_listening_history')
           .insert({ email, track_id: parsed.data.track_id });
