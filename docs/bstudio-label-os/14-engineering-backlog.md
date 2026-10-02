@@ -647,7 +647,7 @@ Restore the old relation CHECK (only if no `master` / `demo` rows exist); drop t
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-10, LABEL-04
-**Status:** In Review (PR #68, branch label-os/LABEL-12)
+**Status:** Done (2026-10-02) — PR #68. Migration 141, not applied. Adds RESTRICTIVE `org_member_guard` SELECT policies and a service-role-only write trigger on org rows (accepted by the orchestrator: they only tighten access).
 
 ## Objective
 Let org songs, projects and their #44 material live in the existing tables without changing producer behaviour (`17` R11).
@@ -713,7 +713,7 @@ Drop the policies, restore the trigger functions, drop the nullable columns.
 **Risk:** Critical
 **Workstream:** L
 **Dependencies:** LABEL-05, LABEL-11, LABEL-12
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-13)
 
 ## Objective
 Stream or presign a recording only if the caller may access that specific recording.
@@ -751,6 +751,11 @@ Route test matrix; Range header test.
 
 ## Carried from LABEL-11 (#66)
 `recordingKindOf` returns `null` for unlinked loop / topline / instrumental / remix / song tracks (no R1 row). Null means no audio capability, so the route fails closed. Decide whether such org tracks need a kind (for example a standalone loop in an artist's inbox). If they do, extend the R1 mapping and its test.
+
+## Carried from LABEL-12 (#68)
+- **The route applies D4 itself.** `requireObjectAccess({ table: 'tracks' })` checks scope and capability, not the audio class. Use `audioCapabilityFor(recordingKindOf(...))` per the task. The DB row rule (`orgTrackReadClass` / `orgRowAudioAllows` in `lib/labelos/org-read.ts`, SQL `can_read_org_track`) is deliberately narrower. It may hide a row the route would stream, but the route must never stream a recording to someone who lacks the audio capability for its kind.
+- **Scope goes through the project path:** the track's projects of its OWN org, then the project's `inbox_for_contact_id` or `project_contacts`, then `can_see_artist` (TS: `scopeAllowsAnyContact`; SQL: `can_see_org_track`). A track in no project is whole-org only.
+- Load the track with the service role, filtered by `org_id = orgId`. A member's PostgREST read is now guarded, so do not rely on it to find a row the route then refuses; answer 404 either way.
 
 ## Out of Scope
 Hardening `/api/audio` for multiple producers.
@@ -802,6 +807,13 @@ The uploads tray works unchanged. In org context it offers "new song / add to so
 
 ## Tests
 Route tests with mocked storage; processing-branch unit test; e2e: upload 3 files → 3 songs in the artist's inbox project.
+
+## Carried from LABEL-12 (#68)
+- **Put linked material in the song's project.** A master, demo or other linked track is in a scoped member's scope only through a project of the song's org that it sits in, so `complete` must add it to the song's project(s) (`project_tracks`). Otherwise a scoped A&R member sees the song but not its master.
+- Writing `user_id` = the uploader on org rows is safe now: the 141 guards stop that user_id granting a read, and the trigger blocks PostgREST writes. All org writes must go through the service role; an `authenticated` client write raises `insufficient_privilege`.
+- **`project_tracks` has no same-owner / same-org trigger** (pre-existing). The 141 scope path ignores mismatched rows, but this task writes the first org `project_tracks` rows: add the trigger as migration **142** (same shape as 141's section 4: owner case, or every parent in one non-null org), with a local check and a rollback.
+- **Name PostgREST embeds explicitly.** `projects.inbox_for_contact_id → contacts` is a direct FK now, so a bare `projects?select=contacts(…)` resolves through it. Use `contacts!project_contacts(…)` or the FK name.
+- `scopedOrgQuery` still returns nothing for projects / tracks to an artists-scoped member (fail-closed). If this task adds a list read, narrow it by the project path; do not widen the helper to the whole org.
 
 ## Out of Scope
 Non-audio files (LABEL-15).
@@ -1010,6 +1022,10 @@ Counts respect scope; no leak of out-of-scope artist counts.
 
 ## Tests
 `overview.test.ts`; route test.
+
+## Carried from LABEL-12 (#68)
+- **R-08 explain-plan pass.** 141 adds a SECURITY DEFINER lookup per row on producer PostgREST reads of the guarded tables (`project_tracks`, `play_head_pings`, `track_licenses`, …) and on member reads of org rows. Most producer routes use the service role and skip RLS. Before Phase 2 closes, run `EXPLAIN ANALYZE` at catalogue scale (10k tracks, the `test:scale` fixtures) for the Overview's queries and for one producer PostgREST read of a guarded table. Record the numbers in the PR. If a guard dominates, wrap the helper as `(SELECT fn(col))` or index the lookup; never drop the guard.
+- Overview lists for an artists-scoped member must narrow by the project path (see LABEL-14's note on `scopedOrgQuery`).
 
 ## Out of Scope
 Needs attention; digest.
