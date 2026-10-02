@@ -647,7 +647,7 @@ Restore the old relation CHECK (only if no `master` / `demo` rows exist); drop t
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-10, LABEL-04
-**Status:** In Progress (branch label-os/LABEL-12)
+**Status:** In Review (PR #68, branch label-os/LABEL-12)
 
 ## Objective
 Let org songs, projects and their #44 material live in the existing tables without changing producer behaviour (`17` R11).
