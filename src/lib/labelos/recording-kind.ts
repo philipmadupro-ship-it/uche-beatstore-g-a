@@ -40,13 +40,28 @@ const BY_RELATION: Readonly<Record<SongSide, RecordingKind>> = {
 };
 
 /**
+ * Unlinked tracks whose TYPE is already a recording kind. R1 lists only the
+ * beat; LABEL-13 adds loop and topline (a standalone loop in an artist's
+ * inbox is a loop), both working material, so the addition can only reach
+ * people who already hear every linked loop. An unlinked instrumental or
+ * remix stays null: calling it finished would hand it to the business side
+ * with no song vouching for it.
+ */
+const BY_UNLINKED_TYPE: Readonly<Record<string, RecordingKind>> = {
+  beat: 'beat_source',
+  loop: 'loop',
+  topline: 'topline',
+};
+
+/**
  * The 17 R1 mapping table. Once a track is linked to a song, the relation
- * decides (a master is usually uploaded as a song-type file). Unlinked, only
- * a `beat` has a row (`beat_source`); anything else is null.
+ * decides (a master is usually uploaded as a song-type file). Unlinked, a
+ * `beat` is a `beat_source` and a `loop` / `topline` is itself; anything
+ * else is null.
  */
 export function recordingKindOf(track: { type: string | null }, relationFromSong: SongSide | null): RecordingKind | null {
   if (relationFromSong) return BY_RELATION[relationFromSong] ?? null;
-  return track.type === 'beat' ? 'beat_source' : null;
+  return Object.hasOwn(BY_UNLINKED_TYPE, track.type ?? '') ? BY_UNLINKED_TYPE[track.type as string] : null;
 }
 
 export interface SongRecording {
