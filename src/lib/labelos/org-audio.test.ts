@@ -5,6 +5,7 @@ import {
   orgAudioAllowed,
   orgAudioFilename,
   orgAudioSource,
+  orgAudioSourceAllowed,
   parseOrgAudioVariant,
   recordingContexts,
   requiredAudioCapabilities,
@@ -30,6 +31,7 @@ describe('parseOrgAudioVariant', () => {
     expect(parseOrgAudioVariant('')).toEqual({ kind: 'full' });
     expect(parseOrgAudioVariant('full')).toEqual({ kind: 'full' });
     expect(parseOrgAudioVariant('preview')).toEqual({ kind: 'preview' });
+    expect(parseOrgAudioVariant('peaks')).toEqual({ kind: 'peaks' });
     expect(parseOrgAudioVariant('wav')).toEqual({ kind: 'wav' });
     expect(parseOrgAudioVariant('stem:vocals')).toEqual({ kind: 'stem', stem: 'vocals' });
     expect(parseOrgAudioVariant('stem:drums')).toEqual({ kind: 'stem', stem: 'drums' });
@@ -169,6 +171,8 @@ describe('orgAudioSource', () => {
     expect(orgAudioSource(row, { kind: 'full' })).toBe('r2://priv/a.mp3');
     expect(orgAudioSource(row, { kind: 'wav' })).toBe('r2://priv/a.wav');
     expect(orgAudioSource(row, { kind: 'preview' })).toBe('r2://priv/a.preview.mp3');
+    expect(orgAudioSource({ ...row, peaks_url: 'r2://priv/orgs/o/peaks/a.json' }, { kind: 'peaks' })).toBe('r2://priv/orgs/o/peaks/a.json');
+    expect(orgAudioSource(row, { kind: 'peaks' })).toBeNull();
     expect(orgAudioSource(row, { kind: 'stem', stem: 'bass' }, [{ bass_url: null }, { bass_url: 'r2://priv/bass.wav' }])).toBe('r2://priv/bass.wav');
   });
   it('null when the track has no such file', () => {
@@ -179,6 +183,24 @@ describe('orgAudioSource', () => {
     expect(orgAudioSource({ ...row, wav_url: null, audio_url: 'r2://priv/b.WAV' }, { kind: 'wav' })).toBe('r2://priv/b.WAV');
     expect(orgAudioSource({ ...row, preview_url: null }, { kind: 'preview' })).toBeNull();
     expect(orgAudioSource(row, { kind: 'stem', stem: 'drums' }, [{ vocals_url: 'r2://priv/v.wav' }])).toBeNull();
+  });
+});
+
+describe('orgAudioSourceAllowed (D8: org files stream from the private bucket only)', () => {
+  it('the private bucket, under any key', () => {
+    expect(orgAudioSourceAllowed('r2://priv/orgs/o/previews/a.mp3', 'priv')).toBe(true);
+    expect(orgAudioSourceAllowed('r2://priv/tracks/a.wav', 'priv')).toBe(true);
+  });
+  it('never the public bucket, a URL, or anything when the private bucket is unknown in production shape', () => {
+    expect(orgAudioSourceAllowed('r2://pub/previews/a.mp3', 'priv')).toBe(false);
+    expect(orgAudioSourceAllowed('https://pub.example/previews/a.mp3', 'priv')).toBe(false);
+    expect(orgAudioSourceAllowed('/uploads/a.wav', 'priv')).toBe(false);
+    expect(orgAudioSourceAllowed('r2://priv/a.mp3', '')).toBe(false);
+  });
+  it('without R2, only the local fallback path', () => {
+    expect(orgAudioSourceAllowed('/uploads/a.wav', undefined)).toBe(true);
+    expect(orgAudioSourceAllowed('/uploads/../.env', undefined)).toBe(false);
+    expect(orgAudioSourceAllowed('https://x/a.wav', undefined)).toBe(false);
   });
 });
 
