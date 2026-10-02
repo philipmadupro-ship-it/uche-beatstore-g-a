@@ -4,6 +4,7 @@ import { Resend } from 'resend';
 import { trackHeldByAnotherBuyer, type OtherPurchase } from '@/lib/store/exclusive-claim';
 import { buildHeldPurchaseEmail } from '@/lib/store/held-purchase-email';
 import { refundAccessEffect } from '@/lib/store/refund-rule';
+import { disputeClosedEffect } from '@/lib/store/dispute-rule';
 import { getStripe } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
@@ -53,6 +54,11 @@ type WebhookCharge = {
   refunded?: boolean | null;
   amount?: number | null;
   amount_refunded?: number | null;
+};
+type WebhookDispute = {
+  status?: string | null;
+  payment_intent?: string | null;
+  charge?: string | null;
 };
 type TrackTitleRow = {
   id: string;
@@ -1297,6 +1303,110 @@ export async function POST(req: NextRequest) {
           } catch (err) {
             log.warn('exclusive re-list on refund failed', { error: errorMessage(err) });
           }
+        }
+        break;
+      }
+
+      // ── charge.dispute.closed ──────────────────────────────────────────────
+      // `charge.dispute.created` revoked the buyer's downloads. When the
+      // dispute closes in the seller's favour that is undone; when the bank
+      // keeps the money (or the charge was refunded) access stays revoked.
+      // See lib/store/dispute-rule.ts. Every write is conditional, so a
+      // redelivered event is a no-op.
+      case 'charge.dispute.closed': {
+        const dispute = event.data.object as WebhookDispute;
+        const effect = disputeClosedEffect(dispute.status);
+        const paymentIntent = dispute.payment_intent;
+        log.info('dispute closed', { status: dispute.status ?? null, effect, payment_intent: paymentIntent ?? null });
+
+        if (effect === 'ignore' || !paymentIntent) break;
+
+        let restored = false;
+        if (effect === 'restore') {
+          // Track licenses: only a row still marked 'disputed' comes back. A
+          // row a later full refund moved to 'refunded' must stay revoked.
+          const { data: licenseRows, error: licenseErr } = await admin
+            .from('license_purchases')
+            .update({ status: 'paid', download_unlocked: true })
+            .eq('stripe_payment_intent', paymentIntent)
+            .eq('status', 'disputed')
+            .select('id');
+          if (licenseErr) {
+            log.warn('dispute-won restore failed (license)', { payment_intent: paymentIntent, error: errorMessage(licenseErr) });
+          } else if ((licenseRows ?? []).length > 0) {
+            restored = true;
+          }
+
+          // Project bundles have no status column: both a refund and a dispute
+          // revoke by expiring the link, so the link cannot say which one did.
+          // Ask Stripe whether the charge was refunded; if that cannot be
+          // established, leave it revoked and say so.
+          try {
+            const charge = dispute.charge ? await stripe.charges.retrieve(dispute.charge) : null;
+            if (!charge) {
+              log.warn('dispute-won: no charge on the dispute, bundle left revoked', { payment_intent: paymentIntent });
+            } else if (charge.refunded) {
+              log.info('dispute-won: charge was refunded, bundle stays revoked', { payment_intent: paymentIntent });
+            } else {
+              const sessions = await stripe.checkout.sessions.list({ payment_intent: paymentIntent, limit: 10 });
+              const sessionIds = sessions.data.map((x) => x.id);
+              const byIntent = await admin
+                .from('project_access_links')
+                .update({ expires_at: null })
+                .eq('stripe_payment_intent', paymentIntent)
+                .not('expires_at', 'is', null)
+                .select('id');
+              const bySession = sessionIds.length > 0
+                ? await admin
+                    .from('project_access_links')
+                    .update({ expires_at: null })
+                    .in('stripe_session_id', sessionIds)
+                    .not('expires_at', 'is', null)
+                    .select('id')
+                : { data: [], error: null };
+              if (byIntent.error) log.warn('dispute-won restore failed (bundle, by intent)', { error: errorMessage(byIntent.error) });
+              if (bySession.error) log.warn('dispute-won restore failed (bundle, by session)', { error: errorMessage(bySession.error) });
+              if ((byIntent.data ?? []).length > 0 || (bySession.data ?? []).length > 0) restored = true;
+            }
+          } catch (err) {
+            log.warn('dispute-won bundle restore threw; bundle left revoked', { payment_intent: paymentIntent, error: errorMessage(err) });
+          }
+        }
+
+        // Tell the producer how it ended. A dispute closed as `charge_refunded`
+        // is a refund, which has already notified them.
+        if (dispute.status === 'charge_refunded') break;
+        try {
+          const { data: licenseSale } = await admin
+            .from('license_purchases')
+            .select('seller_user_id, amount_usd, buyer_email')
+            .eq('stripe_payment_intent', paymentIntent)
+            .maybeSingle();
+          const { data: bundleSale } = licenseSale
+            ? { data: null }
+            : await admin
+                .from('project_access_links')
+                .select('seller_user_id, amount_usd, buyer_email')
+                .eq('stripe_payment_intent', paymentIntent)
+                .maybeSingle();
+          const sale = (licenseSale ?? bundleSale) as PurchaseNotificationRow | null;
+          if (sale?.seller_user_id) {
+            const amount = `$${Number(sale.amount_usd ?? 0).toFixed(2)}`;
+            const won = effect === 'restore';
+            await admin.from('notifications').insert({
+              user_id: sale.seller_user_id,
+              kind: 'dispute',
+              title: dispute.status === 'warning_closed'
+                ? `Dispute inquiry closed — ${amount}`
+                : won ? `Dispute won — ${amount}` : `Dispute lost — ${amount}`,
+              body: won
+                ? `${sale.buyer_email ?? 'The buyer'}'s downloads ${restored ? 'are restored' : 'could not be restored automatically — check /sales'}.`
+                : `${sale.buyer_email ?? 'The buyer'}'s downloads stay revoked.`,
+              data: { payment_intent: paymentIntent, dispute_status: dispute.status ?? null, restored },
+            });
+          }
+        } catch (ne) {
+          log.warn('notification insert failed on dispute close', { error: errorMessage(ne) });
         }
         break;
       }

@@ -9357,7 +9357,7 @@ Follow-up (same PR): the partial-refund rule. `charge.refunded` fires for every 
 
 Found alongside, same branch: refunding the LOSER of a double sale — the way a held purchase is resolved — re-listed the track for sale while the winner still held it exclusively. The re-list now skips any track another live exclusive purchase holds (`trackHeldByAnotherBuyer`).
 
-Tests: `refund-rule.test.ts`; webhook cases for partial (no writes but the notification), full-with-amounts, dispute, and loser refund (the partial and loser cases fail on the old handler). Not changed: a dispute later won (`charge.dispute.closed`) still does not restore access.
+Tests: `refund-rule.test.ts`; webhook cases for partial (no writes but the notification), full-with-amounts, dispute, and loser refund (the partial and loser cases fail on the old handler). 
 
 Follow-up (same PR): download audit log and rate limit.
 
@@ -9407,3 +9407,21 @@ Follow-up (same PR): deleting superseded MP3s.
 Tests: pure selection (adversarial), prune with fakes, ensure prunes only on a NEW derivative (not on exists / MP3 master / unstored; a failing prune doesn't lose the result), a lifecycle test over an in-memory object store (one MP3 per track through a master change, another track's untouched, delete removes only that track's, masters and stems intact), `private-keys.test.ts` (pagination, 1000-batching, error surfaced), and route tests for revert and DELETE (prune on success with the right arguments; none on a failed revert or a track the caller does not own) — the two hook tests fail without the hooks.
 
 Not verified: against real R2 (ListObjectsV2 / DeleteObjects). The S3 client is exercised with its `send` spied, so command shapes are asserted but not accepted by a live bucket; the token needs `s3:ListBucket` and `s3:DeleteObject` on the private bucket, which the upload and delete helpers already imply for delete but list is new.
+
+Follow-up (same PR): `charge.dispute.closed`.
+
+**The gap.** `charge.dispute.created` revokes access immediately (status `disputed`, `download_unlocked = false`, bundle link expired), and nothing ever undid it: a buyer whose dispute the producer WON — they paid, the bank sided with the seller — stayed locked out of files they own, until the producer hand-edited the database.
+
+**The rule** (`lib/store/dispute-rule.ts`, pure and tested). `won` and `warning_closed` restore; `lost` and `charge_refunded` stay revoked; anything else (an open status in a "closed" event, or a status Stripe adds later) does nothing — leaving access revoked is recoverable, restoring files on a sale we cannot classify is not.
+
+**The handler** (`/api/stripe/webhook`, new case):
+- **Track licenses:** `UPDATE … SET status='paid', download_unlocked=true WHERE stripe_payment_intent = … AND status = 'disputed'`. The status guard is the protection against a later full refund (which moved the row to `refunded`) being reversed. `needs_refund_review` is untouched, so a double-sold exclusive stays held after a won dispute.
+- **Bundles:** no status column, and both a refund and a dispute revoke by setting `expires_at = now()`, so the row cannot say which. Before un-expiring (`expires_at = null`, by payment intent and by checkout session, only rows currently expired) it retrieves the charge from Stripe: refunded, or Stripe unreachable → left revoked and logged. Setting null is a faithful undo because the webhook never writes `expires_at` at creation.
+- Notifies the producer: "Dispute won", "Dispute inquiry closed", or "Dispute lost" with whether downloads were restored; silent for `charge_refunded` (the refund event already notified). Bundle sales are now covered too (the created-notification only looked at `license_purchases`; the closed one falls back to `project_access_links`).
+- Every write is conditional, so a redelivered event is a no-op.
+
+**Required prod config:** the Stripe webhook endpoint must also be subscribed to `charge.dispute.closed` (Dashboard → Developers → Webhooks), or this never fires. `/api/stripe/diagnostics` now lists it as a required event and reports it missing.
+
+Tests: `dispute-rule.test.ts`; webhook cases for won (the WHERE clause asserted, not just the payload), warning_closed, lost, charge_refunded, unrecognised/absent statuses, no payment intent, bundle un-expire (both lookups, only-expired filter), bundle left revoked on a refunded charge and on a Stripe failure, "could not restore" wording, and idempotence. The restore cases fail on the old handler. The test harness now records the filters applied to each write so WHERE clauses can be asserted.
+
+Not verified against a real Stripe dispute: the event shape (`status`, `payment_intent`, `charge` on the dispute object) is from Stripe's documented Dispute object, and the tests construct it, not capture it. A Stripe CLI `stripe trigger charge.dispute.closed` against a test-mode endpoint would confirm.

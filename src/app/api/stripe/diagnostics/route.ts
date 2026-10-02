@@ -121,11 +121,11 @@ export async function GET() {
     out.hints.push('RESEND_API_KEY missing — purchase receipt emails will be skipped (purchase still records).');
   }
 
-  // 2b: Confirm a Stripe webhook endpoint is actually registered for the three
-  // events we handle. This turns "is the dashboard set up?" from a manual
+  // 2b: Confirm a Stripe webhook endpoint is actually registered for the
+  // events we handle (charge.dispute.closed restores access when a dispute is won). This turns "is the dashboard set up?" from a manual
   // checklist into a programmatic check — a paid sale with no registered
   // webhook never fulfils.
-  const REQUIRED_EVENTS = ['checkout.session.completed', 'charge.refunded', 'charge.dispute.created'];
+  const REQUIRED_EVENTS = ['checkout.session.completed', 'charge.refunded', 'charge.dispute.created', 'charge.dispute.closed'];
   out.webhook = {
     endpoint_registered: false,
     url: null as string | null,
