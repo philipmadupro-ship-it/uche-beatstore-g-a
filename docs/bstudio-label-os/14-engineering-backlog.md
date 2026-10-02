@@ -713,7 +713,7 @@ Drop the policies, restore the trigger functions, drop the nullable columns.
 **Risk:** Critical
 **Workstream:** L
 **Dependencies:** LABEL-05, LABEL-11, LABEL-12
-**Status:** In Progress (branch label-os/LABEL-13)
+**Status:** Done (2026-10-02) — PR #69. It streams through `lib/audio/stream-source` with Range support and issues no presigned URL. It classifies from the raw inbound link rows, not `mergeLinks`, so the strictest reading wins. An unlinked loop or topline is now its own recording kind (working).
 
 ## Objective
 Stream or presign a recording only if the caller may access that specific recording.
@@ -772,7 +772,7 @@ Revert.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-11, LABEL-12, LABEL-13 (D8 decided: private until released)
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-14)
 
 ## Objective
 Upload audio into an org as a song, or as material linked to a song, with previews that are not publicly addressable.
@@ -814,6 +814,11 @@ Route tests with mocked storage; processing-branch unit test; e2e: upload 3 file
 - **`project_tracks` has no same-owner / same-org trigger** (pre-existing). The 141 scope path ignores mismatched rows, but this task writes the first org `project_tracks` rows: add the trigger as migration **142** (same shape as 141's section 4: owner case, or every parent in one non-null org), with a local check and a rollback.
 - **Name PostgREST embeds explicitly.** `projects.inbox_for_contact_id → contacts` is a direct FK now, so a bare `projects?select=contacts(…)` resolves through it. Use `contacts!project_contacts(…)` or the FK name.
 - `scopedOrgQuery` still returns nothing for projects / tracks to an artists-scoped member (fail-closed). If this task adds a list read, narrow it by the project path; do not widen the helper to the whole org.
+
+## Carried from LABEL-13 (#69)
+- **Previews (D8).** `GET /api/org/[orgId]/audio/[trackId]?variant=preview` streams whatever `preview_url` holds. Once this task writes org previews to the private bucket (`orgs/<org_id>/previews/`), that route serves them unchanged, through `stream-source`'s bucket allowlist. Check that the allowlist accepts the new prefix, and add a route test that an org preview never resolves to the public bucket.
+- **Play through the LABEL-13 route.** Any org player or tray link plays `/api/org/[orgId]/audio/[trackId]`, never `/api/audio?src=`.
+- **Classification follows links.** An upload added "as" a relation (`demo`, `master`, …) gets its D4 class from that link, so write the link in the same request that creates the track. A track with no link and no song type is unplayable to everyone in the org (null kind fails closed), except beats, loops and toplines.
 
 ## Out of Scope
 Non-audio files (LABEL-15).
@@ -870,6 +875,9 @@ The project Files section is reused in org context.
 ## Tests
 Route tests; existing assets tests stay green.
 
+## Carried from LABEL-13 (#69)
+- `track_stem_files` (mig 080) and older `track_versions` snapshots are not addressable through the org audio route, and `track_stem_files` has no `org_member_guard` in 141. Before any org surface lists stem files or versions, add the guard and the service-only write trigger to `track_stem_files` (same shape as 141 §3b/§3c, next free migration), and extend the audio route's variants if needed.
+
 ## Out of Scope
 Thumbnails / image processing.
 
@@ -921,6 +929,9 @@ None (LABEL-17 / 33).
 
 ## Tests
 `identifiers.test.ts`; route tests.
+
+## Carried from LABEL-13 (#69)
+- **"On a release" makes a mix finished** (06 §2.3). Until this task, `audioCapabilityFor('mix', { currentMixOfSelectedSong })` treats only `song_stage = 'selected'` as finished. When release items exist, extend that flag (in `lib/labelos/org-audio.ts#recordingContexts`) and the SQL twin `labelos_track_is_finished` (141) together, and add both to their tests. The two must not drift.
 
 ## Out of Scope
 Gates (LABEL-32); export (LABEL-34).
@@ -1179,6 +1190,9 @@ The Producer X flow (W4) end to end; revoked → 403.
 ## Tests
 - A route matrix (external × every org route → 403/404 except project-scoped ones).
 - e2e with two accounts.
+
+## Carried from LABEL-13 (#69)
+- The org audio route answers 404 to anyone who is not an org member. Wire `externalCan` into `GET /api/org/[orgId]/audio/[trackId]` (recordings in their project only) and record `recording.downloaded` for external members, as LABEL-13's spec intended.
 
 ## Out of Scope
 Credits proposal UI (LABEL-27).
