@@ -7,6 +7,7 @@ import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { readStoredObject, uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
+import { uploadOrgPeaks, uploadOrgPreview } from '@/lib/storage/org-media';
 import { errorMessage } from '@/lib/errors';
 import { parseTitleMetadata } from '@/lib/upload/title-metadata';
 import { compareFilenameWithDetected } from '@/lib/audio/metadata-agreement';
@@ -159,6 +160,12 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
 }> {
   const admin = createServiceClient();
   try {
+    // Where the derived files go is the ONE thing an org track changes here
+    // (LABEL-14, D8): an org recording's preview and peaks go to the private
+    // bucket under orgs/<org>/, a producer track's to the public one exactly
+    // as before. Read from the row, not inferred from the key, and a failed
+    // read fails the job (retried) rather than defaulting to public.
+    const orgId = await trackOrgId(admin, job.track_id);
     const audioBuffer = await readStoredObject(job.audio_url);
     const sniff = sniffAudioBuffer(audioBuffer);
     if (!sniff.ok) {
@@ -183,7 +190,11 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
     let peaksUrl: string | null = null;
     try {
       const peaks = await extractPeaks(audioBuffer);
-      if (peaks) peaksUrl = await uploadPeaksSidecar(job.audio_url, JSON.stringify(peaks));
+      if (peaks) {
+        peaksUrl = orgId
+          ? await uploadOrgPeaks(orgId, JSON.stringify(peaks))
+          : await uploadPeaksSidecar(job.audio_url, JSON.stringify(peaks));
+      }
     } catch (err) {
       console.warn('Upload processing peaks failed:', err);
     }
@@ -217,7 +228,9 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
     // backfill and "Analyze N" retry any track left without one.
     let previewUrl: string | null = null;
     try {
-      previewUrl = await uploadPublicPreview(audioBuffer, job.audio_url, merged.duration_seconds);
+      previewUrl = orgId
+        ? await uploadOrgPreview(orgId, audioBuffer, job.audio_url, merged.duration_seconds)
+        : await uploadPublicPreview(audioBuffer, job.audio_url, merged.duration_seconds);
       if (!previewUrl) console.warn('Upload processing: no preview clip (ffmpeg unavailable and master not mp3/wav)');
     } catch (err) {
       console.warn('Upload processing preview failed:', err);
@@ -276,6 +289,14 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
 
 type ServiceClient = ReturnType<typeof createServiceClient>;
 type Scalar = string | number | null;
+
+/** The track's organization (LABEL-12 `tracks.org_id`), or null for a producer track. Throws on a read error. */
+async function trackOrgId(admin: ServiceClient, trackId: string): Promise<string | null> {
+  const { data, error } = await admin.from('tracks').select('org_id').eq('id', trackId).maybeSingle();
+  if (error) throw new Error(`Track lookup failed: ${error.message}`);
+  const orgId = (data as { org_id?: unknown } | null)?.org_id;
+  return typeof orgId === 'string' && orgId ? orgId : null;
+}
 
 /**
  * `UPDATE tracks SET <next> WHERE id AND user_id AND <each column = expected>`.

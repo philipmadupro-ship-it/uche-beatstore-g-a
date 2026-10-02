@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ORG_UPLOAD_RELATIONS,
   isAnyOrgUploadKey,
+  isOrgMasterRef,
   isOrgUploadKey,
   isPrivateOrgMediaRef,
   orgMediaKey,
@@ -38,6 +39,18 @@ describe('org upload keys', () => {
     expect(isAnyOrgUploadKey(`local:orgs/${org}/tracks/sid`)).toBe(true);
     expect(isAnyOrgUploadKey('tracks/abc.wav')).toBe(false);
     expect(isAnyOrgUploadKey('local:sid')).toBe(false);
+  });
+});
+
+describe('org masters (R-05: never a public derivative)', () => {
+  it('recognises an org master in any bucket, and nothing else', () => {
+    expect(isOrgMasterRef(`r2://masters/orgs/${org}/tracks/abc.wav`)).toBe(true);
+    expect(isOrgMasterRef(`r2://other/orgs/${org}/tracks/abc.wav`)).toBe(true);
+    expect(isOrgMasterRef('r2://masters/tracks/abc.wav')).toBe(false);
+    expect(isOrgMasterRef('/uploads/abc.wav')).toBe(false);
+    expect(isOrgMasterRef('https://cdn.example.com/orgs/x/tracks/a.wav')).toBe(false);
+    expect(isOrgMasterRef(null)).toBe(false);
+    expect(isOrgMasterRef('Night Shift 140 Fm.wav')).toBe(false);
   });
 });
 

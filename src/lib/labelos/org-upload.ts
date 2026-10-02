@@ -60,6 +60,17 @@ export function isAnyOrgUploadKey(key: string): boolean {
   return /^(?:local:)?orgs\//.test(key);
 }
 
+/**
+ * An org recording's master (`r2://<bucket>/orgs/<org>/tracks/…`). The
+ * producer pipeline's public derivatives — `uploadPublicPreview`, the peaks
+ * and bands sidecars, the preview backfill — refuse to derive anything from
+ * one, so no producer route, cron or button can publish an org recording
+ * that the org path itself keeps private (R-05).
+ */
+export function isOrgMasterRef(ref: string | null | undefined): boolean {
+  return typeof ref === 'string' && /^r2:\/\/[^/]+\/orgs\/[0-9a-f-]{36}\/tracks\//i.test(ref);
+}
+
 export type OrgMediaKind = 'previews' | 'peaks';
 
 /** `orgs/<org>/<kind>/<id>.<ext>` — the private home of a derived file. */
