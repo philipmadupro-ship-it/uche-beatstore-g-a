@@ -22,6 +22,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     - row in another org than the URL's  → 404
  *     - member lacking the capability      → 403
  *     - member with it                     → ok, with the row's scope keys
+ *     - artist scope (LABEL-10): a scoped member gets 404 outside their
+ *       contacts, for objects with no contact, and with zero contacts; the
+ *       scope read failing is 500
+ *
+ *   scopedOrgQuery
+ *     - org filter always; artist-scope filter on org object tables only
  */
 
 const ORG_A = '00000000-0000-4000-8000-00000000000a';
@@ -51,10 +57,24 @@ function builder(table: string) {
       filters[col] = value;
       return b;
     },
+    in: (col: string, values: unknown[]) => {
+      calls.push({ table, op: 'in', args: [col, values] });
+      return b;
+    },
+    is: (col: string, value: unknown) => {
+      calls.push({ table, op: 'is', args: [col, value] });
+      return b;
+    },
     maybeSingle: async () => {
       const a = answers[table];
       if (!a) return { data: null, error: null };
       return typeof a === 'function' ? a(filters) : a;
+    },
+    // A list read (member_artist_scopes) is awaited directly.
+    then: (resolve: (r: Result) => unknown, reject?: (e: unknown) => unknown) => {
+      const a = answers[table];
+      const r = !a ? { data: [], error: null } : typeof a === 'function' ? a(filters) : a;
+      return Promise.resolve(r).then(resolve, reject);
     },
   };
   return b;
@@ -410,14 +430,101 @@ describe('requireObjectAccess', () => {
     if (r.ok) expect(r.object.contactId).toBeNull();
   });
 
-  it('artist scope is a no-op until LABEL-10: an artist-scoped member is not narrowed yet', async () => {
+});
+
+describe('artist scope (LABEL-10)', () => {
+  const OTHER_CONTACT = '00000000-0000-4000-8000-0000000000c2';
+
+  function scoped(contactIds: string[]) {
+    answers.member_artist_scopes = (filters) => {
+      // Read for THIS member of THIS org only.
+      expect(filters).toEqual({ org_id: ORG_A, user_id: USER });
+      return { data: contactIds.map((contact_id) => ({ contact_id })), error: null };
+    };
+  }
+
+  it('a scoped member reaches a contact in their scope, and the context carries the scope', async () => {
     signedIn();
     answers.contacts = { data: { org_id: ORG_A, id: CONTACT }, error: null };
     memberships({ [ORG_A]: member({ role: 'artist', scope: 'artists' }) });
+    scoped([CONTACT.toUpperCase()]);
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'contacts', id: CONTACT, cap: 'catalog.read', orgId: ORG_A });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.artistScope).toEqual(new Set([CONTACT]));
+  });
+
+  it('an out-of-scope contact is 404, never 403', async () => {
+    signedIn();
+    answers.contacts = { data: { org_id: ORG_A, id: OTHER_CONTACT }, error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'contacts', id: OTHER_CONTACT, cap: 'catalog.read' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(404);
+  });
+
+  it('a scoped member with zero contacts sees nothing', async () => {
+    signedIn();
+    answers.contacts = { data: { org_id: ORG_A, id: CONTACT }, error: null };
+    memberships({ [ORG_A]: member({ role: 'artist', scope: 'artists' }) });
+    scoped([]);
     const { requireObjectAccess } = await load();
     const r = await requireObjectAccess({ table: 'contacts', id: CONTACT, cap: 'catalog.read' });
-    // LABEL-10 makes this depend on member_artist_scopes; change this test then.
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(404);
+  });
+
+  it('an object with no roster contact (a project, for now) is 404 to a scoped member', async () => {
+    signedIn();
+    answers.projects = { data: { org_id: ORG_A, id: ROW }, error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'projects', id: ROW, cap: 'catalog.read' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(404);
+  });
+
+  it("an activity event is scoped by its artist_id (the roster contact)", async () => {
+    signedIn();
+    answers.activity_events = { data: { org_id: ORG_A, artist_id: CONTACT, project_id: null }, error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    expect((await requireObjectAccess({ table: 'activity_events', id: ROW, cap: 'catalog.read' })).ok).toBe(true);
+  });
+
+  it('role artist is scoped even if the column says org', async () => {
+    signedIn();
+    answers.contacts = { data: { org_id: ORG_A, id: CONTACT }, error: null };
+    memberships({ [ORG_A]: member({ role: 'artist', scope: 'org' }) });
+    scoped([]);
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'contacts', id: CONTACT, cap: 'catalog.read' });
+    expect(r.ok).toBe(false);
+  });
+
+  it('a failed scope read is 500, never the whole org', async () => {
+    signedIn();
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    answers.member_artist_scopes = { data: null, error: { message: 'db down' } };
+    const { requireOrgMember } = await load();
+    const r = await requireOrgMember(ORG_A);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(500);
+  });
+
+  it('an org-scoped member is not narrowed and costs no scope read', async () => {
+    signedIn();
+    answers.contacts = { data: { org_id: ORG_A, id: CONTACT }, error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'] }) });
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'contacts', id: CONTACT, cap: 'catalog.read' });
     expect(r.ok).toBe(true);
+    if (r.ok) expect(r.artistScope).toBeNull();
+    expect(calls.some((c) => c.table === 'member_artist_scopes')).toBe(false);
   });
 });
 
@@ -434,6 +541,48 @@ describe('scopedOrgQuery', () => {
       { table: 'projects', op: 'select', args: ['id, name', undefined] },
       { table: 'projects', op: 'eq', args: ['org_id', ORG_A] },
     ]);
+  });
+
+  async function scopedCtx(contactIds: string[]) {
+    signedIn();
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    answers.member_artist_scopes = { data: contactIds.map((contact_id) => ({ contact_id })), error: null };
+    const mod = await load();
+    const ctx = await mod.requireOrgMember(ORG_A);
+    if (!ctx.ok) throw new Error('expected a member');
+    calls = [];
+    return { ...mod, ctx };
+  }
+
+  it('narrows contacts to the scoped ids', async () => {
+    const C2 = '00000000-0000-4000-8000-0000000000c2';
+    const { scopedOrgQuery, ctx } = await scopedCtx([C2, CONTACT]);
+    scopedOrgQuery(ctx.admin, 'contacts', ctx, 'id');
+    expect(calls.slice(1)).toEqual([
+      { table: 'contacts', op: 'eq', args: ['org_id', ORG_A] },
+      { table: 'contacts', op: 'in', args: ['id', [CONTACT, C2]] },
+    ]);
+  });
+
+  it('narrows activity_events by artist_id', async () => {
+    const { scopedOrgQuery, ctx } = await scopedCtx([CONTACT]);
+    scopedOrgQuery(ctx.admin, 'activity_events', ctx, 'id');
+    expect(calls).toContainEqual({ table: 'activity_events', op: 'in', args: ['artist_id', [CONTACT]] });
+  });
+
+  it('returns nothing for zero contacts, or for an object table without a contact column', async () => {
+    const { scopedOrgQuery, ctx } = await scopedCtx([]);
+    scopedOrgQuery(ctx.admin, 'contacts', ctx, 'id');
+    expect(calls).toContainEqual({ table: 'contacts', op: 'is', args: ['org_id', null] });
+    calls = [];
+    scopedOrgQuery(ctx.admin, 'projects', { ...ctx, artistScope: new Set([CONTACT]) }, 'id');
+    expect(calls).toContainEqual({ table: 'projects', op: 'is', args: ['org_id', null] });
+  });
+
+  it('does not artist-scope org-level tables (co-members stay listable)', async () => {
+    const { scopedOrgQuery, ctx } = await scopedCtx([]);
+    scopedOrgQuery(ctx.admin, 'org_members', ctx, 'user_id');
+    expect(calls.map((c) => c.op)).toEqual(['select', 'eq']);
   });
 });
 

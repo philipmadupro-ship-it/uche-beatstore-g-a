@@ -26,8 +26,12 @@
  *    producer row (org_id IS NULL)", so an id never reveals that something
  *    exists in another tenant. Never 200 across orgs.
  *
- * Artist scope (`org_members.scope = 'artists'`) is a no-op until LABEL-10
- * adds `member_artist_scopes` / `can_see_artist`; see `artistScopeAllows`.
+ * Artist scope (06 §2.5, LABEL-10): a member with `scope = 'artists'` (role
+ * `artist` always) sees only the roster contacts in `member_artist_scopes`,
+ * read live with the membership. requireObjectAccess answers 404 for an
+ * object outside it (and for any object with no contact); scopedOrgQuery
+ * narrows list reads to it. The rule is lib/labelos/artist-scope, the SQL
+ * twin `public.can_see_artist` (migration 139).
  */
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
@@ -41,6 +45,7 @@ import {
   type OrgKind,
   type Role,
 } from '@/lib/labelos/capabilities';
+import { artistScopeFilter, scopeAllowsContact, toArtistScope, type ArtistScope } from '@/lib/labelos/artist-scope';
 import { createLogger } from '@/lib/log';
 import { isUUID } from '@/lib/validate';
 
@@ -55,12 +60,14 @@ export type OrgAccessOk = {
   role: Role;
   /** `org` sees every artist; `artists` only those in member_artist_scopes (LABEL-10). */
   scope: 'org' | 'artists';
+  /** The roster contacts this member sees: null = the whole org (lib/labelos/artist-scope). */
+  artistScope: ArtistScope;
   capabilities: ReadonlySet<Capability>;
 };
 export type OrgAccessResult = OrgAccessOk | OwnershipFail;
 
 /** The parts of an access context the query and event helpers need. */
-export type OrgContext = Pick<OrgAccessOk, 'orgId' | 'userId' | 'scope'>;
+export type OrgContext = Pick<OrgAccessOk, 'orgId' | 'userId' | 'scope' | 'artistScope'>;
 
 function fail(status: 401 | 403 | 404 | 500, error: string): OwnershipFail {
   return { ok: false, res: NextResponse.json({ error }, { status }) };
@@ -106,7 +113,7 @@ async function readMembership(
   admin: AdminClient,
   orgId: string,
   userId: string,
-): Promise<Omit<OrgAccessOk, 'ok' | 'admin' | 'userId' | 'orgId'> | null> {
+): Promise<Omit<OrgAccessOk, 'ok' | 'admin' | 'userId' | 'orgId' | 'artistScope'> | null> {
   const { data, error } = await admin
     .from('org_members')
     .select('role, functions, scope, cap_grants, cap_revokes, organizations!inner(kind, deleted_at)')
@@ -155,7 +162,36 @@ async function memberContext(
     return fail(500, 'Could not check organization access');
   }
   if (!membership) return missing();
-  return { ok: true, userId, admin, orgId, ...membership };
+  let artistScope: ArtistScope;
+  try {
+    artistScope = await readArtistScope(admin, orgId, userId, membership);
+  } catch (err) {
+    log.error('artist scope read failed', { orgId, error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check organization access');
+  }
+  return { ok: true, userId, admin, orgId, ...membership, artistScope };
+}
+
+/**
+ * The member's artist scope: null for the whole org, else the contacts in
+ * member_artist_scopes (none = sees nothing). Read only when scoped; throws
+ * on a database error so the caller fails closed.
+ */
+async function readArtistScope(
+  admin: AdminClient,
+  orgId: string,
+  userId: string,
+  membership: { role: Role; scope: 'org' | 'artists' },
+): Promise<ArtistScope> {
+  if (toArtistScope(membership.role, membership.scope, []) === null) return null;
+  const { data, error } = await admin
+    .from('member_artist_scopes')
+    .select('contact_id')
+    .eq('org_id', orgId)
+    .eq('user_id', userId);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as { contact_id: string | null }[];
+  return toArtistScope(membership.role, membership.scope, rows.map((r) => r.contact_id));
 }
 
 /**
@@ -235,13 +271,11 @@ export type OrgObject = {
 export type ObjectAccessResult = (OrgAccessOk & { object: OrgObject }) | OwnershipFail;
 
 /**
- * Artist scope (06 §2.5). A no-op until LABEL-10, which adds
- * `member_artist_scopes` and makes this read it: an `artists`-scoped member
- * will then see only objects whose contact is in their list, and objects with
- * no contact not at all.
+ * Artist scope (06 §2.5): an `artists`-scoped member sees only objects whose
+ * roster contact is in their list, and objects with no contact not at all.
  */
-function artistScopeAllows(_access: OrgAccessOk, _object: OrgObject): boolean {
-  return true;
+function artistScopeAllows(access: OrgAccessOk, object: OrgObject): boolean {
+  return scopeAllowsContact(access.artistScope, object.contactId);
 }
 
 /**
@@ -281,7 +315,6 @@ export async function requireObjectAccess(opts: {
 
   const access = await memberContext(userId, rowOrg, NOT_FOUND);
   if (!access.ok) return access;
-  if (!access.capabilities.has(cap)) return FORBIDDEN();
 
   const key = (col: string | null) => {
     const v = col ? row[col] : null;
@@ -294,14 +327,19 @@ export async function requireObjectAccess(opts: {
     contactId: key(cols.contact),
     projectId: key(cols.project),
   };
+  // Scope before capability: an object outside the member's artists is 404
+  // whatever they may do, so a 403 never confirms that it exists.
   if (!artistScopeAllows(access, object)) return NOT_FOUND();
+  if (!access.capabilities.has(cap)) return FORBIDDEN();
   return { ...access, object };
 }
 
 /**
- * A read of `table` pre-filtered to the context's org (and, from LABEL-10,
- * its artist scope). Chain further filters on the result. The context must
- * come from one of the require* helpers above, so the org was authorised.
+ * A read of `table` pre-filtered to the context's org and, for an org object
+ * table (ORG_OBJECT_TABLES), to the member's artist scope. Org-level tables
+ * (org_members, member_artist_scopes) are not artist-scoped. Chain further
+ * filters on the result. The context must come from one of the require*
+ * helpers above, so the org was authorised.
  */
 export function scopedOrgQuery(
   admin: AdminClient,
@@ -310,7 +348,15 @@ export function scopedOrgQuery(
   columns = '*',
   options?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean },
 ) {
-  return admin.from(table).select(columns, options).eq('org_id', ctx.orgId);
+  const query = admin.from(table).select(columns, options).eq('org_id', ctx.orgId);
+  if (!(table in ORG_OBJECT_TABLES)) return query;
+  const filter = artistScopeFilter(ctx.artistScope, ORG_OBJECT_TABLES[table as OrgObjectTable].contact);
+  if (filter.kind === 'in') return query.in(filter.column, filter.values);
+  // Nothing in scope: a filter no row can satisfy alongside the org filter
+  // above (org_id = X AND org_id IS NULL), so the read stays a normal query
+  // the route can chain on, and returns nothing.
+  if (filter.kind === 'none') return query.is('org_id', null);
+  return query;
 }
 
 // ── Member rows (LABEL-09) ──────────────────────────────────────────────
@@ -341,6 +387,48 @@ export function memberRowQuery(admin: AdminClient, ctx: OrgAccessOk, userId: str
     delete: () => {
       write();
       return admin.from('org_members').delete().eq('org_id', ctx.orgId).eq('user_id', userId);
+    },
+  };
+}
+
+/**
+ * One member's artist scope rows (`member_artist_scopes`), addressed by
+ * (org, user) like `memberRowQuery`, for the same reason. Reads need only
+ * the context; replacing the list needs `members.manage` (throws without).
+ * The same-org trigger (139) refuses a contact of another org.
+ */
+export function memberArtistScopeQuery(admin: AdminClient, ctx: OrgAccessOk, userId: string) {
+  if (!isUUID(userId)) throw new Error('memberArtistScopeQuery: userId is not a uuid');
+  const rows = () => admin.from('member_artist_scopes');
+  const select = () => rows().select('contact_id').eq('org_id', ctx.orgId).eq('user_id', userId);
+  return {
+    select,
+    /** The list as sorted, lower-cased ids. Throws on a database error. */
+    list: async (): Promise<string[]> => {
+      const { data, error } = await select();
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as { contact_id: string }[]).map((r) => r.contact_id.toLowerCase()).sort();
+    },
+    /**
+     * Make the list exactly `contactIds`. Drops what is not wanted FIRST, then
+     * adds what is missing: a failure between the two leaves the member with
+     * less than either list, never more (fail narrow; the route then puts the
+     * old list back).
+     */
+    replace: async (contactIds: readonly string[]): Promise<{ error: { message: string } | null }> => {
+      if (!ctx.capabilities.has('members.manage')) throw new Error('memberArtistScopeQuery: members.manage is required to write');
+      const ids = [...new Set(contactIds.map((c) => c.toLowerCase()))];
+      if (ids.some((id) => !isUUID(id))) throw new Error('memberArtistScopeQuery: contact ids must be uuids');
+      let drop = rows().delete().eq('org_id', ctx.orgId).eq('user_id', userId);
+      if (ids.length > 0) drop = drop.not('contact_id', 'in', `(${ids.join(',')})`);
+      const { error: dropErr } = await drop;
+      if (dropErr) return { error: dropErr };
+      if (ids.length === 0) return { error: null };
+      const { error } = await rows().upsert(
+        ids.map((contact_id) => ({ org_id: ctx.orgId, user_id: userId, contact_id })),
+        { onConflict: 'org_id,user_id,contact_id', ignoreDuplicates: true },
+      );
+      return { error: error ?? null };
     },
   };
 }

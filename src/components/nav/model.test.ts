@@ -82,8 +82,16 @@ describe('navGroupsFor', () => {
   it('a label org lists the pages that exist for it, under its slug', () => {
     const groups = navGroupsFor('label', new Set(['catalog.read']), { slug: 'night-shift', viewerIsProducer: true });
     expect(shape(groups)).toEqual([
+      { key: 'roster', label: 'Artists', icon: 'MicVocal', items: [{ label: 'Artists', href: '/o/night-shift/artists', icon: 'MicVocal' }] },
       { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/night-shift/settings/members', icon: 'UsersRound' }] },
     ]);
+  });
+
+  it('the Artists hub needs catalog.read, and is for label and artist orgs only (LABEL-10)', () => {
+    expect(navGroupsFor('label', new Set(), { slug: 'ns', viewerIsProducer: false }).map((g) => g.key)).toEqual(['org']);
+    expect(navGroupsFor('artist', new Set(['catalog.read']), { slug: 'nova', viewerIsProducer: false }).map((g) => g.key)).toEqual(['roster', 'org']);
+    const producer = navGroupsFor('producer', new Set(ALL_CAPABILITIES), { slug: 'uche', viewerIsProducer: true });
+    expect(producer.map((g) => g.key)).not.toContain('roster');
   });
 
   it('an org without its slug, or of an unknown kind, has nothing to link to', () => {

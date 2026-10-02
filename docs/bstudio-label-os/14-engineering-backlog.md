@@ -522,7 +522,7 @@ Flag off.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-09
-**Status:** In Progress (branch label-os/LABEL-10)
+**Status:** In Review (PR #65, branch label-os/LABEL-10)
 
 ## Objective
 The artist roster is the org's contacts in workspace mode (`17` R3), and members can be limited to some artists.

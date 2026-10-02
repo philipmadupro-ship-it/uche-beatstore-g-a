@@ -91,7 +91,7 @@ export type InvitationGrant =
       ok: true;
       role: InvitableRole;
       functions: OrgFunction[];
-      /** The roster artists (contacts, 17 R3) the member is limited to. Validated by LABEL-10. */
+      /** The roster artists (contacts, 17 R3) the member is limited to. The route checks they are contacts of the org. */
       contactIds: string[];
       /** What the accepted membership's `org_members.scope` will be. */
       scope: 'org' | 'artists';

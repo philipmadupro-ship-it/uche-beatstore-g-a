@@ -30,15 +30,25 @@ const NOUNS = {
   },
 } as const;
 
-export function ArtistsCardView({ artists, ready, failed, kind = 'artist' }: {
+export function ArtistsCardView({ artists, ready, failed, kind = 'artist', linkFor, emptyText }: {
   /** From /api/contacts/artists, loaded by the page (it also splits the table by them). Null while loading. */
   artists: ArtistSummary[] | null;
   ready: boolean;
   failed: boolean;
   /** Which tab this is; only changes the wording. */
   kind?: keyof typeof NOUNS;
+  /**
+   * Where a card links. Defaults to the producer's workspace (/contacts/<id>).
+   * Null renders the card without a link — the org roster (LABEL-10) until
+   * the org artist workspace exists, so a card never points at a page the
+   * viewer cannot open.
+   */
+  linkFor?: (contactId: string) => string | null;
+  /** Overrides the empty-state copy (the producer's mentions Start workspace). */
+  emptyText?: string;
 }) {
   const noun = NOUNS[kind];
+  const hrefOf = linkFor ?? ((id: string) => `/contacts/${id}`);
   const [query, setQuery] = useState('');
   const shown = useMemo(() => searchArtists(artists ?? [], query), [artists, query]);
 
@@ -48,7 +58,7 @@ export function ArtistsCardView({ artists, ready, failed, kind = 'artist' }: {
   if (artists.length === 0) {
     return (
       <p className={kind === 'artist' ? 'mx-auto max-w-md py-16 text-center text-[11px] text-white/40' : 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-5 text-center text-[11px] text-white/40'}>
-        {noun.empty}
+        {emptyText ?? noun.empty}
       </p>
     );
   }
@@ -75,55 +85,62 @@ export function ArtistsCardView({ artists, ready, failed, kind = 'artist' }: {
           a.downloads > 0 ? `${a.downloads} download${a.downloads === 1 ? '' : 's'}` : null,
           a.portal?.live ? (a.portal.lastViewedAt ? `opened ${relativeDays(a.portal.lastViewedAt)}` : 'portal not opened') : a.portal ? 'portal revoked' : null,
         ].filter(Boolean).join(' · ');
+        const href = hrefOf(a.contact.id);
+        const cardClass = 'flex h-full flex-col gap-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+        const body = (
+          <>
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.06] text-[13px] text-white/80">
+                {a.contact.avatar_url
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={a.contact.avatar_url} alt="" className="h-full w-full object-cover" />
+                  : a.contact.name[0]?.toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] text-white/90">{a.contact.name}</span>
+                <span className="block text-[11px] text-white/50">
+                  {RELATIONSHIP_META[a.relationship.stage].label}
+                  {a.relationship.parked && <span className="text-white/30"> · parked</span>}
+                </span>
+              </span>
+              {a.notifyCount > 0 && (
+                <span className="shrink-0 rounded-lg border border-[#6DC6A4]/40 px-2 py-0.5 text-[10px] text-[#6DC6A4]" title="New in their portal since the last notify">
+                  {a.notifyCount} to notify
+                </span>
+              )}
+            </div>
+
+            {a.activeProject ? (
+              <div className="flex items-center gap-3">
+                <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-white/[0.06]">
+                  <ArtworkFallback src={a.activeProject.cover_url} seed={a.activeProject.id} kind="project" sizes="40px" className="object-cover">
+                    <Layers size={14} className="text-white/30" aria-hidden="true" />
+                  </ArtworkFallback>
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[11px] text-white/70">{a.activeProject.name}</span>
+                  <span className="block text-[11px] text-white/40">
+                    {a.projectCount > 1 ? `+${a.projectCount - 1} more project${a.projectCount === 2 ? '' : 's'}` : 'Active project'}
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-white/30">No active project</p>
+            )}
+
+            <p className={`text-[11px] ${moving ? 'text-[#6DC6A4]' : 'text-white/30'}`}>{moving || 'Nothing moving yet'}</p>
+            {facts && <p className="mt-auto text-[11px] text-white/40">{facts}</p>}
+          </>
+        );
         return (
           <li key={a.contact.id}>
-            <Link
-              href={`/contacts/${a.contact.id}`}
-              className="flex h-full flex-col gap-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4 transition-colors hover:border-white/20"
-              data-testid={`artist-card-${a.contact.id}`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.06] text-[13px] text-white/80">
-                  {a.contact.avatar_url
-                    // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={a.contact.avatar_url} alt="" className="h-full w-full object-cover" />
-                    : a.contact.name[0]?.toUpperCase()}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] text-white/90">{a.contact.name}</span>
-                  <span className="block text-[11px] text-white/50">
-                    {RELATIONSHIP_META[a.relationship.stage].label}
-                    {a.relationship.parked && <span className="text-white/30"> · parked</span>}
-                  </span>
-                </span>
-                {a.notifyCount > 0 && (
-                  <span className="shrink-0 rounded-lg border border-[#6DC6A4]/40 px-2 py-0.5 text-[10px] text-[#6DC6A4]" title="New in their portal since the last notify">
-                    {a.notifyCount} to notify
-                  </span>
-                )}
-              </div>
-
-              {a.activeProject ? (
-                <div className="flex items-center gap-3">
-                  <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-white/[0.06]">
-                    <ArtworkFallback src={a.activeProject.cover_url} seed={a.activeProject.id} kind="project" sizes="40px" className="object-cover">
-                      <Layers size={14} className="text-white/30" aria-hidden="true" />
-                    </ArtworkFallback>
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-[11px] text-white/70">{a.activeProject.name}</span>
-                    <span className="block text-[11px] text-white/40">
-                      {a.projectCount > 1 ? `+${a.projectCount - 1} more project${a.projectCount === 2 ? '' : 's'}` : 'Active project'}
-                    </span>
-                  </span>
-                </div>
-              ) : (
-                <p className="text-[11px] text-white/30">No active project</p>
-              )}
-
-              <p className={`text-[11px] ${moving ? 'text-[#6DC6A4]' : 'text-white/30'}`}>{moving || 'Nothing moving yet'}</p>
-              {facts && <p className="mt-auto text-[11px] text-white/40">{facts}</p>}
-            </Link>
+            {href ? (
+              <Link href={href} className={`${cardClass} transition-colors hover:border-white/20`} data-testid={`artist-card-${a.contact.id}`}>
+                {body}
+              </Link>
+            ) : (
+              <div className={cardClass} data-testid={`artist-card-${a.contact.id}`}>{body}</div>
+            )}
           </li>
         );
       })}

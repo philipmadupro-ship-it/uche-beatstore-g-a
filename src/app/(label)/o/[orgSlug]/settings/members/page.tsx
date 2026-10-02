@@ -13,8 +13,10 @@
  * row's ⋯ ActionMenu (remove confirms with confirmToast); abilities are a
  * popover of switches; inviting is the one modal.
  *
- * Artist scope (which roster artists a member sees) is shown, not edited:
- * the roster picker is LABEL-10.
+ * Artist scope (LABEL-10, 06 §2.5): the ⋯ menu switches a member between
+ * the whole organization and selected artists (PATCH scope); for a member
+ * limited to some artists, the Artists popover is the roster picker
+ * (PUT /members/artists). Role `artist` is always limited.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserPlus } from 'lucide-react';
@@ -62,7 +64,13 @@ type Member = {
   cap_revokes: string[];
   joined_at: string;
   is_you: boolean;
+  /** The roster contacts an artists-scoped member sees; null when not shown or whole org. */
+  contact_ids: string[] | null;
 };
+
+type RosterEntry = { id: string; name: string };
+/** null while loading; 'failed' when the roster could not be read. */
+type Roster = RosterEntry[] | null | 'failed';
 
 type Invitation = {
   id: string;
@@ -72,7 +80,7 @@ type Invitation = {
   expires_at: string;
 };
 
-type Patch = Partial<Pick<Member, 'role' | 'functions' | 'cap_grants' | 'cap_revokes'>>;
+type Patch = Partial<Pick<Member, 'role' | 'functions' | 'scope' | 'cap_grants' | 'cap_revokes'>>;
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
 
@@ -104,6 +112,7 @@ export default function OrgMembersPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [roster, setRoster] = useState<Roster>(null);
 
   const orgId = shell?.org.id ?? '';
   const manage = shell?.can('members.manage') ?? false;
@@ -113,6 +122,26 @@ export default function OrgMembersPage() {
     if (!manage) return;
     const res = await fetch(`/api/org/${orgId}/invitations`, { cache: 'no-store' });
     if (res.ok) setInvitations(((await readJson(res)).invitations as Invitation[]) ?? []);
+  }, [orgId, manage]);
+
+  // The roster to pick from, for whoever may change a member's artists.
+  // A failed read (no catalog.read, a server error) is shown as such, never
+  // as an empty roster.
+  useEffect(() => {
+    if (!orgId || !manage) return;
+    let alive = true;
+    fetch(`/api/org/${orgId}/contacts?view=roster`, { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const body = await readJson(res);
+        if (alive) setRoster(((body.contacts as RosterEntry[]) ?? []).map((c) => ({ id: c.id, name: c.name })));
+      })
+      .catch(() => {
+        if (alive) setRoster('failed');
+      });
+    return () => {
+      alive = false;
+    };
   }, [orgId, manage]);
 
   useEffect(() => {
@@ -170,13 +199,48 @@ export default function OrgMembersPage() {
         return;
       }
       const next = body.member as Partial<Member>;
+      // A new limit starts from no artists (widening to the whole org clears
+      // the list on the server, LABEL-10); the whole org carries none.
+      let contactIds: string[] | null | undefined;
+      if (next.scope === 'artists' && m.scope !== 'artists') contactIds = [];
+      else if (next.scope === 'org') contactIds = null;
       setMembers((cur) =>
         (cur ?? []).map((x) =>
           x.user_id === m.user_id
-            ? { ...x, role: next.role ?? x.role, functions: next.functions ?? x.functions, scope: next.scope ?? x.scope, cap_grants: next.cap_grants ?? x.cap_grants, cap_revokes: next.cap_revokes ?? x.cap_revokes }
+            ? {
+                ...x,
+                role: next.role ?? x.role,
+                functions: next.functions ?? x.functions,
+                scope: next.scope ?? x.scope,
+                cap_grants: next.cap_grants ?? x.cap_grants,
+                cap_revokes: next.cap_revokes ?? x.cap_revokes,
+                contact_ids: contactIds === undefined ? x.contact_ids : contactIds,
+              }
             : x,
         ),
       );
+    } catch {
+      toast.error('Could not reach the server');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const setArtists = async (m: Member, contactIds: string[]) => {
+    setBusy(m.user_id);
+    try {
+      const res = await fetch(`/api/org/${org.id}/members/artists`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ user_id: m.user_id, contact_ids: contactIds }),
+      });
+      const body = await readJson(res);
+      if (!res.ok) {
+        toast.error('Could not change the artists', typeof body.error === 'string' ? body.error : undefined);
+        return;
+      }
+      const saved = (body.contact_ids as string[]) ?? [];
+      setMembers((cur) => (cur ?? []).map((x) => (x.user_id === m.user_id ? { ...x, contact_ids: saved } : x)));
     } catch {
       toast.error('Could not reach the server');
     } finally {
@@ -294,7 +358,9 @@ export default function OrgMembersPage() {
                   actor={actor}
                   ownerCount={ownerCount}
                   busy={busy === m.user_id}
+                  roster={roster}
                   onChange={(p) => change(m, p)}
+                  onArtists={(ids) => setArtists(m, ids)}
                   onRemove={() => remove(m)}
                 />
               ))}
@@ -351,7 +417,9 @@ function MemberRow({
   actor,
   ownerCount,
   busy,
+  roster,
   onChange,
+  onArtists,
   onRemove,
 }: {
   member: Member;
@@ -360,7 +428,9 @@ function MemberRow({
   actor: { userId: string; role: Role };
   ownerCount: number;
   busy: boolean;
+  roster: Roster;
   onChange: (patch: Patch) => void;
+  onArtists: (contactIds: string[]) => void;
   onRemove: () => void;
 }) {
   const role = asRole(m.role);
@@ -371,8 +441,23 @@ function MemberRow({
   const removable = manage && planMemberRemoval(actor, state, ownerCount).ok;
   const usesFunctions = !!role && ROLE_USES_FUNCTIONS[role];
   const switchable = manage && role && ROLE_TAKES_OVERRIDES[role] ? switchableCapabilities(orgKind, role) : [];
+  const limited = m.scope === 'artists' || role === 'artist';
+  // Only a plain member chooses between the two: an artist is always
+  // limited, an owner/admin never (planMemberChange holds the same rule).
+  const scopeChoosable = manage && role === 'member' && !m.is_you;
+  const artistCount = m.contact_ids?.length ?? null;
 
   const sections: MenuSection[] = [];
+  if (scopeChoosable) {
+    sections.push({
+      id: 'scope',
+      label: 'Sees',
+      items: [
+        { id: 'scope-org', label: 'Whole organization', checked: !limited, disabled: busy, onSelect: () => { if (limited) onChange({ scope: 'org' }); } },
+        { id: 'scope-artists', label: 'Selected artists', checked: limited, disabled: busy, onSelect: () => { if (!limited) onChange({ scope: 'artists' }); } },
+      ],
+    });
+  }
   if (manage && usesFunctions && roles.length > 0) {
     sections.push({
       id: 'functions',
@@ -408,7 +493,7 @@ function MemberRow({
           {m.is_you && <span className="shrink-0 rounded-full border border-white/20 px-2 py-0.5 text-[10px] text-white/70">You</span>}
         </p>
         <p className={`${LABEL} mt-1 truncate`}>
-          {[m.email && m.email !== who ? m.email : null, functions.length ? functions.map((f) => FUNCTION_LABELS[f]).join(' · ') : null, m.scope === 'artists' ? 'Selected artists' : null, `Joined ${shortDate(m.joined_at)}`]
+          {[m.email && m.email !== who ? m.email : null, functions.length ? functions.map((f) => FUNCTION_LABELS[f]).join(' · ') : null, limited ? (artistCount === null ? 'Selected artists' : `${artistCount} ${artistCount === 1 ? 'artist' : 'artists'}`) : null, `Joined ${shortDate(m.joined_at)}`]
             .filter(Boolean)
             .join(' · ')}
         </p>
@@ -426,6 +511,9 @@ function MemberRow({
           />
         ) : (
           <span className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/70">{role ? ROLE_LABELS[role] : m.role}</span>
+        )}
+        {manage && limited && (
+          <ArtistsPopover member={m} roster={roster} busy={busy} onArtists={onArtists} who={who} />
         )}
         {switchable.length > 0 && role && (
           <AbilitiesPopover member={m} orgKind={orgKind} role={role} switchable={switchable} busy={busy} onChange={onChange} who={who} />
@@ -521,6 +609,95 @@ function AbilitiesPopover({
             );
           })}
         </ul>
+      </div>
+    </Popover>
+  );
+}
+
+/**
+ * The roster picker (LABEL-10): which of the org's artists a limited member
+ * sees. Each switch saves the whole list (PUT /members/artists). None
+ * selected is allowed and means the member sees no artist.
+ */
+function ArtistsPopover({
+  member: m,
+  roster,
+  busy,
+  onArtists,
+  who,
+}: {
+  member: Member;
+  roster: Roster;
+  busy: boolean;
+  onArtists: (contactIds: string[]) => void;
+  who: string;
+}) {
+  const selected = new Set(m.contact_ids ?? []);
+  const count = selected.size;
+  return (
+    <Popover
+      width={300}
+      align="right"
+      label={`Artists ${who} sees`}
+      trigger={({ open, toggle, ref }) => (
+        <button
+          ref={ref as (el: HTMLButtonElement | null) => void}
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          disabled={busy}
+          className={cn(
+            'min-h-9 rounded-lg border px-3 text-xs transition-colors duration-[var(--dur-fast)] disabled:opacity-40',
+            open
+              ? 'border-white/30 bg-white/[0.14] text-white'
+              : 'border-white/10 bg-white/[0.06] text-white/80 hover:border-white/20 hover:bg-white/[0.10]',
+          )}
+        >
+          {count === 0 ? 'Artists · none' : `Artists · ${count}`}
+        </button>
+      )}
+    >
+      <div className="max-h-[60vh] overflow-y-auto p-2">
+        <p className="px-2 pb-2 pt-1 text-[11px] leading-5 text-[var(--text-readable)]">
+          {who} sees only the artists switched on here{count === 0 ? ' — none yet, so nothing at all' : ''}.
+        </p>
+        {roster === null ? (
+          <p role="status" className="px-2 py-2 text-[11px] text-white/60">Loading the roster…</p>
+        ) : roster === 'failed' ? (
+          <p role="alert" className="px-2 py-2 text-[11px] text-[var(--error-text)]">Could not load the roster. Reload to try again.</p>
+        ) : roster.length === 0 ? (
+          <p className="px-2 py-2 text-[11px] text-white/60">This organization has no artists on its roster yet.</p>
+        ) : (
+          <ul className="space-y-0.5">
+            {roster.map((a) => {
+              const on = selected.has(a.id);
+              return (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={on}
+                    disabled={busy}
+                    onClick={() => onArtists(on ? [...selected].filter((id) => id !== a.id) : [...selected, a.id])}
+                    className="flex min-h-10 w-full items-center gap-3 rounded-lg px-2 text-left text-[11px] transition-colors hover:bg-white/[0.08] disabled:opacity-40"
+                  >
+                    <span className={cn('min-w-0 flex-1 truncate', on ? 'text-white/80' : 'text-white/40')}>{a.name}</span>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'relative h-4 w-7 shrink-0 rounded-full border transition-colors',
+                        on ? 'border-white/30 bg-white/[0.14]' : 'border-white/10 bg-white/[0.04]',
+                      )}
+                    >
+                      <span className={cn('absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full transition-all', on ? 'left-3.5 bg-white' : 'left-0.5 bg-white/40')} />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </Popover>
   );
