@@ -17,6 +17,7 @@
 import { z } from 'zod';
 import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
 import { DECISIONS } from '@/lib/contacts/decisions';
+import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -970,3 +971,39 @@ export const OrgAudioQuerySchema = z.object({
   key: z.undefined({ message: 'Name a track, not a file' }).optional(),
 });
 export type OrgAudioQuery = z.infer<typeof OrgAudioQuerySchema>;
+
+// ── Label OS org upload (LABEL-14) ───────────────────────────────────────
+
+/**
+ * What an org upload becomes (lib/labelos/org-upload): a new song for a
+ * roster artist, or material linked to an existing org song. Sent at init
+ * (checked before a byte moves) and again at complete (checked again — the
+ * session row stores no intent, and access may have changed meanwhile).
+ */
+export const OrgUploadIntentSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('song'), contactId: z.string().uuid() }),
+  z.object({ kind: z.literal('link'), songId: z.string().uuid(), relation: z.enum(ORG_UPLOAD_RELATIONS) }),
+]);
+export type OrgUploadIntentBody = z.infer<typeof OrgUploadIntentSchema>;
+
+/**
+ * POST /api/org/[orgId]/upload/init. Unlike the producer route it takes no
+ * `projectId`, `replaceTrackId` or `trackType`: the destination and the type
+ * follow from the intent, and are decided by the server. Unknown keys drop.
+ */
+export const OrgUploadInitSchema = z.object({
+  fileName: z.string().trim().min(1).max(300),
+  fileSize: z.number().int().positive(),
+  fileType: z.string().max(120).optional(),
+  as: OrgUploadIntentSchema,
+});
+
+/** POST /api/org/[orgId]/upload/complete. `analysis` is validated per field by `parseClientAnalysis`. */
+export const OrgUploadCompleteSchema = z.object({
+  sessionId: z.string().min(1).max(64),
+  analysis: z.unknown().optional(),
+  as: OrgUploadIntentSchema,
+});
+
+/** POST /api/org/[orgId]/upload/abort. */
+export const OrgUploadSessionSchema = z.object({ sessionId: z.string().min(1).max(64) });
