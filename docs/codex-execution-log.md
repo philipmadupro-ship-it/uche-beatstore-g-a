@@ -9346,3 +9346,9 @@ Tests: `purchase-access.test.ts`, `download-failure.test.ts`, route tests for bo
 Not changed (see report): a lease bought on a WAV-only master has nothing to download (no MP3 derivative exists); `charge.refunded` revokes on a partial refund too; no download audit log or rate limit.
 
 Follow-up (same PR): `/api/store/projects/access/[token]/download` now logs the detail and returns a fixed "Download failed" on a 500 (new `route.test.ts`; also covers 404 for unknown/expired token).
+
+Follow-up (same PR): the flagged buyer's email. `runFulfillment` step 4 re-reads `needs_refund_review` and, when set, sends `lib/store/held-purchase-email.ts` ("Your purchase is being reviewed": payment received, exclusive sold at the same moment, producer will be in touch) instead of "your files are ready" — no download button, no license PDF attached. Same `deliverFulfillmentEmail` job key, so retries stay idempotent.
+
+**A hazard this exposed, fixed here:** the webhook decided "double sale" from a failed conditional claim alone. A re-delivered event re-runs fulfilment for a purchase that already claimed the track, the claim fails against itself, and the legitimate winner was flagged. Harmless while the flag was a badge; with the flag now holding downloads and triggering this email it would lock out the buyer who paid first. `lib/store/exclusive-claim.ts#trackHeldByAnotherBuyer` now requires another LIVE exclusive purchase of the track (unlocked and not itself flagged — the loser's row also names the track) before the flag is written; if that lookup errors it falls back to the old behaviour (flag). Tests: webhook loser and winner-retry cases (both failed on the old code), `exclusive-claim.test.ts`.
+
+Not changed: the license PDF is still generated and stored on a flagged row (just not emailed); `/api/sales/resend` and `/api/store/orders/resend` will still email the download link to a flagged buyer, which then shows the hold message.

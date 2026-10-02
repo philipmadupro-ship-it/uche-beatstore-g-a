@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUrl } from '@/lib/env';
 import { Resend } from 'resend';
+import { trackHeldByAnotherBuyer, type OtherPurchase } from '@/lib/store/exclusive-claim';
+import { buildHeldPurchaseEmail } from '@/lib/store/held-purchase-email';
 import { getStripe } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
@@ -340,12 +342,33 @@ async function runFulfillment(params: {
           const claimedIds = new Set((claimed ?? []).map((t) => t.id as string));
           const lost = exclusiveTrackIds.filter((id) => !claimedIds.has(id));
 
+          // A failed claim is "already sold", but a re-delivered event re-runs
+          // a purchase that claimed the track itself. Only a live exclusive
+          // held by ANOTHER purchase makes this a double sale; the flag holds
+          // the buyer's downloads, so it must never land on the winner.
+          let confirmedLost = lost;
           if (lost.length > 0) {
+            const { data: others, error: othersError } = await admin
+              .from('license_purchases')
+              .select('track_ids, line_items, license_type, download_unlocked, needs_refund_review')
+              .neq('stripe_session_id', session.id)
+              .overlaps('track_ids', lost);
+            if (!othersError) {
+              confirmedLost = lost.filter((id) =>
+                trackHeldByAnotherBuyer(id, (others ?? []) as OtherPurchase[]));
+            } else {
+              log.warn('could not confirm exclusive holder; treating as double sale', {
+                sessionId: session.id, error: othersError.message,
+              });
+            }
+          }
+
+          if (confirmedLost.length > 0) {
             // This buyer paid for an exclusive that was already sold. Flag the
             // purchase so /sales can surface it for refund rather than leaving
             // the producer to discover it from a complaint.
             log.error('EXCLUSIVE DOUBLE SALE — track already sold when payment landed', {
-              trackIds: lost,
+              trackIds: confirmedLost,
               sessionId: session.id,
               buyerEmail: meta.buyer_email ?? null,
             });
@@ -535,7 +558,7 @@ async function runFulfillment(params: {
       // Re-fetch the flag in case a concurrent execution already sent the email
       const { data: purchaseRow } = await admin
         .from('license_purchases')
-        .select('fulfillment_email_sent')
+        .select('fulfillment_email_sent, needs_refund_review')
         .eq('id', purchaseId)
         .maybeSingle();
 
@@ -580,6 +603,28 @@ async function runFulfillment(params: {
              📜 Your signed-style <a href="${contractPdfUrl}" style="color: #FFFFFF; text-decoration: underline;">license agreement (PDF)</a> is attached to this email.
            </p>`
         : '';
+
+      // A buyer whose exclusive sold twice is told so, not "your files are
+      // ready" with a link the download page will refuse.
+      if (purchaseRow?.needs_refund_review === true) {
+        const held = buildHeldPurchaseEmail({ totalPaid: fmt(totalCents) });
+        await deliverFulfillmentEmail({
+          admin,
+          kind: 'track',
+          referenceId: purchaseId,
+          sellerUserId: meta.seller_user_id || null,
+          stripeSessionId: session.id,
+          to: meta.buyer_email,
+          subject: held.subject,
+          html: held.html,
+        });
+        await admin
+          .from('license_purchases')
+          .update({ fulfillment_email_sent: true })
+          .eq('id', purchaseId);
+        log.info('held-purchase email sent', { purchaseId, to: meta.buyer_email });
+        return;
+      }
 
       await deliverFulfillmentEmail({
         admin,
