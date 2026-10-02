@@ -56,8 +56,16 @@ const library = {
   }],
 };
 
+/** Bodies POSTed to /api/store/me (log_play etc.), in order. */
+let posted: Array<{ url: string; body: Record<string, unknown> }> = [];
+const plays = () => posted.filter((p) => p.body.action === 'log_play').map((p) => p.body.track_id);
+
 function mount(revoked = false) {
-  vi.stubGlobal('fetch', vi.fn((url: string) => {
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') {
+      posted.push({ url, body: JSON.parse(String(init.body)) });
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    }
     const body = url.startsWith('/api/store/account/me') ? purchases(revoked) : library;
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
   }));
@@ -68,6 +76,7 @@ function mount(revoked = false) {
 const player = () => usePlayer.getState();
 
 beforeEach(() => {
+  posted = [];
   usePlayer.setState({ currentTrack: null, queue: [], isPlaying: false });
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -79,6 +88,26 @@ describe('/store/account/me playback', () => {
     expect(player().currentTrack?.id).toBe(FAV);
     expect(player().currentTrack?.audio_url).toBe(`/api/store/me/preview/${FAV}?session=1`);
     expect(player().isPlaying).toBe(true);
+  });
+
+  it('logs a play when a new beat starts, as the session, once per start', async () => {
+    mount();
+    fireEvent.click(await screen.findByLabelText('Play Night Shift'));
+    await waitFor(() => expect(plays()).toEqual([FAV]));
+    expect(posted[0].url).toBe('/api/store/me?session=1');
+    // A different beat is a new play, including an owned one.
+    fireEvent.click(await screen.findByLabelText('Play Cold Front'));
+    await waitFor(() => expect(plays()).toEqual([FAV, OWNED]));
+  });
+
+  it('does not log on pause or resume of the same beat', async () => {
+    mount();
+    fireEvent.click(await screen.findByLabelText('Play Night Shift'));
+    fireEvent.click(await screen.findByLabelText('Pause Night Shift'));
+    fireEvent.click(await screen.findByLabelText('Play Night Shift'));
+    await waitFor(() => expect(plays()).toEqual([FAV]));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(plays()).toEqual([FAV]);
   });
 
   it('queues the list it was pressed in, skipping unavailable rows', async () => {

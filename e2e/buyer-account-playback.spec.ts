@@ -124,6 +124,54 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
       expect(audioRequests.every((r) => r.startsWith('/api/store/me/preview/'))).toBe(true);
     });
 
+    test('the legacy token page plays a purchased and a favourite beat as the token', async ({ page }) => {
+      test.skip(!stubSupabase, 'needs the stub Supabase (NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321)');
+      // Real tokens are base64url.exp.base64url, so they need no escaping.
+      const token = 'bGVnYWN5QGJ1eWVy.1790000000.c2ln_-x';
+      const enc = encodeURIComponent(token);
+      const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+      const audioRequests: string[] = [];
+      const plays: string[] = [];
+      await page.route(`**/api/store/account/${enc}`, (route) => route.fulfill(json(purchases)));
+      await page.route(`**/api/store/me?token=${enc}`, (route) => {
+        const req = route.request();
+        if (req.method() === 'POST') {
+          const body = req.postDataJSON() as { action: string; track_id: string };
+          if (body.action === 'log_play') plays.push(body.track_id);
+          return route.fulfill(json({ ok: true }));
+        }
+        return route.fulfill(json(library));
+      });
+      const wav = toneWav();
+      await page.route('**/api/store/me/preview/**', (route) => {
+        const u = new URL(route.request().url());
+        audioRequests.push(u.pathname + u.search);
+        const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers()['range'] ?? '');
+        if (!range) return route.fulfill({ status: 200, contentType: 'audio/wav', body: wav, headers: { 'accept-ranges': 'bytes' } });
+        const start = Number(range[1]);
+        const end = range[2] ? Math.min(Number(range[2]), wav.length - 1) : wav.length - 1;
+        return route.fulfill({
+          status: 206, contentType: 'audio/wav', body: wav.subarray(start, end + 1),
+          headers: { 'accept-ranges': 'bytes', 'content-range': `bytes ${start}-${end}/${wav.length}` },
+        });
+      });
+
+      await page.goto(`/store/account/${enc}`);
+      await page.getByLabel('Play OWNED EXCLUSIVE').click();
+      await expect.poll(async () => (await audioState(page)).some((a) => !a.paused && a.time > 0.2)).toBe(true);
+      expect(audioRequests.some((r) => r.startsWith(`/api/store/me/preview/${OWNED}?token=${enc}`))).toBe(true);
+
+      await page.getByLabel('Play FAVOURITE ONE').click();
+      await expect.poll(async () => (await audioState(page)).some((a) => !a.paused && a.src.includes(FAV))).toBe(true);
+      expect((await audioState(page)).filter((a) => !a.paused)).toHaveLength(1);
+
+      await page.getByLabel('Pause FAVOURITE ONE').click();
+      await expect.poll(async () => (await audioState(page)).every((a) => a.paused)).toBe(true);
+      // Two beats started, one pause: two plays logged, none for the pause.
+      expect(plays).toEqual([OWNED, FAV]);
+      expect(audioRequests.every((r) => r.includes(`token=${enc}`))).toBe(true);
+    });
+
     test('keyboard: the play button is reachable and Enter starts the beat', async ({ page, context, baseURL }) => {
       test.skip(!stubSupabase, 'needs the stub Supabase (NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321)');
       await context.addCookies([signInCookie(baseURL!)]);

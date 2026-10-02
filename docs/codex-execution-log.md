@@ -9346,6 +9346,19 @@ Tests: `buyer-playback.test.ts`; `api/store/me/preview/[id]/route.test.ts` (no i
 
 Not changed: playing from the account does not write `buyer_listening_history` (`log_play` 404s a delisted beat, so an owned exclusive would never log); the legacy `/store/account/[token]` page has no playback; project-bundle rows still open the delivery page, which has Play all.
 
+## 2026-10-02 - BUYER-04 follow-ups (stacks on #60)
+
+Four small items left over from "Play a beat from the buyer account".
+
+- **Owned plays are logged.** `/api/store/me` `log_play` accepts a beat that is store-listed OR owned (`buyerOwnsTrack`), so an owned exclusive, delisted on sale, can enter `buyer_listening_history`. An unowned, unlisted beat still 404s. `set_favorite` and `add_to_playlist` keep the `store_listed` gate on purpose: favouriting or playlisting a delisted beat is not what this was for, and a test pins that ownership does not loosen them. The account page logs when a *different* beat starts (not on pause/resume, not on Next inside the queue), and is the only writer there — the store grid logs through `trackStoreEvent`, which these pages never call, so nothing double-counts.
+- **Legacy `/store/account/[token]` plays.** `hooks/useBuyerPlayback(identityQuery)` replaces the page-local `useAccountPlayback`; `session=1` on `/me`, `token=<encoded>` here. History, favourites and purchased beats play through the global player (`StoreLayoutClient` hides the bar only on checkout/download, so it is mounted at this path); revoked purchases offer no play. `logPlay(trackId, identityQuery?)` takes the page's identity: without it the session marker outranks the token and a play could land in another account's library. Not added: playlist track lists (that page only ever listed playlist names).
+- **Bundle rows.** Their button read "Open" with a download icon, though the page it opens leads with Play all. Now "Open to listen" with a play icon, on both account pages. No inline bundle playback.
+- **Lint.** Unused `err` in `/api/store/promo` removed (optional catch binding).
+
+Tests: `me/route.test.ts` (owned+delisted logs, unowned+unlisted 404, listed skips the ownership lookup, ownership does not loosen favourite/playlist); `account/me/page.test.tsx` and new `account/[token]/page.test.tsx` (log once per start, none on pause/resume, token identity wins over a session marker, revoked offers no play, bundle label); `e2e/buyer-account-playback.spec.ts` gains the token-page flow at 1280 and 390.
+
+Known quirk, unchanged: the token page re-encodes `params.token` with `encodeURIComponent`; real tokens are base64url so it is a no-op for them.
+
 
 ## 2026-10-02 - Buyer "My beats" workspace on /store/account/me (BUYER-01)
 

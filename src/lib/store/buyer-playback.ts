@@ -56,3 +56,26 @@ export function buyerPlayerQueue(
   }
   return queue;
 }
+
+/** A purchased line item (loadBuyerPurchases) as the summary the builders take. */
+export function purchasedItemSummary(item: {
+  track_id: string;
+  title?: string | null;
+  cover_url?: string | null;
+  type?: string | null;
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+  duration_seconds?: number | null;
+}): BuyerLibraryTrackSummary {
+  return {
+    id: item.track_id,
+    title: item.title ?? null,
+    cover_url: item.cover_url ?? null,
+    type: item.type ?? null,
+    bpm: item.bpm ?? null,
+    key: item.key ?? null,
+    scale: item.scale ?? null,
+    duration_seconds: item.duration_seconds ?? null,
+  };
+}
