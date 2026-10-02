@@ -173,7 +173,7 @@ export function BuyerBeatsWorkspace() {
       ) : isError ? (
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-6 text-center" role="alert">
           <AlertCircle size={20} className="text-red-400 mx-auto mb-2" />
-          <p className="text-[12px] text-white mb-1">Couldn&apos;t load your beats</p>
+          <p className="text-[11px] text-white mb-1">Couldn&apos;t load your beats</p>
           <p className="text-[11px] text-white/60 mb-4">{(error as Error)?.message}</p>
           <button
             type="button"
@@ -244,7 +244,7 @@ export function BuyerBeatsWorkspace() {
 
           {visible.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-8 text-center">
-              <p className="text-[12px] text-white/60 mb-3">No beats match.</p>
+              <p className="text-[11px] text-white/60 mb-3">No beats match.</p>
               {filtersActive && (
                 <button
                   type="button"
@@ -302,11 +302,11 @@ export function BuyerBeatsWorkspace() {
 
                     <div className="min-w-0 flex-1">
                       {b.playable ? (
-                        <Link href={`/store/${b.id}`} className="block truncate text-[12px] font-medium text-white hover:underline underline-offset-2">
+                        <Link href={`/store/${b.id}`} className="block truncate text-[11px] font-medium text-white hover:underline underline-offset-2">
                           {b.title}
                         </Link>
                       ) : (
-                        <p className="truncate text-[12px] font-medium text-white">{b.title}</p>
+                        <p className="truncate text-[11px] font-medium text-white">{b.title}</p>
                       )}
                       <p className="mt-0.5 truncate text-[10px] font-mono text-white/45">{metaLine(b)}</p>
                       <p className={`mt-0.5 truncate text-[10px] font-mono ${b.status === 'owned' ? 'text-[#6DC6A4]' : 'text-white/60'}`}>

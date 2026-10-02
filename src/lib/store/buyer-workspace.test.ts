@@ -78,10 +78,20 @@ describe('buildBuyerBeats', () => {
     expect(b.offer?.status).toBe('countered');
   });
 
-  it('a delisted beat the buyer owns keeps its metadata but cannot stream', () => {
+  it('a delisted beat the buyer owns keeps its metadata and still plays', () => {
     const [b] = build({ licenses: [license(['a'])], tracks: [track('a', { store_listed: false })] });
-    expect(b).toMatchObject({ available: true, playable: false, canAddToProject: true, title: 'Beat a', bpm: 140 });
-    expect(beatToPlayerTrack(b)).toBeNull();
+    expect(b).toMatchObject({ available: true, playable: true, canAddToProject: true, title: 'Beat a', bpm: 140 });
+    expect(beatToPlayerTrack(b)?.audio_url).toBe('/api/store/me/preview/a?session=1');
+  });
+
+  it('a revoked exclusive no longer plays', () => {
+    const beats = build({
+      licenses: [license(['a'], { access_revoked: true })],
+      offers: [offer('a')],
+      tracks: [track('a', { store_listed: false })],
+    });
+    expect(beats[0]).toMatchObject({ status: 'requested', playable: false });
+    expect(beatToPlayerTrack(beats[0])).toBeNull();
   });
 
   it('a delisted beat that is only requested shows the stored title and nothing else', () => {
@@ -190,10 +200,10 @@ describe('projectTrackIds', () => {
 });
 
 describe('beatToPlayerTrack', () => {
-  it('streams the public preview route, never a master', () => {
+  it("streams the buyer's preview route, never a master", () => {
     const [b] = build({ licenses: [license(['a'])], tracks: [track('a')] });
     const t = beatToPlayerTrack(b)!;
-    expect(t.audio_url).toBe('/api/store/preview/a');
+    expect(t.audio_url).toBe('/api/store/me/preview/a?session=1');
     expect(t.preview_url).toBeNull();
     expect(t).toMatchObject({ id: 'a', title: 'Beat a', bpm: 140 });
   });

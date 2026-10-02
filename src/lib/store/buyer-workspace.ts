@@ -18,7 +18,7 @@
  */
 
 import type { Track, TrackType } from '@/lib/types';
-import { publicPreviewUrl } from '@/lib/store/public-media';
+import { buyerPlayerTrack } from '@/lib/store/buyer-playback';
 
 export type BuyerBeatStatus = 'owned' | 'requested';
 export type BuyerBeatSort = 'recent' | 'title' | 'bpm' | 'key';
@@ -79,7 +79,10 @@ export interface BuyerBeat {
   /** License tier of the latest purchase; null for a bundle track or a request. */
   license: string | null;
   offer: BuyerBeatOffer | null;
-  /** The storefront still lists it, so `/api/store/preview/[id]` will stream. */
+  /**
+   * `/api/store/me/preview/[id]` will stream it: the buyer owns it (even after
+   * an exclusive sale delisted it) or the store still lists it.
+   */
   playable: boolean;
   /** Owned, or listed: the same rule `/api/store/me` enforces on write. */
   canAddToProject: boolean;
@@ -191,7 +194,7 @@ export function buildBuyerBeats(input: {
       since: claimed ? claimed.since : offer?.created_at ?? null,
       license: claimed?.license ?? null,
       offer: offer ? { status: offer.status ?? 'pending', price_usd: Number.isFinite(price) ? price : 0 } : null,
-      playable: listed,
+      playable: Boolean(claimed) || listed,
       canAddToProject: Boolean(claimed) || listed,
       openUrl: claimed?.openUrl ?? null,
       available: Boolean(visible),
@@ -319,32 +322,29 @@ export function projectTrackIds(beats: BuyerBeat[], selected: ReadonlySet<string
   return ids;
 }
 
-const TRACK_TYPES: readonly TrackType[] = ['beat', 'instrumental', 'song', 'remix', 'loop', 'topline'];
+/** Identity the account page's player asks the buyer preview route with. */
+const SESSION_IDENTITY = 'session=1';
 
 /**
- * The persistent player's input for a row. The source is always the PUBLIC
- * preview route — the same stream the storefront plays — never a master, even
- * for a beat the buyer owns: the full files are delivered on the download page.
- * Null when the beat cannot stream (delisted), so the row shows no Play.
+ * The persistent player's input for a row. The source is the buyer's preview
+ * route (`lib/store/buyer-playback`), which streams the public preview clip
+ * and never a master — and which, unlike the public route, still serves a beat
+ * the buyer owns after an exclusive sale delisted it. Null when the row cannot
+ * stream (a request on a beat that is no longer listed), so it shows no Play.
  */
 export function beatToPlayerTrack(beat: BuyerBeat): Track | null {
   if (!beat.playable) return null;
-  const src = publicPreviewUrl(beat.id);
-  if (!src) return null;
-  const type = TRACK_TYPES.find((t) => t === beat.type) ?? 'beat';
-  return {
-    id: beat.id,
-    user_id: '',
-    title: beat.title,
-    type,
-    audio_url: src,
-    preview_url: null,
-    cover_url: beat.cover_url,
-    duration_seconds: beat.duration_seconds,
-    bpm: beat.bpm,
-    key: beat.key,
-    scale: beat.scale,
-    stems_status: 'none',
-    created_at: beat.since ?? new Date(0).toISOString(),
-  };
+  return buyerPlayerTrack(
+    {
+      id: beat.id,
+      title: beat.title,
+      type: beat.type,
+      cover_url: beat.cover_url,
+      bpm: beat.bpm,
+      key: beat.key,
+      scale: beat.scale,
+      duration_seconds: beat.duration_seconds,
+    },
+    SESSION_IDENTITY,
+  );
 }

@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser, createServiceClient } from '@/lib/auth/ownership';
+import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
-import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { normalizeEmail } from '@/lib/contacts/email';
-import { sessionBuyerEmail } from '@/lib/store/buyer-purchases';
+import { resolveBuyerEmail as resolveEmail } from '@/lib/store/buyer-identity';
 import { loadBuyerBeats, loadBuyerOwnedTrackIds } from '@/lib/store/buyer-beats';
 import { BUYER_PROJECT_MAX_TRACKS } from '@/lib/store/buyer-workspace';
 import {
@@ -95,34 +94,6 @@ async function upsertLeadContact(
  * The RLS policies on the new tables refuse public PostgREST access so
  * this route is the only path in.
  */
-
-async function readClaims(token: string | null) {
-  if (!token) return null;
-  return verifyBuyerToken(token);
-}
-
-async function resolveEmail(req: NextRequest): Promise<{ email: string } | null> {
-  const { searchParams } = new URL(req.url);
-  const token = searchParams.get('token');
-  const sessionMode = searchParams.get('session') === '1';
-
-  // Every buyer_* row is keyed on the canonical email, whichever proof of
-  // identity the caller brings — a token and a session for the same person
-  // must land on the same rows.
-  if (token) {
-    const claims = await readClaims(token);
-    return claims ? { email: normalizeEmail(claims.email) } : null;
-  }
-  if (sessionMode) {
-    const result = await requireUser();
-    if (!result.ok) return null;
-    // Same canonical email the token path carries (tokens are signed over a
-    // lowercased email), so a session and a token share one library.
-    const email = await sessionBuyerEmail(createServiceClient(), result.userId);
-    return email ? { email } : null;
-  }
-  return null;
-}
 
 /**
  * A buyer can only put a track into their library that the storefront

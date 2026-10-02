@@ -25,7 +25,7 @@ const BEATS: BuyerBeat[] = [
     title: 'Asked For', status: 'requested', license: null, openUrl: null, bpm: 120, since: '2026-09-12T00:00:00Z',
     offer: { status: 'pending', price_usd: 300 },
   }),
-  beat('gone', { title: 'Delisted One', playable: false, openUrl: '/store/download?session_id=gone', since: '2026-09-01T00:00:00Z' }),
+  beat('gone', { title: 'Delisted One', playable: true, openUrl: '/store/download?session_id=gone', since: '2026-09-01T00:00:00Z' }),
 ];
 
 let respond: (url: string, init?: RequestInit) => Response | Promise<Response>;
@@ -106,21 +106,28 @@ describe('BuyerBeatsWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Play Night Shift' }));
     const s = usePlayer.getState();
     expect(s.currentTrack?.id).toBe('night');
-    expect(s.currentTrack?.audio_url).toBe('/api/store/preview/night');
+    expect(s.currentTrack?.audio_url).toBe('/api/store/me/preview/night?session=1');
     expect(s.isPlaying).toBe(true);
-    // the delisted beat is not in the queue: it cannot stream
-    expect(s.queue.map((t) => t.id)).toEqual(['ask', 'cold', 'night']);
+    // the owned-but-delisted beat is queued too: the buyer route streams it
+    expect(s.queue.map((t) => t.id)).toEqual(['ask', 'cold', 'night', 'gone']);
     const pause = screen.getByRole('button', { name: 'Pause Night Shift' });
     fireEvent.click(pause);
     expect(usePlayer.getState().isPlaying).toBe(false);
   });
 
-  it('a delisted beat has no Play but keeps Open', async () => {
+  it('a delisted beat the buyer owns plays, and keeps Open', async () => {
     mount();
     await screen.findByText('Delisted One');
-    expect(screen.queryByRole('button', { name: /Play Delisted One/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Play Delisted One' })).toBeTruthy();
     const row = screen.getByText('Delisted One').closest('li')!;
     expect(within(row).getByRole('link', { name: /Open/ }).getAttribute('href')).toBe('/store/download?session_id=gone');
+  });
+
+  it('a request on a beat that is no longer listed has no Play', async () => {
+    respond = () => json({ email: 'a@b.test', beats: [beat('x', { title: 'Asked For', status: 'requested', canAddToProject: false, playable: false, available: false, openUrl: null, license: null, offer: { status: 'pending', price_usd: 5 } })] });
+    mount();
+    await screen.findByText('Asked For');
+    expect(screen.queryByRole('button', { name: /Play Asked For/ })).toBeNull();
   });
 
   it('selecting beats reveals Create project, which posts the ids with the name, then clears', async () => {

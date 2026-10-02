@@ -188,11 +188,11 @@ describe('GET /api/store/me?view=beats', () => {
     }
   });
 
-  it('a delisted beat the buyer owns still shows, but cannot play', async () => {
+  it('a delisted beat the buyer owns still shows, and plays', async () => {
     const { GET } = await import('./route');
     const { beats } = await (await GET(get('?session=1&view=beats'))).json();
     expect(beats.find((b: { id: string }) => b.id === B)).toMatchObject({
-      title: 'Exclusive One', playable: false, canAddToProject: true, license: 'exclusive', openUrl: '/store/download?session_id=cs_2',
+      title: 'Exclusive One', playable: true, canAddToProject: true, license: 'exclusive', openUrl: '/store/download?session_id=cs_2',
     });
   });
 

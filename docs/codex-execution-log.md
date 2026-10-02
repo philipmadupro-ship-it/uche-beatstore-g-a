@@ -9328,6 +9328,25 @@ Tests: `buyer-session.test.ts` (3 new): a lost marker with a live session is res
 
 Not changed: the session is shared with the producer's dashboard login, so a producer browsing `/store` while signed in now syncs hearts under their own email and `upsertLeadContact` creates a lead for them (as opening `/store/account/me` already did). Skipping that needs the server to know the producer's email; left for a follow-up. `syncedIdentity` is keyed on the query string (`session=1`), not the user id, so switching accounts without signing out through `/store/account/me` would not re-sync until reload.
 
+## 2026-10-02 - Play a beat from the buyer account (BUYER-04)
+
+Reported: a buyer should be able to play an owned or requested beat from their account.
+
+**Reproduced by code trace** (no live Supabase in the session; browser run against a stubbed Supabase + stubbed data endpoints): signed in, `/store/account/me`. Every beat in Recently played, Favorites and the playlists was a `<Link>` to `/store/<id>`, and the purchased beats were text. Nothing on the page called `usePlayer`, although `StoreLayoutClient` already mounts the global `PlayerBar` there. Refresh, sign-out and viewport made no difference.
+
+**Root cause, two layers.** (1) The library payload is metadata only and no account component drove the player. (2) The only public audio route, `/api/store/preview/[id]`, serves a beat only if the store lists it or a featured bundle holds it; a bought exclusive is delisted on sale, so the beat the buyer paid most for would have played nothing even with a button.
+
+Changes (no schema change):
+- `lib/store/buyer-playback.ts` — summary -> player `Track` and queue (unavailable rows skipped, a beat once). Source is the buyer route below, never `preview_url` / `wav_url` / a master.
+- `GET /api/store/me/preview/[id]` — token or session identity (`lib/store/buyer-identity.ts`, extracted from `/api/store/me` so both resolve the same canonical email). Streams the SAME public preview clip. Allowed when the buyer owns the beat (`lib/store/buyer-ownership.ts`: an active license with `download_unlocked !== false`, or an unexpired bundle containing it) or the public route would serve it; otherwise 404. `cache-control: private`.
+- `/store/account/me` — play/pause on library tiles, playlist rows and each purchased beat, through the existing `usePlayer` / `PlayerBar`. The button is a sibling of the tile's link, never inside it. A revoked purchase offers no play. Pressing the playing beat pauses it; pressing another replaces the queue with the list it was pressed in.
+- `loadBuyerPurchases` items now carry cover / type / bpm / key / scale / duration (same `tracks` read, no extra query) so a purchased beat has a length in the bar.
+
+Tests: `buyer-playback.test.ts`; `api/store/me/preview/[id]/route.test.ts` (no identity, malformed id, owned-and-delisted, bundle, not-owned, refunded, expired bundle, listed, no-preview-never-master, email keying); `account/me/page.test.tsx` (real page + real player store; 6 of 7 fail on the old page); `e2e/buyer-account-playback.spec.ts` at 1280 and 390 (audio element plays, request goes to the buyer route as `session=1`, one audible element, pause, keyboard).
+
+Not changed: playing from the account does not write `buyer_listening_history` (`log_play` 404s a delisted beat, so an owned exclusive would never log); the legacy `/store/account/[token]` page has no playback; project-bundle rows still open the delivery page, which has Play all.
+
+
 ## 2026-10-02 - Buyer "My beats" workspace on /store/account/me (BUYER-01)
 
 Asked for: an artist/rapper-personalised buyer workspace reusing the Library's philosophy for owned and requested beats; acceptance "filter, sort, play and create project". Decisions taken with the owner: **create project = a buyer playlist**, **requested = offers only**, **personalised = derived from ownership**. No migration.
