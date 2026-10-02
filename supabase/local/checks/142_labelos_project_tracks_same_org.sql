@@ -6,8 +6,9 @@
 --   another producer Q; label L (owner O), label L2 (owner X).
 --   P's rows: project PP1, beat PT1, loop PT2 (org_id NULL).
 --   Q's rows: project QP1, beat QT1.
---   L's rows: project LP1 (written with P as user_id, as an upload by P
---             would), song LS1 (user_id P), master LM1 (user_id O).
+--   L's rows (no user_id — org rows have no owner; the uploader is
+--             created_by): project LP1 (uploaded by P), song LS1 (by P),
+--             master LM1 (by O).
 --   L2's rows: project XP1, song XS1.
 --
 -- The trigger runs for every role (it is a data rule, not a permission), so
@@ -50,12 +51,12 @@ INSERT INTO public.tracks (id, user_id, title, type, audio_url) VALUES
   (:QT1, :Q, 'Q beat', 'beat', 'r2://private/q1');
 INSERT INTO public.projects (id, user_id, name) VALUES (:PP1, :P, 'P project'), (:QP1, :Q, 'Q project');
 INSERT INTO public.projects (id, user_id, org_id, name) VALUES
-  (:LP1, :P, :L, 'Inbox · Nova'),
-  (:XP1, :X, :L2, 'L2 project');
+  (:LP1, NULL, :L, 'Inbox · Nova'),
+  (:XP1, NULL, :L2, 'L2 project');
 INSERT INTO public.tracks (id, user_id, org_id, created_by, title, type, audio_url, song_stage) VALUES
-  (:LS1, :P, :L, :P, 'Nova demo', 'song', 'r2://private/orgs/l/tracks/s1', 'inbox'),
-  (:LM1, :O, :L, :O, 'Nova master', 'song', 'r2://private/orgs/l/tracks/m1', NULL),
-  (:XS1, :X, :L2, :X, 'L2 song', 'song', 'r2://private/orgs/l2/tracks/s1', 'inbox');
+  (:LS1, NULL, :L, :P, 'Nova demo', 'song', 'r2://private/orgs/l/tracks/s1', 'inbox'),
+  (:LM1, NULL, :L, :O, 'Nova master', 'song', 'r2://private/orgs/l/tracks/m1', NULL),
+  (:XS1, NULL, :L2, :X, 'L2 song', 'song', 'r2://private/orgs/l2/tracks/s1', 'inbox');
 
 CREATE FUNCTION public.check_eq(label text, got anyelement, want anyelement) RETURNS void
 LANGUAGE plpgsql AS $$
@@ -99,6 +100,42 @@ SELECT public.check_eq('… and an UPDATE only of project_id / track_id',
    FROM information_schema.triggered_update_columns c
    WHERE c.event_object_table = 'project_tracks' AND c.trigger_name = 'project_tracks_same_owner'),
   'project_id,track_id');
+
+-- ── Org rows have no owner (projects_org_or_owner, tracks_org_or_owner) ──
+
+SELECT public.check_raises('an org track with a user_id is refused',
+  $$INSERT INTO public.tracks (user_id, org_id, title, type, audio_url) VALUES ('0b0e1a57-0000-4000-8000-000000000001', 'b1420000-0000-4000-8000-000000000001', 'x', 'song', 'r2://private/x')$$,
+  'tracks_org_or_owner');
+SELECT public.check_raises('an org project with a user_id is refused',
+  $$INSERT INTO public.projects (user_id, org_id, name) VALUES ('0b0e1a57-0000-4000-8000-000000000001', 'b1420000-0000-4000-8000-000000000001', 'x')$$,
+  'projects_org_or_owner');
+SELECT public.check_raises('an existing org row cannot be given an owner',
+  $$UPDATE public.tracks SET user_id = '0b0e1a57-0000-4000-8000-000000000001' WHERE id = 'e1420000-0000-4000-8000-000000000011'$$,
+  'tracks_org_or_owner');
+SELECT public.check_raises('a producer project without a user_id is refused',
+  $$INSERT INTO public.projects (user_id, org_id, name) VALUES (NULL, NULL, 'ownerless')$$,
+  'projects_org_or_owner');
+SELECT public.check_ok('a producer track without a user_id is still accepted (legacy NULL-owner rows, 002)',
+  $$INSERT INTO public.tracks (user_id, org_id, title, type, audio_url) VALUES (NULL, NULL, 'legacy', 'beat', 'r2://private/legacy')$$);
+DELETE FROM public.tracks WHERE title = 'legacy' AND user_id IS NULL AND org_id IS NULL;
+
+-- track_links: org links carry no user_id; producer links still need their owner.
+SELECT public.check_ok('an org link (master) with no user_id is accepted',
+  $$INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES ('e1420000-0000-4000-8000-000000000011', 'e1420000-0000-4000-8000-000000000012', NULL, 'master')$$);
+SELECT public.check_raises('an org link carrying a user_id is refused',
+  $$INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES ('e1420000-0000-4000-8000-000000000012', 'e1420000-0000-4000-8000-000000000011', '0b0e1a57-0000-4000-8000-000000000001', 'version')$$,
+  'both tracks must be owned');
+SELECT public.check_raises('a producer link without a user_id is refused',
+  $$INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES ('e1420000-0000-4000-8000-000000000001', 'e1420000-0000-4000-8000-000000000002', NULL, 'loop')$$,
+  'both tracks must be owned');
+SELECT public.check_ok('a producer link with its owner is accepted, as before',
+  $$INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES ('e1420000-0000-4000-8000-000000000001', 'e1420000-0000-4000-8000-000000000002', '0b0e1a57-0000-4000-8000-000000000001', 'loop')$$);
+SELECT public.check_raises('a link across two producers, no org, is refused',
+  $$INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES ('e1420000-0000-4000-8000-000000000001', 'e1420000-0000-4000-8000-000000000003', '0b0e1a57-0000-4000-8000-000000000001', 'loop')$$,
+  'both tracks must be owned');
+SELECT public.check_raises('a link from an org song to another org''s song is refused',
+  $$INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES ('e1420000-0000-4000-8000-000000000011', 'e1420000-0000-4000-8000-000000000021', NULL, 'version')$$,
+  'both tracks must be owned');
 
 -- ── Producer: unchanged for its own rows (through RLS, as the app writes) ──
 
@@ -150,3 +187,21 @@ SELECT public.check_eq('exactly the allowed rows exist',
    FROM public.project_tracks pt JOIN public.tracks t ON t.id = pt.track_id JOIN public.projects p ON p.id = pt.project_id
    WHERE pt.project_id IN (:PP1, :QP1, :LP1, :XP1)),
   'Nova demo@Inbox · Nova,Nova master@Inbox · Nova,P beat@P project');
+
+-- ── Replays never adopt an org row ──────────────────────────────────────
+-- scripts/apply-migrations.sh replays every file. 049 / 050 / 053 backfill
+-- NULL-owner projects and tracks onto the single producer (the seed has
+-- exactly one populated profile, so they act here); amended in 142 they skip
+-- org rows, which now have no user_id by design.
+SELECT public.check_eq('before the replay: the org rows have no owner',
+  (SELECT count(*) FROM public.tracks WHERE org_id IS NOT NULL AND user_id IS NOT NULL)
+    + (SELECT count(*) FROM public.projects WHERE org_id IS NOT NULL AND user_id IS NOT NULL), 0::bigint);
+\ir ../../migrations/049_data_model_fixes.sql
+\ir ../../migrations/050_reconcile_orphan_tracks.sql
+\ir ../../migrations/053_reconcile_null_owners.sql
+SELECT public.check_eq('after replaying 049 / 050 / 053: still no owner on any org row',
+  (SELECT count(*) FROM public.tracks WHERE org_id IS NOT NULL AND user_id IS NOT NULL)
+    + (SELECT count(*) FROM public.projects WHERE org_id IS NOT NULL AND user_id IS NOT NULL), 0::bigint);
+SELECT public.check_eq('… and the org rows are all still there',
+  (SELECT count(*) FROM public.tracks WHERE org_id IS NOT NULL) || '/' || (SELECT count(*) FROM public.projects WHERE org_id IS NOT NULL),
+  '3/2');
