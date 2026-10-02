@@ -18,6 +18,8 @@ describe('recordingKindOf — every row of the 17 R1 mapping table', () => {
     ['master link (new)', 'song', 'master', 'master', 'finished'],
     ['demo link (new)', 'song', 'demo', 'demo', 'working'],
     ['track type beat not linked to a song', 'beat', null, 'beat_source', 'working'],
+    ['track type loop not linked to a song (LABEL-13)', 'loop', null, 'loop', 'working'],
+    ['track type topline not linked to a song (LABEL-13)', 'topline', null, 'topline', 'working'],
   ];
   it.each(rows)('%s', (_label, type, relation, kind, cls) => {
     expect(recordingKindOf({ type }, relation)).toBe(kind);
@@ -38,7 +40,7 @@ describe('recordingKindOf — every row of the 17 R1 mapping table', () => {
   });
 
   it('fails closed (null → no audio capability) for material the table does not classify', () => {
-    for (const type of ['song', 'instrumental', 'remix', 'loop', 'topline', null]) {
+    for (const type of ['song', 'instrumental', 'remix', 'toString', '__proto__', null]) {
       expect(recordingKindOf({ type }, null)).toBeNull();
     }
     expect(audioCapabilityFor(String(recordingKindOf({ type: 'remix' }, null)))).toBeNull();
