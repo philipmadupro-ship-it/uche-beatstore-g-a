@@ -26,6 +26,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { clearBuyerIdentity, setPersistentBuyerSession } from '@/lib/buyer-session';
 import { useWishlistStore } from '@/hooks/useWishlist';
 import { BuyerLibraryTile, BuyerPlayButton, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
+import { BuyerBeatsWorkspace } from '@/components/store/BuyerBeatsWorkspace';
 import { CoverImage } from '@/components/ui/CoverImage';
 import type { BuyerLibraryShape, BuyerLibraryPlaylist, BuyerLibraryTrackSummary } from '@/lib/store/buyer-library';
 import { buyerPlayerQueue, buyerPlayerTrack } from '@/lib/store/buyer-playback';
@@ -237,6 +238,8 @@ export default function BuyerMePage() {
             </div>
           </div>
         )}
+
+        <BuyerBeatsWorkspace />
 
         {isEmpty ? (
           <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-16 text-center">
