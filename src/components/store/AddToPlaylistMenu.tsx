@@ -18,8 +18,10 @@ import {
 } from '@/lib/store/buyer-library';
 
 /**
- * "Add to playlist" on a storefront beat, for a buyer with an account.
+ * "Add to project" on a storefront beat, for a buyer with an account.
  *
+ * The buyer-facing word is "project" (it is what /store/account/me calls the
+ * list); the storage and the `/api/store/me` actions keep the playlist name.
  * Buyer playlists (mig 060) could be created and deleted on
  * /store/account/me, but nothing on the storefront could put a beat in one,
  * so every playlist stayed empty. Renders nothing for an anonymous visitor —
@@ -60,7 +62,7 @@ export function AddToPlaylistMenu({ trackId, trackTitle }: { trackId: string; tr
     try {
       const result = await work();
       if (!result.ok) {
-        toast.error('Playlist not updated', result.error);
+        toast.error('Project not updated', result.error);
         return;
       }
       toast.success(done);
@@ -74,7 +76,7 @@ export function AddToPlaylistMenu({ trackId, trackTitle }: { trackId: string; tr
   const sections: MenuSection[] = [
     {
       id: 'playlists',
-      label: 'Your playlists',
+      label: 'Your projects',
       items: rows.map((row) => ({
         id: row.id,
         label: row.name,
@@ -90,7 +92,7 @@ export function AddToPlaylistMenu({ trackId, trackTitle }: { trackId: string; tr
       id: 'new',
       items: [{
         id: 'new-playlist',
-        label: 'New playlist with this beat',
+        label: 'New project with this beat',
         hint: 'Named after this beat',
         disabled: playlists === null,
         onSelect: () => run(async () => {
@@ -98,7 +100,7 @@ export function AddToPlaylistMenu({ trackId, trackTitle }: { trackId: string; tr
           const playlist = (created.data as { playlist?: { id?: string } } | undefined)?.playlist;
           if (!created.ok || !playlist?.id) return { ok: false, error: created.error };
           return addToPlaylist(playlist.id, trackId);
-        }, 'Playlist created'),
+        }, 'Project created'),
       }],
     },
   ];
@@ -108,7 +110,7 @@ export function AddToPlaylistMenu({ trackId, trackTitle }: { trackId: string; tr
       <ActionMenu
         align="right"
         width={240}
-        label="Add to playlist"
+        label="Add to project"
         busy={busy}
         triggerContent={<ListPlus size={14} />}
         triggerClassName="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/80 transition-colors hover:border-white/[0.16] hover:bg-white/[0.08] hover:text-white"

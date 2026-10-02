@@ -79,7 +79,13 @@ export interface BuyerBeat {
   /** License tier of the latest purchase; null for a bundle track or a request. */
   license: string | null;
   offer: BuyerBeatOffer | null;
-  /** The storefront still lists it, so `/api/store/preview/[id]` will stream. */
+  /** The storefront lists it, so `/store/[id]` exists to link to. */
+  listed: boolean;
+  /**
+   * `/api/store/preview/[id]` will stream it to this buyer: the storefront
+   * still lists it, or they own it (an exclusive delists the beat it sells,
+   * and the preview route lets the signed-in owner through).
+   */
   playable: boolean;
   /** Owned, or listed: the same rule `/api/store/me` enforces on write. */
   canAddToProject: boolean;
@@ -191,7 +197,8 @@ export function buildBuyerBeats(input: {
       since: claimed ? claimed.since : offer?.created_at ?? null,
       license: claimed?.license ?? null,
       offer: offer ? { status: offer.status ?? 'pending', price_usd: Number.isFinite(price) ? price : 0 } : null,
-      playable: listed,
+      listed,
+      playable: listed || Boolean(claimed),
       canAddToProject: Boolean(claimed) || listed,
       openUrl: claimed?.openUrl ?? null,
       available: Boolean(visible),
@@ -325,7 +332,8 @@ const TRACK_TYPES: readonly TrackType[] = ['beat', 'instrumental', 'song', 'remi
  * The persistent player's input for a row. The source is always the PUBLIC
  * preview route — the same stream the storefront plays — never a master, even
  * for a beat the buyer owns: the full files are delivered on the download page.
- * Null when the beat cannot stream (delisted), so the row shows no Play.
+ * Null when the beat cannot stream (delisted and not owned), so the row shows
+ * no Play. An owned beat always streams, listed or not.
  */
 export function beatToPlayerTrack(beat: BuyerBeat): Track | null {
   if (!beat.playable) return null;

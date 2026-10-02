@@ -364,7 +364,7 @@ function SessionLibrary() {
       if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
       return j.playlist as BuyerLibraryPlaylist;
     },
-    onSuccess: () => { setNewPlaylistName(''); toast.success('Playlist created'); refresh(); },
+    onSuccess: () => { setNewPlaylistName(''); toast.success('Project created'); refresh(); },
     onError: (e: Error) => toast.error('Could not create', e.message),
   });
 
@@ -380,7 +380,7 @@ function SessionLibrary() {
         throw new Error(j.error ?? `HTTP ${res.status}`);
       }
     },
-    onSuccess: () => { toast.success('Playlist deleted'); refresh(); },
+    onSuccess: () => { toast.success('Project deleted'); refresh(); },
     onError: (e: Error) => toast.error('Could not delete', e.message),
   });
 
@@ -457,14 +457,14 @@ function SessionLibrary() {
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4">
         <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-3">
           <ListMusic size={11} />
-          My playlists ({data.playlists.length})
+          Projects ({data.playlists.length})
         </p>
         <div className="flex items-center gap-2 mb-3">
           <input
             type="text"
             value={newPlaylistName}
             onChange={(e) => setNewPlaylistName(e.target.value)}
-            placeholder="New playlist name"
+            placeholder="New project name"
             maxLength={80}
             onKeyDown={(e) => { if (e.key === 'Enter' && newPlaylistName.trim()) createMut.mutate(newPlaylistName.trim()); }}
             className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
@@ -481,7 +481,7 @@ function SessionLibrary() {
         </div>
         {data.playlists.length === 0 ? (
           <p className="text-[11px] text-white/40">
-            Create one here, or use the playlist button on any beat&apos;s page to add it.
+            Create one here, or use the project button on any beat&apos;s page to add it.
           </p>
         ) : (
           <ul className="space-y-1.5">
@@ -500,12 +500,12 @@ function SessionLibrary() {
                     onClick={async () => {
                       const ok = await confirmToast(
                         `Delete "${p.name}"?`,
-                        'The playlist is removed from your account on every device.',
+                        'The project is removed from your account on every device.',
                         { confirmLabel: 'Delete', danger: true },
                       );
                       if (ok) deleteMut.mutate(p.id);
                     }}
-                    aria-label={`Delete playlist ${p.name}`}
+                    aria-label={`Delete project ${p.name}`}
                     title="Delete"
                     className="w-7 h-7 rounded-md border border-white/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-900/40 transition-colors"
                   >
@@ -527,7 +527,7 @@ function SessionLibrary() {
                           onClick={() => removeTrackMut.mutate({ playlist_id: p.id, track_id: t.id })}
                           disabled={removeTrackMut.isPending}
                           aria-label={`Remove ${t.title?.trim() || 'beat'} from ${p.name}`}
-                          title="Remove from playlist"
+                          title="Remove from project"
                           className="w-6 h-6 rounded-md flex items-center justify-center text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-40"
                         >
                           <X size={11} />
