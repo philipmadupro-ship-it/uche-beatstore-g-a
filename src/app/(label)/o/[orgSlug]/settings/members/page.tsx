@@ -501,7 +501,7 @@ function AbilitiesPopover({
                     const next = toggleCapability(orgKind, role, m.functions, overrides, cap, !on);
                     onChange({ cap_grants: next.grant, cap_revokes: next.revoke });
                   }}
-                  className="flex min-h-10 w-full items-center gap-3 rounded-lg px-2 text-left text-[12px] transition-colors hover:bg-white/[0.08] disabled:opacity-40"
+                  className="flex min-h-10 w-full items-center gap-3 rounded-lg px-2 text-left text-[11px] transition-colors hover:bg-white/[0.08] disabled:opacity-40"
                 >
                   <span className={cn('min-w-0 flex-1', on ? 'text-white/80' : 'text-white/40')}>
                     {CAPABILITY_LABELS[cap]}

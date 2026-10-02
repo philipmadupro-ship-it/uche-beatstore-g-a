@@ -65,7 +65,7 @@ export function OrgSwitcher() {
             // Icon-only on a phone: the bar's right cluster (session, search,
             // bell, menu, profile) already fills 390px, and a named pill
             // pushed the menu button off-screen. The name stays in the label.
-            'flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg border px-2 text-[12px] font-medium tracking-tight transition-colors sm:max-w-[14rem] sm:justify-start sm:px-2.5',
+            'flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg border px-2 text-[11px] font-medium tracking-tight transition-colors sm:max-w-[14rem] sm:justify-start sm:px-2.5',
             open
               ? 'border-white/30 bg-white/[0.14] text-white'
               : 'border-white/10 bg-white/[0.06] text-white/80 hover:border-white/20 hover:bg-white/[0.10] hover:text-white',
