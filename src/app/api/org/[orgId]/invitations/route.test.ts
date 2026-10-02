@@ -75,7 +75,15 @@ vi.mock('@/lib/log', () => ({
   createLogger: () => ({ info: (...a: unknown[]) => logged.push(a), warn: (...a: unknown[]) => logged.push(a), error: (...a: unknown[]) => logged.push(a), debug: () => {} }),
 }));
 
+/** Contacts of THIS org (anything else — another org's, a producer's — is absent). */
+let orgContacts = [C1];
+
 function answer(chain: Chain): Answer {
+  if (chain.table === 'contacts') {
+    expect(eqs(chain)).toEqual({ org_id: ORG });
+    const asked = (opOf(chain, 'in')?.args[1] ?? []) as string[];
+    return { data: asked.filter((id) => orgContacts.includes(id)).map((id) => ({ id })), error: null };
+  }
   if (chain.table === 'organizations') return { data: { name: 'Night Shift' }, error: null };
   if (chain.table === 'org_invitations') {
     if (opOf(chain, 'insert')) {
@@ -95,6 +103,7 @@ function answer(chain: Chain): Answer {
 }
 
 beforeEach(() => {
+  orgContacts = [C1];
   denied = null;
   orgKind = 'label';
   allowed = true;
@@ -128,6 +137,23 @@ async function revoke() {
 }
 
 const insertOf = () => opOf(admin.chains.find((c) => c.table === 'org_invitations' && opOf(c, 'insert'))!, 'insert')!.args[0] as Record<string, unknown>;
+
+describe('POST invitations: contact_ids (LABEL-10)', () => {
+  const FOREIGN = '66666666-6666-4666-8666-666666666666';
+
+  it('refuses a contact that is not in THIS org (another org, a producer contact, unknown) with 400 and writes nothing', async () => {
+    const r = await create({ email: 'a@b.test', role: 'artist', contact_ids: [C1, FOREIGN] });
+    expect(r.status).toBe(400);
+    expect(r.json.contact_ids).toEqual([FOREIGN]);
+    expect(admin.chains.some((c) => c.table === 'org_invitations')).toBe(false);
+    expect(rateCalls).toBe(0);
+  });
+
+  it('checks the list against the org through the scoped read, and skips the read for no contacts', async () => {
+    expect((await create({ email: 'a@b.test', role: 'member', functions: ['a_and_r'] })).status).toBe(201);
+    expect(admin.chains.some((c) => c.table === 'contacts')).toBe(false);
+  });
+});
 
 describe('POST invitations', () => {
   it('passes through the access helper refusal (401/403)', async () => {

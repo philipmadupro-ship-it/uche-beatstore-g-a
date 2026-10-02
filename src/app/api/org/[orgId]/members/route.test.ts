@@ -43,6 +43,10 @@ let auditFails = false;
 let admin: ReturnType<typeof fakeAdmin>;
 const events: unknown[][] = [];
 let capRequested: string | null = null;
+let myArtistScope: Set<string> | null = null;
+let listRows: Row[] | null = null;
+const C1 = '66666666-6666-4666-8666-666666666666';
+const C2 = '77777777-7777-4777-8777-777777777777';
 
 const accessOk = () => ({
   ok: true as const,
@@ -51,7 +55,8 @@ const accessOk = () => ({
   orgId: ORG,
   orgKind: 'label',
   role: myRole,
-  scope: 'org',
+  scope: myArtistScope ? 'artists' : 'org',
+  artistScope: myArtistScope,
   capabilities: new Set(myCaps),
 });
 
@@ -102,6 +107,10 @@ vi.mock('@/lib/log', () => ({
 }));
 
 function answer(chain: Chain): Answer {
+  if (chain.table === 'member_artist_scopes') {
+    expect(eqs(chain)).toEqual({ org_id: ORG });
+    return { data: [{ user_id: THEM, contact_id: C2 }, { user_id: THEM, contact_id: C1 }], error: null };
+  }
   if (chain.table !== 'org_members') return { data: null, error: { message: `unexpected ${chain.table}` } };
   const select = opOf(chain, 'select');
   if (opOf(chain, 'update')) {
@@ -119,7 +128,7 @@ function answer(chain: Chain): Answer {
     return { data: null, error: null, count: owners } as Answer;
   }
   if (opOf(chain, 'maybeSingle')) return { data: target, error: null };
-  return { data: [row({ user_id: ME, role: 'owner', functions: [] }), row()], error: null };
+  return { data: listRows ?? [row({ user_id: ME, role: 'owner', functions: [] }), row()], error: null };
 }
 
 const { GET, PATCH, DELETE } = await import('./route');
@@ -139,6 +148,8 @@ beforeEach(() => {
   auditFails = false;
   events.length = 0;
   capRequested = null;
+  myArtistScope = null;
+  listRows = null;
   admin = fakeAdmin({ answer });
 });
 
@@ -164,6 +175,21 @@ describe('GET members', () => {
   it('passes the helper’s refusal through', async () => {
     denied = 403;
     expect((await GET(new NextRequest('http://x'), params)).status).toBe(403);
+  });
+
+  it('a manager sees each limited member’s artists (LABEL-10); org-wide members carry null', async () => {
+    listRows = [row({ user_id: ME, role: 'owner', functions: [] }), row({ scope: 'artists' })];
+    const body = await (await GET(new NextRequest('http://x'), params)).json();
+    expect(body.members.map((m: { contact_ids: unknown }) => m.contact_ids)).toEqual([null, [C1, C2]]);
+  });
+
+  it('a limited member sees only their own list, never a co-member’s', async () => {
+    myCaps = ['catalog.read'];
+    myArtistScope = new Set([C1]);
+    listRows = [row({ user_id: ME, scope: 'artists' }), row({ scope: 'artists' })];
+    const body = await (await GET(new NextRequest('http://x'), params)).json();
+    expect(body.members.map((m: { contact_ids: unknown }) => m.contact_ids)).toEqual([[C1], null]);
+    expect(admin.chains.some((c) => c.table === 'member_artist_scopes')).toBe(false);
   });
 });
 

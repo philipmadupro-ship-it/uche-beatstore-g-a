@@ -1,7 +1,7 @@
 import {
   Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
   CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
-  Building2, UsersRound,
+  Building2, UsersRound, Mic2,
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 
@@ -112,6 +112,19 @@ function orgGroup(slug: string): NavGroup {
 }
 
 /**
+ * The roster hub (LABEL-10): the org's artists, which are its contacts
+ * (17 R3). Label and artist orgs only — a producer org's people are the
+ * producer's CRM, which the producer hubs already reach — and only for a
+ * member who can see the catalogue (the page's own capability).
+ */
+function rosterGroup(slug: string): NavGroup {
+  return {
+    key: 'roster', label: 'Artists', icon: Mic2,
+    items: [{ label: 'Artists', href: `/o/${slug}/artists`, icon: Mic2 }],
+  };
+}
+
+/**
  * The hubs for an org context (07-information-architecture.md §1). One model,
  * one function, so the top bar and the org shell cannot drift.
  *
@@ -120,10 +133,11 @@ function orgGroup(slug: string): NavGroup {
  *   IS that dashboard.
  * - Inside an org shell: a producer org shows the producer hubs to its
  *   producer, then the org's own pages; a label or artist org shows the pages
- *   that exist for it. The IA's label hubs (Overview, Artists, Releases, A&R,
- *   Rights) are added here by the tasks that build those pages (LABEL-17,
- *   18, 24, 29, 31), each gated on its capability in `caps`; a hub that
- *   pointed at a page not yet built would be a dead link.
+ *   that exist for it: Artists (LABEL-10, catalog.read), then the org's own
+ *   pages. The IA's other label hubs (Overview, Releases, A&R, Rights) are
+ *   added here by the tasks that build those pages (LABEL-17, 18, 24, 29,
+ *   31), each gated on its capability in `caps`; a hub that pointed at a
+ *   page not yet built would be a dead link.
  * - Anything unknown: no hubs.
  */
 export function navGroupsFor(
@@ -131,9 +145,9 @@ export function navGroupsFor(
   caps: ReadonlySet<Capability | string> | null,
   org?: OrgNavContext,
 ): NavGroup[] {
-  void caps; // read by the hubs LABEL-17 onwards adds; see above.
   if (!(ORG_KINDS as readonly string[]).includes(orgKind)) return [];
   if (!org) return orgKind === 'producer' ? NAV_GROUPS : [];
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
-  return [...producerHubs, orgGroup(org.slug)];
+  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug)] : [];
+  return [...producerHubs, ...roster, orgGroup(org.slug)];
 }

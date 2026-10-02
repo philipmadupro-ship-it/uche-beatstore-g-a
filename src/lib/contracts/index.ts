@@ -861,7 +861,7 @@ export type TrackLinkBody = z.infer<typeof TrackLinkBodySchema>;
  * POST /api/org/[orgId]/invitations. Which roles and functions are allowed is
  * decided per org kind by `validateInvitationGrant` (lib/labelos/invitations),
  * so here they are only bounded strings. `contact_ids` are the roster artists
- * (contacts, 17 R3) the member is limited to; LABEL-10 validates them.
+ * (contacts, 17 R3) the member is limited to; the route checks they are contacts of that org.
  */
 export const OrgInvitationCreateBodySchema = z.object({
   email: z.string().trim().email('Enter a valid email address').max(200),
@@ -908,3 +908,29 @@ export const OrgMemberPatchBodySchema = z.object({
   { message: 'Nothing to change' },
 );
 export type OrgMemberPatchBody = z.infer<typeof OrgMemberPatchBodySchema>;
+
+// ── Label OS org contacts + artist scope (LABEL-10) ──────────────────────
+
+/**
+ * POST / PATCH /api/org/[orgId]/contacts[/id]: an org's own people directory
+ * (17 R3, Q2). The same field list as the producer's contacts, so the two
+ * cannot drift; `org_id` and `user_id` are never accepted from the body.
+ */
+export const OrgContactCreateBodySchema = ContactCreateBodySchema;
+export type OrgContactCreateBody = ContactCreateBody;
+export const OrgContactPatchBodySchema = ContactPatchBodySchema.refine(
+  (b) => Object.keys(b).length > 0,
+  { message: 'Nothing to change' },
+);
+export type OrgContactPatchBody = z.infer<typeof OrgContactPatchBodySchema>;
+
+/**
+ * PUT /api/org/[orgId]/members/artists: the roster contacts an
+ * artists-scoped member sees (member_artist_scopes), replaced as a whole.
+ * An empty list is allowed and means "sees nothing".
+ */
+export const OrgMemberArtistsBodySchema = z.object({
+  user_id: z.string().uuid(),
+  contact_ids: z.array(z.string().uuid()).max(500),
+}).strict();
+export type OrgMemberArtistsBody = z.infer<typeof OrgMemberArtistsBodySchema>;

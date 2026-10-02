@@ -39,6 +39,7 @@ const ctx = (caps: string[]) => ({
   orgKind: 'label' as const,
   role: 'admin' as const,
   scope: 'org' as const,
+  artistScope: null,
   capabilities: new Set(caps) as never,
 });
 

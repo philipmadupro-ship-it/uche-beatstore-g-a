@@ -41,8 +41,13 @@ export const VERBS = [
   'member.role_changed',
   'member.scope_changed',
   'member.capabilities_changed',
+  'member.artists_changed',
   'invitation.created',
   'invitation.revoked',
+  // People directory + roster (LABEL-10; the subject is the contact)
+  'contact.created',
+  'contact.updated',
+  'contact.deleted',
   // Projects + sharing
   'project.created',
   'project.member_added',
@@ -83,6 +88,7 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'member.role_changed',
   'member.scope_changed',
   'member.capabilities_changed',
+  'member.artists_changed',
   'invitation.created',
   'invitation.revoked',
   'project.member_added',

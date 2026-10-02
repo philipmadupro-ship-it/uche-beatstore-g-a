@@ -89,13 +89,15 @@ function labelOsTables(): string[] {
     'org_invitations',
     'user_profiles',
     'activity_events',
+    // 139_labelos_org_contacts.sql (LABEL-10)
+    'member_artist_scopes',
   ];
 }
 
 /**
  * The SQL membership helpers a Label OS policy may key on
- * (06-permission-model.md §3.1). can_see_artist / can_see_project arrive
- * with LABEL-10 / LABEL-21.
+ * (06-permission-model.md §3.1). can_see_artist arrived with LABEL-10;
+ * can_see_project arrives with LABEL-21.
  */
 const ORG_HELPERS = ['org_role', 'has_org_cap', 'can_see_artist', 'can_see_project'];
 
@@ -209,6 +211,49 @@ describe('final RLS policy state', () => {
       const writes = onTable('org_members').filter(([, body]) => /FOR\s+(UPDATE|DELETE)\b/i.test(body));
       expect(writes.length).toBeGreaterThan(0);
       for (const [k, body] of writes) expect(body, k).toMatch(/has_org_cap\s*\(\s*org_id\s*,\s*'members\.manage'\s*\)/);
+    });
+  });
+
+  describe('Label OS org contacts (mig 139, R-04)', () => {
+    const before139 = replay(realMigrations().filter((m) => m.name < '139')).policies;
+    const onContacts = () => [...policies].filter(([k]) => k.startsWith('contacts.'));
+
+    it('contacts has exactly the producer policy and the one additive org policy', () => {
+      expect(onContacts().map(([k]) => k).sort()).toEqual(['contacts.org_member_read', 'contacts.owner_only']);
+    });
+
+    it("the producer's owner_only policy is exactly what it was before Label OS touched contacts", () => {
+      expect(policies.get('contacts.owner_only')).toBe(before139.get('contacts.owner_only'));
+      expect(policies.get('contacts.owner_only')).toMatch(/FOR ALL USING \(\(SELECT auth\.uid\(\)\) = user_id\)/);
+    });
+
+    it('org_member_read is read-only and requires org_id IS NOT NULL, catalog.read and the artist scope', () => {
+      const body = policies.get('contacts.org_member_read') ?? '';
+      expect(body).toMatch(/^\s*FOR SELECT\b/i);
+      expect(body).toMatch(/USING \(\s*org_id IS NOT NULL\s+AND/i);
+      expect(body).toMatch(/has_org_cap\(org_id, 'catalog\.read'\)/);
+      expect(body).toMatch(/can_see_artist\(org_id, id\)/);
+      expect(body).not.toMatch(/\bOR\b/i);
+      expect(body).not.toMatch(/WITH CHECK/i);
+    });
+
+    it('member_artist_scopes has no write policy: scope changes only through the service role', () => {
+      const writes = [...policies]
+        .filter(([k, body]) => k.startsWith('member_artist_scopes.') && /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body))
+        .map(([k]) => k);
+      expect(writes).toEqual([]);
+    });
+
+    it('every org policy on a table that predates Label OS requires org_id IS NOT NULL (R-04)', () => {
+      // A permissive policy is OR-combined with the producer's: on tracks,
+      // projects, contacts… an org predicate that does not rule out producer
+      // rows (org_id IS NULL) would hand them to members.
+      const guarded = new Set(labelOsTables());
+      const helper = /\b(org_role|has_org_cap|can_see_artist|can_see_project)\s*\(/i;
+      const offenders = [...policies]
+        .filter(([k, body]) => !guarded.has(k.split('.')[0]) && helper.test(body) && !/\borg_id IS NOT NULL\b/i.test(body))
+        .map(([k]) => k);
+      expect(offenders).toEqual([]);
     });
   });
 

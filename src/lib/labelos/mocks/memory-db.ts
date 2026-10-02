@@ -1,0 +1,214 @@
+/**
+ * A small in-memory stand-in for the service-role supabase-js client that
+ * actually EVALUATES filters, for route tests that run the real
+ * `lib/auth/org-access` (membership, capabilities, artist scope) against
+ * several orgs at once. Unlike `fake-admin`, which records a chain and lets
+ * the test answer it, a wrong or missing filter here returns the wrong rows,
+ * so cross-org and out-of-scope leaks show up as failing assertions.
+ *
+ * Supports what the Label OS routes use: select (column lists, one
+ * `table!inner(cols)` embed resolved through `org_id` for organizations,
+ * else `<table singular>_id`), eq, in,
+ * is, not(col, 'in', '(…)'), order, limit, maybeSingle, single, insert,
+ * update, delete, upsert (ignoreDuplicates). Unique keys per table are
+ * declared by the test and answered with Postgres' 23505.
+ */
+import { randomUUID } from 'node:crypto';
+
+type Row = Record<string, unknown>;
+type Filter = (row: Row) => boolean;
+type Err = { message: string; code?: string };
+
+export type MemoryDb = {
+  tables: Record<string, Row[]>;
+  /** column lists that must be unique per table, e.g. { contacts: [['org_id', 'email']] } */
+  unique?: Record<string, string[][]>;
+};
+
+const EMBED = /^(\w+)!inner\(([^)]*)\)$/;
+
+function splitColumns(columns: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of columns) {
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) {
+      out.push(cur.trim());
+      cur = '';
+    } else cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+function pick(row: Row, cols: string[]): Row {
+  if (cols.length === 1 && cols[0] === '*') return { ...row };
+  const out: Row = {};
+  for (const c of cols) out[c] = row[c] ?? null;
+  return out;
+}
+
+export function memoryAdmin(db: MemoryDb) {
+  const writes: { table: string; op: string; rows: Row[] }[] = [];
+
+  function violates(table: string, candidate: Row, ignore: Row | null): boolean {
+    for (const key of db.unique?.[table] ?? []) {
+      if (key.some((k) => candidate[k] === null || candidate[k] === undefined)) continue;
+      if ((db.tables[table] ?? []).some((r) => r !== ignore && key.every((k) => r[k] === candidate[k]))) return true;
+    }
+    return false;
+  }
+
+  function from(table: string) {
+    const filters: Filter[] = [];
+    let mode: 'select' | 'insert' | 'update' | 'delete' | 'upsert' = 'select';
+    let columns = '*';
+    let payload: Row[] = [];
+    let patch: Row = {};
+    let ignoreDuplicates = false;
+    let order: { col: string; asc: boolean } | null = null;
+    let limit: number | null = null;
+    let returning = false;
+
+    const rowsOf = () => (db.tables[table] ??= []);
+
+    function project(rows: Row[]): Row[] {
+      const cols = splitColumns(columns);
+      const plain = cols.filter((c) => !EMBED.test(c));
+      const embeds = cols.map((c) => c.match(EMBED)).filter((m): m is RegExpMatchArray => !!m);
+      const out: Row[] = [];
+      for (const row of rows) {
+        const base = pick(row, plain.length ? plain : ['*']);
+        let keep = true;
+        for (const [, other, inner] of embeds) {
+          // org_members.org_id → organizations; otherwise <singular>_id.
+          const fk = other === 'organizations' ? 'org_id' : `${other.replace(/s$/, '')}_id`;
+          const target = (db.tables[other] ?? []).find((r) => r.id === row[fk]);
+          if (!target) keep = false;
+          else base[other] = pick(target, splitColumns(inner));
+        }
+        if (keep) out.push(base);
+      }
+      return out;
+    }
+
+    function run(): { data: unknown; error: Err | null } {
+      const matching = rowsOf().filter((r) => filters.every((f) => f(r)));
+      if (mode === 'select') {
+        let rows = [...matching];
+        if (order) {
+          const { col, asc } = order;
+          rows.sort((a, b) => String(a[col] ?? '').localeCompare(String(b[col] ?? '')) * (asc ? 1 : -1));
+        }
+        if (limit !== null) rows = rows.slice(0, limit);
+        return { data: project(rows), error: null };
+      }
+      if (mode === 'insert' || mode === 'upsert') {
+        const added: Row[] = [];
+        for (const raw of payload) {
+          const row: Row = { id: randomUUID(), created_at: new Date().toISOString(), ...raw };
+          if (violates(table, row, null)) {
+            if (mode === 'upsert' && ignoreDuplicates) continue;
+            return { data: null, error: { message: `duplicate key value violates unique constraint on ${table}`, code: '23505' } };
+          }
+          rowsOf().push(row);
+          added.push(row);
+        }
+        writes.push({ table, op: mode, rows: added });
+        return { data: returning ? project(added) : null, error: null };
+      }
+      if (mode === 'update') {
+        for (const row of matching) {
+          const next = { ...row, ...patch };
+          if (violates(table, next, row)) {
+            return { data: null, error: { message: `duplicate key value violates unique constraint on ${table}`, code: '23505' } };
+          }
+        }
+        for (const row of matching) Object.assign(row, patch);
+        writes.push({ table, op: 'update', rows: matching });
+        return { data: returning ? project(matching) : null, error: null };
+      }
+      // delete
+      db.tables[table] = rowsOf().filter((r) => !matching.includes(r));
+      writes.push({ table, op: 'delete', rows: matching });
+      return { data: returning ? project(matching) : null, error: null };
+    }
+
+    const lower = (v: unknown) => (typeof v === 'string' ? v.toLowerCase() : v);
+    const b = {
+      select(cols = '*') {
+        columns = cols;
+        if (mode !== 'select') returning = true;
+        return b;
+      },
+      insert(rows: Row | Row[]) {
+        mode = 'insert';
+        payload = Array.isArray(rows) ? rows : [rows];
+        return b;
+      },
+      upsert(rows: Row | Row[], opts?: { ignoreDuplicates?: boolean }) {
+        mode = 'upsert';
+        payload = Array.isArray(rows) ? rows : [rows];
+        ignoreDuplicates = !!opts?.ignoreDuplicates;
+        return b;
+      },
+      update(p: Row) {
+        mode = 'update';
+        patch = p;
+        return b;
+      },
+      delete() {
+        mode = 'delete';
+        return b;
+      },
+      eq(col: string, v: unknown) {
+        filters.push((r) => lower(r[col]) === lower(v));
+        return b;
+      },
+      in(col: string, values: unknown[]) {
+        const set = new Set(values.map(lower));
+        filters.push((r) => set.has(lower(r[col])));
+        return b;
+      },
+      is(col: string, v: null) {
+        filters.push((r) => (r[col] ?? null) === v);
+        return b;
+      },
+      not(col: string, op: string, list: string) {
+        if (op !== 'in') throw new Error(`memory-db: not.${op} unsupported`);
+        const set = new Set(list.replace(/^\(|\)$/g, '').split(',').map((v) => v.trim().toLowerCase()));
+        filters.push((r) => !set.has(String(lower(r[col]))));
+        return b;
+      },
+      order(col: string, opts?: { ascending?: boolean }) {
+        order = { col, asc: opts?.ascending !== false };
+        return b;
+      },
+      limit(n: number) {
+        limit = n;
+        return b;
+      },
+      async maybeSingle() {
+        const r = run();
+        if (r.error) return r;
+        const rows = r.data as Row[] | null;
+        return { data: rows?.[0] ?? null, error: null };
+      },
+      async single() {
+        const r = run();
+        if (r.error) return r;
+        const rows = r.data as Row[] | null;
+        if (!rows || rows.length !== 1) return { data: null, error: { message: 'expected one row' } };
+        return { data: rows[0], error: null };
+      },
+      then(resolve: (r: { data: unknown; error: Err | null }) => unknown, reject?: (e: unknown) => unknown) {
+        return Promise.resolve().then(run).then(resolve, reject);
+      },
+    };
+    return b;
+  }
+
+  return { client: { from }, writes };
+}

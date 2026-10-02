@@ -214,10 +214,14 @@ async function resolveOwnedProjectIds(admin: ReturnType<typeof createServiceClie
 }
 
 async function resolveOwnedContactIds(admin: ReturnType<typeof createServiceClient>, userId: string): Promise<Set<string>> {
+  // Strictly the producer's own. A NULL-owner contact is no longer a legacy
+  // producer row (mig 111 adopted those onto the producer) but a Label OS org
+  // contact (mig 139: org contacts never carry a user_id), which must never
+  // reach the producer's feed.
   const { data } = await admin
     .from('contacts')
     .select('id')
-    .or(`user_id.eq.${userId},user_id.is.null`);
+    .eq('user_id', userId);
   return new Set((data ?? []).map((r: { id: string }) => r.id));
 }
 

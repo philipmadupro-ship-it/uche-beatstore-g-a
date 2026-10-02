@@ -3,7 +3,9 @@
  *
  *  GET     every member of the org. Any member may read the list (136's RLS
  *          lets members read co-members); emails only for callers who manage
- *          members.
+ *          members. `contact_ids` (LABEL-10) is an artists-scoped member's
+ *          roster list, shown to managers for everyone and to each member
+ *          for themselves (139's RLS on member_artist_scopes: the same rule).
  *  PATCH   { user_id, role?, functions?, scope?, cap_grants?, cap_revokes? }
  *          — capability `members.manage`. What may change, and by whom, is
  *          `planMemberChange` (lib/labelos/members): kind-offered roles and
@@ -32,6 +34,7 @@ import { errorMessage } from '@/lib/errors';
 import { recordEvent } from '@/lib/labelos/activity';
 import { memberIdentities, type IdentityAdmin } from '@/lib/labelos/member-identity';
 import { planMemberChange, planMemberRemoval, type MemberState } from '@/lib/labelos/members';
+import { toArtistScope } from '@/lib/labelos/artist-scope';
 import { createLogger } from '@/lib/log';
 import { isUUID, readBody } from '@/lib/validate';
 
@@ -61,7 +64,13 @@ function toState(row: MemberRow): MemberState {
   };
 }
 
-function toView(row: MemberRow, viewer: string, identity?: { name: string | null; email: string | null }, withEmail = false) {
+function toView(
+  row: MemberRow,
+  viewer: string,
+  identity?: { name: string | null; email: string | null },
+  withEmail = false,
+  contactIds: string[] | null = null,
+) {
   return {
     user_id: row.user_id,
     name: identity?.name ?? null,
@@ -73,7 +82,29 @@ function toView(row: MemberRow, viewer: string, identity?: { name: string | null
     cap_revokes: row.cap_revokes ?? [],
     joined_at: row.joined_at,
     is_you: row.user_id.toLowerCase() === viewer.toLowerCase(),
+    /** null = not shown to this viewer, or the member sees the whole org. */
+    contact_ids: contactIds,
   };
+}
+
+/** Each artists-scoped member's roster list, as this viewer may see it. */
+async function scopeLists(access: OrgAccessOk, rows: MemberRow[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const scoped = rows.filter((r) => toArtistScope(r.role, r.scope, []) !== null);
+  if (scoped.length === 0) return out;
+  if (access.capabilities.has('members.manage')) {
+    const { data, error } = await scopedOrgQuery(access.admin, 'member_artist_scopes', access, 'user_id, contact_id');
+    if (error) throw new Error(error.message);
+    for (const r of scoped) out.set(r.user_id, []);
+    for (const s of (data ?? []) as unknown as { user_id: string; contact_id: string }[]) {
+      out.get(s.user_id)?.push(s.contact_id);
+    }
+  } else if (access.artistScope !== null) {
+    // Only their own: the list the access helper already read.
+    out.set(access.userId, [...access.artistScope]);
+  }
+  for (const list of out.values()) list.sort();
+  return out;
 }
 
 /**
@@ -109,9 +140,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ org
     if (error) throw new Error(error.message);
     const rows = (data ?? []) as unknown as MemberRow[];
     const withEmail = access.capabilities.has('members.manage');
-    const ids = await memberIdentities(access.admin as unknown as IdentityAdmin, access.orgId, rows.map((r) => r.user_id), { withEmail });
+    const [ids, lists] = await Promise.all([
+      memberIdentities(access.admin as unknown as IdentityAdmin, access.orgId, rows.map((r) => r.user_id), { withEmail }),
+      scopeLists(access, rows),
+    ]);
     return NextResponse.json(
-      { members: rows.map((r) => toView(r, access.userId, ids.get(r.user_id), withEmail)) },
+      { members: rows.map((r) => toView(r, access.userId, ids.get(r.user_id), withEmail, lists.get(r.user_id) ?? null)) },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (err) {
