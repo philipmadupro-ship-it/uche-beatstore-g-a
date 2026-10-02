@@ -9359,3 +9359,19 @@ Tests: `me/route.test.ts` (owned+delisted logs, unowned+unlisted 404, listed ski
 
 Known quirk, unchanged: the token page re-encodes `params.token` with `encodeURIComponent`; real tokens are base64url so it is a no-op for them.
 
+
+## 2026-10-02 - Buyer "My beats" workspace on /store/account/me (BUYER-01)
+
+Asked for: an artist/rapper-personalised buyer workspace reusing the Library's philosophy for owned and requested beats; acceptance "filter, sort, play and create project". Decisions taken with the owner: **create project = a buyer playlist**, **requested = offers only**, **personalised = derived from ownership**. No migration.
+
+**Reproduced** (stubbed APIs, 1280 and 390 px): the page listed purchases as one text line per order, favourites and history as links, and had no Play, no filter or sort, and no way to group beats except an empty-playlist name field. Offers (`buyer_offers`, mig 068) were never readable by the buyer. First wrong layer: the read model, not any write path.
+
+Changes:
+- `lib/store/buyer-workspace.ts` (pure, Vitest): merge purchases + bought-bundle tracks + offers into one row per beat. Owned beats win over requested; a revoked purchase owns nothing; metadata shows only for a listed or owned beat (a delisted, merely requested beat keeps the title the offer stored); built field by field, so no media URL can ride along. `filterBuyerBeats` / `sortBuyerBeats`, `ownedSound` + `describeOwnedSound` (the personalisation), `projectTrackIds`, `beatToPlayerTrack` (always the PUBLIC preview route, never a master).
+- `lib/store/buyer-beats.ts`: the queries. Reuses `loadBuyerPurchases`, so the buyer's orders and "My beats" cannot disagree on ownership.
+- `/api/store/me`: `GET ?view=beats` (a separate view so the wishlist sync that reads this route on every store navigation does not pay for it); `create_playlist` accepts `track_ids` (≤50, all checked before anything is written, rolled back if the rows fail); `add_to_playlist` now accepts a beat the buyer paid for even when it is delisted. Every read and write is keyed on the email the session/token proved, never the body.
+- `components/store/BuyerBeatsWorkspace` on `/store/account/me`.
+
+Tests: `buyer-workspace.test.ts`, `api/store/me/workspace.test.ts` (in-memory PostgREST stand-in that really filters: cross-buyer, token == session, revoked, expired bundle, no leak of media/private fields/offer messages, all-or-nothing project create, owned-but-delisted add), `BuyerBeatsWorkspace.test.tsx` (jsdom), `e2e/buyer-workspace.spec.ts` (1280 + 390; APIs stubbed).
+
+Not changed: a delisted owned beat cannot play here (the public preview route serves listed / featured-bundle beats only); the delivery page plays it. Offers are matched on the lowercased email the offer form stored, which is unverified at write time, so a buyer sees offers made under their address by anyone. The playlist section is still headed "My playlists".
