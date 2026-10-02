@@ -854,6 +854,16 @@ export const TrackLinkBodySchema = z.object({
   direction: z.enum(['out', 'in']).optional().default('out'),
 }).strict();
 export type TrackLinkBody = z.infer<typeof TrackLinkBodySchema>;
+/**
+ * DELETE /api/tracks/[id]/links. Also takes the Label OS relations (mig 140),
+ * so a master or demo link the drawer shows can always be removed; creating
+ * one (POST, TrackLinkBodySchema) stays refused on the producer route.
+ */
+export const TrackUnlinkBodySchema = z.object({
+  track_id: z.string().uuid(),
+  relation: z.enum(['beat', 'instrumental', 'loop', 'topline', 'version', 'master', 'demo']),
+  direction: z.enum(['out', 'in']).optional().default('out'),
+}).strict();
 
 // ── Label OS invitations (LABEL-08) ──────────────────────────────────────
 

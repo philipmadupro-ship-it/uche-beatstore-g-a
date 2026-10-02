@@ -588,7 +588,7 @@ Drop the policy, table and column (nullable, no backfill).
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-10
-**Status:** In Progress (branch label-os/LABEL-11)
+**Status:** In Review (PR #66, branch label-os/LABEL-11)
 
 ## Objective
 Use `main`'s song model (a `tracks` row with `type = 'song'`, plus `song_beats` and `track_links`) as the Label OS song (`17` R1).
