@@ -588,7 +588,7 @@ Drop the policy, table and column (nullable, no backfill).
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-10
-**Status:** In Review (PR #66, branch label-os/LABEL-11)
+**Status:** Done (2026-10-02) — [PR #66](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/66)
 
 ## Objective
 Use `main`'s song model (a `tracks` row with `type = 'song'`, plus `song_beats` and `track_links`) as the Label OS song (`17` R1).
@@ -647,7 +647,7 @@ Restore the old relation CHECK (only if no `master` / `demo` rows exist); drop t
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-10, LABEL-04
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-12)
 
 ## Objective
 Let org songs, projects and their #44 material live in the existing tables without changing producer behaviour (`17` R11).
@@ -686,6 +686,17 @@ None.
 
 ## Tests
 Replay assertions; trigger tests on the local real-DB harness (`scripts/local-db/`); `npm run e2e:real-db` unchanged.
+
+## Carried from LABEL-11 (#66)
+- `tracks.isrc` belongs here (R1 puts it on the master track; 140 did not add it). Validators stay LABEL-16.
+- `planInboxProject` (`lib/labelos/inbox-project.ts`) takes `inboxForContactId`, but nothing stores which project is an artist's inbox. Persist that marker here, either as a column on `projects` or as a `project_contacts` role value, and say which in the PR. LABEL-14 wires `ensureInboxProject`.
+
+## Orchestrator note (2026-10-02): the read policy must not bypass scope or audio class
+`org_member_read` on `tracks` as written above (`org_id IS NOT NULL AND has_org_cap(org_id,'catalog.read')`) would let any member with `catalog.read` read EVERY org track row directly through PostgREST. That includes rows of artists outside their scope, and working material (demos, toplines, loops) that D4 hides from marketing. The policy must therefore also respect:
+- **artist scope:** `can_see_artist`, reached through the track's artist. Use the project → `project_contacts` path or whatever artist key this task adds, and state which.
+- **working vs finished audio (D4, `audioCapabilityFor`):** gate on the matching capability (`audio.working` / `audio.finished`), or narrow the policy so that working material is not readable without `audio.working`.
+
+If an exact SQL twin of `recordingKindOf` is too heavy for RLS, choose the narrower rule. Leave the finer split to the routes, and document it. Add two-scope and marketing-vs-A&R cases to `supabase/local/checks/141_*.sql`. A member must never be able to read through PostgREST what the `/api/org/*` routes would refuse them.
 
 ## Out of Scope
 M7 backfill; org-scoping `contacts` (LABEL-10 did it).
@@ -737,6 +748,9 @@ None.
 
 ## Tests
 Route test matrix; Range header test.
+
+## Carried from LABEL-11 (#66)
+`recordingKindOf` returns `null` for unlinked loop / topline / instrumental / remix / song tracks (no R1 row). Null means no audio capability, so the route fails closed. Decide whether such org tracks need a kind (for example a standalone loop in an artist's inbox). If they do, extend the R1 mapping and its test.
 
 ## Out of Scope
 Hardening `/api/audio` for multiple producers.
