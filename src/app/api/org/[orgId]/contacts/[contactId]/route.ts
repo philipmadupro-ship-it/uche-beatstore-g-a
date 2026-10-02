@@ -22,6 +22,7 @@ import {
   DUPLICATE_EMAIL,
   ORG_CONTACT_COLUMNS,
   isDuplicateEmail,
+  orgContactRoles,
   toContactWrite,
   toOrgContactView,
   type OrgContactRow,
@@ -74,9 +75,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!before) return NOT_FOUND();
 
     if (access.orgKind === 'artist' && (patch.category !== undefined || patch.secondary_category !== undefined)) {
-      const { data, error } = await scopedOrgQuery(admin, 'contacts', access, 'id, category, secondary_category');
-      if (error) throw new Error(error.message);
-      const existing = (data ?? []) as unknown as { id: string; category: string | null; secondary_category: string | null }[];
+      // The whole org, not the caller's scoped view (orgContactRoles).
+      const existing = await orgContactRoles(admin, access);
       const refused = artistOrgRosterError(access.orgKind, existing, {
         id: before.id,
         category: patch.category !== undefined ? patch.category : before.category,

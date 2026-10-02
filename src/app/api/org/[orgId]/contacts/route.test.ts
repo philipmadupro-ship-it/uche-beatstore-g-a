@@ -25,6 +25,8 @@ const ART = '20000000-0000-4000-8000-000000000004';
 const FIN = '20000000-0000-4000-8000-000000000005';
 const X = '20000000-0000-4000-8000-000000000006';
 const AOWN = '20000000-0000-4000-8000-000000000007';
+const AMGR = '20000000-0000-4000-8000-000000000008';
+const AENG = '30000000-0000-4000-8000-0000000000e5';
 const PRODUCER = '20000000-0000-4000-8000-0000000000aa';
 const C1 = '30000000-0000-4000-8000-0000000000c1';
 const C2 = '30000000-0000-4000-8000-0000000000c2';
@@ -76,13 +78,18 @@ beforeEach(() => {
         member(L, FIN, 'member', ['finance']),
         member(L2, X, 'owner'),
         member(A, AOWN, 'owner'),
+        member(A, AMGR, 'member', ['artist_manager'], 'artists'),
       ],
-      member_artist_scopes: [{ org_id: L, user_id: SC, contact_id: C1 }],
+      member_artist_scopes: [
+        { org_id: L, user_id: SC, contact_id: C1 },
+        { org_id: A, user_id: AMGR, contact_id: AENG },
+      ],
       contacts: [
         contact(C1, L, 'Nova'),
         contact(C2, L, 'Kilo'),
         contact(D1, L2, 'Other'),
         contact(ASELF, A, 'Self'),
+        contact(AENG, A, 'Engineer', { category: 'engineer' }),
         contact(PC1, null, 'Crm'),
       ],
       activity_events: [],
@@ -223,7 +230,7 @@ describe('POST /contacts', () => {
     expect((await call(SC, 'POST', L, undefined, { name: 'x' })).status).toBe(403);
     expect((await call(ART, 'POST', L, undefined, { name: 'x' })).status).toBe(403);
     expect((await call(FIN, 'POST', L, undefined, { name: 'x' })).status).toBe(403);
-    expect(db.tables.contacts).toHaveLength(5);
+    expect(db.tables.contacts).toHaveLength(6);
   });
 
   it('an artist org keeps one artist: a second is 409, an engineer is fine', async () => {
@@ -247,6 +254,13 @@ describe('PATCH /contacts/[id]', () => {
     expect((await call(AR, 'PATCH', L, C1, { email: 'kilo@test.dev' })).status).toBe(409);
   });
 
+  it("the one-artist rule is judged on the whole org, not a scoped member's slice", async () => {
+    // AMGR sees only the engineer, not the org's artist; turning the
+    // engineer into an artist would still make two.
+    expect((await call(AMGR, 'PATCH', A, AENG, { category: 'artist' })).status).toBe(409);
+    expect((await call(AMGR, 'PATCH', A, AENG, { notes: 'mixes' })).status).toBe(200);
+  });
+
   it("an artist org's artist cannot stop being its artist", async () => {
     expect((await call(AOWN, 'PATCH', A, ASELF, { category: 'producer' })).status).toBe(409);
     expect((await call(AOWN, 'PATCH', A, ASELF, { category: 'singer' })).status).toBe(200);
@@ -264,7 +278,7 @@ describe('DELETE /contacts/[id]', () => {
     expect((await call(OWN, 'DELETE', L, D1)).status).toBe(404);
     expect((await call(OWN, 'DELETE', L, PC1)).status).toBe(404);
     expect((await call(AOWN, 'DELETE', A, ASELF)).status).toBe(409);
-    expect(db.tables.contacts).toHaveLength(5);
+    expect(db.tables.contacts).toHaveLength(6);
   });
 });
 
@@ -290,7 +304,7 @@ describe('/members/artists: the roster picker', () => {
     expect(foreign.status).toBe(400);
     expect((foreign.json.contact_ids as string[]).sort()).toEqual([D1, PC1].sort());
     expect((await artists(OWN, 'PUT', L, { user_id: AR, contact_ids: [C1] })).status).toBe(400);
-    expect(db.tables.member_artist_scopes).toEqual([{ org_id: L, user_id: SC, contact_id: C1 }]);
+    expect(db.tables.member_artist_scopes.filter((r) => r.org_id === L)).toEqual([{ org_id: L, user_id: SC, contact_id: C1 }]);
   });
 
   it('needs members.manage to change; a member of another org is refused', async () => {

@@ -218,6 +218,24 @@ DELETE FROM public.org_members WHERE org_id = :L AND user_id = :SC;
 SELECT public.check_eq('removing a member removes their scope rows',
   (SELECT count(*) FROM public.member_artist_scopes WHERE user_id = :SC), 0::bigint);
 
+-- ── Replaying 110/111 (db:migrate replays every file) leaves org contacts alone ──
+-- 111 adopts NULL-owner contacts onto the single producer and merges ones
+-- whose email the producer already has. An org contact is NULL-owner by
+-- design and shares an email with a CRM row here (nova@local.test).
+INSERT INTO public.contacts (user_id, name, email) VALUES (NULL, 'Real orphan', 'orphan@local.test');
+-- One transaction per file, as scripts/apply-migrations.sh runs them (110's
+-- temp table is ON COMMIT DROP).
+BEGIN;
+\ir ../../migrations/110_normalize_contact_emails.sql
+COMMIT;
+BEGIN;
+\ir ../../migrations/111_adopt_orphan_contacts.sql
+COMMIT;
+SELECT public.check_eq('after replaying 110 + 111 every org contact is still there, ownerless and in its org',
+  (SELECT count(*) FROM public.contacts WHERE org_id IS NOT NULL AND user_id IS NULL), 3::bigint);
+SELECT public.check_eq('…and a real orphan is still adopted by the producer',
+  (SELECT user_id FROM public.contacts WHERE email = 'orphan@local.test'), :P::uuid);
+
 -- ── Accepting an artist-limited invitation writes the scope (carried) ───
 
 CREATE FUNCTION pg_temp.h(t text) RETURNS text LANGUAGE sql AS $$ SELECT encode(sha256(convert_to(t, 'UTF8')), 'hex') $$;

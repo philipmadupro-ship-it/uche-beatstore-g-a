@@ -104,7 +104,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ orgI
 
     const scopes = memberArtistScopeQuery(access.admin, access, userId);
     const { error: writeErr } = await scopes.replace(wanted);
-    if (writeErr) throw new Error(writeErr.message);
+    if (writeErr) {
+      // replace() fails narrow; put the old list back rather than leave a
+      // list nobody chose.
+      const { error: revertErr } = await scopes.replace(before);
+      if (revertErr) log.error('restoring an artist scope after a failed change failed', { orgId: access.orgId, error: revertErr.message });
+      throw new Error(writeErr.message);
+    }
 
     try {
       await recordEvent(

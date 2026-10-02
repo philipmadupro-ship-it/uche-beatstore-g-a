@@ -89,3 +89,19 @@ export async function missingOrgContacts(admin: AdminClient, ctx: OrgContext, id
   const found = new Set(((data ?? []) as unknown as { id: string }[]).map((r) => r.id.toLowerCase()));
   return wanted.filter((id) => !found.has(id));
 }
+
+/**
+ * The categories of EVERY contact in the org, for the artist-org rule
+ * (`artistOrgRosterError`, D1). Deliberately not scopedOrgQuery: an
+ * invariant over the whole directory must not be judged on the slice a
+ * scoped member happens to see. Used only for that check; nothing read
+ * here is returned to the caller. Throws on a database error.
+ */
+export async function orgContactRoles(
+  admin: AdminClient,
+  ctx: OrgContext,
+): Promise<{ id: string; category: string | null; secondary_category: string | null }[]> {
+  const { data, error } = await admin.from('contacts').select('id, category, secondary_category').eq('org_id', ctx.orgId);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as { id: string; category: string | null; secondary_category: string | null }[];
+}

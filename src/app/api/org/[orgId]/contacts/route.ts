@@ -23,6 +23,7 @@ import {
   DUPLICATE_EMAIL,
   ORG_CONTACT_COLUMNS,
   isDuplicateEmail,
+  orgContactRoles,
   toContactWrite,
   toOrgContactView,
   type OrgContactRow,
@@ -72,9 +73,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
 
   try {
     if (access.orgKind === 'artist') {
-      const { data, error } = await scopedOrgQuery(admin, 'contacts', access, 'id, category, secondary_category');
-      if (error) throw new Error(error.message);
-      const existing = (data ?? []) as unknown as { id: string; category: string | null; secondary_category: string | null }[];
+      // The whole org, not the caller's scoped view (orgContactRoles).
+      const existing = await orgContactRoles(admin, access);
       const refused = artistOrgRosterError(access.orgKind, existing, fields);
       if (refused) return NextResponse.json({ error: refused }, { status: 409 });
     }

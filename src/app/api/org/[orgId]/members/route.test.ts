@@ -45,6 +45,8 @@ const events: unknown[][] = [];
 let capRequested: string | null = null;
 let myArtistScope: Set<string> | null = null;
 let listRows: Row[] | null = null;
+let scopeRows: string[] = [];
+const replaced: string[][] = [];
 const C1 = '66666666-6666-4666-8666-666666666666';
 const C2 = '77777777-7777-4777-8777-777777777777';
 
@@ -78,6 +80,13 @@ vi.mock('@/lib/auth/org-access', () => {
       return accessOk();
     },
     scopedOrgQuery: scoped,
+    memberArtistScopeQuery: (a: { from: (t: string) => { select: (c: string) => { eq: (k: string, v: string) => { eq: (k: string, v: string) => unknown } } } }, ctx: { orgId: string }, userId: string) => ({
+      select: () => a.from('member_artist_scopes').select('contact_id').eq('org_id', ctx.orgId).eq('user_id', userId),
+      replace: async (ids: string[]) => {
+        replaced.push(ids);
+        return { error: null };
+      },
+    }),
     memberRowQuery: (a: { from: (t: string) => Record<string, (...x: unknown[]) => { eq: (k: string, v: string) => { eq: (k: string, v: string) => unknown } }> }, ctx: { orgId: string; capabilities: Set<string> }, userId: string) => ({
       select: (cols = '*') => a.from('org_members').select(cols).eq('org_id', ctx.orgId).eq('user_id', userId),
       update: (patch: unknown) => {
@@ -108,6 +117,7 @@ vi.mock('@/lib/log', () => ({
 
 function answer(chain: Chain): Answer {
   if (chain.table === 'member_artist_scopes') {
+    if (eqs(chain).user_id) return { data: scopeRows.map((contact_id) => ({ contact_id })), error: null };
     expect(eqs(chain)).toEqual({ org_id: ORG });
     return { data: [{ user_id: THEM, contact_id: C2 }, { user_id: THEM, contact_id: C1 }], error: null };
   }
@@ -150,6 +160,8 @@ beforeEach(() => {
   capRequested = null;
   myArtistScope = null;
   listRows = null;
+  scopeRows = [];
+  replaced.length = 0;
   admin = fakeAdmin({ answer });
 });
 
@@ -287,6 +299,44 @@ describe('PATCH members', () => {
     const updates = admin.chains.filter((c) => opOf(c, 'update'));
     expect(updates.map((c) => opOf(c, 'update')!.args[0])).toEqual([{ functions: ['marketing'] }, { functions: ['a_and_r'] }]);
     expect(eqs(updates[1])).toEqual({ org_id: ORG, user_id: THEM });
+  });
+});
+
+describe('artist scope rows follow the membership (LABEL-10)', () => {
+  it('widening a limited member to the whole org clears their artists, and the event names them', async () => {
+    target = row({ scope: 'artists' });
+    scopeRows = [C2, C1];
+    const res = await patch({ user_id: THEM, scope: 'org' });
+    expect(res.status).toBe(200);
+    expect(replaced).toEqual([[]]);
+    expect(events[0][1]).toBe('member.scope_changed');
+    expect(events[0][3]).toMatchObject({ scope: { from: 'artists', to: 'org' }, contact_ids: { from: [C1, C2], to: [] } });
+  });
+
+  it('a change that keeps the member limited leaves their artists alone', async () => {
+    target = row({ scope: 'artists' });
+    scopeRows = [C1];
+    expect((await patch({ user_id: THEM, functions: ['marketing'] })).status).toBe(200);
+    expect(replaced).toEqual([]);
+    expect(events[0][3]).not.toHaveProperty('contact_ids');
+  });
+
+  it('if the audit event fails after clearing, the membership AND the list are put back', async () => {
+    target = row({ scope: 'artists' });
+    scopeRows = [C1];
+    auditFails = true;
+    expect((await patch({ user_id: THEM, scope: 'org' })).status).toBe(500);
+    expect(replaced).toEqual([[], [C1]]);
+    const updates = admin.chains.filter((c) => opOf(c, 'update')).map((c) => opOf(c, 'update')!.args[0]);
+    expect(updates).toEqual([{ scope: 'org' }, { scope: 'artists' }]);
+  });
+
+  it('a removal rolled back for a missing audit event restores the artists the cascade took', async () => {
+    target = row({ scope: 'artists' });
+    scopeRows = [C1, C2];
+    auditFails = true;
+    expect((await del(THEM)).status).toBe(500);
+    expect(replaced).toEqual([[C1, C2]]);
   });
 });
 

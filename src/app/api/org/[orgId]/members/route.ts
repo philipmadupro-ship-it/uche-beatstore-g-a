@@ -13,6 +13,12 @@
  *          owner row only by an owner, nobody raises themselves.
  *  DELETE  ?user_id= — capability `members.manage`; an owner only by an owner.
  *
+ * Artist scope rows (member_artist_scopes, LABEL-10) follow the membership:
+ * a change that leaves a member seeing the whole org clears their list (so
+ * a later limit starts from none, never from a list nobody chose for it),
+ * named in the event's payload; a removal's rollback restores the list the
+ * FK cascade took.
+ *
  * The last owner is never demoted or removed: 409, checked here and held by
  * 136's deferred trigger, whose error is answered as the same 409 rather
  * than a raw database error. Each change is an audit event (member.*); if it
@@ -23,6 +29,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  memberArtistScopeQuery,
   memberRowQuery,
   requireOrgCapability,
   requireOrgMember,
@@ -125,6 +132,14 @@ async function ownerCount(access: OrgAccessOk): Promise<number> {
   return count ?? 0;
 }
 
+/** A member's artist scope list, or [] for one who sees the whole org. */
+async function scopeListOf(access: OrgAccessOk, row: MemberRow): Promise<string[]> {
+  if (toArtistScope(row.role, row.scope, []) === null) return [];
+  const { data, error } = await memberArtistScopeQuery(access.admin, access, row.user_id).select();
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { contact_id: string }[]).map((r) => r.contact_id.toLowerCase()).sort();
+}
+
 async function readMember(access: OrgAccessOk, userId: string): Promise<MemberRow | null> {
   const { data, error } = await memberRowQuery(access.admin, access, userId).select(COLUMNS).maybeSingle();
   if (error) throw new Error(error.message);
@@ -184,24 +199,44 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ or
     const after = (Array.isArray(updated) ? updated[0] : null) as MemberRow | null;
     if (!after) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    // Put back exactly the fields this request changed, and the artist list
+    // if it was cleared. supabase-js resolves with { error }, so check it.
+    const scopes = memberArtistScopeQuery(admin, access, userId);
+    let cleared: string[] = [];
+    const undo = async () => {
+      const revert: Record<string, unknown> = {};
+      for (const key of Object.keys(plan.patch) as (keyof MemberRow)[]) revert[key] = before[key];
+      const { error: revertErr } = await memberRowQuery(admin, access, userId).update(revert);
+      if (revertErr) log.error('reverting an unaudited member change failed', { orgId: access.orgId, error: revertErr.message });
+      if (cleared.length > 0) {
+        const { error: restoreErr } = await scopes.replace(cleared);
+        if (restoreErr) log.error('restoring a cleared artist scope failed', { orgId: access.orgId, error: restoreErr.message });
+      }
+    };
+
     try {
+      // Widened to the whole org: the old artist list goes (LABEL-10).
+      if (toArtistScope(after.role, after.scope, []) === null) {
+        const list = await scopeListOf(access, before);
+        if (list.length > 0) {
+          const { error: clearErr } = await scopes.replace([]);
+          if (clearErr) throw new Error(clearErr.message);
+          cleared = list;
+        }
+      }
       if (plan.event) {
         await recordEvent(
           admin,
           { orgId: access.orgId, userId: access.userId },
           plan.event.verb,
           { type: 'member', id: userId },
-          plan.event.payload,
+          cleared.length > 0 ? { ...plan.event.payload, contact_ids: { from: cleared, to: [] } } : plan.event.payload,
         );
       }
     } catch (err) {
-      // A change nobody can account for must not stand: put back exactly the
-      // fields this request changed. (One event per request, so nothing of
-      // it was recorded.) supabase-js resolves with { error }, so check it.
-      const revert: Record<string, unknown> = {};
-      for (const key of Object.keys(plan.patch) as (keyof MemberRow)[]) revert[key] = before[key];
-      const { error: revertErr } = await memberRowQuery(admin, access, userId).update(revert);
-      if (revertErr) log.error('reverting an unaudited member change failed', { orgId: access.orgId, error: revertErr.message });
+      // A change nobody can account for must not stand. (One event per
+      // request, so nothing of it was recorded.)
+      await undo();
       throw err;
     }
     return NextResponse.json({ member: toView(after, access.userId) });
@@ -231,6 +266,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ o
     );
     if (!plan.ok) return NextResponse.json({ error: plan.error }, { status: plan.status });
 
+    // The FK cascade takes the artist list with the membership; keep it for
+    // the rollback below.
+    const list = await scopeListOf(access, before);
     const { data: removed, error: deleteErr } = await memberRowQuery(admin, access, userId).delete().select('user_id');
     if (isLastOwnerError(deleteErr)) return NextResponse.json({ error: LAST_OWNER }, { status: 409 });
     if (deleteErr) throw new Error(deleteErr.message);
@@ -250,6 +288,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ o
       // insert policy; this is the same path invitation-accept uses).
       const { error: restoreErr } = await admin.from('org_members').insert({ org_id: access.orgId, ...before });
       if (restoreErr) log.error('restoring a removed member failed', { orgId: access.orgId, error: restoreErr.message });
+      if (!restoreErr && list.length > 0) {
+        const { error: scopeErr } = await memberArtistScopeQuery(admin, access, userId).replace(list);
+        if (scopeErr) log.error('restoring a removed member’s artists failed', { orgId: access.orgId, error: scopeErr.message });
+      }
       throw err;
     }
     return NextResponse.json({ removed: true });

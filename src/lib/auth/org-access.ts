@@ -400,21 +400,25 @@ export function memberArtistScopeQuery(admin: AdminClient, ctx: OrgAccessOk, use
   const rows = () => admin.from('member_artist_scopes');
   return {
     select: () => rows().select('contact_id').eq('org_id', ctx.orgId).eq('user_id', userId),
-    /** Make the list exactly `contactIds`: add what is missing, drop the rest. */
+    /**
+     * Make the list exactly `contactIds`. Drops what is not wanted FIRST, then
+     * adds what is missing: a failure between the two leaves the member with
+     * less than either list, never more (fail narrow; the route then puts the
+     * old list back).
+     */
     replace: async (contactIds: readonly string[]): Promise<{ error: { message: string } | null }> => {
       if (!ctx.capabilities.has('members.manage')) throw new Error('memberArtistScopeQuery: members.manage is required to write');
       const ids = [...new Set(contactIds.map((c) => c.toLowerCase()))];
       if (ids.some((id) => !isUUID(id))) throw new Error('memberArtistScopeQuery: contact ids must be uuids');
-      if (ids.length > 0) {
-        const { error } = await rows().upsert(
-          ids.map((contact_id) => ({ org_id: ctx.orgId, user_id: userId, contact_id })),
-          { onConflict: 'org_id,user_id,contact_id', ignoreDuplicates: true },
-        );
-        if (error) return { error };
-      }
       let drop = rows().delete().eq('org_id', ctx.orgId).eq('user_id', userId);
       if (ids.length > 0) drop = drop.not('contact_id', 'in', `(${ids.join(',')})`);
-      const { error } = await drop;
+      const { error: dropErr } = await drop;
+      if (dropErr) return { error: dropErr };
+      if (ids.length === 0) return { error: null };
+      const { error } = await rows().upsert(
+        ids.map((contact_id) => ({ org_id: ctx.orgId, user_id: userId, contact_id })),
+        { onConflict: 'org_id,user_id,contact_id', ignoreDuplicates: true },
+      );
       return { error: error ?? null };
     },
   };

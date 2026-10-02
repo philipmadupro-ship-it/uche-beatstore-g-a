@@ -196,14 +196,11 @@ export default function OrgMembersPage() {
         return;
       }
       const next = body.member as Partial<Member>;
-      // Limited to artists just now: read which ones (rows a past limit left).
+      // A new limit starts from no artists (widening to the whole org clears
+      // the list on the server, LABEL-10); the whole org carries none.
       let contactIds: string[] | null | undefined;
-      if (next.scope === 'artists' && m.scope !== 'artists') {
-        const list = await fetch(`/api/org/${org.id}/members/artists?user_id=${encodeURIComponent(m.user_id)}`, { cache: 'no-store' });
-        contactIds = list.ok ? (((await readJson(list)).contact_ids as string[]) ?? []) : [];
-      } else if (next.scope === 'org') {
-        contactIds = null;
-      }
+      if (next.scope === 'artists' && m.scope !== 'artists') contactIds = [];
+      else if (next.scope === 'org') contactIds = null;
       setMembers((cur) =>
         (cur ?? []).map((x) =>
           x.user_id === m.user_id
