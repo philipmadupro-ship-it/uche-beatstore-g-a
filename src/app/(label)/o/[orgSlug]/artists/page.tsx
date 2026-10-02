@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ArtistsCardView } from '@/components/artists/ArtistsCardView';
+import { OrgUploadPanel } from '@/components/labelos/OrgUploadPanel';
 import { useOrgShell } from '@/components/labelos/OrgShellContext';
 import { rosterSummary } from '@/lib/labelos/roster';
 import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
@@ -45,6 +46,7 @@ export default function OrgArtistsPage() {
   }, [orgId]);
 
   const artists = useMemo(() => (load.state === 'ready' ? load.contacts.map(rosterSummary) : null), [load]);
+  const uploadArtists = useMemo(() => (load.state === 'ready' ? load.contacts.map((c) => ({ id: c.id, name: c.name })) : []), [load]);
 
   if (!shell) return null;
   const limited = shell.scope === 'artists' || shell.role === 'artist';
@@ -67,6 +69,8 @@ export default function OrgArtistsPage() {
           {limited ? 'The artists you work on in this organization.' : 'Everyone on this organization’s roster.'}
         </p>
       </header>
+      {/* LABEL-14: demos and material go straight into the roster (W3). */}
+      {shell.capabilities.includes('catalog.write') && <OrgUploadPanel orgId={shell.org.id} artists={uploadArtists} />}
       <ArtistsCardView
         artists={artists}
         ready

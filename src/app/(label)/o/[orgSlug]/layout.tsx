@@ -15,6 +15,7 @@ import { TopBar } from '@/components/nav/TopBar';
 import { PlayerBar } from '@/components/player/PlayerBar';
 import { MediaSessionBridge } from '@/components/player/MediaSessionBridge';
 import { WidgetErrorBoundary } from '@/components/system/WidgetErrorBoundary';
+import { UploadsTray } from '@/components/upload/UploadsTray';
 import { LabelOsFlagProvider } from '@/components/labelos/LabelOsFlag';
 import { OrgShellProvider } from '@/components/labelos/OrgShellContext';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
@@ -41,6 +42,8 @@ export default async function OrgShellLayout({
       <WidgetErrorBoundary name="TopBar"><TopBar /></WidgetErrorBoundary>
       <main className="pt-14 pb-28 min-h-screen">{children}</main>
       <WidgetErrorBoundary name="PlayerBar"><PlayerBar /></WidgetErrorBoundary>
+      {/* LABEL-14: org uploads run in the same tray as the producer's. */}
+      <WidgetErrorBoundary name="UploadsTray"><UploadsTray /></WidgetErrorBoundary>
       <WidgetErrorBoundary name="MediaSessionBridge"><MediaSessionBridge /></WidgetErrorBoundary>
     </div>
   );

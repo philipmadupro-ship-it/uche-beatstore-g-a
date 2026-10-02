@@ -186,3 +186,28 @@ export function orgUploadTrackView(
     playUrl: orgUploadPlayUrl(orgId, row.id),
   };
 }
+
+/** What the upload control offers (W3): a new song, or "add to song as…" each upload relation. */
+export type OrgUploadMode = 'song' | OrgUploadRelation;
+
+export const ORG_UPLOAD_MODE_LABELS: Readonly<Record<OrgUploadMode, string>> = {
+  song: 'New songs',
+  demo: 'Add to song as demo',
+  master: 'Add to song as master',
+  instrumental: 'Add to song as instrumental',
+  loop: 'Add to song as loop',
+  topline: 'Add to song as topline',
+  version: 'Add to song as version',
+};
+
+/**
+ * The intent the upload control sends, or null while it is incomplete (no
+ * artist; "add to song" with no song picked). Several files in "add to song"
+ * mode all become that relation of the one song.
+ */
+export function orgUploadIntentFor(input: { contactId: string | null; mode: OrgUploadMode; songId: string | null }): OrgUploadIntent | null {
+  if (!input.contactId) return null;
+  if (input.mode === 'song') return { kind: 'song', contactId: input.contactId };
+  if (!input.songId) return null;
+  return { kind: 'link', songId: input.songId, relation: input.mode };
+}

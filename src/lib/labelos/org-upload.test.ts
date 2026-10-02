@@ -10,6 +10,8 @@ import {
   orgUploadTrackFields,
   orgUploadTrackView,
   orgUploadPlayUrl,
+  ORG_UPLOAD_MODE_LABELS,
+  orgUploadIntentFor,
 } from './org-upload';
 import { OrgUploadCompleteSchema, OrgUploadInitSchema } from '@/lib/contracts';
 import { recordingContexts } from './org-audio';
@@ -144,5 +146,17 @@ describe('org upload contracts', () => {
     expect(OrgUploadCompleteSchema.safeParse({ sessionId: 's', as: { kind: 'link', songId: OTHER, relation: 'beat' } }).success).toBe(false);
     expect(OrgUploadCompleteSchema.safeParse({ sessionId: 's', as: { kind: 'link', songId: 'nope', relation: 'demo' } }).success).toBe(false);
     expect(OrgUploadCompleteSchema.safeParse({ sessionId: 's', as: { kind: 'song' } }).success).toBe(false);
+  });
+});
+
+describe('the upload control', () => {
+  it('offers a new song and every upload relation', () => {
+    expect(Object.keys(ORG_UPLOAD_MODE_LABELS)).toEqual(['song', ...ORG_UPLOAD_RELATIONS]);
+  });
+  it('builds the intent only when complete', () => {
+    expect(orgUploadIntentFor({ contactId: null, mode: 'song', songId: null })).toBeNull();
+    expect(orgUploadIntentFor({ contactId: OTHER, mode: 'song', songId: 'x' })).toEqual({ kind: 'song', contactId: OTHER });
+    expect(orgUploadIntentFor({ contactId: OTHER, mode: 'master', songId: null })).toBeNull();
+    expect(orgUploadIntentFor({ contactId: OTHER, mode: 'master', songId: 's1' })).toEqual({ kind: 'link', songId: 's1', relation: 'master' });
   });
 });
