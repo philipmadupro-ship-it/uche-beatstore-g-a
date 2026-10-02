@@ -58,7 +58,7 @@ Where buyers actually buy.
 | `/store/orders` | Order lookup by email — sends a magic-link-style token so a buyer without a persistent account can still find a past purchase. |
 | `/store/account` | Buyer sign-in — email magic link (Supabase OTP) or Google OAuth. Already-signed-in buyers redirect straight to `/store/account/me`. |
 | `/store/account/[token]` | Legacy 24h signed-token delivery view (pre-dates persistent accounts) — still the link post-purchase emails point at. Looks up purchases by email only, no session. |
-| `/store/account/me` | Persistent buyer account dashboard (session-gated). Purchases, listening history, favorites, and custom playlists that follow the buyer across devices — see "Buyer accounts" below. |
+| `/store/account/me` | Persistent buyer account dashboard (session-gated). Purchases, listening history, favorites, and custom playlists (shown as **Projects**) that follow the buyer across devices — see "Buyer accounts" below. |
 
 ### Artist portal (`/artist/[token]`)
 
@@ -115,6 +115,8 @@ Either type `?promo=CODE` in any `/store/checkout*` URL, or enter it in the cart
 
 ### Buyer accounts (persistent, opt-in)
 A buyer can sign in at `/store/account` (Supabase magic-link OTP or Google OAuth — the same auth system the producer uses) to get a library that follows them across devices: favorited tracks, listening history (last 100 plays), and custom playlists built from anything free/previewable/licensed. All three are keyed on the buyer's **email**, not a producer-scoped `user_id` — there's exactly one producer, so no scoping is needed. Writes only ever happen through `/api/store/me`, which is the sole path into `buyer_favorites` / `buyer_listening_history` / `buyer_playlists` (RLS blocks direct PostgREST access; see migration 060). This coexists with — and is separate from — the older `/store/account/[token]` flow: a 24h signed token, no real session, used by post-purchase delivery emails to resolve "purchases for this email" without requiring sign-in. Both views read the same email-keyed rows, so no merge step is needed: signing in with the email a purchase was made under shows that purchase, plus the same favourites, history and playlists the token page shows. The delivery page says so and links to sign-in, since its link expires and the account doesn't.
+
+**My beats.** `/store/account/me` opens with the buyer's own library: every beat they own (a license, or a track of a bundle they bought) and every beat they have made an offer on, in one list with a status. It searches, filters (All / Owned / Requested), sorts (Newest, Title, BPM, Key) and plays through the store's player bar. A line under the heading says what their owned beats have in common — tempo range, most common key and type — worked out from what they own, never asked for. Ticking beats and pressing **Create project** makes a buyer playlist from them, which then lives under **Projects** on the same page (the buyer-facing word for a buyer playlist is *project*, including in the storefront's "Add to project" menu). A refunded purchase owns nothing. A beat the producer has delisted (an exclusive that sold) stays in My beats for its owner with an Open link to the delivery page **and Play**: the preview stream lets the signed-in owner hear the same public clip the storefront plays, never the master, and never anyone else. The "requested" rows are offers the buyer made **while signed in as themselves**; an offer sent without an account is still delivered to the producer but is stored as unverified and shows in nobody's My beats, so typing someone's address into the offer form cannot put an offer in their account.
 
 From `/store/account/me` a buyer can play any beat in the account — Recently played, Favorites, a playlist, or a beat they bought — in the same player bar the store uses. A bought beat plays even after an exclusive sale took it off the store; what streams is always the preview clip, and a refunded purchase plays nothing.
 
@@ -265,6 +267,8 @@ license_purchases(id, seller_user_id, buyer_email, buyer_stripe_customer,
                   amount_usd, stripe_session_id, stripe_payment_intent,
                   status[paid|refunded|disputed|failed], download_unlocked,
                   fulfillment_email_sent, created_at, updated_at)
+buyer_offers(id, seller_user_id, track_id, buyer_email, buyer_email_verified,
+             offered_price_usd, status)   -- verified = made while signed in as buyer_email
 promo_codes(code, seller_user_id, discount_percent, discount_amount,
             active, expires_at, max_uses, uses_count, created_at)
 processed_stripe_events(event_id, processed_at)
@@ -280,7 +284,7 @@ rating_history(track_id, user_id, rating, rated_at)
 
 buyer_favorites(email, track_id, created_at)
 buyer_listening_history(id, email, track_id, played_at)
-buyer_playlists(id, email, name, created_at, updated_at)
+buyer_playlists(id, email, name, created_at, updated_at)   -- shown to the buyer as "Projects"
 buyer_playlist_tracks(playlist_id, track_id, position, added_at)
 ```
 

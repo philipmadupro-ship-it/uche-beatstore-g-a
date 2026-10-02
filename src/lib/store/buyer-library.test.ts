@@ -98,8 +98,8 @@ describe('playlistNameFromTrack', () => {
   it('names the playlist after the beat, within the 80-char limit', () => {
     expect(playlistNameFromTrack('  Night Shift ')).toBe('Night Shift');
     expect(playlistNameFromTrack('x'.repeat(120))).toHaveLength(80);
-    expect(playlistNameFromTrack(null)).toBe('My playlist');
-    expect(playlistNameFromTrack('   ')).toBe('My playlist');
+    expect(playlistNameFromTrack(null)).toBe('My project');
+    expect(playlistNameFromTrack('   ')).toBe('My project');
   });
 });
 

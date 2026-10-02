@@ -37,7 +37,7 @@ re-run `NOTIFY pgrst, 'reload schema';` and wait.
 As of **2026-09-29** 001–129 are in effect on production: the owner ran the
 SQL-editor bundle and its verify table reported every row `applied`.
 **Pending: 130, 131, 132** (Artist Workspace, phase 3) and **133** (linked
-material), **134** (contact roles) and **135** (label pitch notes) — `supabase/apply/pending.sql` carries all six. Every one is
+material), **134** (contact roles), **135** (label pitch notes) and **139** (verified offers) — `supabase/apply/pending.sql` carries all seven. Every one is
 idempotent, so the bundle is safe to run again if some were already applied. Keep the table below as the record; add new
 migrations to it as **not applied** until they are run.
 
@@ -80,6 +80,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `133_track_links.sql` | **not applied** | new — `track_links` (instrumental / loop / topline / version) + track types `loop`, `topline` |
 | `134_contact_secondary_role.sql` | **not applied** | new — `contacts.secondary_category`: one extra role beside `category` |
 | `135_portal_pitch_note.sql` | **not applied** | new — `project_contacts.pitch_note`: the pitch a label sees on a pack in their portal |
+| `139_buyer_offer_email_verified.sql` | **not applied** | new — `buyer_offers.buyer_email_verified` (default false): My beats shows only offers made while signed in as the address on them (BUYER-02) |
 
 **To apply everything pending in one go** without `psql`, paste
 `supabase/apply/pending.sql` (built by `scripts/ops/bundle-migrations.sh`) into
@@ -217,13 +218,22 @@ All are idempotent, so running the full set (`npm run db:migrate`) is safe.
   Per link, not per project — one pack is pitched differently to two labels.
   Without it portals are still shaped by role; the pitch is just absent and
   saving one answers 503 naming 135.
+- `139` — **Verified offers.** `buyer_offers.buyer_email_verified` (boolean,
+  NOT NULL, default false). `POST /api/store/offer` is public; with a Supabase
+  session the route takes the email from the session and stores the offer
+  verified, otherwise it keeps the claimed address, unverified. My beats
+  (`loadBuyerBeats`) lists verified offers only, so typing someone's address
+  into the form can no longer put an offer in their account. Existing rows
+  default to unverified: they stay on the producer's /sales and leave buyers'
+  My beats. Before the migration the offer insert retries without the column
+  and My beats shows no offers (fail closed).
 
 Update this table when a run is confirmed.
 
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 135, 121 is `121_share_full_playback` (SHARE-01) (next new migration = 136). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 139 (136–138 are the label-os branches' `136_labelos_*`, not on main yet — 139 skips them so the two lines of work cannot collide), 121 is `121_share_full_playback` (SHARE-01) (next new migration = 140 unless label-os lands first — re-check `git log --all -- supabase/migrations/`). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
