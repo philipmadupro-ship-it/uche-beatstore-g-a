@@ -32,10 +32,12 @@ export async function authorizeOrgUploadIntent(orgId: string, intent: OrgUploadI
   }
   const a = await requireObjectAccess({ table: 'tracks', id: intent.songId, cap: 'catalog.write', orgId });
   if (!a.ok) return a;
-  const { data, error } = await a.admin.from('tracks').select('type').eq('id', intent.songId).eq('org_id', a.orgId).maybeSingle();
+  const { data, error } = await a.admin.from('tracks').select('type, song_stage').eq('id', intent.songId).eq('org_id', a.orgId).maybeSingle();
   if (error) return fail(500, 'Could not check the song');
   if (!data) return fail(404, 'Not found');
-  if ((data as { type: string | null }).type !== 'song') return fail(409, 'Material can only be added to a song');
+  // A song has a stage; a song-type master or demo linked to one has none, and is material, not a song.
+  const song = data as { type: string | null; song_stage: string | null };
+  if (song.type !== 'song' || song.song_stage === null) return fail(409, 'Material can only be added to a song');
   return { ok: true, access: a };
 }
 
