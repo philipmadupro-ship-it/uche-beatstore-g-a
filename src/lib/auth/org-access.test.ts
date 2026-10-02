@@ -25,6 +25,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     - artist scope (LABEL-10): a scoped member gets 404 outside their
  *       contacts, for objects with no contact, and with zero contacts; the
  *       scope read failing is 500
+ *     - projects / tracks (LABEL-12): scoped through the project's inbox
+ *       artist and linked contacts, a track through the projects of its
+ *       own org it sits in; a failed lookup is 500
  *
  *   scopedOrgQuery
  *     - org filter always; artist-scope filter on org object tables only
@@ -410,7 +413,7 @@ describe('requireObjectAccess', () => {
     const { requireObjectAccess } = await load();
     const r = await requireObjectAccess({ table: 'projects', id: ROW, cap: 'catalog.read' });
     const select = calls.find((c) => c.table === 'projects' && c.op === 'select');
-    expect(select?.args[0]).toBe('org_id, id');
+    expect(select?.args[0]).toBe('org_id, id, inbox_for_contact_id');
     expect(r.ok).toBe(true);
     // A project is its own project scope.
     if (r.ok) expect(r.object.projectId).toBe(ROW);
@@ -476,9 +479,9 @@ describe('artist scope (LABEL-10)', () => {
     if (!r.ok) expect(r.res.status).toBe(404);
   });
 
-  it('an object with no roster contact (a project, for now) is 404 to a scoped member', async () => {
+  it('a project with no artist (no inbox, no linked contact) is 404 to a scoped member', async () => {
     signedIn();
-    answers.projects = { data: { org_id: ORG_A, id: ROW }, error: null };
+    answers.projects = { data: { org_id: ORG_A, id: ROW, inbox_for_contact_id: null }, error: null };
     memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
     scoped([CONTACT]);
     const { requireObjectAccess } = await load();
@@ -525,6 +528,149 @@ describe('artist scope (LABEL-10)', () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.artistScope).toBeNull();
     expect(calls.some((c) => c.table === 'member_artist_scopes')).toBe(false);
+  });
+});
+
+describe('projects, tracks and project-keyed rows reach their artist through projects (LABEL-12)', () => {
+  const OTHER_CONTACT = '00000000-0000-4000-8000-0000000000c2';
+  const TRACK = '00000000-0000-4000-8000-0000000000e1';
+  const P2 = '00000000-0000-4000-8000-0000000000d2';
+
+  function scoped(contactIds: string[]) {
+    answers.member_artist_scopes = { data: contactIds.map((contact_id) => ({ contact_id })), error: null };
+  }
+
+  /** `projects`: the single-row read by id, or the list read of a track's projects. */
+  function projectsTable(single: Record<string, unknown> | null, list: Record<string, unknown>[] = []) {
+    answers.projects = (filters) => (filters.id ? { data: single, error: null } : { data: list, error: null });
+  }
+
+  it('a scoped member reaches a project linked to one of their artists', async () => {
+    signedIn();
+    projectsTable({ org_id: ORG_A, id: PROJECT, inbox_for_contact_id: null });
+    answers.project_contacts = { data: [{ contact_id: OTHER_CONTACT }, { contact_id: CONTACT.toUpperCase() }], error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    expect((await requireObjectAccess({ table: 'projects', id: PROJECT, cap: 'catalog.read' })).ok).toBe(true);
+    expect(calls).toContainEqual({ table: 'project_contacts', op: 'in', args: ['project_id', [PROJECT]] });
+  });
+
+  it("a scoped member reaches their artist's Inbox project", async () => {
+    signedIn();
+    projectsTable({ org_id: ORG_A, id: PROJECT, inbox_for_contact_id: CONTACT });
+    memberships({ [ORG_A]: member({ role: 'artist', scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    expect((await requireObjectAccess({ table: 'projects', id: PROJECT, cap: 'catalog.read' })).ok).toBe(true);
+  });
+
+  it('a project for other artists only is 404', async () => {
+    signedIn();
+    projectsTable({ org_id: ORG_A, id: PROJECT, inbox_for_contact_id: OTHER_CONTACT });
+    answers.project_contacts = { data: [{ contact_id: OTHER_CONTACT }], error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'projects', id: PROJECT, cap: 'catalog.read' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(404);
+  });
+
+  it("a track is reached through a project of its own org", async () => {
+    signedIn();
+    answers.tracks = { data: { org_id: ORG_A }, error: null };
+    answers.project_tracks = { data: [{ project_id: PROJECT }, { project_id: P2 }], error: null };
+    projectsTable(null, [{ id: PROJECT, inbox_for_contact_id: null }]);
+    answers.project_contacts = { data: [{ contact_id: CONTACT }], error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    expect((await requireObjectAccess({ table: 'tracks', id: TRACK, cap: 'catalog.read' })).ok).toBe(true);
+    // Only projects of the track's org count (another org's project never scopes it).
+    expect(calls).toContainEqual({ table: 'projects', op: 'eq', args: ['org_id', ORG_A] });
+    expect(calls).toContainEqual({ table: 'project_contacts', op: 'in', args: ['project_id', [PROJECT]] });
+  });
+
+  it('a track in no project of its org is 404 to a scoped member', async () => {
+    signedIn();
+    answers.tracks = { data: { org_id: ORG_A }, error: null };
+    answers.project_tracks = { data: [], error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'tracks', id: TRACK, cap: 'catalog.read' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(404);
+  });
+
+  it('a failed artist lookup is 500, never a pass', async () => {
+    signedIn();
+    answers.tracks = { data: { org_id: ORG_A }, error: null };
+    answers.project_tracks = { data: null, error: { message: 'db down' } };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'tracks', id: TRACK, cap: 'catalog.read' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(500);
+  });
+
+  it("a project file is reached through its project's artists", async () => {
+    signedIn();
+    answers.project_assets = { data: { org_id: ORG_A, project_id: PROJECT }, error: null };
+    projectsTable(null, [{ id: PROJECT, inbox_for_contact_id: null }]);
+    answers.project_contacts = { data: [{ contact_id: CONTACT }], error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    expect((await requireObjectAccess({ table: 'project_assets', id: ROW, cap: 'catalog.read' })).ok).toBe(true);
+    expect(calls).toContainEqual({ table: 'projects', op: 'eq', args: ['org_id', ORG_A] });
+  });
+
+  it("a comment on another artist's project is 404", async () => {
+    signedIn();
+    answers.project_comments = { data: { org_id: ORG_A, project_id: PROJECT }, error: null };
+    projectsTable(null, [{ id: PROJECT, inbox_for_contact_id: OTHER_CONTACT }]);
+    answers.project_contacts = { data: [], error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'project_comments', id: ROW, cap: 'catalog.read' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(404);
+  });
+
+  it('a project-keyed row with no project stays 404 to a scoped member', async () => {
+    signedIn();
+    answers.project_assets = { data: { org_id: ORG_A, project_id: null }, error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'project_assets', id: ROW, cap: 'catalog.read' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(404);
+  });
+
+  it('an org-scoped member costs no artist lookup', async () => {
+    signedIn();
+    answers.tracks = { data: { org_id: ORG_A }, error: null };
+    memberships({ [ORG_A]: member({ functions: ['a_and_r'] }) });
+    const { requireObjectAccess } = await load();
+    expect((await requireObjectAccess({ table: 'tracks', id: TRACK, cap: 'catalog.read' })).ok).toBe(true);
+    expect(calls.some((c) => c.table === 'project_tracks' || c.table === 'project_contacts')).toBe(false);
+  });
+
+  it('scope before capability: an out-of-scope project is 404 even without the capability', async () => {
+    signedIn();
+    projectsTable({ org_id: ORG_A, id: PROJECT, inbox_for_contact_id: null });
+    answers.project_contacts = { data: [], error: null };
+    memberships({ [ORG_A]: member({ functions: ['finance'], scope: 'artists' }) });
+    scoped([CONTACT]);
+    const { requireObjectAccess } = await load();
+    const r = await requireObjectAccess({ table: 'projects', id: PROJECT, cap: 'catalog.write' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(404);
   });
 });
 

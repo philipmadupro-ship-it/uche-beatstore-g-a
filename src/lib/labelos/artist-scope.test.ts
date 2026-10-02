@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { artistScopeFilter, scopeAllowsContact, toArtistScope } from './artist-scope';
+import { artistScopeFilter, scopeAllowsAnyContact, scopeAllowsContact, toArtistScope } from './artist-scope';
 
 const C1 = '00000000-0000-4000-8000-0000000000c1';
 const C2 = '00000000-0000-4000-8000-0000000000c2';
@@ -61,5 +61,21 @@ describe('artistScopeFilter', () => {
   it('scoped with zero contacts, or a table without a contact column: nothing', () => {
     expect(artistScopeFilter(new Set(), 'id')).toEqual({ kind: 'none' });
     expect(artistScopeFilter(new Set([C1]), null)).toEqual({ kind: 'none' });
+  });
+});
+
+describe('scopeAllowsAnyContact (a project / track reaches its artists through projects, LABEL-12)', () => {
+  it('whole org: always, even with no artist', () => {
+    expect(scopeAllowsAnyContact(null, [])).toBe(true);
+  });
+
+  it('scoped: at least one of the artists is listed', () => {
+    const scope = new Set([C1]);
+    expect(scopeAllowsAnyContact(scope, [C2, C1.toUpperCase()])).toBe(true);
+    expect(scopeAllowsAnyContact(scope, [C2])).toBe(false);
+  });
+
+  it('scoped: an object with no artist is not visible', () => {
+    expect(scopeAllowsAnyContact(new Set([C1]), [])).toBe(false);
   });
 });

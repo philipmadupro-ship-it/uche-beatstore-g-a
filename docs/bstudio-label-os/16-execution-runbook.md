@@ -76,7 +76,7 @@ Every task that adds or changes a migration runs **`npm run db:local:check`** (`
 1. runs `scripts/local-db/reset.sh` against it: `bootstrap.sql` (Supabase-shaped roles and `auth`), **every** migration twice through the deploy runner, `seed.sql`;
 2. runs each `supabase/local/checks/*.sql`. **A schema task adds a check file for its migration**: behaviour asserted as `anon` / `authenticated` users, raising on failure. `136_labelos_org_core.sql` is the template;
 3. checks `has_org_cap` against `capabilitiesFor()` on generated fixtures;
-4. runs each `supabase/rollback/NNN_*.down.sql`, then re-applies its migration.
+4. runs every `supabase/rollback/NNN_*.down.sql` newest first in one copy (each after the rollbacks of every later migration, as it is used by hand), then re-applies those migrations.
 
 It deletes the database afterwards (`KEEP_LOCAL_DB=1` keeps it running). The PR's test plan reports its output. This is what "not applied" means: never applied to a **real** database, always proven on a local one.
 

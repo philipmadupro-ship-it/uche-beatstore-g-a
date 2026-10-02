@@ -94,14 +94,19 @@ SELECT public.check_eq('existing producer tracks read NULL for both new columns'
   0::bigint);
 
 -- ── No new read path: tracks / track_links policies keep their 133/097 shape ──
+-- 140 adds none. 141 (LABEL-12) adds exactly org_member_read and
+-- org_member_guard to both tables; those are asserted in 141's own check,
+-- so they are left out here.
 
-SELECT public.check_eq('no policy on tracks or track_links mentions an org',
+SELECT public.check_eq('no producer policy on tracks or track_links mentions an org',
   (SELECT count(*) FROM pg_policies
    WHERE schemaname = 'public' AND tablename IN ('tracks', 'track_links')
+     AND policyname NOT IN ('org_member_read', 'org_member_guard')
      AND (coalesce(qual, '') ~* 'org' OR coalesce(with_check, '') ~* 'org')),
   0::bigint);
-SELECT public.check_eq('track_links keeps exactly its two owner policies',
-  (SELECT string_agg(policyname, ',' ORDER BY policyname) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'track_links'),
+SELECT public.check_eq('track_links keeps exactly its two owner policies (besides 141''s)',
+  (SELECT string_agg(policyname, ',' ORDER BY policyname) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'track_links'
+     AND policyname NOT IN ('org_member_read', 'org_member_guard')),
   'track_links_owner_select,track_links_owner_write');
 
 -- ── The producer, through RLS ───────────────────────────────────────────────

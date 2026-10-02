@@ -45,7 +45,8 @@ import {
   type OrgKind,
   type Role,
 } from '@/lib/labelos/capabilities';
-import { artistScopeFilter, scopeAllowsContact, toArtistScope, type ArtistScope } from '@/lib/labelos/artist-scope';
+import { artistScopeFilter, scopeAllowsAnyContact, scopeAllowsContact, toArtistScope, type ArtistScope } from '@/lib/labelos/artist-scope';
+import { orgProjectScopeContacts } from '@/lib/labelos/org-read';
 import { createLogger } from '@/lib/log';
 import { isUUID } from '@/lib/validate';
 
@@ -247,6 +248,13 @@ export async function requireOrgCapability(orgId: string, cap: Capability): Prom
  * `contact` is the roster artist (R3: an artist is a contact). It is NOT
  * `project_comments.contact_id`, which is the portal commenter.
  * `activity_events` still names its column `artist_id` (migration 136).
+ *
+ * `projects`, `tracks` and the project-keyed rows carry no contact column:
+ * they reach their artists through projects (scopedThroughProjects below,
+ * LABEL-12), the same path as the SQL `can_see_org_project` /
+ * `can_see_org_track` (migration 141). scopedOrgQuery still lists none of
+ * them to a scoped member; a list route for them must narrow by that path
+ * first.
  */
 export const ORG_OBJECT_TABLES = {
   contacts: { contact: 'id', project: null },
@@ -279,6 +287,62 @@ function artistScopeAllows(access: OrgAccessOk, object: OrgObject): boolean {
 }
 
 /**
+ * Tables whose artist is reached through projects (06 §2.5, 17 R1, LABEL-12):
+ * projects and tracks, and every object table that has a project column but
+ * no roster-contact column (project_assets, project_comments, …) — the same
+ * paths as the SQL (`can_see_org_project`, `can_see_org_track`, the
+ * org_member_read policies, migration 141).
+ */
+function scopedThroughProjects(table: OrgObjectTable): boolean {
+  const cols = ORG_OBJECT_TABLES[table];
+  return table === 'projects' || table === 'tracks' || (cols.contact === null && cols.project !== null);
+}
+
+/**
+ * The roster contacts of the object's projects OF ITS ORG — a project
+ * itself, every project a track sits in, or the project a row is keyed to:
+ * inbox artist plus project_contacts (lib/labelos/org-read#orgProjectScopeContacts).
+ * null when a read fails — the caller answers 500.
+ */
+async function artistsThroughProjects(
+  admin: AdminClient,
+  table: OrgObjectTable,
+  id: string,
+  orgId: string,
+  row: Record<string, unknown>,
+): Promise<string[] | null> {
+  let projects: { id: string; inbox_for_contact_id: string | null }[];
+  if (table === 'projects') {
+    const inbox = row.inbox_for_contact_id;
+    projects = [{ id, inbox_for_contact_id: typeof inbox === 'string' ? inbox : null }];
+  } else {
+    let ids: string[];
+    if (table === 'tracks') {
+      const links = await admin.from('project_tracks').select('project_id').eq('track_id', id);
+      if (links.error) return null;
+      ids = ((links.data ?? []) as { project_id: string }[]).map((l) => l.project_id);
+    } else {
+      const projectCol = ORG_OBJECT_TABLES[table].project;
+      const projectId = projectCol ? row[projectCol] : null;
+      ids = typeof projectId === 'string' ? [projectId] : [];
+    }
+    if (ids.length === 0) return [];
+    const inOrg = await admin.from('projects').select('id, inbox_for_contact_id').in('id', ids).eq('org_id', orgId);
+    if (inOrg.error) return null;
+    projects = (inOrg.data ?? []) as typeof projects;
+  }
+  if (projects.length === 0) return [];
+  const linked = await admin
+    .from('project_contacts')
+    .select('contact_id')
+    .in('project_id', projects.map((p) => p.id));
+  if (linked.error) return null;
+  const contactIds = ((linked.data ?? []) as { contact_id: string | null }[]).map((c) => c.contact_id);
+  // Every project's inbox artist, plus every linked contact (once).
+  return orgProjectScopeContacts({ inbox_for_contact_id: null }, [...projects.map((p) => p.inbox_for_contact_id), ...contactIds]);
+}
+
+/**
  * Load an object's `org_id` (and its contact / project scope keys), then
  * check membership of THAT org, the capability, and scope. The org is always
  * read from the row; `orgId`, when the route has one in its path, must match
@@ -298,6 +362,7 @@ export async function requireObjectAccess(opts: {
   const cols = ORG_OBJECT_TABLES[table];
   const scopeCols: (string | null)[] = [cols.contact, cols.project];
   const select = ['org_id', ...new Set(scopeCols.filter((c): c is string => !!c))];
+  if (table === 'projects') select.push('inbox_for_contact_id');
   const admin = createServiceClient();
   const { data, error } = await admin.from(table).select(select.join(', ')).eq('id', id).maybeSingle();
   if (error) {
@@ -329,7 +394,16 @@ export async function requireObjectAccess(opts: {
   };
   // Scope before capability: an object outside the member's artists is 404
   // whatever they may do, so a 403 never confirms that it exists.
-  if (!artistScopeAllows(access, object)) return NOT_FOUND();
+  if (scopedThroughProjects(table) && access.artistScope !== null) {
+    const artists = await artistsThroughProjects(admin, table, id, rowOrg, row);
+    if (artists === null) {
+      log.error('artist scope lookup failed', { table, id });
+      return fail(500, 'Could not check organization access');
+    }
+    if (!scopeAllowsAnyContact(access.artistScope, artists)) return NOT_FOUND();
+  } else if (!artistScopeAllows(access, object)) {
+    return NOT_FOUND();
+  }
   if (!access.capabilities.has(cap)) return FORBIDDEN();
   return { ...access, object };
 }
