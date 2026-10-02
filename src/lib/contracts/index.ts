@@ -959,11 +959,14 @@ export type OrgMemberArtistsBody = z.infer<typeof OrgMemberArtistsBodySchema>;
  * GET /api/org/[orgId]/audio/[trackId] query. The track is the path; the
  * query only names WHICH of its stored files (`variant`, parsed by
  * `parseOrgAudioVariant` in lib/labelos/org-audio) and whether to download.
- * There is deliberately no `src` / `key`: the route never takes a URL or an
- * `r2://` reference from the client.
+ * `src` / `key` (what `/api/audio` takes) are refused outright: the route
+ * never takes a URL or an `r2://` reference from the client. Any other
+ * parameter (a player's cache-buster) is ignored.
  */
 export const OrgAudioQuerySchema = z.object({
   variant: z.string().max(40).optional(),
   download: z.enum(['0', '1']).optional(),
-}).strict();
+  src: z.undefined({ message: 'Name a track, not a file' }).optional(),
+  key: z.undefined({ message: 'Name a track, not a file' }).optional(),
+});
 export type OrgAudioQuery = z.infer<typeof OrgAudioQuerySchema>;

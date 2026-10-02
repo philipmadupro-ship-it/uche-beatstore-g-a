@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { mergeLinks, type LinkTrack, type RawLinks } from '@/lib/tracks/links';
 import { capabilitiesFor } from './capabilities';
 import {
+  inboundLinks,
   orgAudioAllowed,
   orgAudioFilename,
   orgAudioSource,
@@ -9,15 +9,18 @@ import {
   recordingContexts,
   requiredAudioCapabilities,
   type OrgAudioVariant,
+  type RawInbound,
 } from './org-audio';
 
-const t = (id: string, type: string): LinkTrack => ({ id, title: id, type });
-const TRACKS = new Map(
-  [t('song', 'song'), t('song2', 'song'), t('beat', 'beat'), t('mst', 'song'), t('inst', 'instrumental'),
-    t('loop', 'loop'), t('top', 'topline'), t('dmo', 'song'), t('alt', 'song'), t('rmx', 'remix')].map((x) => [x.id, x]),
-);
-const linksOf = (id: string, raw: Partial<RawLinks>) => mergeLinks(id, { songBeats: [], links: [], ...raw }, TRACKS);
-const link = (from: string, to: string, relation: string) => ({ from_track_id: from, to_track_id: to, relation, position: 0 });
+const TYPES = new Map<string, string | null>([
+  ['song', 'song'], ['song2', 'song'], ['beat', 'beat'], ['mst', 'song'], ['inst', 'instrumental'],
+  ['loop', 'loop'], ['top', 'topline'], ['dmo', 'song'], ['alt', 'song'], ['rmx', 'remix'],
+]);
+const TRACKS = { get: (id: string) => ({ type: TYPES.get(id) ?? null }) };
+/** Inbound links of a track, from raw rows (only rows INTO it are passed, as the route reads them). */
+const linksOf = (_id: string, raw: Partial<RawInbound> & { links?: { from_track_id: string; to_track_id?: string; relation: string }[] }) =>
+  inboundLinks({ songBeats: [], links: [], ...raw }, TYPES);
+const link = (from: string, to: string, relation: string) => ({ from_track_id: from, to_track_id: to, relation });
 
 const FULL: OrgAudioVariant = { kind: 'full' };
 
@@ -58,11 +61,14 @@ describe('recordingContexts — the kind comes from where the track sits', () =>
     ['version', 'alt', 'mix', 'audio.working'],
   ])('%s link from a song', (relation, id, kind, capability) => {
     const linked = linksOf(id, { links: [link('song', id, relation)] });
-    expect(recordingContexts({ type: TRACKS.get(id)!.type, song_stage: null }, linked)).toEqual([{ kind, current: false, capability }]);
+    const contexts = recordingContexts({ type: TRACKS.get(id).type, song_stage: null }, linked);
+    expect(contexts?.[0]).toEqual({ kind, current: false, capability });
+    // A song-type demo / version is also its own (unselected, so working) mix: same capability.
+    expect(new Set(contexts?.map((c) => c.capability))).toEqual(new Set([capability]));
   });
 
   it('a beat on a song (song_beats) is a beat_source', () => {
-    const linked = linksOf('beat', { songBeats: [{ song_track_id: 'song', beat_track_id: 'beat', position: 0 }] });
+    const linked = linksOf('beat', { songBeats: [{ song_track_id: 'song' }] });
     expect(recordingContexts({ type: 'beat', song_stage: null }, linked)).toEqual([{ kind: 'beat_source', current: false, capability: 'audio.working' }]);
   });
 
@@ -82,9 +88,33 @@ describe('recordingContexts — the kind comes from where the track sits', () =>
     expect(recordingContexts({ type: 'loop', song_stage: null }, loopOfBeat)).toEqual([{ kind: 'loop', current: false, capability: 'audio.working' }]);
   });
 
-  it('outbound links do not classify the track (a song linking its beat is still its own mix)', () => {
-    const linked = linksOf('song', { links: [link('song', 'mst', 'master')], mainBeatId: 'beat' });
-    expect(recordingContexts({ type: 'song', song_stage: 'selected' }, linked)).toEqual([{ kind: 'mix', current: true, capability: 'audio.finished' }]);
+  it('a song with only outbound links (its beat, its master) is its own mix', () => {
+    expect(recordingContexts({ type: 'song', song_stage: 'selected' }, [])).toEqual([{ kind: 'mix', current: true, capability: 'audio.finished' }]);
+  });
+
+  it("a selected song another song uses as a version is BOTH: its own finished mix and a working take", () => {
+    const linked = linksOf('alt', { links: [link('song', 'alt', 'version')] });
+    const caps = requiredAudioCapabilities({ type: 'song', song_stage: 'selected' }, linked, FULL);
+    expect([...caps!].sort()).toEqual(['audio.finished', 'audio.working']);
+  });
+
+  it('every inbound row counts — a beat link and a master link from the same song are not deduplicated', () => {
+    const linked = linksOf('mst', { songBeats: [{ song_track_id: 'song' }], links: [link('song', 'mst', 'master')] });
+    const caps = requiredAudioCapabilities({ type: 'song', song_stage: null }, linked, FULL);
+    expect([...caps!].sort()).toEqual(['audio.finished', 'audio.working']);
+  });
+
+  it("a song's main beat recorded only in tracks.beat_track_id is still a beat_source", () => {
+    const linked = linksOf('beat', { mainBeatOf: ['song'] });
+    expect(recordingContexts({ type: 'beat', song_stage: null }, linked)).toEqual([{ kind: 'beat_source', current: false, capability: 'audio.working' }]);
+  });
+
+  it('a link from a track outside the org (absent from the type map) is dropped; an unknown relation fails closed', () => {
+    expect(linksOf('mst', { links: [link('elsewhere', 'mst', 'master')] })).toEqual([]);
+    const odd = linksOf('mst', { links: [link('song', 'mst', 'stem')] });
+    expect(recordingContexts({ type: 'song', song_stage: 'selected' }, odd)).toBeNull();
+    const proto = linksOf('mst', { links: [link('song', 'mst', '__proto__')] });
+    expect(recordingContexts({ type: 'song', song_stage: 'selected' }, proto)).toBeNull();
   });
 
   it('unlinked material: beat, loop and topline by type; instrumental, remix and unknown types fail closed', () => {
@@ -107,7 +137,7 @@ describe('requiredAudioCapabilities + orgAudioAllowed (D4)', () => {
 
   it('marketing hears a master and not a topline or loop; A&R hears all three', () => {
     const need = (track: string, linked: typeof master, v: OrgAudioVariant = FULL) =>
-      requiredAudioCapabilities({ type: TRACKS.get(track)!.type, song_stage: null }, linked, v);
+      requiredAudioCapabilities({ type: TRACKS.get(track).type, song_stage: null }, linked, v);
     expect(orgAudioAllowed(marketing, need('mst', master))).toBe(true);
     expect(orgAudioAllowed(marketing, need('top', topline))).toBe(false);
     expect(orgAudioAllowed(marketing, need('loop', loop))).toBe(false);
@@ -145,6 +175,8 @@ describe('orgAudioSource', () => {
     expect(orgAudioSource({ audio_url: null, wav_url: '', preview_url: '  ' }, { kind: 'full' })).toBeNull();
     expect(orgAudioSource(row, { kind: 'wav' }, [])).toBe('r2://priv/a.wav');
     expect(orgAudioSource({ ...row, wav_url: '' }, { kind: 'wav' })).toBeNull();
+    // A WAV uploaded as the main file is the wav variant too.
+    expect(orgAudioSource({ ...row, wav_url: null, audio_url: 'r2://priv/b.WAV' }, { kind: 'wav' })).toBe('r2://priv/b.WAV');
     expect(orgAudioSource({ ...row, preview_url: null }, { kind: 'preview' })).toBeNull();
     expect(orgAudioSource(row, { kind: 'stem', stem: 'drums' }, [{ vocals_url: 'r2://priv/v.wav' }])).toBeNull();
   });
@@ -154,6 +186,6 @@ describe('orgAudioFilename', () => {
   it('title + variant + the stored extension, with unsafe characters dropped', () => {
     expect(orgAudioFilename('Night Shift', { kind: 'wav' }, 'r2://priv/tracks/abc.wav')).toBe('Night Shift.wav');
     expect(orgAudioFilename('A/B: "C"', { kind: 'stem', stem: 'vocals' }, 'r2://priv/s.WAV')).toBe('A B C - vocals.wav');
-    expect(orgAudioFilename(null, { kind: 'preview' }, 'r2://priv/p')).toBe('audio - preview');
+    expect(orgAudioFilename(null, { kind: 'preview' }, 'r2://priv/p')).toBe('Untitled - preview');
   });
 });

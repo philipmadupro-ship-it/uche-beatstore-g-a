@@ -8,34 +8,50 @@
  * kind (17 R1, `recordingKindOf`) — read from where it sits relative to a
  * song, never from the file:
  *
- *  - linked INTO a song (`mergeLinks` direction 'in'): the relation decides —
- *    a song-type file linked as a song's master is a master;
- *  - a song with no such link: its own current audio, a `mix`, finished
- *    only when the song is `selected` (on a release, once LABEL-16 exists);
- *  - otherwise the track type alone (a beat is a `beat_source`; a loop or
- *    topline is what it says). Anything else has no kind and NO capability
- *    covers it: fail closed.
+ *  - linked INTO a song (song_beats, track_links, or a song's
+ *    `tracks.beat_track_id`): the relation decides — a song-type file linked
+ *    as a song's master is a master;
+ *  - a song's own audio is also its current `mix` — finished only when the
+ *    song is `selected` (on a release, once LABEL-16 exists) — UNLESS a song
+ *    vouches for the file as its master / instrumental, which is what such a
+ *    file is (a master is usually uploaded as a song-type file);
+ *  - with no song link, the track type alone (a beat is a `beat_source`; a
+ *    loop or topline is what it says). Anything else has no kind, and NO
+ *    capability covers it: fail closed.
  *
- * A track can sit in several places at once (a beat on two songs; a song's
- * master that another song also uses as a version). Each context is
- * classified and the caller needs EVERY capability they ask for, so the
- * stricter reading always wins. A working link from a non-song track (a
- * beat's loop) also counts — it can only narrow access. A FINISHED relation
- * from a non-song (a beat's "instrumental") does not count: only a song
- * vouches for finished material, the same rule as the database's
- * `labelos_track_is_finished` (migration 141, lib/labelos/org-read).
+ * A track can sit in several places at once (a beat on two songs; a master
+ * another song also uses as a version). EVERY context is kept and the caller
+ * needs every capability they call for, so the stricter reading always wins.
+ * Links are read from the raw rows, not from `mergeLinks`: that read model
+ * keeps one relation per other track for display, and dropping a working
+ * link there would widen access here. A working link from a non-song (a
+ * beat's loop) also counts — it can only narrow. A FINISHED relation from a
+ * non-song (a beat's "instrumental") does not: only a song vouches for
+ * finished material, the rule of the database's `labelos_track_is_finished`
+ * (migration 141, lib/labelos/org-read).
+ *
+ * No substitutes: `audio.working` does not stand in for `audio.finished`
+ * here, unlike the row rule `orgRowAudioAllows`. The two differ only for a
+ * member whose `audio.finished` was revoked, and LABEL-12's note binds the
+ * route: never stream a recording to someone who lacks the capability for
+ * its kind.
  *
  * Stems are working material whatever the track is (§2.3), so a stem
  * variant adds `audio.working` on top.
  */
 
-import type { LinkedItem } from '@/lib/tracks/links';
 import { audioCapabilityFor, recordingClass, type RecordingKind } from './capabilities';
+import type { InboundLink } from './org-read';
 import { recordingKindOf } from './recording-kind';
+import { safeName } from '@/lib/tracks/links';
 
 export type AudioCapability = 'audio.finished' | 'audio.working';
 
-/** The four stems the `stems` table holds (`<name>_url`). */
+/**
+ * The stems the `stems` table has columns for (`<name>_url`, migration 001).
+ * Narrower than lib/stems STEM_NAMES, which also names stems the separation
+ * service can return but this table cannot store.
+ */
 export const ORG_AUDIO_STEMS = ['vocals', 'drums', 'bass', 'other'] as const;
 export type OrgAudioStem = (typeof ORG_AUDIO_STEMS)[number];
 
@@ -61,32 +77,61 @@ export interface OrgAudioTrack {
 
 export interface RecordingContext {
   kind: RecordingKind;
-  /** The song's own current audio (`self`): finished only for a selected song. */
+  /** The song's own current audio: finished only for a selected song. */
   current: boolean;
   capability: AudioCapability;
 }
 
+/** Raw link rows touching the track, as the route reads them. */
+export interface RawInbound {
+  /** song_beats rows with beat_track_id = the track. */
+  songBeats: ReadonlyArray<{ song_track_id: string }>;
+  /** track_links rows with to_track_id = the track. */
+  links: ReadonlyArray<{ from_track_id: string; relation: string }>;
+  /** Songs whose tracks.beat_track_id is the track (main beat, pre-132 fallback). */
+  mainBeatOf?: ReadonlyArray<string>;
+}
+
 /**
- * Every recording kind `track` is, from its one-hop links (`mergeLinks`,
- * read from this track's side). Null when any context has no kind — no
- * capability covers it, so the caller refuses.
+ * Every link INTO the track, typed by the track it comes from. A row whose
+ * other end is not among `types` (another org's, deleted) is dropped.
+ * Unknown relations are kept as-is so `recordingContexts` fails closed on them.
  */
-export function recordingContexts(track: OrgAudioTrack, linked: readonly LinkedItem[]): RecordingContext[] | null {
+export function inboundLinks(raw: RawInbound, types: ReadonlyMap<string, string | null>): InboundLink[] {
+  const out: InboundLink[] = [];
+  const add = (fromId: string, relation: string) => {
+    if (types.has(fromId)) out.push({ relation: relation as InboundLink['relation'], fromType: types.get(fromId) ?? null });
+  };
+  for (const r of raw.songBeats) add(r.song_track_id, 'beat');
+  for (const id of raw.mainBeatOf ?? []) add(id, 'beat');
+  for (const r of raw.links) add(r.from_track_id, r.relation);
+  return out;
+}
+
+const FINISHED_FROM_SONG = new Set(['master', 'instrumental']);
+
+/**
+ * Every recording kind `track` is, from its inbound links. Null when any
+ * context has no kind — no capability covers it, so the caller refuses.
+ */
+export function recordingContexts(track: OrgAudioTrack, inbound: readonly InboundLink[]): RecordingContext[] | null {
   const out: RecordingContext[] = [];
-  for (const l of linked) {
-    if (l.direction !== 'in') continue;
+  let vouchedFinished = false;
+  for (const l of inbound) {
     const kind = recordingKindOf(track, l.relation);
     const capability = kind ? audioCapabilityFor(kind) : null;
     if (!kind || !capability) return null;
-    if (l.track.type === 'song' || recordingClass(kind) === 'working') out.push({ kind, current: false, capability });
+    const fromSong = l.fromType === 'song';
+    if (fromSong && FINISHED_FROM_SONG.has(l.relation)) vouchedFinished = true;
+    if (fromSong || recordingClass(kind) === 'working') out.push({ kind, current: false, capability });
+  }
+
+  if (track.type === 'song' && !vouchedFinished) {
+    const capability = audioCapabilityFor('mix', { currentMixOfSelectedSong: track.song_stage === 'selected' });
+    if (!capability) return null;
+    out.push({ kind: 'mix', current: true, capability });
   }
   if (out.length > 0) return out;
-
-  if (track.type === 'song') {
-    const opts = { currentMixOfSelectedSong: track.song_stage === 'selected' };
-    const capability = audioCapabilityFor('mix', opts);
-    return capability ? [{ kind: 'mix', current: true, capability }] : null;
-  }
 
   const kind = recordingKindOf(track, null);
   const capability = kind ? audioCapabilityFor(kind) : null;
@@ -99,10 +144,10 @@ export function recordingContexts(track: OrgAudioTrack, linked: readonly LinkedI
  */
 export function requiredAudioCapabilities(
   track: OrgAudioTrack,
-  linked: readonly LinkedItem[],
+  inbound: readonly InboundLink[],
   variant: OrgAudioVariant,
 ): Set<AudioCapability> | null {
-  const contexts = recordingContexts(track, linked);
+  const contexts = recordingContexts(track, inbound);
   if (!contexts) return null;
   const caps = new Set<AudioCapability>(contexts.map((c) => c.capability));
   if (variant.kind === 'stem') caps.add('audio.working');
@@ -141,7 +186,9 @@ export function orgAudioSource(
     case 'full':
       return pick(track.audio_url);
     case 'wav':
-      return pick(track.wav_url);
+      // A WAV master uploaded as the main file has no separate wav_url
+      // (the store's download-file route reads it the same way).
+      return pick(track.wav_url) ?? (/\.wav(?:[?#]|$)/i.test(track.audio_url ?? '') ? pick(track.audio_url) : null);
     case 'stem': {
       for (const row of stems) {
         const url = pick(row[`${variant.stem}_url`]);
@@ -154,7 +201,7 @@ export function orgAudioSource(
 
 /** A download filename from the title and variant; the extension from the stored reference. */
 export function orgAudioFilename(title: string | null, variant: OrgAudioVariant, source: string): string {
-  const base = (title ?? '').replace(/[\\/:*?"<>|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
+  const base = safeName(title ?? '');
   const ext = /\.([a-z0-9]{2,5})(?:$|[?#])/i.exec(source.split('/').pop() ?? '')?.[1]?.toLowerCase();
   const suffix = variant.kind === 'stem' ? ` - ${variant.stem}` : variant.kind === 'preview' ? ' - preview' : '';
   return `${base}${suffix}${ext ? `.${ext}` : ''}`;

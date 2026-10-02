@@ -179,7 +179,8 @@ export const BUNDLE_MAX_TRACKS = 20;
 
 const EXT_RE = /\.(wav|mp3|flac|aiff|aif|m4a|ogg)(?:\?|$)/i;
 
-function safeName(s: string): string {
+/** A title made safe for a file name (also used by the org audio route's downloads). */
+export function safeName(s: string): string {
   return s.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Untitled';
 }
 

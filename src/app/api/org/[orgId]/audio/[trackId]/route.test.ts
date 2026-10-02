@@ -327,6 +327,25 @@ describe('D4 headline cases', () => {
   });
 });
 
+describe('every inbound link counts (no display dedup)', () => {
+  it("a selected song that is another song's demo AND links back to it as a version is working", async () => {
+    // song → selected (demo) and selected → song (version): mergeLinks would keep only one.
+    db.tables.track_links.push(
+      { from_track_id: T.song, to_track_id: T.selected, relation: 'demo', position: 0 },
+      { from_track_id: T.selected, to_track_id: T.song, relation: 'version', position: 0 },
+    );
+    expect((await get(MK, L, T.selected)).status).toBe(403);
+    expect((await get(AR, L, T.selected)).status).toBe(200);
+  });
+
+  it("a song-type main beat recorded only in tracks.beat_track_id is working material", async () => {
+    // `selected` alone is a finished mix; as song2's main beat it is a beat source too.
+    expect((await get(MK, L, T.selected)).status).toBe(200);
+    db.tables.tracks.find((t) => t.id === T.song2)!.beat_track_id = T.selected;
+    expect((await get(MK, L, T.selected)).status).toBe(403);
+  });
+});
+
 describe('who reaches the route at all', () => {
   it('401 without a session', async () => {
     expect((await get(null, L, T.master)).status).toBe(401);
@@ -362,6 +381,15 @@ describe('the client names a track and a variant, never a file', () => {
     expect((await get(OWN, L, T.master, '?src=r2%3A%2F%2Fpriv%2Fproducer.wav')).status).toBe(400);
     expect((await get(OWN, L, T.master, '?key=producer.wav')).status).toBe(400);
     expect(r2Gets).toEqual([]);
+  });
+
+  it('other parameters (a player cache-buster) are ignored', async () => {
+    expect((await get(OWN, L, T.master, '?variant=full&t=1696240000')).status).toBe(200);
+  });
+
+  it('only finished stems are streamed', async () => {
+    db.tables.stems.find((r) => r.track_id === T.master)!.status = 'processing';
+    expect((await get(OWN, L, T.master, '?variant=stem:vocals')).status).toBe(404);
   });
 
   it('the auth check runs before the query is read: a stranger with a bad variant is still 404', async () => {
@@ -407,6 +435,17 @@ describe('Range', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-range')).toBeNull();
     expect((await res.text()).length).toBe(100);
+  });
+
+  it('HEAD answers the headers with no body', async () => {
+    current = OWN;
+    const mod = await import('./route');
+    const res = await mod.HEAD(new NextRequest(`https://app.test/api/org/${L}/audio/${T.master}`, { method: 'HEAD' }), {
+      params: Promise.resolve({ orgId: L, trackId: T.master }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-length')).toBe('100');
+    expect(res.body).toBeNull();
   });
 
   it('a refused caller never reaches storage, Range or not', async () => {
