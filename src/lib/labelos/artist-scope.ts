@@ -46,3 +46,15 @@ export function artistScopeFilter(scope: ArtistScope, contactColumn: string | nu
   if (!contactColumn || scope.size === 0) return { kind: 'none' };
   return { kind: 'in', column: contactColumn, values: [...scope].sort() };
 }
+
+/**
+ * An object that reaches its roster artists through projects (a project:
+ * its inbox artist and linked contacts; a track: those of every project of
+ * its org it sits in — lib/labelos/org-read, LABEL-12) is visible when ANY
+ * of them is in scope. The SQL twins are `can_see_org_project` /
+ * `can_see_org_track` (migration 141).
+ */
+export function scopeAllowsAnyContact(scope: ArtistScope, contactIds: readonly string[]): boolean {
+  if (scope === null) return true;
+  return contactIds.some((id) => scopeAllowsContact(scope, id));
+}

@@ -97,9 +97,19 @@ function labelOsTables(): string[] {
 /**
  * The SQL membership helpers a Label OS policy may key on
  * (06-permission-model.md §3.1). can_see_artist arrived with LABEL-10;
+ * can_see_org_project / can_see_org_track / can_read_org_track with LABEL-12;
  * can_see_project arrives with LABEL-21.
  */
-const ORG_HELPERS = ['org_role', 'has_org_cap', 'can_see_artist', 'can_see_project'];
+const ORG_HELPERS = [
+  'org_role',
+  'has_org_cap',
+  'can_see_artist',
+  'can_see_org_project',
+  'can_see_org_track',
+  'can_read_org_track',
+  'can_see_project',
+];
+const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 
 /**
  * A Label OS policy must key on the tenant: a membership helper on the row's
@@ -249,11 +259,104 @@ describe('final RLS policy state', () => {
       // projects, contacts… an org predicate that does not rule out producer
       // rows (org_id IS NULL) would hand them to members.
       const guarded = new Set(labelOsTables());
-      const helper = /\b(org_role|has_org_cap|can_see_artist|can_see_project)\s*\(/i;
       const offenders = [...policies]
-        .filter(([k, body]) => !guarded.has(k.split('.')[0]) && helper.test(body) && !/\borg_id IS NOT NULL\b/i.test(body))
+        .filter(([k, body]) => !guarded.has(k.split('.')[0]) && ORG_HELPER_CALL.test(body) && !/\borg_id IS NOT NULL\b/i.test(body))
         .map(([k]) => k);
       expect(offenders).toEqual([]);
+    });
+  });
+
+  describe('Label OS org catalogue (mig 141, R-04)', () => {
+    const before141 = replay(realMigrations().filter((m) => m.name < '141')).policies;
+    const ORG_READ_TABLES = [
+      'tracks',
+      'projects',
+      'project_contacts',
+      'artist_portals',
+      'project_assets',
+      'song_beats',
+      'track_links',
+      'artist_messages',
+      'contact_track_states',
+      'project_comments',
+    ];
+    /** Every table with an org read path is guarded with its predicate. */
+    const GUARDED_TABLES = ORG_READ_TABLES;
+    /** Keyed through a track's / project's user_id, with no org read path: org rows hidden. */
+    const HIDDEN_TABLES = [
+      'project_tracks',
+      'project_shares',
+      'track_versions',
+      'track_collaborators',
+      'track_licenses',
+      'play_head_pings',
+      'store_free_downloads',
+      'project_tags',
+      'project_folder_items',
+      'project_access_links',
+    ];
+    const ALL_141 = [...ORG_READ_TABLES, ...HIDDEN_TABLES];
+
+    it('every producer policy on these tables is exactly what it was before 141', () => {
+      for (const [key, body] of before141) {
+        if (!ALL_141.includes(key.split('.')[0])) continue;
+        expect(policies.get(key), key).toBe(body);
+      }
+    });
+
+    it('141 adds exactly org_member_read on each org-readable table and org_member_guard wherever an owner policy could reach an org row', () => {
+      const added = [...policies.keys()].filter((k) => ALL_141.includes(k.split('.')[0]) && !before141.has(k)).sort();
+      expect(added).toEqual(
+        [...ORG_READ_TABLES.map((t) => `${t}.org_member_read`), ...ALL_141.map((t) => `${t}.org_member_guard`)].sort(),
+      );
+    });
+
+    it('every org_member_read is a permissive SELECT keyed on org_id IS NOT NULL (on the row or, in EXISTS, its parent) and a membership helper', () => {
+      for (const table of ORG_READ_TABLES) {
+        const body = policies.get(`${table}.org_member_read`) ?? '';
+        expect(body, table).toMatch(/^\s*FOR SELECT\s+TO authenticated\s+USING\b/i);
+        expect(body, table).toMatch(/\borg_id IS NOT NULL\b/i);
+        expect(body, table).toMatch(ORG_HELPER_CALL);
+        expect(body, table).not.toMatch(/WITH CHECK/i);
+        expect(body, table).not.toMatch(/auth\.uid\s*\(/i);
+        if (!['tracks', 'projects'].includes(table)) expect(body, table).toMatch(/^[^(]*USING \(\s*EXISTS\s*\(/i);
+      }
+    });
+
+    it('tracks and projects test org_id IS NOT NULL on the row itself, first', () => {
+      for (const table of ['tracks', 'projects']) {
+        expect(policies.get(`${table}.org_member_read`)).toMatch(/USING \(\s*org_id IS NOT NULL\s+AND/i);
+      }
+      expect(policies.get('tracks.org_member_read')).toMatch(/can_read_org_track\(org_id, id\)/);
+      expect(policies.get('projects.org_member_read')).toMatch(/can_see_org_project\(org_id, id\)/);
+    });
+
+    it('every guard is a RESTRICTIVE SELECT that lets a producer row through and holds an org row to the read predicate', () => {
+      for (const table of GUARDED_TABLES) {
+        const body = policies.get(`${table}.org_member_guard`) ?? '';
+        expect(body, table).toMatch(/^\s*AS RESTRICTIVE\s+FOR SELECT\s+USING\b/i);
+        expect(body, table).toMatch(/\borg_id IS NOT NULL\b/i);
+        expect(body, table).toMatch(ORG_HELPER_CALL);
+        expect(body, table).not.toMatch(/WITH CHECK/i);
+        // Producer rows pass: the row's own org_id IS NULL, or a SECURITY
+        // DEFINER "is it an org row" helper (never an EXISTS under RLS).
+        expect(body, table).toMatch(/USING \(\s*(org_id IS NULL\s+OR|\(?NOT public\.labelos_is_org_(project|track|contact)\()/i);
+      }
+    });
+
+    it('on tables with no org read path, the guard hides org rows outright', () => {
+      for (const table of HIDDEN_TABLES) {
+        const body = policies.get(`${table}.org_member_guard`) ?? '';
+        expect(body, table).toMatch(/^\s*AS RESTRICTIVE\s+FOR SELECT\s+USING \(\s*NOT public\.labelos_is_org_(project|track)\(/i);
+        expect(body, table).not.toMatch(/\bOR\b/i);
+      }
+    });
+
+    it('no org policy writes: nothing new is FOR INSERT / UPDATE / DELETE / ALL', () => {
+      const writes = [...policies]
+        .filter(([k, body]) => /\.org_member_(read|guard)$/.test(k) && /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body))
+        .map(([k]) => k);
+      expect(writes).toEqual([]);
     });
   });
 

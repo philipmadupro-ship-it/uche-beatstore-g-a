@@ -18,8 +18,8 @@
 #      at COMMIT. A check fails by raising;
 #   3. capability parity: the real has_org_cap against capabilitiesFor() on
 #      generated fixtures (capability-parity.ts);
-#   4. each supabase/rollback/NNN_*.down.sql in its own copy, then its
-#      migration again.
+#   4. every supabase/rollback/NNN_*.down.sql in one copy, newest first
+#      (each after every later rollback), then those migrations again.
 #
 # Needs a Postgres server install (initdb, pg_ctl, psql) and Node. Run as
 # root, the server runs as the `postgres` OS user.
@@ -104,15 +104,26 @@ if [ ${#org_core[@]} -gt 0 ]; then
   echo "db:local:check: capability parity ok — has_org_cap == capabilitiesFor"
 fi
 
-n=0
-for down in "$ROOT"/supabase/rollback/*.down.sql; do
-  n=$((n + 1))
-  up="$ROOT/supabase/migrations/$(basename "$down" .down.sql).sql"
-  [ -f "$up" ] || { echo "db:local:check: $(basename "$down") has no matching migration" >&2; exit 1; }
-  copy_db "$DB" "rollback_$n"
-  psql_db "rollback_$n" --single-transaction -f "$down"
-  psql_db "rollback_$n" --single-transaction -f "$up"
-  echo "db:local:check: rollback ok — $(basename "$down"), then re-applied"
-done
+# Rollbacks run the way they are used by hand: newest first, each after the
+# rollbacks of every later migration (later migrations build on earlier
+# ones — 141's policies call 139's can_see_artist), all in one copy. Then
+# every migration is re-applied, oldest first, proving each rollback left a
+# database its migration applies to cleanly. Linear in the number of files.
+downs=("$ROOT"/supabase/rollback/*.down.sql)
+if [ ${#downs[@]} -gt 0 ]; then
+  for down in "${downs[@]}"; do
+    up="$ROOT/supabase/migrations/$(basename "$down" .down.sql).sql"
+    [ -f "$up" ] || { echo "db:local:check: $(basename "$down") has no matching migration" >&2; exit 1; }
+  done
+  copy_db "$DB" rollback_all
+  for ((j = ${#downs[@]} - 1; j >= 0; j--)); do
+    psql_db rollback_all --single-transaction -f "${downs[$j]}"
+    echo "db:local:check: rollback ok — $(basename "${downs[$j]}")"
+  done
+  for down in "${downs[@]}"; do
+    psql_db rollback_all --single-transaction -f "$ROOT/supabase/migrations/$(basename "$down" .down.sql).sql"
+  done
+  echo "db:local:check: re-applied ${#downs[@]} migration(s) after their rollbacks"
+fi
 
 echo "db:local:check: ✓ all passed (throwaway database $( [ "${KEEP_LOCAL_DB:-}" = 1 ] && echo kept || echo deleted ))"
