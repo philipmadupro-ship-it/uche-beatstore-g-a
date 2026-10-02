@@ -399,7 +399,7 @@ Delete the org rows where `kind = 'producer'` and no other members exist.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-05, LABEL-06, LABEL-07
-**Status:** In Review (PR #58, branch label-os/LABEL-08)
+**Status:** Done (2026-10-02) — [PR #58](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/58)
 
 ## Objective
 A working invitation flow for org members.
@@ -460,7 +460,7 @@ Flag off; revert.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-06, LABEL-08
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-09)
 
 ## Objective
 A navigable Label OS shell with member management.
