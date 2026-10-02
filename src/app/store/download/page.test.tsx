@@ -66,7 +66,7 @@ describe('/store/download', () => {
     fireEvent.click(await screen.findByRole('button', { name: /download/i }));
 
     await waitFor(() => expect(clicked).toEqual([FILE_URL]));
-    expect(fetchMock).toHaveBeenCalledWith(FILE_URL, expect.objectContaining({ headers: { Range: 'bytes=0-0' } }));
+    expect(fetchMock).toHaveBeenCalledWith(FILE_URL, expect.objectContaining({ headers: { Range: 'bytes=0-0', 'X-Download-Probe': '1' } }));
     expect(mockToastError).not.toHaveBeenCalled();
   });
 
@@ -83,6 +83,19 @@ describe('/store/download', () => {
     expect(clicked).toEqual([]);
     // The button is usable again rather than stuck on "Saving…".
     expect((await screen.findByRole('button', { name: /download/i })).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('tells the buyer to wait when the route rate-limits the download', async () => {
+    mockNetwork({ status: 429, body: { error: 'Too many download requests. Wait a minute and try again.' } });
+    render(<DownloadPortalWrapper />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /download/i }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(
+      'MP3 could not be downloaded',
+      'Too many download requests. Wait a minute and try again.',
+    ));
+    expect(clicked).toEqual([]);
   });
 
   it('shows the route\'s refusal on load when the purchase is on hold', async () => {

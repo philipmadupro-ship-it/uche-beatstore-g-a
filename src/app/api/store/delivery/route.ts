@@ -5,6 +5,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { isProjectAccessActive } from '@/lib/store/project-access';
 import { purchaseAccess } from '@/lib/store/purchase-access';
+import { clientIp, rateLimitDurable } from '@/lib/security/rate-limit';
 import {
   canDownloadFormat,
   parsePurchaseLineItem,
@@ -100,6 +101,15 @@ export async function GET(req: NextRequest) {
   }
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  }
+
+  // The lookup returns the buyer's email for a session id, so it is capped per
+  // IP like the downloads it leads to (a lower cap: a page load is one call).
+  if (!(await rateLimitDurable(`dl-list:${clientIp(req)}`, 60, 60_000))) {
+    return NextResponse.json(
+      { error: 'Too many requests. Wait a minute and try again.' },
+      { status: 429, headers: { 'Retry-After': '60' } },
+    );
   }
 
   try {

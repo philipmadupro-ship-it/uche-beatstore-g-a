@@ -16,6 +16,7 @@ export const DOWNLOAD_FALLBACK_MESSAGE = 'The download could not start. Try agai
 export function downloadFailureMessage(status: number, serverError?: string | null): string {
   const text = typeof serverError === 'string' ? serverError.trim() : '';
   if (status >= 400 && status < 500 && text) return text;
+  if (status === 429) return 'Too many download requests. Wait a minute and try again.';
   if (status === 404) return 'This file is not available right now. Contact the producer if it persists.';
   if (status === 401 || status === 403) return 'Download access is no longer available for this purchase.';
   return DOWNLOAD_FALLBACK_MESSAGE;
@@ -27,14 +28,15 @@ export type DownloadProbe = { ok: true } | { ok: false; message: string };
  * Ask the gated route for the first byte. `Range: bytes=0-0` makes a success
  * cost one byte instead of the file, and the body is cancelled either way so a
  * server that ignores Range (a local source) does not stream the whole master
- * into a discarded response.
+ * into a discarded response. `X-Download-Probe` tells the server not to count
+ * it as a download in the audit log (lib/store/download-audit.ts).
  */
 export async function probeDownload(
   url: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<DownloadProbe> {
   try {
-    const res = await fetchImpl(url, { headers: { Range: 'bytes=0-0' }, cache: 'no-store' });
+    const res = await fetchImpl(url, { headers: { Range: 'bytes=0-0', 'X-Download-Probe': '1' }, cache: 'no-store' });
     if (res.ok) {
       await res.body?.cancel().catch(() => undefined);
       return { ok: true };

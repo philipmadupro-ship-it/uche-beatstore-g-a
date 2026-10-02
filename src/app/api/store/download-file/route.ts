@@ -6,6 +6,12 @@ import { createLogger } from '@/lib/log';
 import { isProjectAccessActive } from '@/lib/store/project-access';
 import { purchaseAccess } from '@/lib/store/purchase-access';
 import { streamAudioSource } from '@/lib/audio/stream-source';
+import { clientIp, rateLimitDurable } from '@/lib/security/rate-limit';
+import {
+  recordDownload,
+  shouldLogGrant,
+  type DownloadDenial,
+} from '@/lib/store/download-audit';
 import {
   canDownloadFormat,
   parsePurchaseLineItem,
@@ -29,7 +35,16 @@ export const dynamic = 'force-dynamic';
  *     disputed, not held for review) — see lib/store/purchase-access
  *   - We confirm track_id is in the purchase's track_ids array
  *   - We never expose the raw R2/storage URL in the redirect
+ *   - Per-IP rate limit before any lookup (429), so the endpoint cannot be
+ *     hammered or used to probe for session ids
+ *   - Every grant and every refusal on a known purchase is written to the
+ *     audit log (lib/store/download-audit.ts)
  */
+
+/** Requests per IP per minute. A buyer saving a whole bundle clicks a few dozen
+ *  files (each is a pre-check plus the download); this is well above that and
+ *  far below a scraper. */
+const DOWNLOADS_PER_MINUTE = 240;
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const sessionId = searchParams.get('session_id');
@@ -43,25 +58,47 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
+  const ip = clientIp(req);
+  if (!(await rateLimitDurable(`dl:${ip}`, DOWNLOADS_PER_MINUTE, 60_000))) {
+    return NextResponse.json(
+      { error: 'Too many download requests. Wait a minute and try again.' },
+      { status: 429, headers: { 'Retry-After': '60' } },
+    );
+  }
+
   try {
     const admin = createServiceClient();
 
     const { data: purchase, error: purchaseError } = await admin
       .from('license_purchases')
-      .select('download_unlocked, needs_refund_review, license_type, track_ids, line_items')
+      .select('id, seller_user_id, download_unlocked, needs_refund_review, license_type, track_ids, line_items')
       .eq('stripe_session_id', sessionId)
       .maybeSingle();
     // A failed lookup is not "no such purchase": falling through would answer
     // 404 for a paid buyer on a transient error and hide a broken query.
     if (purchaseError) throw purchaseError;
 
+    // Filled in once the purchase is known; unknown sessions are not logged
+    // (no seller to attribute them to, and a flood of guesses is not an audit).
+    let ctx: { kind: 'track_license' | 'project'; id: string | null; seller: string | null } | null = null;
+    const audit = (outcome: 'granted' | 'denied', reason?: DownloadDenial) =>
+      ctx
+        ? recordDownload(admin, {
+            sellerUserId: ctx.seller, trackId, purchaseKind: ctx.kind, purchaseId: ctx.id,
+            format, outcome, reason, ip,
+          })
+        : Promise.resolve();
+
     let entitlement: PurchaseLineItem | null = null;
     if (purchase) {
+      ctx = { kind: 'track_license', id: purchase.id ?? null, seller: purchase.seller_user_id ?? null };
       const access = purchaseAccess(purchase);
       if (!access.allowed) {
+        await audit('denied', access.reason);
         return NextResponse.json({ error: access.message }, { status: 403 });
       }
       if (!Array.isArray(purchase.track_ids) || !purchase.track_ids.includes(trackId)) {
+        await audit('denied', 'track-not-in-purchase');
         return NextResponse.json({ error: 'Track not in this purchase' }, { status: 403 });
       }
       const lineItem = Array.isArray(purchase.line_items)
@@ -81,13 +118,15 @@ export async function GET(req: NextRequest) {
     } else {
       const { data: access } = await admin
         .from('project_access_links')
-        .select('project_id, expires_at')
+        .select('id, project_id, expires_at, seller_user_id')
         .eq('stripe_session_id', sessionId)
         .maybeSingle();
       if (!access) {
         return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
       }
+      ctx = { kind: 'project', id: access.id ?? null, seller: access.seller_user_id ?? null };
       if (!isProjectAccessActive(access)) {
+        await audit('denied', 'expired');
         return NextResponse.json({ error: 'Download access revoked (refunded, disputed or expired)' }, { status: 403 });
       }
       const { data: belongs } = await admin
@@ -97,6 +136,7 @@ export async function GET(req: NextRequest) {
         .eq('track_id', trackId)
         .maybeSingle();
       if (!belongs) {
+        await audit('denied', 'track-not-in-purchase');
         return NextResponse.json({ error: 'Track not in this purchase' }, { status: 403 });
       }
       entitlement = {
@@ -110,6 +150,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!entitlement || !canDownloadFormat(entitlement, format)) {
+      await audit('denied', 'format-not-permitted');
       return NextResponse.json({ error: 'File download not permitted by this license' }, { status: 403 });
     }
 
@@ -143,13 +184,18 @@ export async function GET(req: NextRequest) {
     }
 
     if (!source) {
+      await audit('denied', 'file-missing');
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
     if (!canDownloadFormat(entitlement, ext)) {
+      await audit('denied', 'format-not-permitted');
       return NextResponse.json({ error: 'Stored file is not permitted by this license' }, { status: 403 });
     }
     const suffix = ['vocals', 'drums', 'bass', 'other'].includes(format) ? `_${format}` : '';
     const filename = `${track?.title || 'track'}${suffix}.${ext}`;
+    if (shouldLogGrant(req.headers.get('range'), req.headers.has('x-download-probe'))) {
+      await audit('granted');
+    }
     return streamAudioSource(req, source, filename);
   } catch (err) {
     log.error('download-file failed', { sessionId, trackId, error: errorMessage(err) });

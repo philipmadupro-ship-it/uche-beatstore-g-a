@@ -22,6 +22,12 @@ vi.mock('@/lib/auth/ownership', () => ({
   }),
 }));
 
+const mockRateLimit = vi.fn();
+vi.mock('@/lib/security/rate-limit', () => ({
+  rateLimitDurable: (...a: unknown[]) => mockRateLimit(...a),
+  clientIp: () => '203.0.113.9',
+}));
+
 vi.mock('@/lib/env', () => ({
   getAppUrl: () => 'https://example.test',
 }));
@@ -107,6 +113,7 @@ async function loadRoute() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockIsSupabaseConfigured.mockReturnValue(true);
+  mockRateLimit.mockResolvedValue(true);
   mockFrom.mockImplementation((table: string) => tableForProjectDelivery(table));
 });
 
@@ -192,6 +199,17 @@ describe('GET /api/store/delivery', () => {
 
     expect(missing.status).toBe(400);
     expect(unknown.status).toBe(404);
+  });
+
+  it('answers 429 over the per-IP limit, before any lookup', async () => {
+    mockRateLimit.mockResolvedValue(false);
+    const mod = await loadRoute();
+    const res = await mod.GET(req());
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get('retry-after')).toBe('60');
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockRateLimit).toHaveBeenCalledWith('dl-list:203.0.113.9', 60, 60_000);
   });
 
   it('does not echo internal error text to the buyer', async () => {

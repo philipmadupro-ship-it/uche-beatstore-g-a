@@ -9343,7 +9343,7 @@ Task: make the post-purchase download path (`/store/download` → `/api/store/de
 
 Tests: `purchase-access.test.ts`, `download-failure.test.ts`, route tests for both routes (+12), `page.test.tsx` (jsdom), `e2e/store-download.spec.ts` (1280 and 390 px, API stubbed, real browser download event and filename). Not run against a real database: both routes use the service client, so RLS does not apply to them; the authorization is the route code, which the route tests exercise.
 
-Not changed (see report): a lease bought on a WAV-only master has nothing to download (no MP3 derivative exists); no download audit log or rate limit.
+Not changed (see report): a lease bought on a WAV-only master has nothing to download (no MP3 derivative exists); 
 
 Follow-up (same PR): `/api/store/projects/access/[token]/download` now logs the detail and returns a fixed "Download failed" on a 500 (new `route.test.ts`; also covers 404 for unknown/expired token).
 
@@ -9358,3 +9358,13 @@ Follow-up (same PR): the partial-refund rule. `charge.refunded` fires for every 
 Found alongside, same branch: refunding the LOSER of a double sale — the way a held purchase is resolved — re-listed the track for sale while the winner still held it exclusively. The re-list now skips any track another live exclusive purchase holds (`trackHeldByAnotherBuyer`).
 
 Tests: `refund-rule.test.ts`; webhook cases for partial (no writes but the notification), full-with-amounts, dispute, and loser refund (the partial and loser cases fail on the old handler). Not changed: a dispute later won (`charge.dispute.closed`) still does not restore access.
+
+Follow-up (same PR): download audit log and rate limit.
+
+**Audit log, no migration.** One `store_events` row (`event_type: 'download'`) per file granted or refused on a known purchase, written by `lib/store/download-audit.ts` from `/api/store/download-file` and the bundle-token download. `store_events` was built open ("new event types never need a migration"), already has producer-only read RLS and a salted IP hash, and the funnel/analytics readers ignore types they don't know. The public `/api/store/event` endpoint validates a closed enum that excludes `download` (tested through the real schema), so the log cannot be forged from a browser. A new table would also have needed a migration number: 136–138 are claimed by `claude/happy-bardeen-rnosf3` / `label-os/*` and 139 by #64. Metadata: purchase kind, purchase id, format, outcome, and for a refusal the reason (`revoked`, `under-review`, `expired`, `track-not-in-purchase`, `format-not-permitted`, `file-missing`). It deliberately omits the Stripe session id and bundle token (bearer credentials). The write is best-effort and awaited, so a failed insert is logged and never blocks a paid download. The page's one-byte pre-check sends `X-Download-Probe` and a resumed download asks for the middle of the file; neither counts (`shouldLogGrant`). Unknown sessions/tokens are not logged: no seller to attribute them to, and a flood of guesses is not an audit.
+
+**Rate limit, no migration.** The durable limiter already existed (`rateLimitDurable`, mig 074, in-memory fallback). `/api/store/download-file` and the bundle-token download share a per-IP bucket of 240/min; `/api/store/delivery` (which returns the buyer's email for a session id) gets 60/min. 429 + `Retry-After: 60`, checked before any lookup. The page shows the route's sentence.
+
+**Not built:** anything that READS the log. The rows are queryable by the producer (RLS), but /sales shows no "downloaded N times / last on" yet — that is the natural next step and needs a join on `metadata->>purchase_id`. Also not done: a per-purchase download cap, and retention for old `download` rows.
+
+Tests: `download-audit.test.ts` (rule, row shape, no credential, hashed IP, never throws, forgery guard), route tests for all three routes (11 fail on the old routes), page 429 case.

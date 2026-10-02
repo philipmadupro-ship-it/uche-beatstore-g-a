@@ -18,6 +18,7 @@ describe('downloadFailureMessage', () => {
   it('has a sentence for each status when the body is empty', () => {
     expect(downloadFailureMessage(403)).toMatch(/no longer available/);
     expect(downloadFailureMessage(401)).toMatch(/no longer available/);
+    expect(downloadFailureMessage(429)).toMatch(/Too many/);
     expect(downloadFailureMessage(404)).toMatch(/not available right now/);
     expect(downloadFailureMessage(502)).toBe(DOWNLOAD_FALLBACK_MESSAGE);
   });
@@ -31,7 +32,7 @@ describe('probeDownload', () => {
 
     expect(result).toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledWith('/api/store/download-file?x=1', {
-      headers: { Range: 'bytes=0-0' },
+      headers: { Range: 'bytes=0-0', 'X-Download-Probe': '1' },
       cache: 'no-store',
     });
     expect(cancel).toHaveBeenCalled();
