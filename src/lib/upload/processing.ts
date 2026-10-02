@@ -7,6 +7,8 @@ import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { readStoredObject, uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
+import { prepareMp3Deliverable } from '@/lib/audio/mp3-deliverable';
+import { realMp3Deps } from '@/lib/audio/mp3-deliverable.server';
 import { errorMessage } from '@/lib/errors';
 import { parseTitleMetadata } from '@/lib/upload/title-metadata';
 import { compareFilenameWithDetected } from '@/lib/audio/metadata-agreement';
@@ -221,6 +223,14 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
       if (!previewUrl) console.warn('Upload processing: no preview clip (ffmpeg unavailable and master not mp3/wav)');
     } catch (err) {
       console.warn('Upload processing preview failed:', err);
+    }
+
+    // The MP3 a lease on this track delivers, made now from the master already
+    // in memory so the first buyer does not wait for it (it is otherwise made on
+    // first download — lib/audio/mp3-deliverable). Non-fatal either way.
+    const mp3 = await prepareMp3Deliverable({ id: job.track_id, audio_url: job.audio_url }, audioBuffer, realMp3Deps);
+    if (!mp3 && job.audio_url && !/\.mp3(?:\?|$)/i.test(job.audio_url)) {
+      console.warn('Upload processing: delivery MP3 not made (ffmpeg unavailable?); it will be made on first download');
     }
 
     const { bpm, key, scale, ...rest } = merged;

@@ -201,6 +201,69 @@ describe('GET /api/store/delivery', () => {
     expect(unknown.status).toBe(404);
   });
 
+  describe('a track whose master is a WAV', () => {
+    function mockWavMaster(fileTypes: string[], wavUrl: string | null = null) {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'license_purchases') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: () => Promise.resolve({
+                  data: {
+                    id: 'purchase-1', buyer_email: 'buyer@example.test', amount_usd: 30,
+                    created_at: '2026-01-01T00:00:00Z', status: 'paid', download_unlocked: true,
+                    track_ids: ['track-1'],
+                    line_items: [{ track_id: 'track-1', license_id: 'custom', license_type: 'lease', file_types: fileTypes, stems_included: false }],
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'tracks') {
+          return {
+            select: () => ({
+              in: () => Promise.resolve({
+                data: [{ id: 'track-1', title: 'WAV Beat', type: 'beat', audio_url: 'r2://private/tracks/beat.wav', wav_url: wavUrl, stems_status: 'none' }],
+                error: null,
+              }),
+            }),
+          };
+        }
+        return tableForProjectDelivery(table);
+      });
+    }
+
+    it('lists the MP3 for an MP3-only lease, which used to list nothing at all', async () => {
+      mockWavMaster(['MP3']);
+      const mod = await loadRoute();
+      const body = await (await mod.GET(req())).json();
+
+      expect(body.tracks[0].downloads).toEqual([
+        { format: 'mp3', label: 'MP3', proxied_url: expect.stringMatching(/^\/api\/store\/download-file\?.*format=mp3/) },
+      ]);
+    });
+
+    it('lists the MP3 and the WAV for a tier that includes both, and no WAV for one that does not', async () => {
+      mockWavMaster(['MP3', 'WAV']);
+      const mod = await loadRoute();
+      const both = (await (await mod.GET(req())).json()).tracks[0].downloads.map((d: { format: string }) => d.format);
+      expect(both).toEqual(['mp3', 'wav-main']);
+
+      mockWavMaster(['MP3']);
+      const mp3Only = (await (await mod.GET(req())).json()).tracks[0].downloads.map((d: { format: string }) => d.format);
+      expect(mp3Only).toEqual(['mp3']);
+    });
+
+    it('lists no MP3 for a tier that does not include one', async () => {
+      mockWavMaster(['WAV']);
+      const mod = await loadRoute();
+      const formats = (await (await mod.GET(req())).json()).tracks[0].downloads.map((d: { format: string }) => d.format);
+      expect(formats).toEqual(['wav-main']);
+    });
+  });
+
   it('answers 429 over the per-IP limit, before any lookup', async () => {
     mockRateLimit.mockResolvedValue(false);
     const mod = await loadRoute();

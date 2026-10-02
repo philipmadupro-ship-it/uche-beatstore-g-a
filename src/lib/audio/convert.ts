@@ -279,6 +279,39 @@ export async function makePreviewMp3Buffer(
   }
 }
 
+/**
+ * Transcode a whole master to the MP3 a lease buyer is sold: 320 kbps CBR
+ * stereo at 44.1 kHz, metadata stripped. Unlike the 96 kbps public preview this
+ * is the deliverable, so quality is the point; the master stays in private
+ * storage. Works for any input ffmpeg reads (wav, flac, aiff, m4a, ogg).
+ * Returns null when ffmpeg is unavailable or the input is unreadable.
+ */
+export async function makeDeliveryMp3Buffer(input: Buffer): Promise<Buffer | null> {
+  if (!(await checkFfmpeg())) {
+    console.warn('ffmpeg not available - delivery mp3 was not generated.');
+    return null;
+  }
+  try {
+    return await runFfmpegToBuffer([
+        '-i', 'pipe:0',
+        '-vn',
+        '-map_metadata', '-1',
+        '-ac', '2',
+        '-ar', '44100',
+        '-c:a', 'libmp3lame',
+        '-b:a', '320k',
+        '-f', 'mp3',
+        'pipe:1',
+      ],
+      input,
+      180_000,
+    );
+  } catch (err) {
+    console.warn('delivery mp3 conversion failed:', err);
+    return null;
+  }
+}
+
 /** Exposed for tests / diagnostics. */
 export async function isFfmpegInstalled(): Promise<boolean> {
   return checkFfmpeg();

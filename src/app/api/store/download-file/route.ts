@@ -5,7 +5,10 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { isProjectAccessActive } from '@/lib/store/project-access';
 import { purchaseAccess } from '@/lib/store/purchase-access';
-import { streamAudioSource } from '@/lib/audio/stream-source';
+import { bufferDownloadResponse, streamAudioSource } from '@/lib/audio/stream-source';
+import { canDeriveMp3 } from '@/lib/audio/mp3-deliverable';
+import { ensureTrackMp3 } from '@/lib/audio/mp3-deliverable.server';
+import { alertMp3Unavailable } from '@/lib/store/mp3-alert';
 import { clientIp, rateLimitDurable } from '@/lib/security/rate-limit';
 import {
   recordDownload,
@@ -21,6 +24,10 @@ import {
 const log = createLogger('api.store.download-file');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// The first MP3 request for a WAV-mastered track reads the master and runs
+// ffmpeg over it (seconds for a normal beat); later requests stream the stored
+// derivative. Room for a long master.
+export const maxDuration = 120;
 
 /**
  * GET /api/store/download-file?session_id=cs_xxx&track_id=yyy
@@ -161,6 +168,7 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     let source: string | null = null;
+    let derivedBytes: Buffer | null = null;
     let ext = 'mp3';
     if (format === 'wav') {
       const mainAudioIsWav = /\.wav(?:\?|$)/i.test(track?.audio_url ?? '');
@@ -177,13 +185,28 @@ export async function GET(req: NextRequest) {
       const stemValue = (stem as Record<string, unknown> | null)?.[column];
       source = typeof stemValue === 'string' ? stemValue : null;
       ext = 'wav';
+    } else if (format === 'mp3' && canDeriveMp3(track?.audio_url)) {
+      // The tier promises an MP3 and the master is not one (usually a WAV).
+      // Make it from the master — never hand the master over in its place.
+      const mp3 = await ensureTrackMp3({ id: trackId, audio_url: track?.audio_url });
+      if (!mp3) {
+        await audit('denied', 'file-missing');
+        await alertMp3Unavailable(admin as unknown as Parameters<typeof alertMp3Unavailable>[0], { sellerUserId: ctx?.seller ?? null, trackId, title: track?.title ?? null });
+        return NextResponse.json(
+          { error: 'Your MP3 is still being prepared. Try again in a minute — the producer has been told.' },
+          { status: 503, headers: { 'Retry-After': '60' } },
+        );
+      }
+      ext = 'mp3';
+      if (mp3.kind === 'ref') source = mp3.ref;
+      else derivedBytes = mp3.buffer;
     } else {
       source = track?.audio_url || null;
       const extMatch = source?.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i);
       ext = (extMatch?.[1] ?? 'mp3').toLowerCase();
     }
 
-    if (!source) {
+    if (!source && !derivedBytes) {
       await audit('denied', 'file-missing');
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
@@ -196,7 +219,8 @@ export async function GET(req: NextRequest) {
     if (shouldLogGrant(req.headers.get('range'), req.headers.has('x-download-probe'))) {
       await audit('granted');
     }
-    return streamAudioSource(req, source, filename);
+    if (derivedBytes) return bufferDownloadResponse(derivedBytes, filename, 'audio/mpeg');
+    return streamAudioSource(req, source!, filename);
   } catch (err) {
     log.error('download-file failed', { sessionId, trackId, error: errorMessage(err) });
     // Public route: log the detail, never return it (DB/storage internals).

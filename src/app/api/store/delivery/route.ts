@@ -5,6 +5,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { isProjectAccessActive } from '@/lib/store/project-access';
 import { purchaseAccess } from '@/lib/store/purchase-access';
+import { canDeriveMp3 } from '@/lib/audio/mp3-deliverable';
 import { clientIp, rateLimitDurable } from '@/lib/security/rate-limit';
 import {
   canDownloadFormat,
@@ -240,6 +241,14 @@ export async function GET(req: NextRequest) {
       ).toLowerCase();
 
       const downloads: Array<{ format: string; label: string; proxied_url: string }> = [];
+
+      // A tier that includes MP3 on a track whose master is not one (usually a
+      // WAV): the MP3 is made from the master when it is first downloaded
+      // (/api/store/download-file), so it is offered here whether or not it
+      // exists yet. Without this such a lease listed nothing at all.
+      if (item && canDeriveMp3(t.audio_url) && canDownloadFormat(item, 'mp3')) {
+        downloads.push({ format: 'mp3', label: 'MP3', proxied_url: proxied('mp3', t.id) });
+      }
 
       const mainFormat = audioExt === 'wav' ? 'wav' : audioExt;
       if (t.audio_url && item && canDownloadFormat(item, mainFormat)) {

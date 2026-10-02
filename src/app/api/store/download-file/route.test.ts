@@ -14,8 +14,14 @@ vi.mock('@/lib/auth/ownership', () => ({
   }),
 }));
 
-vi.mock('@/lib/audio/stream-source', () => ({
+vi.mock('@/lib/audio/stream-source', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/audio/stream-source')>()),
   streamAudioSource: (...args: unknown[]) => mockStreamAudioSource(...args),
+}));
+
+const mockEnsureMp3 = vi.fn();
+vi.mock('@/lib/audio/mp3-deliverable.server', () => ({
+  ensureTrackMp3: (...args: unknown[]) => mockEnsureMp3(...args),
 }));
 
 const mockRateLimit = vi.fn();
@@ -36,6 +42,8 @@ function purchaseTable(lineItem: Record<string, unknown>, licenseType = 'lease')
       eq: () => ({
         maybeSingle: () => Promise.resolve({
           data: {
+            id: 'purchase-1',
+            seller_user_id: 'seller-1',
             download_unlocked: true,
             license_type: licenseType,
             track_ids: ['track-1'],
@@ -56,6 +64,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockStreamAudioSource.mockResolvedValue(new NextResponse('audio'));
   mockRateLimit.mockResolvedValue(true);
+  mockEnsureMp3.mockResolvedValue(null);
 });
 
 describe('GET /api/store/download-file', () => {
@@ -158,42 +167,101 @@ describe('GET /api/store/download-file', () => {
     expect(mockStreamAudioSource).toHaveBeenCalledTimes(1);
   });
 
-  it('does not stream a WAV-valued main file through an MP3-only entitlement', async () => {
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'license_purchases') {
-        return purchaseTable({
-          track_id: 'track-1',
-          license_id: 'custom-license',
-          license_type: 'lease',
-          file_types: ['MP3'],
-          stems_included: false,
-          is_exclusive: false,
-        });
-      }
-      if (table === 'tracks') {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: () => Promise.resolve({
-                data: {
-                  title: 'WAV Main Beat',
-                  audio_url: 'https://cdn.example.test/beat.wav',
-                  wav_url: null,
-                },
-                error: null,
+  describe('MP3 for a track whose master is a WAV', () => {
+    function mockWavMasterPurchase(fileTypes: string[]) {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'license_purchases') {
+          return purchaseTable({
+            track_id: 'track-1', license_id: 'custom-license', license_type: 'lease',
+            file_types: fileTypes, stems_included: false, is_exclusive: false,
+          });
+        }
+        if (table === 'tracks') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: () => Promise.resolve({
+                  data: { title: 'WAV Main Beat', audio_url: 'r2://private/tracks/beat.wav', wav_url: null },
+                  error: null,
+                }),
               }),
             }),
-          }),
-        };
-      }
-      throw new Error(`Unexpected table ${table}`);
+          };
+        }
+        if (table === 'notifications') {
+          return {
+            select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }) }),
+            insert: (row: unknown) => { notifications.push(row as Record<string, unknown>); return Promise.resolve({ error: null }); },
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      });
+    }
+    let notifications: Array<Record<string, unknown>> = [];
+    beforeEach(() => { notifications = []; });
+
+    it('serves an MP3-only lease the MP3 made from the WAV master — never the WAV itself', async () => {
+      mockWavMasterPurchase(['MP3']);
+      mockEnsureMp3.mockResolvedValue({ kind: 'ref', ref: 'r2://private/deliverables/track-1-abc.mp3', created: true });
+
+      const mod = await loadRoute();
+      const res = await mod.GET(req('mp3'));
+
+      expect(res.status).toBe(200);
+      expect(mockEnsureMp3).toHaveBeenCalledWith({ id: 'track-1', audio_url: 'r2://private/tracks/beat.wav' });
+      expect(mockStreamAudioSource).toHaveBeenCalledWith(
+        expect.anything(), 'r2://private/deliverables/track-1-abc.mp3', 'WAV Main Beat.mp3',
+      );
+      // The master is never what was streamed.
+      expect(JSON.stringify(mockStreamAudioSource.mock.calls)).not.toContain('beat.wav');
     });
 
-    const mod = await loadRoute();
-    const res = await mod.GET(req('mp3'));
+    it('serves the bytes directly when the MP3 was made but could not be stored', async () => {
+      mockWavMasterPurchase(['MP3']);
+      mockEnsureMp3.mockResolvedValue({ kind: 'buffer', buffer: Buffer.from('ID3-mp3-bytes') });
 
-    expect(res.status).toBe(403);
-    expect(mockStreamAudioSource).not.toHaveBeenCalled();
+      const mod = await loadRoute();
+      const res = await mod.GET(req('mp3'));
+
+      expect(res.status).toBe(200);
+      expect(mockStreamAudioSource).not.toHaveBeenCalled();
+      expect(res.headers.get('content-type')).toBe('audio/mpeg');
+      expect(res.headers.get('content-disposition')).toContain('WAV Main Beat.mp3');
+      expect(Buffer.from(await res.arrayBuffer()).toString()).toBe('ID3-mp3-bytes');
+    });
+
+    it('says the MP3 is being prepared — and alerts the producer once — when it cannot be made', async () => {
+      mockWavMasterPurchase(['MP3']);
+      mockEnsureMp3.mockResolvedValue(null);
+
+      const mod = await loadRoute();
+      const res = await mod.GET(req('mp3'));
+
+      expect(res.status).toBe(503);
+      expect(res.headers.get('retry-after')).toBe('60');
+      expect((await res.json()).error).toMatch(/being prepared/);
+      // It must not fall back to the master the tier does not include.
+      expect(mockStreamAudioSource).not.toHaveBeenCalled();
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0]).toMatchObject({ kind: 'fulfillment_alert', data: { alert_kind: 'mp3_unavailable', track_id: 'track-1' } });
+    });
+
+    it('still refuses the WAV itself to an MP3-only tier', async () => {
+      mockWavMasterPurchase(['MP3']);
+      const mod = await loadRoute();
+
+      expect((await mod.GET(req('wav'))).status).toBe(403);
+      expect(mockStreamAudioSource).not.toHaveBeenCalled();
+      expect(mockEnsureMp3).not.toHaveBeenCalled();
+    });
+
+    it('does not transcode for a tier that does not include MP3', async () => {
+      mockWavMasterPurchase(['WAV']);
+      const mod = await loadRoute();
+
+      expect((await mod.GET(req('mp3'))).status).toBe(403);
+      expect(mockEnsureMp3).not.toHaveBeenCalled();
+    });
   });
 
   describe('project bundle purchases', () => {

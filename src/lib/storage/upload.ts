@@ -114,6 +114,31 @@ export async function uploadPrivateAudio(fileBuffer: Buffer, fileName: string, c
 }
 
 /**
+ * Write a private object under a CALLER-CHOSEN key and return its r2:// ref.
+ * Unlike uploadPrivateAudio (random key per call) this overwrites, so a key
+ * derived from the content's identity is a cache: writing it twice is one
+ * object, not two. Fails closed without a private bucket, like the above.
+ */
+export async function putPrivateObject(key: string, body: Buffer, contentType: string): Promise<string> {
+  const bucketName = privateAudioBucket();
+  await r2.send(new PutObjectCommand({ Bucket: bucketName, Key: key, Body: body, ContentType: contentType }));
+  return r2ObjectRef(bucketName, key);
+}
+
+/** Whether an r2:// object exists (a one-byte ranged GET; false on any miss). */
+export async function storedObjectExists(source: string): Promise<boolean> {
+  try {
+    const object = await getStoredObject(source, 'bytes=0-0');
+    if (!object?.Body) return false;
+    // Drop the body: only the existence mattered.
+    await object.Body.transformToByteArray();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Backwards-compatible name used by stems and licensed source uploads.
  */
 export const uploadAudio = uploadPrivateAudio;

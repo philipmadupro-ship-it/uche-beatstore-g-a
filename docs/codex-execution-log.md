@@ -9343,7 +9343,7 @@ Task: make the post-purchase download path (`/store/download` → `/api/store/de
 
 Tests: `purchase-access.test.ts`, `download-failure.test.ts`, route tests for both routes (+12), `page.test.tsx` (jsdom), `e2e/store-download.spec.ts` (1280 and 390 px, API stubbed, real browser download event and filename). Not run against a real database: both routes use the service client, so RLS does not apply to them; the authorization is the route code, which the route tests exercise.
 
-Not changed (see report): a lease bought on a WAV-only master has nothing to download (no MP3 derivative exists); 
+Not changed (see report): 
 
 Follow-up (same PR): `/api/store/projects/access/[token]/download` now logs the detail and returns a fixed "Download failed" on a 500 (new `route.test.ts`; also covers 404 for unknown/expired token).
 
@@ -9368,3 +9368,17 @@ Follow-up (same PR): download audit log and rate limit.
 **Not built:** anything that READS the log. The rows are queryable by the producer (RLS), but /sales shows no "downloaded N times / last on" yet — that is the natural next step and needs a join on `metadata->>purchase_id`. Also not done: a per-purchase download cap, and retention for old `download` rows.
 
 Tests: `download-audit.test.ts` (rule, row shape, no credential, hashed IP, never throws, forgery guard), route tests for all three routes (11 fail on the old routes), page 429 case.
+
+Follow-up (same PR): a lease on a WAV master.
+
+**The defect.** A lease tier promises `['MP3']`. `delivery` only advertised the master's own format, and `download-file` (correctly, since the earlier security fix) refused a WAV to an MP3-only tier. For a track whose `audio_url` is a WAV — the common case — the buyer paid, the page said "No files available for download", and nothing could be fetched. Checkout had let the sale through. Reproduced as route tests (delivery listed nothing; download-file answered 403) and then end to end.
+
+**The fix, without a schema change.** The first design was a `tracks.mp3_url` column filled at upload and by the backfill cron. Dropped: the cron runs once a day on this plan (a WAV-mastered catalogue would stay unbuyable for weeks), a revert of a track version changes `audio_url` and would leave a stale MP3 on the row, and migration numbers 136–139 are already claimed by other branches. Instead the derivative's KEY is derived from the track id and a hash of `audio_url` (`mp3DeliverableKey`), so existence of the key is the whole state and a replaced master can never be served an old MP3. `lib/audio/mp3-deliverable.ts` is the pure orchestration with injected dependencies (every branch tested with fakes); `mp3-deliverable.server.ts` wires R2 + ffmpeg. `convert.ts#makeDeliveryMp3Buffer` is a 320 kbps stereo 44.1 kHz libmp3lame pass over the whole master (the 96 kbps 75 s public preview is a different thing and untouched).
+- `/api/store/delivery`: offers `mp3` for a tier that includes it on a transcodable non-MP3 master.
+- `/api/store/download-file?format=mp3`: serves the stored derivative, making it first if needed; if it was made but could not be stored the bytes are served directly; if it cannot be made, 503 + `Retry-After`, audit `file-missing`, one deduped `fulfillment_alert` to the producer. It never falls back to the master. `format=wav` is still refused to an MP3-only tier.
+- Upload processing makes it eagerly from the master already in memory (non-fatal). `next.config.ts` traces ffmpeg into `/api/store/download-file`; the route has `maxDuration = 120`.
+- Side effect, intended: exclusive and bundle tiers include MP3, so `format=mp3` now returns a real MP3 for them too (it used to return the WAV master named `.wav`).
+
+Tests: `mp3-deliverable.test.ts` (rules, key, reuse, create, store-failure, no-storage, cannot-make → null, upload-time), `convert-delivery.test.ts` (REAL ffmpeg over a generated WAV: valid stereo MP3, whole length, not a clip), route tests for delivery and download-file, and `mp3-integration.test.ts` — the real route, real `ensureTrackMp3` and real ffmpeg over a WAV on disk, DB stubbed: a lease receives a genuine MP3 and the WAV is refused (fails on the old routes).
+
+Not verified: ffmpeg actually running inside the Vercel function for `/api/store/download-file`. It is traced the same way as the upload routes, whose earlier "never traced" failure is documented in `lib/audio/preview-clip.ts`, and `/api/audio/diagnostics` reports it; but I could not run on Vercel. If it does not run there, the buyer sees "being prepared" and the producer is alerted, and the eager upload-time path is the fallback for new tracks. Also not done: deleting superseded derivatives, and a producer-visible "MP3 ready" indicator.
