@@ -28,7 +28,11 @@ const sum = (id: string, title: string) => ({
 
 const purchases = (revoked = false) => ({
   email: 'buyer@example.com',
-  project_bundles: [],
+  project_bundles: [{
+    id: 'pb1', kind: 'project', project: { name: 'Winter Tape', cover_url: null }, project_id: 'p1',
+    amount_usd: 99, created_at: '2026-09-01T00:00:00Z', stripe_session_id: 'cs_2',
+    download_url: revoked ? null : '/store/projects/access/abc', access_revoked: revoked,
+  }],
   track_licenses: [{
     id: 'lp1', kind: 'track', amount_usd: 300, created_at: '2026-09-01T00:00:00Z', status: 'paid',
     stripe_session_id: 'cs_1', download_url: revoked ? null : '/store/download?session_id=cs_1',
@@ -109,9 +113,15 @@ describe('/store/account/[token] playback', () => {
     expect(posted[0].url).toBe(`/api/store/me?token=${ENC}`);
   });
 
+  it('labels a bundle row as the place to listen, not just a download', async () => {
+    mount();
+    const link = await screen.findByRole('link', { name: /Open to listen/ });
+    expect(link.getAttribute('href')).toBe('/store/projects/access/abc');
+  });
+
   it('offers no play on a revoked purchase', async () => {
     mount(true);
-    await screen.findByText(/Access revoked/);
+    await screen.findAllByText(/Access revoked/);
     expect(screen.queryByLabelText('Play Cold Front')).toBeNull();
   });
 });

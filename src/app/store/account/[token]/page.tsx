@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Loader2, AlertCircle, Music, Layers, Download, ExternalLink,
-  CreditCard, Heart, History, ListMusic, Plus, Trash2,
+  CreditCard, Heart, History, ListMusic, Play, Plus, Trash2,
 } from 'lucide-react';
 import { setBuyerToken } from '@/lib/buyer-session';
 import { toast } from '@/hooks/useToast';
@@ -222,8 +222,8 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
                           href={b.download_url}
                           className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white text-black hover:bg-white/90 transition-colors"
                         >
-                          <Download size={11} />
-                          Open
+                          <Play size={11} fill="currentColor" aria-hidden="true" />
+                          Open to listen
                         </a>
                       )}
                     </li>
