@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { isProjectAccessActive } from '@/lib/store/project-access';
+import { purchaseAccess } from '@/lib/store/purchase-access';
 import { streamAudioSource } from '@/lib/audio/stream-source';
 import {
   canDownloadFormat,
@@ -24,7 +25,8 @@ export const dynamic = 'force-dynamic';
  *
  * Security model:
  *   - session_id is a Stripe cs_xxx (not guessable)
- *   - We confirm download_unlocked=true on the purchase row
+ *   - We confirm the purchase row still grants access (not refunded or
+ *     disputed, not held for review) — see lib/store/purchase-access
  *   - We confirm track_id is in the purchase's track_ids array
  *   - We never expose the raw R2/storage URL in the redirect
  */
@@ -44,16 +46,20 @@ export async function GET(req: NextRequest) {
   try {
     const admin = createServiceClient();
 
-    const { data: purchase } = await admin
+    const { data: purchase, error: purchaseError } = await admin
       .from('license_purchases')
-      .select('download_unlocked, license_type, track_ids, line_items')
+      .select('download_unlocked, needs_refund_review, license_type, track_ids, line_items')
       .eq('stripe_session_id', sessionId)
       .maybeSingle();
+    // A failed lookup is not "no such purchase": falling through would answer
+    // 404 for a paid buyer on a transient error and hide a broken query.
+    if (purchaseError) throw purchaseError;
 
     let entitlement: PurchaseLineItem | null = null;
     if (purchase) {
-      if (!purchase.download_unlocked) {
-        return NextResponse.json({ error: 'Download access revoked' }, { status: 403 });
+      const access = purchaseAccess(purchase);
+      if (!access.allowed) {
+        return NextResponse.json({ error: access.message }, { status: 403 });
       }
       if (!Array.isArray(purchase.track_ids) || !purchase.track_ids.includes(trackId)) {
         return NextResponse.json({ error: 'Track not in this purchase' }, { status: 403 });
