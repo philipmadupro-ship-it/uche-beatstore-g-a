@@ -9381,7 +9381,7 @@ Follow-up (same PR): a lease on a WAV master.
 
 Tests: `mp3-deliverable.test.ts` (rules, key, reuse, create, store-failure, no-storage, cannot-make → null, upload-time), `convert-delivery.test.ts` (REAL ffmpeg over a generated WAV: valid stereo MP3, whole length, not a clip), route tests for delivery and download-file, and `mp3-integration.test.ts` — the real route, real `ensureTrackMp3` and real ffmpeg over a WAV on disk, DB stubbed: a lease receives a genuine MP3 and the WAV is refused (fails on the old routes).
 
-Not verified: ffmpeg actually running inside the Vercel function for `/api/store/download-file`. It is traced the same way as the upload routes, whose earlier "never traced" failure is documented in `lib/audio/preview-clip.ts`, and `/api/audio/diagnostics` reports it; but I could not run on Vercel. If it does not run there, the buyer sees "being prepared" and the producer is alerted, and the eager upload-time path is the fallback for new tracks. Also not done: deleting superseded derivatives.
+Not verified: ffmpeg actually running inside the Vercel function for `/api/store/download-file`. It is traced the same way as the upload routes, whose earlier "never traced" failure is documented in `lib/audio/preview-clip.ts`, and `/api/audio/diagnostics` reports it; but I could not run on Vercel. If it does not run there, the buyer sees "being prepared" and the producer is alerted, and the eager upload-time path is the fallback for new tracks. 
 
 Follow-up (same PR): the producer-visible "MP3 ready" indicator.
 
@@ -9392,3 +9392,18 @@ The drawer's new **Delivery** section (`TrackDeliverySection`, after Linked) sho
 The section re-checks when `audio_url` changes (a version revert swaps the master, and the old derivative key no longer applies) and renders nothing in local mode (501). A failed check says "Could not check the MP3" with Retry rather than guessing.
 
 Tests: `mp3-status.test.ts`, route tests (signed out 401 / another producer's track 403 / missing 404 each read nothing; owner filter asserted; status; make success; 503 cannot make; 503 not stored; 409; no internal leak), `TrackDeliverySection.test.tsx` (ready, pending → make → ready, make fails, check fails + Retry, 501 hides, re-check on master change), and `e2e/track-delivery.spec.ts` in the real drawer at 1280 and 390 px (the library has no All tracks toggle on phones; the spec handles both).
+
+Follow-up (same PR): deleting superseded MP3s.
+
+**Where orphans come from.** The derivative's key hashes `audio_url`, so a changed master leaves the old MP3 behind. `audio_url` is written in exactly one place — the version-revert route — and a track delete is a bare DB delete. The MP3 feature has not reached production, so there is no existing backlog to sweep; three hooks cover the lifecycle:
+1. **A new derivative is stored** (`EnsureMp3Deps.prune`): every other `deliverables/<track>-*.mp3` is superseded.
+2. **A version revert** (`revert/route.ts`): prune everything except the key for the restored master (kept if it was already made).
+3. **A track delete** (`[id]/route.ts` DELETE, after ownership is proven and the row is gone): remove all of them. Masters, previews and peaks are not touched; they were never deleted on track delete and that is a wider storage-GC question this does not take on.
+
+**The selection is the safety boundary.** `supersededDeliverableKeys` returns a key only if it matches exactly `deliverables/<this track's uuid>-<12 hex>.mp3` and is not the current key; the track id must itself be a uuid before it is interpolated into the pattern. The adversarial test feeds it a master, another track's derivative, wrong extensions, `..` traversal, the bare prefix and an empty string and expects nothing back. `listPrivateKeys` (paginated) and `deletePrivateKeys` (batches of 1000, throws on a per-object S3 error) only touch the private bucket. Pruning is best-effort and never throws: a failed cleanup must not fail the download, revert or delete that triggered it; without R2 (local dev) it is a no-op.
+
+**Known small race, accepted.** A request that read the track before a revert can store the OLD master's key after the revert and prune the NEW one; the next request regenerates it. Nothing is served stale (the key is derived from the master it was made from).
+
+Tests: pure selection (adversarial), prune with fakes, ensure prunes only on a NEW derivative (not on exists / MP3 master / unstored; a failing prune doesn't lose the result), a lifecycle test over an in-memory object store (one MP3 per track through a master change, another track's untouched, delete removes only that track's, masters and stems intact), `private-keys.test.ts` (pagination, 1000-batching, error surfaced), and route tests for revert and DELETE (prune on success with the right arguments; none on a failed revert or a track the caller does not own) — the two hook tests fail without the hooks.
+
+Not verified: against real R2 (ListObjectsV2 / DeleteObjects). The S3 client is exercised with its `send` spied, so command shapes are asserted but not accepted by a live bucket; the token needs `s3:ListBucket` and `s3:DeleteObject` on the private bucket, which the upload and delete helpers already imply for delete but list is new.

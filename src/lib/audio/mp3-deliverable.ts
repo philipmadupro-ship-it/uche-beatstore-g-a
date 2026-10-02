@@ -37,6 +37,59 @@ export function mp3DeliverableKey(trackId: string, audioUrl: string): string {
   return `deliverables/${trackId}-${fingerprint}.mp3`;
 }
 
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+/** Listing prefix for one track's derivatives. */
+export function mp3DeliverablePrefix(trackId: string): string {
+  return `deliverables/${trackId}-`;
+}
+
+/**
+ * Which of `listedKeys` are SUPERSEDED derivatives of this track: made from a
+ * master the track no longer has. Everything but the key for `currentAudioUrl`
+ * (all of them when the track has no master that needs one — deleted, or itself
+ * an MP3).
+ *
+ * This is the only thing that decides what gets deleted, so it is strict by
+ * construction: a key is returned only if it is EXACTLY
+ * `deliverables/<this track's uuid>-<12 hex>.mp3`. A bad listing, another
+ * track's derivative, a master (`tracks/…`) or a stem can never be named.
+ */
+export function supersededDeliverableKeys(
+  listedKeys: string[],
+  trackId: string,
+  currentAudioUrl: string | null | undefined,
+): string[] {
+  if (!new RegExp(`^${UUID}$`, 'i').test(trackId)) return [];
+  const exact = new RegExp(`^deliverables/${trackId}-[0-9a-f]{12}\\.mp3$`);
+  const keep = canDeriveMp3(currentAudioUrl) ? mp3DeliverableKey(trackId, currentAudioUrl as string) : null;
+  return [...new Set(listedKeys)].filter((k) => exact.test(k) && k !== keep);
+}
+
+export type PruneDeps = {
+  list: (prefix: string) => Promise<string[]>;
+  remove: (keys: string[]) => Promise<void>;
+};
+
+/**
+ * Delete this track's superseded derivatives. Best-effort and never throws: an
+ * orphan costs a few MB, and a failed cleanup must not fail the download,
+ * revert or delete that triggered it. Returns how many it removed.
+ */
+export async function pruneMp3Deliverables(
+  track: { id: string; audio_url: string | null | undefined },
+  deps: PruneDeps,
+): Promise<number> {
+  try {
+    const stale = supersededDeliverableKeys(await deps.list(mp3DeliverablePrefix(track.id)), track.id, track.audio_url);
+    if (stale.length === 0) return 0;
+    await deps.remove(stale);
+    return stale.length;
+  } catch {
+    return 0;
+  }
+}
+
 export type Mp3Deliverable =
   /** Served from storage: the master itself (already an MP3) or the stored derivative. */
   | { kind: 'ref'; ref: string; created: boolean }
@@ -50,6 +103,8 @@ export type EnsureMp3Deps = {
   readMaster: (audioUrl: string) => Promise<Buffer>;
   transcode: (master: Buffer) => Promise<Buffer | null>;
   put: (key: string, buffer: Buffer) => Promise<string>;
+  /** Called after a NEW derivative is stored, to drop the ones it supersedes. */
+  prune?: (track: { id: string; audio_url: string }) => Promise<unknown>;
 };
 
 /**
@@ -81,7 +136,11 @@ export async function ensureMp3Deliverable(
 
   if (!ref) return { kind: 'buffer', buffer };
   try {
-    return { kind: 'ref', ref: await deps.put(key, buffer), created: true };
+    const stored = await deps.put(key, buffer);
+    // A new key means the master changed (or this is the first MP3): anything
+    // else under this track is a derivative of a master it no longer has.
+    try { await deps.prune?.({ id: track.id, audio_url: audioUrl }); } catch { /* best-effort */ }
+    return { kind: 'ref', ref: stored, created: true };
   } catch {
     // The bytes are good even though they could not be kept: the buyer still
     // gets their file, and the next request tries again.

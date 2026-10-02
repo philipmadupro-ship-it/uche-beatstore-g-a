@@ -33,6 +33,11 @@ vi.mock('@/lib/db', () => ({
     typeof (v as { json?: unknown }).json === 'function',
 }));
 
+const mockPrune = vi.fn();
+vi.mock('@/lib/audio/mp3-deliverable.server', () => ({
+  pruneTrackMp3s: (...args: unknown[]) => mockPrune(...args),
+}));
+
 function buildReq(method: string, body?: unknown): NextRequest {
   return new NextRequest('http://localhost/api/tracks/t-1', {
     method,
@@ -171,5 +176,21 @@ describe('DELETE /api/tracks/[id]', () => {
     const mod = await loadRoute();
     const res = await mod.DELETE(buildReq('DELETE'), { params: Promise.resolve({ id: 't-1' }) });
     expect(res.status).toBe(403);
+  });
+
+  it('removes the deleted track\'s lease MP3s once the delete succeeded', async () => {
+    mockDeleteOwned.mockResolvedValueOnce(true);
+    const mod = await loadRoute();
+    await mod.DELETE(buildReq('DELETE'), { params: Promise.resolve({ id: 't-1' }) });
+
+    expect(mockPrune).toHaveBeenCalledWith({ id: 't-1', audio_url: null });
+  });
+
+  it('removes nothing when the caller does not own the track', async () => {
+    mockDeleteOwned.mockResolvedValueOnce(NextResponse.json({ error: 'Forbidden' }, { status: 403 }));
+    const mod = await loadRoute();
+    await mod.DELETE(buildReq('DELETE'), { params: Promise.resolve({ id: 't-1' }) });
+
+    expect(mockPrune).not.toHaveBeenCalled();
   });
 });

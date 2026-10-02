@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
 import fs from 'node:fs';
@@ -123,6 +123,32 @@ export async function putPrivateObject(key: string, body: Buffer, contentType: s
   const bucketName = privateAudioBucket();
   await r2.send(new PutObjectCommand({ Bucket: bucketName, Key: key, Body: body, ContentType: contentType }));
   return r2ObjectRef(bucketName, key);
+}
+
+/** Every key in the private bucket under `prefix` (paginated). */
+export async function listPrivateKeys(prefix: string): Promise<string[]> {
+  const bucket = privateAudioBucket();
+  const keys: string[] = [];
+  let token: string | undefined;
+  do {
+    const page = await r2.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }));
+    for (const o of page.Contents ?? []) if (o.Key) keys.push(o.Key);
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+  return keys;
+}
+
+/** Delete keys from the private bucket, in the batches of 1000 S3 allows. */
+export async function deletePrivateKeys(keys: string[]): Promise<void> {
+  const bucket = privateAudioBucket();
+  for (let i = 0; i < keys.length; i += 1000) {
+    const chunk = keys.slice(i, i + 1000);
+    const out = await r2.send(new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: { Objects: chunk.map((Key) => ({ Key })), Quiet: true },
+    }));
+    if (out.Errors?.length) throw new Error(`Delete failed for ${out.Errors.length} object(s): ${out.Errors[0].Message ?? out.Errors[0].Code}`);
+  }
 }
 
 /** Whether an r2:// object exists (a one-byte ranged GET; false on any miss). */

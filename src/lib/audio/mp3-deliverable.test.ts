@@ -4,6 +4,9 @@ import {
   ensureMp3Deliverable,
   isMp3Master,
   mp3DeliverableKey,
+  mp3DeliverablePrefix,
+  pruneMp3Deliverables,
+  supersededDeliverableKeys,
   prepareMp3Deliverable,
   type EnsureMp3Deps,
 } from './mp3-deliverable';
@@ -113,5 +116,147 @@ describe('prepareMp3Deliverable (upload time)', () => {
   it('never throws, so a failed transcode cannot fail the upload', async () => {
     const d = deps({ transcode: vi.fn().mockRejectedValue(new Error('ffmpeg crashed')) });
     await expect(prepareMp3Deliverable(track, Buffer.from('x'), d)).resolves.toBeNull();
+  });
+});
+
+const T1 = '11111111-1111-4111-8111-111111111111';
+const T2 = '22222222-2222-4222-8222-222222222222';
+const OLD = 'r2://private/tracks/old.wav';
+const NEW = 'r2://private/tracks/new.wav';
+
+describe('supersededDeliverableKeys', () => {
+  it('names the derivatives of masters the track no longer has, and keeps the current one', () => {
+    const keys = [mp3DeliverableKey(T1, OLD), mp3DeliverableKey(T1, NEW)];
+    expect(supersededDeliverableKeys(keys, T1, NEW)).toEqual([mp3DeliverableKey(T1, OLD)]);
+  });
+
+  it('names all of them when the track no longer needs one (deleted, or now an MP3 master)', () => {
+    const keys = [mp3DeliverableKey(T1, OLD), mp3DeliverableKey(T1, NEW)];
+    expect(supersededDeliverableKeys(keys, T1, null)).toHaveLength(2);
+    expect(supersededDeliverableKeys(keys, T1, 'r2://private/tracks/now.mp3')).toHaveLength(2);
+  });
+
+  it('can never name anything but this track\'s own derivatives', () => {
+    const hostile = [
+      `tracks/${T1}.wav`,                              // a master
+      'tracks/abc123.wav',
+      mp3DeliverableKey(T2, OLD),                      // another track's derivative
+      `deliverables/${T1}-notahash.mp3`,               // wrong shape
+      `deliverables/${T1}-0123456789ab.wav`,           // wrong extension
+      `deliverables/${T1}-0123456789ab.mp3.bak`,
+      `deliverables/${T1}-0123456789ab/../../tracks/master.wav`,
+      `xdeliverables/${T1}-0123456789ab.mp3`,
+      `${mp3DeliverablePrefix(T1)}`,                   // the bare prefix
+      '',
+    ];
+    expect(supersededDeliverableKeys(hostile, T1, NEW)).toEqual([]);
+  });
+
+  it('refuses to build a pattern from something that is not a track uuid', () => {
+    expect(supersededDeliverableKeys([mp3DeliverableKey('t1', OLD)], 't1', NEW)).toEqual([]);
+    expect(supersededDeliverableKeys(['deliverables/x-0123456789ab.mp3'], '.*', NEW)).toEqual([]);
+    expect(supersededDeliverableKeys([], T1, NEW)).toEqual([]);
+  });
+
+  it('lists each key once', () => {
+    const k = mp3DeliverableKey(T1, OLD);
+    expect(supersededDeliverableKeys([k, k], T1, NEW)).toEqual([k]);
+  });
+});
+
+describe('pruneMp3Deliverables', () => {
+  it('lists this track\'s prefix and removes only the superseded keys', async () => {
+    const list = vi.fn().mockResolvedValue([mp3DeliverableKey(T1, OLD), mp3DeliverableKey(T1, NEW)]);
+    const remove = vi.fn().mockResolvedValue(undefined);
+
+    expect(await pruneMp3Deliverables({ id: T1, audio_url: NEW }, { list, remove })).toBe(1);
+    expect(list).toHaveBeenCalledWith(`deliverables/${T1}-`);
+    expect(remove).toHaveBeenCalledWith([mp3DeliverableKey(T1, OLD)]);
+  });
+
+  it('does not call remove when nothing is superseded', async () => {
+    const remove = vi.fn();
+    expect(await pruneMp3Deliverables({ id: T1, audio_url: NEW }, { list: async () => [mp3DeliverableKey(T1, NEW)], remove })).toBe(0);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('never throws, so a failed cleanup cannot fail what triggered it', async () => {
+    const down = { list: vi.fn().mockRejectedValue(new Error('R2 down')), remove: vi.fn() };
+    await expect(pruneMp3Deliverables({ id: T1, audio_url: NEW }, down)).resolves.toBe(0);
+    const failing = { list: async () => [mp3DeliverableKey(T1, OLD)], remove: vi.fn().mockRejectedValue(new Error('403')) };
+    await expect(pruneMp3Deliverables({ id: T1, audio_url: NEW }, failing)).resolves.toBe(0);
+  });
+});
+
+describe('ensureMp3Deliverable prunes only when it makes a NEW derivative', () => {
+  const t = { id: T1, audio_url: NEW };
+
+  it('prunes after storing a new one', async () => {
+    const prune = vi.fn().mockResolvedValue(1);
+    const result = await ensureMp3Deliverable(t, deps({ prune }));
+    expect(result).toMatchObject({ kind: 'ref', created: true });
+    expect(prune).toHaveBeenCalledWith({ id: T1, audio_url: NEW });
+  });
+
+  it('does not prune when the derivative already exists, the master is an MP3, or it could not be stored', async () => {
+    const prune = vi.fn();
+    await ensureMp3Deliverable(t, deps({ prune, exists: vi.fn().mockResolvedValue(true) }));
+    await ensureMp3Deliverable({ id: T1, audio_url: 'r2://b/k.mp3' }, deps({ prune }));
+    await ensureMp3Deliverable(t, deps({ prune, put: vi.fn().mockRejectedValue(new Error('down')) }));
+    expect(prune).not.toHaveBeenCalled();
+  });
+
+  it('still returns the new derivative if pruning fails', async () => {
+    const result = await ensureMp3Deliverable(t, deps({ prune: vi.fn().mockRejectedValue(new Error('boom')) }));
+    expect(result).toMatchObject({ kind: 'ref', created: true });
+  });
+});
+
+describe('lifecycle over an in-memory object store', () => {
+  /** The same deps the server wires, backed by a Set instead of R2. */
+  function store() {
+    const objects = new Set<string>(['tracks/master-old.wav', 'tracks/master-new.wav', `stems/${T1}-0123456789ab.mp3`]);
+    const ref = (k: string) => `r2://private/${k}`;
+    const d: EnsureMp3Deps = {
+      refFor: (key) => ref(key),
+      exists: async (r) => objects.has(r.replace('r2://private/', '')),
+      readMaster: async () => Buffer.from('RIFF'),
+      transcode: async () => Buffer.from('ID3-mp3'),
+      put: async (key) => { objects.add(key); return ref(key); },
+      prune: (t) => pruneMp3Deliverables(t, {
+        list: async (prefix) => [...objects].filter((k) => k.startsWith(prefix)),
+        remove: async (keys) => { for (const k of keys) objects.delete(k); },
+      }),
+    };
+    return { objects, d };
+  }
+  const derivatives = (objects: Set<string>) => [...objects].filter((k) => k.startsWith('deliverables/')).sort();
+
+  it('keeps exactly one MP3 per track as its master changes, and none once it is deleted', async () => {
+    const { objects, d } = store();
+
+    await ensureMp3Deliverable({ id: T1, audio_url: OLD }, d);
+    expect(derivatives(objects)).toEqual([mp3DeliverableKey(T1, OLD)]);
+
+    // The master changes (a version revert): the next MP3 supersedes the old one.
+    await ensureMp3Deliverable({ id: T1, audio_url: NEW }, d);
+    expect(derivatives(objects)).toEqual([mp3DeliverableKey(T1, NEW)]);
+
+    // Another track's derivative is never touched.
+    await ensureMp3Deliverable({ id: T2, audio_url: OLD }, d);
+    await ensureMp3Deliverable({ id: T1, audio_url: OLD }, d);
+    expect(derivatives(objects)).toEqual([mp3DeliverableKey(T1, OLD), mp3DeliverableKey(T2, OLD)].sort());
+
+    // The track is deleted: only ITS derivatives go.
+    await pruneMp3Deliverables({ id: T1, audio_url: null }, {
+      list: async (p) => [...objects].filter((k) => k.startsWith(p)),
+      remove: async (keys) => { for (const k of keys) objects.delete(k); },
+    });
+    expect(derivatives(objects)).toEqual([mp3DeliverableKey(T2, OLD)]);
+
+    // Masters and anything else in the bucket are intact throughout.
+    expect(objects.has('tracks/master-old.wav')).toBe(true);
+    expect(objects.has('tracks/master-new.wav')).toBe(true);
+    expect(objects.has(`stems/${T1}-0123456789ab.mp3`)).toBe(true);
   });
 });
