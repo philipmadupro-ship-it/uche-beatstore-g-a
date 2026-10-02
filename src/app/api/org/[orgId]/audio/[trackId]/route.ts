@@ -42,6 +42,7 @@ import {
   requiredAudioCapabilities,
   type OrgAudioStemRow,
 } from '@/lib/labelos/org-audio';
+import { isR2Configured } from '@/lib/local-store';
 import { createLogger } from '@/lib/log';
 
 export const dynamic = 'force-dynamic';
@@ -118,7 +119,8 @@ export async function GET(req: NextRequest, { params }: Params) {
     const source = orgAudioSource(track, variant, stems);
     if (!source) return json(404, 'No audio for this variant');
     // Private until released (D8): never stream an org file from the public bucket.
-    if (!orgAudioSourceAllowed(source, process.env.R2_PRIVATE_BUCKET_NAME)) {
+    // "No private bucket" means what storage means by it: R2 not configured.
+    if (!orgAudioSourceAllowed(source, isR2Configured() ? process.env.R2_PRIVATE_BUCKET_NAME : null)) {
       log.warn('org audio source outside the private bucket', { orgId: org, trackId, variant: variant.kind });
       return json(403, 'Source not allowed');
     }

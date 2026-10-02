@@ -182,6 +182,9 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'eyJtest';
   process.env.R2_PRIVATE_BUCKET_NAME = 'priv';
   process.env.R2_BUCKET_NAME = 'pub';
+  process.env.R2_ACCOUNT_ID = 'test-account-id';
+  process.env.R2_ACCESS_KEY_ID = 'test-access-key';
+  process.env.R2_SECRET_ACCESS_KEY = 'test-secret-key';
   current = null;
   r2Gets.length = 0;
   const link = (from: TrackKey, to: TrackKey, relation: string) => ({ from_track_id: T[from], to_track_id: T[to], relation, position: 0 });

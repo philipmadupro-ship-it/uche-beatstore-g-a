@@ -14,6 +14,8 @@
  */
 import { test, expect, type APIRequestContext, type BrowserContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { SERVICE_KEY, PRODUCER_ID, BUYER_ID, sessionCookie, userToken } from '../scripts/local-db/jwt.mjs';
 
 const REST = 'http://127.0.0.1:54321/rest/v1';
@@ -35,6 +37,12 @@ async function rest(request: APIRequestContext, method: string, path: string, bo
   });
   expect(res.ok(), `${method} ${path}: ${await res.text()}`).toBeTruthy();
   return res.status() === 204 ? null : res.json();
+}
+
+/** Without R2 a master lands in public/uploads/; a run must not leave any behind. */
+function removeLocalUpload(url: unknown) {
+  if (typeof url !== 'string' || !/^\/uploads\/[A-Za-z0-9_-]+\.[a-z0-9]+$/.test(url)) return;
+  fs.rmSync(path.join(process.cwd(), 'public', url), { force: true });
 }
 
 async function signedIn(context: BrowserContext, baseURL: string, id: string, email: string) {
@@ -89,6 +97,8 @@ test.beforeAll(async ({ request }) => {
 });
 
 test.afterAll(async ({ request }) => {
+  const rows = (await rest(request, 'GET', `tracks?select=audio_url&org_id=eq.${ORG}`)) as { audio_url: string | null }[];
+  for (const r of rows) removeLocalUpload(r.audio_url);
   // Org tracks / projects go with the org (FK cascade), their links and project rows with them.
   await rest(request, 'DELETE', `organizations?id=eq.${ORG}`);
 });
@@ -197,5 +207,6 @@ test('4 · the producer\'s own upload path is unchanged: a producer track, no or
   const jobs = (await rest(request, 'GET', `upload_processing_jobs?select=user_id&track_id=eq.${track.id}`)) as unknown[];
   expect(jobs).toEqual([{ user_id: PRODUCER_ID }]);
   await rest(request, 'DELETE', `tracks?id=eq.${track.id}`);
+  removeLocalUpload(track.audio_url);
   await ctx.close();
 });

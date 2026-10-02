@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseOrgUploadTarget, uploadApiBase, uploadCompleteBody, uploadInitBody, type OrgUploadTarget } from './org-target';
+import { parseOrgUploadTarget, sameUploadTarget, uploadApiBase, uploadCompleteBody, uploadInitBody, type OrgUploadTarget } from './org-target';
 import { normalisePersistedItem } from './persisted-uploads';
 
 const ORG = '10000000-0000-4000-8000-000000000001';
@@ -40,5 +40,15 @@ describe('org uploads', () => {
     expect(normalisePersistedItem({ id: 'u1', fileName: 'a.wav', org })?.org).toEqual(org);
     expect(normalisePersistedItem({ id: 'u1', fileName: 'a.wav' })?.org).toBeNull();
     expect(normalisePersistedItem({ id: 'u1', fileName: 'a.wav', org: { orgId: 'nope' } })?.org).toBeNull();
+  });
+});
+
+describe('the duplicate check keeps two destinations apart', () => {
+  it('same file, same target → one upload; different targets → two', () => {
+    expect(sameUploadTarget(null, undefined)).toBe(true);
+    expect(sameUploadTarget(org, { ...org })).toBe(true);
+    expect(sameUploadTarget(org, null)).toBe(false);
+    expect(sameUploadTarget(org, { orgId: ORG, as: { kind: 'song', contactId: S1 } })).toBe(false);
+    expect(sameUploadTarget(org, { orgId: ORG, as: { kind: 'link', songId: S1, relation: 'master' } })).toBe(false);
   });
 });

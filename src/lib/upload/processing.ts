@@ -160,10 +160,9 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
 }> {
   const admin = createServiceClient();
   try {
-    // Where the derived files go is the ONE thing an org track changes here
-    // (LABEL-14, D8): an org recording's preview and peaks go to the private
-    // bucket under orgs/<org>/, a producer track's to the public one exactly
-    // as before. Read from the row, not inferred from the key, and a failed
+    // An org track changes two things here (LABEL-14, D8): its preview and
+    // peaks go to the private bucket under orgs/<org>/ (a producer track's to
+    // the public one exactly as before), and its bytes never go to AudD. Read from the row, not inferred from the key, and a failed
     // read fails the job (retried) rather than defaulting to public.
     const orgId = await trackOrgId(admin, job.track_id);
     const audioBuffer = await readStoredObject(job.audio_url);
@@ -182,7 +181,9 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
 
     let audd = { danceability: 0, energy: 0, valence: 0, acousticness: 0, tempo: 0 };
     try {
-      audd = await getAuddFeatures(audioBuffer, job.file_name);
+      // AudD is a third-party service: an unreleased org recording is never
+      // sent to it (D8). Its features stay at the same zeros a failure gives.
+      if (!orgId) audd = await getAuddFeatures(audioBuffer, job.file_name);
     } catch (err) {
       console.warn('Upload processing AudD failed:', err);
     }

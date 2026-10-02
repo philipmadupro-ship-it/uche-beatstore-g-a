@@ -63,6 +63,8 @@ export function OrgUploadPanel({ orgId, artists }: { orgId: string; artists: { i
   const pickArtist = (id: string) => {
     setPicked(id);
     setSongId('');
+    // Re-picking an artist whose list failed tries again.
+    setSongsBy((m) => (m[id] === 'failed' ? Object.fromEntries(Object.entries(m).filter(([k]) => k !== id)) : m));
   };
 
   const intent = orgUploadIntentFor({ contactId: contactId || null, mode, songId: songId || null });
@@ -78,6 +80,8 @@ export function OrgUploadPanel({ orgId, artists }: { orgId: string; artists: { i
     const type = orgUploadTrackFields(intent).type;
     for (const file of Array.from(files)) enqueue(file, { org: { orgId, as: intent }, type });
     setQueued(files.length);
+    // New songs become targets once they land: refetch on the next "Add to song as…".
+    setSongsBy({});
     if (fileInput.current) fileInput.current.value = '';
   }
 

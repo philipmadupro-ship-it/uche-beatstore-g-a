@@ -35,7 +35,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { createServiceClient, requireRowOwnership, requireUser } from '@/lib/auth/ownership';
+import { ORG_SCOPED_TABLES, createServiceClient, requireRowOwnership, requireUser } from '@/lib/auth/ownership';
 import {
   isSupabaseConfigured,
   getAll,
@@ -211,6 +211,8 @@ export async function scopedList<T = unknown>(
     } else {
       q = q.eq('user_id', user.id);
     }
+    // An org row carries its uploader's user_id; it is never the producer's (LABEL-14).
+    if (ORG_SCOPED_TABLES.has(table)) q = q.is('org_id', null);
   }
   if (extraEq) {
     for (const [k, v] of Object.entries(extraEq)) {

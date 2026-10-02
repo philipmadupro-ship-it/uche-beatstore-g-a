@@ -21,7 +21,7 @@ import {
   findLiveDuplicate, bytesFromParts, displayedBytes, computeSpeedBps,
   computeEtaSec, backoffMs, isRetriableStatus,
 } from './progress';
-import { uploadApiBase, uploadCompleteBody, uploadInitBody, type OrgUploadTarget } from './org-target';
+import { sameUploadTarget, uploadApiBase, uploadCompleteBody, uploadInitBody, type OrgUploadTarget } from './org-target';
 
 type UploadAnalysis = {
   bpm?: number | null;
@@ -436,7 +436,8 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
     // dropping the same file twice, used to produce two R2 objects and two
     // track rows the producer then had to delete by hand.
     const existing = findLiveDuplicate(
-      get().order.map((x) => get().uploads[x]).filter(Boolean),
+      // Only an upload to the same destination is the same upload (LABEL-14).
+      get().order.map((x) => get().uploads[x]).filter((u) => u && sameUploadTarget(u.org, opts.org)),
       { fileName: file.name, fileSize: file.size, fileLastModified: file.lastModified },
     );
     if (existing) {

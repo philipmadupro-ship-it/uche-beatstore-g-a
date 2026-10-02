@@ -39,7 +39,8 @@ function chain(table: string) {
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/auth/ownership', () => ({ createServiceClient: () => ({ from: (t: string) => chain(t) }) }));
 vi.mock('@/lib/audio/analyze.server', () => ({ analyzeAudio: vi.fn(async () => ({ bpm: null, key: null, scale: null, loudness: null, duration: 200 })) }));
-vi.mock('@/lib/audio/audd', () => ({ getAuddFeatures: vi.fn(async () => ({ danceability: 0, energy: 0, valence: 0, acousticness: 0, tempo: 0 })) }));
+const audd = vi.hoisted(() => ({ getAuddFeatures: vi.fn(async () => ({ danceability: 0, energy: 0, valence: 0, acousticness: 0, tempo: 0 })) }));
+vi.mock('@/lib/audio/audd', () => audd);
 vi.mock('@/lib/audio/peaks', () => ({ extractPeaks: vi.fn(async () => [0, 1, 0]) }));
 const storage = vi.hoisted(() => ({
   readStoredObject: vi.fn(async () => Buffer.from('RIFFxxxxWAVEdata')),
@@ -67,6 +68,7 @@ beforeEach(() => {
   trackOrg = null;
   trackOrgError = null;
   for (const fn of Object.values(storage)) fn.mockClear();
+  audd.getAuddFeatures.mockClear();
 });
 
 describe('processing: where an upload\'s derived files go', () => {
@@ -78,6 +80,8 @@ describe('processing: where an upload\'s derived files go', () => {
     expect(storage.uploadOrgPeaks).toHaveBeenCalledWith('o1', '[0,1,0]');
     expect(storage.uploadPublicPreview).not.toHaveBeenCalled();
     expect(storage.uploadPeaksSidecar).not.toHaveBeenCalled();
+    // Never sent to the third-party analyser (D8).
+    expect(audd.getAuddFeatures).not.toHaveBeenCalled();
     const patch = trackUpdate()?.ops[0][1] as Record<string, unknown>;
     expect(patch).toMatchObject({
       preview_url: 'r2://masters/orgs/o1/previews/c.mp3',
@@ -93,6 +97,7 @@ describe('processing: where an upload\'s derived files go', () => {
     expect(storage.uploadPeaksSidecar).toHaveBeenCalled();
     expect(storage.uploadOrgPreview).not.toHaveBeenCalled();
     expect(storage.uploadOrgPeaks).not.toHaveBeenCalled();
+    expect(audd.getAuddFeatures).toHaveBeenCalledTimes(1);
     expect(trackUpdate()?.ops[0][1]).toMatchObject({ preview_url: 'https://pub.example/previews/x.mp3' });
   });
 
