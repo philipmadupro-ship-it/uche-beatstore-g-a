@@ -772,7 +772,16 @@ Revert.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-11, LABEL-12, LABEL-13 (D8 decided: private until released)
-**Status:** In Review (branch label-os/LABEL-14). Migration 142 (`project_tracks` same-owner/same-org trigger), not applied.
+**Status:** Done (2026-10-02) — PR #70. Migration 142, not applied. It adds the `project_tracks` same-owner/same-org trigger and the ownerless-org-row constraints.
+
+**Orchestrator decision (2026-10-02, on #70): org rows carry no `user_id`.** This is the same rule 139 set for org contacts (`contacts_org_or_owner`). The uploader is recorded in `created_by`, and org writes set `user_id` NULL.
+- **Why:** every producer route filters on `user_id`, so NULL makes an org row unreachable to all of them, including hand-written queries (search, analytics, store-editor beats, bulk routes, `/api/audio`). That beats an `org_id IS NULL` pass over each query.
+- **Enforced by 142:**
+  - `projects_org_or_owner ((org_id IS NULL) = (user_id IS NOT NULL))`;
+  - `tracks_org_or_owner (org_id IS NULL OR user_id IS NULL)` (legacy NULL-owner producer tracks stay legal);
+  - `track_links.user_id` is nullable, and its trigger's org path requires NULL.
+- **Defence in depth:** `requireRowOwnership` and `scopedList` exclude org rows.
+- **Applied migrations:** 049 / 050 / 053's orphan backfills skip org rows on replay. The edit is file-only and a no-op on production (same pattern as 111 in LABEL-10).
 
 ## Objective
 Upload audio into an org as a song, or as material linked to a song, with previews that are not publicly addressable.
@@ -835,7 +844,7 @@ Revert the wrapper. Org rows remain and are harmless.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-10, LABEL-11
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-15)
 
 ## Objective
 Artwork, photos, video, documents and contracts as org assets, by extending `main`'s `project_assets` (`17` R2). **No new `files` table.**
@@ -877,6 +886,14 @@ Route tests; existing assets tests stay green.
 
 ## Carried from LABEL-13 (#69)
 - `track_stem_files` (mig 080) and older `track_versions` snapshots are not addressable through the org audio route, and `track_stem_files` has no `org_member_guard` in 141. Before any org surface lists stem files or versions, add the guard and the service-only write trigger to `track_stem_files` (same shape as 141 §3b/§3c, next free migration), and extend the audio route's variants if needed.
+
+## Carried from LABEL-14 (#70)
+- **Ownerless org rows.** An org `project_assets` row has `user_id` NULL, and the uploader goes in a created_by-style column. In this task's migration (143):
+  - make `project_assets.user_id` nullable;
+  - add a CHECK or trigger so that an org asset has no `user_id` and a producer asset must have one (the asset's project decides);
+  - have the 127 same-owner trigger's org path require NULL.
+- Files go to the private bucket under `orgs/<org>/assets/…`, following `lib/storage/org-media.ts` / `org-upload.ts`. Never the public fallback.
+- `upload_processing_jobs.user_id` is still the uploader for org uploads. Nothing producer-facing lists jobs, so leave it.
 
 ## Out of Scope
 Thumbnails / image processing.
@@ -986,6 +1003,15 @@ jsdom tests for the capability-filtered tabs; Playwright spec; existing artist-w
 - The org roster page (`/o/[orgSlug]/artists`) renders `ArtistsCardView` with `linkFor` returning null, because there is no org artist workspace yet. When this task builds it, point `linkFor` at it.
 - Org contacts deliberately take no `notes` / `crm_status`: those are the CRM's private fields, and a roster artist reads their own contact (D5). If the workspace needs internal notes about an artist, store them separately with visibility (business-internal vs artist-visible). Never put them on the contact row.
 - An artist org's "exactly one roster artist" rule is checked only in the route. A DB guard is optional.
+
+## Carried from LABEL-14 (#70)
+- **Ownerless org rows.** The first org writes to `project_contacts`, `artist_portals`, `song_beats`, `artist_messages`, `contact_track_states` and `project_comments` follow the rule set on #70:
+  - nullable `user_id`, NULL on org rows;
+  - the same-owner trigger's org path requires NULL;
+  - a CHECK or trigger keeps producer rows owned.
+  This needs one migration (next free number).
+- **No org UI lists songs yet.** The upload panel's "Add to song as…" uses `/api/org/[orgId]/upload/targets`, which is narrowed by the project path. The song list and song detail built here should reuse that scope rule.
+- The `complete` rollback leaves a newly created Inbox project in place. That is deliberate: the next upload reuses it.
 
 ## Out of Scope
 Reviews, credits, direction tabs (later tasks).
