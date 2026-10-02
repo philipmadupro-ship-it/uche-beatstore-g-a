@@ -26,6 +26,7 @@ const FIN = '20000000-0000-4000-8000-000000000005';
 const X = '20000000-0000-4000-8000-000000000006';
 const AOWN = '20000000-0000-4000-8000-000000000007';
 const AMGR = '20000000-0000-4000-8000-000000000008';
+const MK = '20000000-0000-4000-8000-000000000009';
 const AENG = '30000000-0000-4000-8000-0000000000e5';
 const PRODUCER = '20000000-0000-4000-8000-0000000000aa';
 const C1 = '30000000-0000-4000-8000-0000000000c1';
@@ -50,7 +51,7 @@ function contact(id: string, org: string | null, name: string, extra: Record<str
   return {
     id, org_id: org, user_id: org ? null : PRODUCER, name, email: `${name.toLowerCase()}@test.dev`,
     phone: null, role: null, label: null, category: 'artist', secondary_category: null, genre: null, country: null,
-    city: null, instagram: null, twitter: null, website: null, notes: null, crm_status: null, avatar_url: null,
+    city: null, instagram: null, twitter: null, website: null, avatar_url: null, notes: null, crm_status: null,
     created_at: '2026-10-01T00:00:00Z', ...extra,
   };
 }
@@ -76,12 +77,14 @@ beforeEach(() => {
         member(L, SC, 'member', ['a_and_r'], 'artists'),
         member(L, ART, 'artist', [], 'artists'),
         member(L, FIN, 'member', ['finance']),
+        member(L, MK, 'member', ['marketing'], 'artists'),
         member(L2, X, 'owner'),
         member(A, AOWN, 'owner'),
         member(A, AMGR, 'member', ['artist_manager'], 'artists'),
       ],
       member_artist_scopes: [
         { org_id: L, user_id: SC, contact_id: C1 },
+        { org_id: L, user_id: MK, contact_id: C1 },
         { org_id: A, user_id: AMGR, contact_id: AENG },
       ],
       contacts: [
@@ -186,6 +189,13 @@ describe('GET /contacts/[id]: 404 outside org and scope', () => {
     expect((await call(ART, 'GET', L, C1)).status).toBe(404);
   });
 
+  it('scope is checked before the capability, so a 403 never confirms an out-of-scope id exists', async () => {
+    // Marketing reads the catalogue but may not write it.
+    expect((await call(MK, 'PATCH', L, C2, { city: 'x' })).status).toBe(404);
+    expect((await call(MK, 'PATCH', L, '30000000-0000-4000-8000-0000000000ff', { city: 'x' })).status).toBe(404);
+    expect((await call(MK, 'PATCH', L, C1, { city: 'x' })).status).toBe(403);
+  });
+
   it("a producer CRM contact (org_id IS NULL) is 404 even to an org owner", async () => {
     expect((await call(OWN, 'GET', L, PC1)).status).toBe(404);
   });
@@ -226,6 +236,18 @@ describe('POST /contacts', () => {
     expect((await call(AR, 'POST', L, undefined, { name: 'x', user_id: PRODUCER })).status).toBe(400);
   });
 
+  it("refuses the CRM's private notes / crm_status: the roster artist reads their own contact (D5)", async () => {
+    expect((await call(AR, 'POST', L, undefined, { name: 'x', notes: 'renegotiate at 12%' })).status).toBe(400);
+    expect((await call(AR, 'PATCH', L, C1, { notes: 'difficult' })).status).toBe(400);
+    expect((await call(AR, 'PATCH', L, C1, { crm_status: 'cold' })).status).toBe(400);
+    db.tables.contacts.find((c) => c.id === C1)!.notes = 'set by hand';
+    const seen = await call(ART, 'GET', L, undefined, undefined, '');
+    expect(JSON.stringify(seen.json)).not.toContain('set by hand');
+    const own = await call(OWN, 'GET', L, C1);
+    expect(own.json.contact).not.toHaveProperty('notes');
+    expect(own.json.contact).not.toHaveProperty('crm_status');
+  });
+
   it('403 for an artists-scoped member (they could not see what they add) and without catalog.write', async () => {
     expect((await call(SC, 'POST', L, undefined, { name: 'x' })).status).toBe(403);
     expect((await call(ART, 'POST', L, undefined, { name: 'x' })).status).toBe(403);
@@ -241,12 +263,12 @@ describe('POST /contacts', () => {
 
 describe('PATCH /contacts/[id]', () => {
   it('edits within scope, 404 outside it and across orgs', async () => {
-    expect((await call(SC, 'PATCH', L, C1, { notes: 'hi' })).status).toBe(200);
-    expect((await call(SC, 'PATCH', L, C2, { notes: 'hi' })).status).toBe(404);
-    expect((await call(OWN, 'PATCH', L, D1, { notes: 'hi' })).status).toBe(404);
-    expect((await call(OWN, 'PATCH', L, PC1, { notes: 'hi' })).status).toBe(404);
-    expect(db.tables.contacts.find((c) => c.id === PC1)!.notes).toBeNull();
-    expect(db.tables.contacts.find((c) => c.id === D1)!.notes).toBeNull();
+    expect((await call(SC, 'PATCH', L, C1, { city: 'Lagos' })).status).toBe(200);
+    expect((await call(SC, 'PATCH', L, C2, { city: 'Lagos' })).status).toBe(404);
+    expect((await call(OWN, 'PATCH', L, D1, { city: 'Lagos' })).status).toBe(404);
+    expect((await call(OWN, 'PATCH', L, PC1, { city: 'Lagos' })).status).toBe(404);
+    expect(db.tables.contacts.find((c) => c.id === PC1)!.city).toBeNull();
+    expect(db.tables.contacts.find((c) => c.id === D1)!.city).toBeNull();
   });
 
   it('400 for an empty patch; 409 for a duplicate email', async () => {
@@ -258,7 +280,7 @@ describe('PATCH /contacts/[id]', () => {
     // AMGR sees only the engineer, not the org's artist; turning the
     // engineer into an artist would still make two.
     expect((await call(AMGR, 'PATCH', A, AENG, { category: 'artist' })).status).toBe(409);
-    expect((await call(AMGR, 'PATCH', A, AENG, { notes: 'mixes' })).status).toBe(200);
+    expect((await call(AMGR, 'PATCH', A, AENG, { genre: 'house' })).status).toBe(200);
   });
 
   it("an artist org's artist cannot stop being its artist", async () => {
@@ -290,7 +312,7 @@ describe('/members/artists: the roster picker', () => {
     expect(names(await call(SC, 'GET', L))).toEqual(['Kilo']);
     expect((await call(SC, 'GET', L, C1)).status).toBe(404);
     expect(db.tables.activity_events).toMatchObject([
-      { verb: 'member.artists_changed', audit: true, subject_id: SC, payload: { from: [C1], to: [C2] } },
+      { verb: 'member.artists_changed', audit: true, subject_id: SC, payload: { added: [C2], removed: [C1], count: 1 } },
     ]);
   });
 
@@ -299,12 +321,15 @@ describe('/members/artists: the roster picker', () => {
     expect(names(await call(SC, 'GET', L))).toEqual([]);
   });
 
-  it("refuses another org's contact, a producer contact, and a member who sees the whole org", async () => {
-    const foreign = await artists(OWN, 'PUT', L, { user_id: SC, contact_ids: [C1, D1, PC1] });
+  it("refuses another org's contact, a producer contact, a directory entry who is not an artist, and a member who sees the whole org", async () => {
+    const ENG = '30000000-0000-4000-8000-0000000000e9';
+    db.tables.contacts.push(contact(ENG, L, 'Mixer', { category: 'engineer' }));
+    const foreign = await artists(OWN, 'PUT', L, { user_id: SC, contact_ids: [C1, D1, PC1, ENG] });
     expect(foreign.status).toBe(400);
-    expect((foreign.json.contact_ids as string[]).sort()).toEqual([D1, PC1].sort());
+    expect((foreign.json.contact_ids as string[]).sort()).toEqual([D1, PC1, ENG].sort());
+    expect((await artists(OWN, 'PUT', L, { user_id: SC, contact_ids: Array.from({ length: 151 }, (_, i) => `30000000-0000-4000-8000-${String(i).padStart(12, '0')}`) })).status).toBe(400);
     expect((await artists(OWN, 'PUT', L, { user_id: AR, contact_ids: [C1] })).status).toBe(400);
-    expect(db.tables.member_artist_scopes.filter((r) => r.org_id === L)).toEqual([{ org_id: L, user_id: SC, contact_id: C1 }]);
+    expect(db.tables.member_artist_scopes.filter((r) => r.user_id === SC)).toEqual([{ org_id: L, user_id: SC, contact_id: C1 }]);
   });
 
   it('needs members.manage to change; a member of another org is refused', async () => {

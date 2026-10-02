@@ -61,9 +61,9 @@ export function artistOrgRemovalError(kind: OrgKind, contact: RoleInput): string
  * decisions yet (LABEL-12 onwards gives those tables an org), so the card
  * honestly reads "New" with nothing moving, rather than inventing activity.
  */
-export function rosterSummary(c: { id: string; name: string; avatar_url: string | null; crm_status: string | null }): ArtistSummary {
+export function rosterSummary(c: { id: string; name: string; avatar_url: string | null; crm_status?: string | null }): ArtistSummary {
   return summarizeArtist({
-    contact: c,
+    contact: { id: c.id, name: c.name, avatar_url: c.avatar_url, crm_status: c.crm_status ?? null },
     links: [],
     projects: [],
     portal: null,

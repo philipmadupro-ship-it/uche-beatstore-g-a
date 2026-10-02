@@ -82,6 +82,7 @@ vi.mock('@/lib/auth/org-access', () => {
     scopedOrgQuery: scoped,
     memberArtistScopeQuery: (a: { from: (t: string) => { select: (c: string) => { eq: (k: string, v: string) => { eq: (k: string, v: string) => unknown } } } }, ctx: { orgId: string }, userId: string) => ({
       select: () => a.from('member_artist_scopes').select('contact_id').eq('org_id', ctx.orgId).eq('user_id', userId),
+      list: async () => [...scopeRows].sort(),
       replace: async (ids: string[]) => {
         replaced.push(ids);
         return { error: null };

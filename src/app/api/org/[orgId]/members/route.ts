@@ -135,9 +135,7 @@ async function ownerCount(access: OrgAccessOk): Promise<number> {
 /** A member's artist scope list, or [] for one who sees the whole org. */
 async function scopeListOf(access: OrgAccessOk, row: MemberRow): Promise<string[]> {
   if (toArtistScope(row.role, row.scope, []) === null) return [];
-  const { data, error } = await memberArtistScopeQuery(access.admin, access, row.user_id).select();
-  if (error) throw new Error(error.message);
-  return ((data ?? []) as { contact_id: string }[]).map((r) => r.contact_id.toLowerCase()).sort();
+  return memberArtistScopeQuery(access.admin, access, row.user_id).list();
 }
 
 async function readMember(access: OrgAccessOk, userId: string): Promise<MemberRow | null> {

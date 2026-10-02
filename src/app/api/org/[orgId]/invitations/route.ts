@@ -9,7 +9,7 @@
  *  - Only the roles and functions this org's KIND offers can be invited
  *    (06 §2.4b); anything else is 400. `owner` is never invitable.
  *  - `contact_ids` (the roster artists a member is limited to) must all be
- *    contacts of THIS org (LABEL-10); anything else is 400.
+ *    on THIS org's roster (LABEL-10); anything else is 400.
  *  - The email is normalised (lib/contacts/email.ts). A second pending
  *    invitation to the same address is 409: revoke the first, then invite.
  *  - 32 random bytes; only their sha-256 is stored. The token leaves this
@@ -27,7 +27,7 @@ import { errorMessage } from '@/lib/errors';
 import { recordEvent } from '@/lib/labelos/activity';
 import { inviterDisplayName, sendInvitationEmail } from '@/lib/labelos/invitation-email';
 import { INVITATION_TTL_MS, newInvitationToken, validateInvitationGrant } from '@/lib/labelos/invitations';
-import { missingOrgContacts } from '@/lib/labelos/org-contacts';
+import { missingRosterContacts } from '@/lib/labelos/org-contacts';
 import { createLogger } from '@/lib/log';
 import { rateLimitDurable } from '@/lib/security/rate-limit';
 import { readBody } from '@/lib/validate';
@@ -101,9 +101,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   const { admin } = access;
 
   try {
-    const missing = await missingOrgContacts(admin, access, grant.contactIds);
+    const missing = await missingRosterContacts(admin, access, grant.contactIds);
     if (missing.length > 0) {
-      return NextResponse.json({ error: 'Some artists are not in this organization', contact_ids: missing }, { status: 400 });
+      return NextResponse.json({ error: 'Some of these are not artists in this organization', contact_ids: missing }, { status: 400 });
     }
 
     const pendingFor = () =>

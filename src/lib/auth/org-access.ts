@@ -315,7 +315,6 @@ export async function requireObjectAccess(opts: {
 
   const access = await memberContext(userId, rowOrg, NOT_FOUND);
   if (!access.ok) return access;
-  if (!access.capabilities.has(cap)) return FORBIDDEN();
 
   const key = (col: string | null) => {
     const v = col ? row[col] : null;
@@ -328,7 +327,10 @@ export async function requireObjectAccess(opts: {
     contactId: key(cols.contact),
     projectId: key(cols.project),
   };
+  // Scope before capability: an object outside the member's artists is 404
+  // whatever they may do, so a 403 never confirms that it exists.
   if (!artistScopeAllows(access, object)) return NOT_FOUND();
+  if (!access.capabilities.has(cap)) return FORBIDDEN();
   return { ...access, object };
 }
 
@@ -398,8 +400,15 @@ export function memberRowQuery(admin: AdminClient, ctx: OrgAccessOk, userId: str
 export function memberArtistScopeQuery(admin: AdminClient, ctx: OrgAccessOk, userId: string) {
   if (!isUUID(userId)) throw new Error('memberArtistScopeQuery: userId is not a uuid');
   const rows = () => admin.from('member_artist_scopes');
+  const select = () => rows().select('contact_id').eq('org_id', ctx.orgId).eq('user_id', userId);
   return {
-    select: () => rows().select('contact_id').eq('org_id', ctx.orgId).eq('user_id', userId),
+    select,
+    /** The list as sorted, lower-cased ids. Throws on a database error. */
+    list: async (): Promise<string[]> => {
+      const { data, error } = await select();
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as { contact_id: string }[]).map((r) => r.contact_id.toLowerCase()).sort();
+    },
     /**
      * Make the list exactly `contactIds`. Drops what is not wanted FIRST, then
      * adds what is missing: a failure between the two leaves the member with

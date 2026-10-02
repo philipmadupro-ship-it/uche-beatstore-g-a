@@ -861,7 +861,8 @@ export type TrackLinkBody = z.infer<typeof TrackLinkBodySchema>;
  * POST /api/org/[orgId]/invitations. Which roles and functions are allowed is
  * decided per org kind by `validateInvitationGrant` (lib/labelos/invitations),
  * so here they are only bounded strings. `contact_ids` are the roster artists
- * (contacts, 17 R3) the member is limited to; the route checks they are contacts of that org.
+ * (contacts, 17 R3) the member is limited to; the route checks they are on
+ * that org's roster.
  */
 export const OrgInvitationCreateBodySchema = z.object({
   email: z.string().trim().email('Enter a valid email address').max(200),
@@ -913,12 +914,16 @@ export type OrgMemberPatchBody = z.infer<typeof OrgMemberPatchBodySchema>;
 
 /**
  * POST / PATCH /api/org/[orgId]/contacts[/id]: an org's own people directory
- * (17 R3, Q2). The same field list as the producer's contacts, so the two
- * cannot drift; `org_id` and `user_id` are never accepted from the body.
+ * (17 R3, Q2). The producer's field list, so the two cannot drift — minus
+ * `notes` and `crm_status`, the CRM's private fields: an org contact is read
+ * by every member in scope, including the roster artist it describes (role
+ * `artist`, D5), so it must not hold business-internal notes. `org_id` and
+ * `user_id` are never accepted from the body.
  */
-export const OrgContactCreateBodySchema = ContactCreateBodySchema;
-export type OrgContactCreateBody = ContactCreateBody;
-export const OrgContactPatchBodySchema = ContactPatchBodySchema.refine(
+const ORG_CONTACT_PRIVATE = { notes: true, crm_status: true } as const;
+export const OrgContactCreateBodySchema = ContactCreateBodySchema.omit(ORG_CONTACT_PRIVATE);
+export type OrgContactCreateBody = z.infer<typeof OrgContactCreateBodySchema>;
+export const OrgContactPatchBodySchema = ContactPatchBodySchema.omit(ORG_CONTACT_PRIVATE).refine(
   (b) => Object.keys(b).length > 0,
   { message: 'Nothing to change' },
 );
@@ -927,10 +932,13 @@ export type OrgContactPatchBody = z.infer<typeof OrgContactPatchBodySchema>;
 /**
  * PUT /api/org/[orgId]/members/artists: the roster contacts an
  * artists-scoped member sees (member_artist_scopes), replaced as a whole.
- * An empty list is allowed and means "sees nothing".
+ * An empty list is allowed and means "sees nothing". At most 150: past that
+ * a member should see the whole org, and the list must fit in the audit
+ * event (16 KB) and in a PostgREST `in.(…)` filter.
  */
+export const ORG_MEMBER_ARTISTS_MAX = 150;
 export const OrgMemberArtistsBodySchema = z.object({
   user_id: z.string().uuid(),
-  contact_ids: z.array(z.string().uuid()).max(500),
+  contact_ids: z.array(z.string().uuid()).max(ORG_MEMBER_ARTISTS_MAX),
 }).strict();
 export type OrgMemberArtistsBody = z.infer<typeof OrgMemberArtistsBodySchema>;

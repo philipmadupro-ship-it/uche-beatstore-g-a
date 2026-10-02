@@ -82,7 +82,7 @@ function answer(chain: Chain): Answer {
   if (chain.table === 'contacts') {
     expect(eqs(chain)).toEqual({ org_id: ORG });
     const asked = (opOf(chain, 'in')?.args[1] ?? []) as string[];
-    return { data: asked.filter((id) => orgContacts.includes(id)).map((id) => ({ id })), error: null };
+    return { data: asked.filter((id) => orgContacts.includes(id)).map((id) => ({ id, category: 'artist', secondary_category: null })), error: null };
   }
   if (chain.table === 'organizations') return { data: { name: 'Night Shift' }, error: null };
   if (chain.table === 'org_invitations') {

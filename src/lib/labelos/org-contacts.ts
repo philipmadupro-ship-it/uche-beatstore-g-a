@@ -18,9 +18,14 @@ import { contactGroups, type RoleGroup } from '@/lib/contacts/roles';
 import { isUUID } from '@/lib/validate';
 import { isRosterContact, NO_WORKSPACE } from './roster';
 
-/** Everything a member sees of an org contact. Never `user_id` (always null). */
+/**
+ * Everything a member sees of an org contact. Never `user_id` (always null),
+ * and never the producer CRM's private `notes` / `crm_status`: org contacts
+ * do not take them (OrgContact*BodySchema), because the roster artist a
+ * contact describes reads it too (D5).
+ */
 export const ORG_CONTACT_COLUMNS =
-  'id, name, email, phone, role, label, category, secondary_category, genre, country, city, instagram, twitter, website, notes, crm_status, avatar_url, created_at';
+  'id, name, email, phone, role, label, category, secondary_category, genre, country, city, instagram, twitter, website, avatar_url, created_at';
 
 export type OrgContactRow = {
   id: string;
@@ -37,8 +42,6 @@ export type OrgContactRow = {
   instagram: string | null;
   twitter: string | null;
   website: string | null;
-  notes: string | null;
-  crm_status: string | null;
   avatar_url: string | null;
   created_at: string;
 };
@@ -76,17 +79,21 @@ export function isDuplicateEmail(error: { code?: string; message?: string } | nu
 export const DUPLICATE_EMAIL = 'Someone with this email is already in the directory.';
 
 /**
- * Which of `ids` are NOT contacts of the context's org (within its scope).
- * For validating a list a request names — invitation contact_ids, a
- * member's artist scope — before writing it. Throws on a database error.
+ * Which of `ids` are NOT on the context's org roster (within its scope):
+ * another org's contact, a producer contact, an unknown id, or a directory
+ * entry who is not an artist. For validating an artist list a request names
+ * — invitation contact_ids, a member's artist scope — before writing it, so
+ * a member is never limited to someone the roster picker cannot show.
+ * Throws on a database error.
  */
-export async function missingOrgContacts(admin: AdminClient, ctx: OrgContext, ids: readonly string[]): Promise<string[]> {
+export async function missingRosterContacts(admin: AdminClient, ctx: OrgContext, ids: readonly string[]): Promise<string[]> {
   const wanted = [...new Set(ids.map((id) => id.toLowerCase()))];
   if (wanted.length === 0) return [];
   if (wanted.some((id) => !isUUID(id))) return wanted.filter((id) => !isUUID(id));
-  const { data, error } = await scopedOrgQuery(admin, 'contacts', ctx, 'id').in('id', wanted);
+  const { data, error } = await scopedOrgQuery(admin, 'contacts', ctx, 'id, category, secondary_category').in('id', wanted);
   if (error) throw new Error(error.message);
-  const found = new Set(((data ?? []) as unknown as { id: string }[]).map((r) => r.id.toLowerCase()));
+  const rows = (data ?? []) as unknown as { id: string; category: string | null; secondary_category: string | null }[];
+  const found = new Set(rows.filter((r) => isRosterContact(r, NO_WORKSPACE)).map((r) => r.id.toLowerCase()));
   return wanted.filter((id) => !found.has(id));
 }
 

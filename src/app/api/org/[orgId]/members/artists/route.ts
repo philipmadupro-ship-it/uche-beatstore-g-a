@@ -7,9 +7,9 @@
  *                  someone else's needs `members.manage` (139's RLS: the
  *                  same rule).
  *  PUT  { user_id, contact_ids }  capability `members.manage`. Replaces the
- *       list. Only for a member who is limited to some artists (role
- *       `artist`, or scope `artists` — change the scope with PATCH
- *       /members first); every id must be a contact of THIS org. An empty
+ *       list (at most 150). Only for a member who is limited to some artists
+ *       (role `artist`, or scope `artists` — change the scope with PATCH
+ *       /members first); every id must be on THIS org's roster. An empty
  *       list is allowed: the member then sees nothing. Audited as
  *       `member.artists_changed`; if the event cannot be written the list
  *       is put back and the request fails.
@@ -29,7 +29,7 @@ import { OrgMemberArtistsBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { recordEvent } from '@/lib/labelos/activity';
 import { toArtistScope } from '@/lib/labelos/artist-scope';
-import { missingOrgContacts } from '@/lib/labelos/org-contacts';
+import { missingRosterContacts } from '@/lib/labelos/org-contacts';
 import { createLogger } from '@/lib/log';
 import { isUUID, readBody } from '@/lib/validate';
 
@@ -41,12 +41,6 @@ async function readMember(access: OrgAccessOk, userId: string): Promise<MemberRo
   const { data, error } = await memberRowQuery(access.admin, access, userId).select('role, scope').maybeSingle();
   if (error) throw new Error(error.message);
   return data as MemberRow | null;
-}
-
-async function readList(access: OrgAccessOk, userId: string): Promise<string[]> {
-  const { data, error } = await memberArtistScopeQuery(access.admin, access, userId).select();
-  if (error) throw new Error(error.message);
-  return ((data ?? []) as { contact_id: string }[]).map((r) => r.contact_id.toLowerCase()).sort();
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
@@ -63,7 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ orgI
     if (!member) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const scoped = toArtistScope(member.role, member.scope, []) !== null;
     return NextResponse.json(
-      { user_id: userId, scoped, contact_ids: scoped ? await readList(access, userId) : [] },
+      { user_id: userId, scoped, contact_ids: scoped ? await memberArtistScopeQuery(access.admin, access, userId).list() : [] },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (err) {
@@ -92,17 +86,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ orgI
       );
     }
 
-    const missing = await missingOrgContacts(access.admin, access, wanted);
+    const missing = await missingRosterContacts(access.admin, access, wanted);
     if (missing.length > 0) {
-      return NextResponse.json({ error: 'Some artists are not in this organization', contact_ids: missing }, { status: 400 });
+      return NextResponse.json({ error: 'Some of these are not artists in this organization', contact_ids: missing }, { status: 400 });
     }
 
-    const before = await readList(access, userId);
+    const scopes = memberArtistScopeQuery(access.admin, access, userId);
+    const before = await scopes.list();
     if (before.length === wanted.length && before.every((id, i) => id === wanted[i])) {
       return NextResponse.json({ user_id: userId, scoped: true, contact_ids: before });
     }
 
-    const scopes = memberArtistScopeQuery(access.admin, access, userId);
     const { error: writeErr } = await scopes.replace(wanted);
     if (writeErr) {
       // replace() fails narrow; put the old list back rather than leave a
@@ -118,7 +112,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ orgI
         { orgId: access.orgId, userId: access.userId },
         'member.artists_changed',
         { type: 'member', id: userId },
-        { from: before, to: wanted },
+        // The change, not both whole lists: it stays small however long the
+        // list is (recordEvent caps payloads at 16 KB).
+        {
+          added: wanted.filter((id) => !before.includes(id)),
+          removed: before.filter((id) => !wanted.includes(id)),
+          count: wanted.length,
+        },
       );
     } catch (err) {
       // A scope change nobody can account for must not stand.

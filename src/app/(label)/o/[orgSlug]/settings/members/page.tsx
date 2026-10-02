@@ -69,6 +69,8 @@ type Member = {
 };
 
 type RosterEntry = { id: string; name: string };
+/** null while loading; 'failed' when the roster could not be read. */
+type Roster = RosterEntry[] | null | 'failed';
 
 type Invitation = {
   id: string;
@@ -110,7 +112,7 @@ export default function OrgMembersPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [roster, setRoster] = useState<RosterEntry[] | null>(null);
+  const [roster, setRoster] = useState<Roster>(null);
 
   const orgId = shell?.org.id ?? '';
   const manage = shell?.can('members.manage') ?? false;
@@ -123,7 +125,8 @@ export default function OrgMembersPage() {
   }, [orgId, manage]);
 
   // The roster to pick from, for whoever may change a member's artists.
-  // Without catalog.read the route refuses; the picker then says so.
+  // A failed read (no catalog.read, a server error) is shown as such, never
+  // as an empty roster.
   useEffect(() => {
     if (!orgId || !manage) return;
     let alive = true;
@@ -134,7 +137,7 @@ export default function OrgMembersPage() {
         if (alive) setRoster(((body.contacts as RosterEntry[]) ?? []).map((c) => ({ id: c.id, name: c.name })));
       })
       .catch(() => {
-        if (alive) setRoster([]);
+        if (alive) setRoster('failed');
       });
     return () => {
       alive = false;
@@ -425,7 +428,7 @@ function MemberRow({
   actor: { userId: string; role: Role };
   ownerCount: number;
   busy: boolean;
-  roster: RosterEntry[] | null;
+  roster: Roster;
   onChange: (patch: Patch) => void;
   onArtists: (contactIds: string[]) => void;
   onRemove: () => void;
@@ -624,7 +627,7 @@ function ArtistsPopover({
   who,
 }: {
   member: Member;
-  roster: RosterEntry[] | null;
+  roster: Roster;
   busy: boolean;
   onArtists: (contactIds: string[]) => void;
   who: string;
@@ -661,6 +664,8 @@ function ArtistsPopover({
         </p>
         {roster === null ? (
           <p role="status" className="px-2 py-2 text-[11px] text-white/60">Loading the roster…</p>
+        ) : roster === 'failed' ? (
+          <p role="alert" className="px-2 py-2 text-[11px] text-[var(--error-text)]">Could not load the roster. Reload to try again.</p>
         ) : roster.length === 0 ? (
           <p className="px-2 py-2 text-[11px] text-white/60">This organization has no artists on its roster yet.</p>
         ) : (
