@@ -70,10 +70,22 @@ const NOT_AUTHENTICATED = () => fail(401, 'Not authenticated');
 const FORBIDDEN = () => fail(403, 'Forbidden');
 const NOT_FOUND = () => fail(404, 'Not found');
 
-async function sessionUserId(): Promise<string | null> {
+export type SessionIdentity = { userId: string; email: string | null };
+
+/**
+ * The signed-in caller, or null. For the one Label OS route a NON-member may
+ * reach (`/api/org/join`, LABEL-08), which authorises by invitation rather
+ * than membership. Every other route uses the require* helpers below.
+ */
+export async function sessionIdentity(): Promise<SessionIdentity | null> {
   const cookieClient = await createServerClient();
   const { data: { user } } = await cookieClient.auth.getUser();
-  return user?.id ?? null;
+  if (!user?.id) return null;
+  return { userId: user.id, email: typeof user.email === 'string' ? user.email : null };
+}
+
+async function sessionUserId(): Promise<string | null> {
+  return (await sessionIdentity())?.userId ?? null;
 }
 
 type MembershipRow = {
@@ -156,6 +168,27 @@ export async function requireOrgMember(orgId: string): Promise<OrgAccessResult> 
   if (!userId) return NOT_AUTHENTICATED();
   if (!isUUID(orgId)) return FORBIDDEN();
   return memberContext(userId, orgId, FORBIDDEN);
+}
+
+/**
+ * `userId`'s live membership of `orgId` (role + capabilities), or null when
+ * they are not a member, the org is gone, or the read fails. For
+ * `/api/org/join`, which runs for a caller who may not be a member of
+ * anything and also asks about a third person (the inviter), so the
+ * require* helpers — which answer for the session, with 403s — do not fit.
+ */
+export async function liveMembership(
+  admin: AdminClient,
+  orgId: string,
+  userId: string,
+): Promise<{ role: Role; capabilities: ReadonlySet<Capability> } | null> {
+  if (!isUUID(orgId) || !isUUID(userId)) return null;
+  try {
+    const m = await readMembership(admin, orgId, userId);
+    return m ? { role: m.role, capabilities: m.capabilities } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** requireOrgMember, plus the capability. 403 when the member lacks it. */

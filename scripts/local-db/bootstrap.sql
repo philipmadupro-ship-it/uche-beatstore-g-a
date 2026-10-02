@@ -14,10 +14,14 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS auth.users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email text,
+  -- Supabase sets this when the address is verified (magic link, OAuth,
+  -- confirmation email). Local users count as verified unless a check says not.
+  email_confirmed_at timestamptz DEFAULT now(),
   raw_user_meta_data jsonb DEFAULT '{}'::jsonb,
   raw_app_meta_data jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now()
 );
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS email_confirmed_at timestamptz DEFAULT now();
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
   SELECT nullif(current_setting('request.jwt.claims', true)::json->>'sub', '')::uuid
 $$;

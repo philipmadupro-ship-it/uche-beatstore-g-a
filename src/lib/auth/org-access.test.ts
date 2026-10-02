@@ -469,3 +469,40 @@ describe('membership edge cases', () => {
     if (r.ok) expect(r.scope).toBe('artists');
   });
 });
+
+describe('sessionIdentity', () => {
+  it('returns null without a session', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    const { sessionIdentity } = await load();
+    expect(await sessionIdentity()).toBeNull();
+  });
+
+  it('returns the id and email, and reads no table', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER, email: 'a@b.test' } } });
+    const { sessionIdentity } = await load();
+    expect(await sessionIdentity()).toEqual({ userId: USER, email: 'a@b.test' });
+    expect(calls).toEqual([]);
+  });
+
+  it('tolerates a user without an email', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER } } });
+    const { sessionIdentity } = await load();
+    expect(await sessionIdentity()).toEqual({ userId: USER, email: null });
+  });
+});
+
+describe('liveMembership', () => {
+  it('answers role + capabilities for a live membership, null otherwise (and on errors)', async () => {
+    const { liveMembership } = await load();
+    const { createServiceClient } = await import('./ownership');
+    const admin = createServiceClient();
+    memberships({ [ORG_A]: member({ role: 'admin' }), [ORG_B]: member({}, { deleted_at: '2026-01-01T00:00:00Z' }) });
+    const m = await liveMembership(admin, ORG_A, USER);
+    expect(m?.role).toBe('admin');
+    expect(m?.capabilities.has('members.manage')).toBe(true);
+    expect(await liveMembership(admin, ORG_B, USER)).toBeNull();
+    expect(await liveMembership(admin, 'nope', USER)).toBeNull();
+    answers.org_members = { data: null, error: { message: 'boom' } };
+    expect(await liveMembership(admin, ORG_A, USER)).toBeNull();
+  });
+});
