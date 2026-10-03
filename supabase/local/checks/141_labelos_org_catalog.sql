@@ -250,7 +250,9 @@ SELECT public.check_eq('the service-only write trigger sits on every table the p
   (SELECT string_agg(c.relname, ',' ORDER BY c.relname) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
    WHERE t.tgname = 'labelos_org_rows_service_only' AND NOT t.tgisinternal),
   'artist_messages,artist_portals,contact_track_states,project_assets,project_comments,project_contacts,'
-  'project_folder_items,project_shares,project_tags,project_tracks,projects,song_beats,track_collaborators,'
+  'project_folder_items,project_shares,project_tags,project_tracks,projects,'
+  -- release_items, releases: 144's own org tables (LABEL-16)
+  'release_items,releases,song_beats,track_collaborators,'
   'track_licenses,track_links,track_stem_files,track_versions,tracks');
 SELECT public.check_eq('every permissive policy on these tables is the producer''s from before 141, or org_member_read',
   (SELECT string_agg(DISTINCT policyname, ',' ORDER BY policyname)

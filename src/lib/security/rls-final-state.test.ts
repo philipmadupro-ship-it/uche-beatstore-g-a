@@ -91,6 +91,9 @@ function labelOsTables(): string[] {
     'activity_events',
     // 139_labelos_org_contacts.sql (LABEL-10)
     'member_artist_scopes',
+    // 144_labelos_releases.sql (LABEL-16)
+    'releases',
+    'release_items',
   ];
 }
 
