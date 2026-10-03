@@ -27,7 +27,7 @@
  */
 
 import type { Capability } from './capabilities';
-import { PROJECT_ASSET_KINDS, fileExtension, guessAssetKind } from '@/lib/projects/assets';
+import { PROJECT_ASSET_KINDS, assetRefKey, fileExtension, guessAssetKind } from '@/lib/projects/assets';
 
 export const ORG_ASSET_KINDS = [...PROJECT_ASSET_KINDS, 'photo', 'video', 'contract', 'split_sheet', 'session'] as const;
 export type OrgAssetKind = (typeof ORG_ASSET_KINDS)[number];
@@ -95,7 +95,42 @@ export function canWriteOrgAsset(caps: ReadonlySet<Capability>, asset: OrgAssetA
   return caps.has('catalog.write');
 }
 
+/**
+ * What the Files section may offer a member, without a file in hand:
+ * `write` — add and change normal files (catalog.write); `restricted` — add
+ * and change restricted ones (canWriteOrgAsset's restricted rule);
+ * `working` — open working material, so its kinds may be chosen.
+ */
+export function orgAssetPermissions(caps: ReadonlySet<Capability>): { write: boolean; restricted: boolean; working: boolean } {
+  return {
+    write: caps.has('catalog.write'),
+    restricted: caps.has('contracts.read') && (caps.has('catalog.write') || caps.has('rights.write')),
+    working: caps.has('audio.working'),
+  };
+}
+
+/** The kinds a member may give a file: no legal kinds without the restricted rule, no working kinds without audio.working. */
+export function assignableOrgAssetKinds(perms: { restricted: boolean; working: boolean }): OrgAssetKind[] {
+  return ORG_ASSET_KINDS.filter((k) => {
+    const cls = assetReadClass(k);
+    if (cls === 'legal') return perms.restricted;
+    if (cls === 'working') return perms.working;
+    return true;
+  });
+}
+
+/**
+ * Whether a download request should be audited: once per download, not per
+ * Range chunk a player or PDF viewer fetches. A request with no Range, or
+ * one starting at byte 0, is a (re)start of the file.
+ */
+export function isDownloadStart(range: string | null): boolean {
+  if (!range) return true;
+  return /^bytes=0-/.test(range.trim());
+}
+
 const SESSION_EXT = ['als', 'flp', 'ptx', 'rpp', 'cpr'];
+const DOCUMENT_EXT = ['pdf', 'doc', 'docx', 'pages', 'rtf', 'txt', 'md', 'csv', 'xlsx'];
 const VIDEO_EXT = ['mp4', 'mov', 'webm', 'm4v'];
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'heic', 'tif', 'tiff'];
 
@@ -103,8 +138,12 @@ const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'heic', 'tif', 'tiff'];
 export function guessOrgAssetKind(fileName: string): OrgAssetKind {
   const ext = fileExtension(fileName);
   const name = fileName.toLowerCase();
-  if (/split/.test(name)) return 'split_sheet';
-  if (/contract|agreement/.test(name)) return 'contract';
+  // A document's name decides between contract and split sheet. Only a
+  // document: "Split Second - cover.png" is artwork, "split vocals.wav" audio.
+  if (DOCUMENT_EXT.includes(ext)) {
+    if (/split/.test(name)) return 'split_sheet';
+    if (/contract|agreement/.test(name)) return 'contract';
+  }
   if (SESSION_EXT.includes(ext) || (ext === 'zip' && /session/.test(name))) return 'session';
   if (VIDEO_EXT.includes(ext)) return 'video';
   if (IMAGE_EXT.includes(ext)) return /photo|press|shoot|portrait/.test(name) ? 'photo' : 'artwork';
@@ -131,17 +170,8 @@ export function orgAssetObjectKey(orgId: string, projectId: string, uniqueId: st
  */
 export function orgProjectAssetKeyOf(ref: string, orgId: string, projectId: string, allowedBuckets: readonly string[]): string | null {
   if (!UUID.test(orgId) || !UUID.test(projectId)) return null;
-  let key: string;
-  if (ref.startsWith('r2://')) {
-    const rest = ref.slice(5);
-    const slash = rest.indexOf('/');
-    if (slash <= 0 || !allowedBuckets.includes(rest.slice(0, slash))) return null;
-    key = rest.slice(slash + 1);
-  } else if (ref.startsWith('local://')) {
-    key = ref.slice(8);
-  } else {
-    return null;
-  }
+  const key = assetRefKey(ref, allowedBuckets);
+  if (key === null) return null;
   const pattern = new RegExp(`^orgs/${orgId.toLowerCase()}/assets/${projectId.toLowerCase()}/[A-Za-z0-9_-]{6,64}\\.[a-z0-9]{1,8}$`);
   return pattern.test(key) ? key : null;
 }

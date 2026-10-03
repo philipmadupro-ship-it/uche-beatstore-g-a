@@ -8,6 +8,9 @@ import {
   VISUAL_ASSET_KINDS,
   LEGAL_ASSET_KINDS,
   assetReadClass,
+  assignableOrgAssetKinds,
+  isDownloadStart,
+  orgAssetPermissions,
   canReadOrgAsset,
   canWriteOrgAsset,
   guessOrgAssetKind,
@@ -73,6 +76,13 @@ describe('kinds', () => {
     expect(guessOrgAssetKind('cover.png')).toBe('artwork');
     expect(guessOrgAssetKind('Midnight lyrics.txt')).toBe('lyrics');
     expect(guessOrgAssetKind('notes.pdf')).toBe('document');
+  });
+
+  it('only a document is read as a contract or split sheet by its name', () => {
+    expect(guessOrgAssetKind('Split Second - cover.png')).toBe('artwork');
+    expect(guessOrgAssetKind('split vocals.wav')).toBe('audio');
+    expect(guessOrgAssetKind('contract signing (BTS).mp4')).toBe('video');
+    expect(guessOrgAssetKind('Split Second session.als')).toBe('session');
   });
 });
 
@@ -204,5 +214,28 @@ describe('SQL twin (migration 143)', () => {
     expect(kinds && [...kinds[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1])).toEqual([...ORG_ASSET_KINDS]);
     const restricted = /project_assets_restricted_kinds\s+CHECK \(kind NOT IN \(([^)]*)\)/.exec(sql);
     expect(restricted && [...restricted[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1])).toEqual([...ALWAYS_RESTRICTED_KINDS]);
+  });
+});
+
+describe('what the Files section may offer', () => {
+  it('normal and restricted writes are separate; working kinds need audio.working', () => {
+    expect(orgAssetPermissions(AR)).toEqual({ write: true, restricted: false, working: true });
+    expect(orgAssetPermissions(LEGAL)).toEqual({ write: false, restricted: true, working: false });
+    expect(orgAssetPermissions(MARKETING)).toEqual({ write: false, restricted: false, working: false });
+    expect(orgAssetPermissions(OWNER)).toEqual({ write: true, restricted: true, working: true });
+  });
+
+  it('assignable kinds: A&R gets no legal kinds, legal no working kinds', () => {
+    expect(assignableOrgAssetKinds(orgAssetPermissions(AR))).not.toContain('contract');
+    expect(assignableOrgAssetKinds(orgAssetPermissions(AR))).toContain('session');
+    expect(assignableOrgAssetKinds(orgAssetPermissions(LEGAL))).toEqual(['artwork', 'lyrics', 'photo', 'video', 'contract', 'split_sheet']);
+    expect(assignableOrgAssetKinds(orgAssetPermissions(OWNER))).toEqual([...ORG_ASSET_KINDS]);
+  });
+
+  it('a download starts with no Range or a Range from byte 0', () => {
+    expect(isDownloadStart(null)).toBe(true);
+    expect(isDownloadStart('bytes=0-')).toBe(true);
+    expect(isDownloadStart('bytes=0-1023')).toBe(true);
+    expect(isDownloadStart('bytes=65536-')).toBe(false);
   });
 });

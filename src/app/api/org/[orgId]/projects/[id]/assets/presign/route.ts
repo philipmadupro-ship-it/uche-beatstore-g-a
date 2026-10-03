@@ -6,8 +6,8 @@
  * big for the app server is PUT straight to the PRIVATE bucket under
  * `orgs/<org>/assets/<project>/`, then registered with POST ../assets, which
  * refuses any other key. The kind is not known yet, so this needs only that
- * the member may add SOME file here (lib/labelos/org-assets via
- * orgAssetPermissions); registering checks the kind and sensitivity. Without
+ * the member may add SOME file here (normal or restricted,
+ * lib/labelos/org-assets orgAssetPermissions); registering checks the kind and sensitivity. Without
  * R2 there is nothing to presign: 501, and the client uploads through the
  * server.
  */
@@ -20,9 +20,8 @@ import { ProjectAssetPresignBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { assetValidationMessage, validateAssetFile } from '@/lib/projects/assets';
-import { orgAssetObjectKey } from '@/lib/labelos/org-assets';
+import { orgAssetObjectKey, orgAssetPermissions } from '@/lib/labelos/org-assets';
 import { presignProjectAssetPut } from '@/lib/storage/project-assets';
-import { orgAssetPermissions } from '../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,7 +33,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   if (!isSupabaseConfigured()) return NextResponse.json({ error: 'Organization files need Supabase.' }, { status: 501 });
   const access = await requireObjectAccess({ table: 'projects', id, cap: 'catalog.read', orgId });
   if (!access.ok) return access.res;
-  if (!orgAssetPermissions(access.capabilities).write) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const perms = orgAssetPermissions(access.capabilities);
+  if (!perms.write && !perms.restricted) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const parsed = await readBody(req, ProjectAssetPresignBodySchema);
   if (!parsed.ok) return parsed.res;

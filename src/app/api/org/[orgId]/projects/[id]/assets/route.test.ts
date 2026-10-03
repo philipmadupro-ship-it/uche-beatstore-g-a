@@ -159,10 +159,11 @@ async function list(as: string | null, org: string, project: string) {
   const { GET } = await import('./route');
   return (GET as Handler)(new NextRequest(base(org, project)), { params: Promise.resolve({ orgId: org, id: project, assetId: '' }) });
 }
-async function download(as: string | null, org: string, project: string, assetId: string) {
+async function download(as: string | null, org: string, project: string, assetId: string, range?: string) {
   current = as;
   const { GET } = await import('./[assetId]/download/route');
-  return (GET as Handler)(new NextRequest(`${base(org, project)}/${assetId}/download`), {
+  const headers = range ? { range } : undefined;
+  return (GET as Handler)(new NextRequest(`${base(org, project)}/${assetId}/download`, { headers }), {
     params: Promise.resolve({ orgId: org, id: project, assetId }),
   });
 }
@@ -212,9 +213,9 @@ describe('GET: the files a member may open (sensitivity × role, 06 §2.4)', () 
   });
 
   it('says what the member may add', async () => {
-    expect((await (await list(AR, L, LP1)).json()).permissions).toEqual({ write: true, restricted: false });
-    expect((await (await list(LEG, L, LP1)).json()).permissions).toEqual({ write: true, restricted: true });
-    expect((await (await list(MKT, L, LP1)).json()).permissions).toEqual({ write: false, restricted: false });
+    expect((await (await list(AR, L, LP1)).json()).permissions).toEqual({ write: true, restricted: false, working: true });
+    expect((await (await list(LEG, L, LP1)).json()).permissions).toEqual({ write: false, restricted: true, working: false });
+    expect((await (await list(MKT, L, LP1)).json()).permissions).toEqual({ write: false, restricted: false, working: false });
   });
 
   it('never sends a stored reference or the uploader', async () => {
@@ -261,6 +262,14 @@ describe('download', () => {
       org_id: L, actor_id: LEG, verb: 'file.restricted_downloaded', subject_type: 'asset', subject_id: A_CON,
       project_id: LP1, audit: true, visibility: 'internal', payload: { kind: 'contract', inline: false },
     });
+  });
+
+  it('later Range chunks of the same download are not audited again', async () => {
+    expect((await download(LEG, L, LP1, A_CON, 'bytes=0-')).status).toBe(200);
+    expect((await download(LEG, L, LP1, A_CON, 'bytes=65536-')).status).toBe(200);
+    expect((await download(LEG, L, LP1, A_CON, 'bytes=131072-')).status).toBe(200);
+    expect(db.tables.activity_events).toHaveLength(1);
+    expect(storage.streamed).toHaveLength(3);
   });
 
   it('if the audit event cannot be written, nothing is downloaded', async () => {
@@ -361,6 +370,23 @@ describe('POST: adding a file', () => {
       expect((await register(OWN, L, LP1, { url: bad, file_name: 'a.pdf' })).status, bad).toBe(400);
     }
     expect((await register(OWN, L, LP1, { url: good, file_name: 'a.pdf', in_portal: true })).status).toBe(400);
+    // The same object registered twice would give two rows one file.
+    expect((await register(OWN, L, LP1, { url: good, file_name: 'Split sheet.pdf' })).status).toBe(409);
+    expect(storage.deleted).toEqual([]);
+  });
+
+  it('a refused presigned upload is removed from storage', async () => {
+    const deal = ref(L, LP1, 'dealdeal12', 'pdf');
+    storage.sizes.set(deal, 10);
+    expect((await register(AR, L, LP1, { url: deal, file_name: 'Nova contract.pdf' })).status).toBe(403);
+    expect(storage.deleted).toEqual([deal]);
+  });
+
+  it('legal adds a scanned document as restricted; the same file as normal is refused', async () => {
+    expect((await upload(LEG, L, LP1, 'scan.pdf')).status).toBe(403);
+    const res = await upload(LEG, L, LP1, 'scan.pdf', { sensitivity: 'restricted' });
+    expect(res.status).toBe(403); // a document is working material, which legal cannot open
+    expect((await upload(LEG, L, LP1, 'scan.pdf', { kind: 'contract' })).status).toBe(201);
   });
 
   it('an unfinished presigned upload is 409; a refused type is deleted', async () => {

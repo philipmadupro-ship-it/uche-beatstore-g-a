@@ -34,6 +34,7 @@ import {
   canReadOrgAsset,
   canWriteOrgAsset,
   guessOrgAssetKind,
+  orgAssetPermissions,
   ORG_ASSET_COLUMNS,
   orgAssetObjectKey,
   orgProjectAssetKeyOf,
@@ -46,7 +47,7 @@ import {
 import { deleteProjectAssetObject, projectAssetBuckets, projectAssetSize, storeProjectAsset } from '@/lib/storage/project-assets';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { requireObjectAccess } from '@/lib/auth/org-access';
-import { notReady, orgAssetPermissions } from './access';
+import { notReady } from './access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -140,9 +141,19 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (!orgProjectAssetKeyOf(body.url, org, id, projectAssetBuckets())) {
         return json(400, 'That upload does not belong to this project.');
       }
+      // One row per stored object: a replayed register would give two rows
+      // one object, and deleting either would break the other.
+      const dup = await admin.from('project_assets').select('id').eq('url', body.url).limit(1);
+      if (dup.error) throw dup.error;
+      if ((dup.data ?? []).length > 0) return json(409, 'That upload is already registered.');
+      // From here no row points at the object, so a refusal removes it.
+      storedHere = true;
       kind = body.kind ?? guessOrgAssetKind(body.file_name);
       sensitivity = resolveSensitivity(kind, body.sensitivity);
-      if (!canWriteOrgAsset(access.capabilities, { kind, sensitivity })) return json(403, 'Forbidden');
+      if (!canWriteOrgAsset(access.capabilities, { kind, sensitivity })) {
+        await deleteProjectAssetObject(body.url).catch(() => {});
+        return json(403, 'Forbidden');
+      }
       const stored = await projectAssetSize(body.url);
       if (stored == null) return json(409, 'The upload did not finish. Try again.');
       const check = validateAssetFile({ name: body.file_name, size: stored }, { org: true });

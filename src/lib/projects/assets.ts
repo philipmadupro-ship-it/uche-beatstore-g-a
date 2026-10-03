@@ -145,20 +145,28 @@ export function assetObjectKey(projectId: string, uniqueId: string, extension: s
   return `project-assets/${projectId}/${uniqueId}.${extension}`;
 }
 
-/** The storage key inside a stored reference, if the reference is a file of this project. */
-export function projectAssetKeyOf(ref: string, projectId: string, allowedBuckets: readonly string[]): string | null {
-  let key: string | null = null;
+/**
+ * The object key inside a stored reference: `r2://<bucket>/<key>` in one of
+ * `allowedBuckets`, or `local://<key>`. Null for anything else. The shape
+ * check on the key is the caller's (projectAssetKeyOf, and the org twin
+ * orgProjectAssetKeyOf in lib/labelos/org-assets).
+ */
+export function assetRefKey(ref: string, allowedBuckets: readonly string[]): string | null {
   if (ref.startsWith('r2://')) {
     const rest = ref.slice(5);
     const slash = rest.indexOf('/');
     if (slash <= 0) return null;
     if (!allowedBuckets.includes(rest.slice(0, slash))) return null;
-    key = rest.slice(slash + 1);
-  } else if (ref.startsWith('local://')) {
-    key = ref.slice(8);
-  } else {
-    return null;
+    return rest.slice(slash + 1);
   }
+  if (ref.startsWith('local://')) return ref.slice(8);
+  return null;
+}
+
+/** The storage key inside a stored reference, if the reference is a file of this project. */
+export function projectAssetKeyOf(ref: string, projectId: string, allowedBuckets: readonly string[]): string | null {
+  const key = assetRefKey(ref, allowedBuckets);
+  if (key === null) return null;
   const pattern = new RegExp(`^project-assets/${projectId.replace(/[^0-9a-f-]/gi, '')}/[A-Za-z0-9_-]{6,64}\\.[a-z0-9]{1,8}$`);
   return pattern.test(key) ? key : null;
 }

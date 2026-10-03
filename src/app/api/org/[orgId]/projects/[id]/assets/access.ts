@@ -59,9 +59,3 @@ export async function orgAssetRow(
   if (!allowed) return fail(403, 'Forbidden');
   return { ok: true, row };
 }
-
-/** What the Files section may offer this member (no file needed to decide). */
-export function orgAssetPermissions(caps: ReadonlySet<string>): { write: boolean; restricted: boolean } {
-  const restricted = caps.has('contracts.read') && (caps.has('catalog.write') || caps.has('rights.write'));
-  return { write: caps.has('catalog.write') || restricted, restricted };
-}

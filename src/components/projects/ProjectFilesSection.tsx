@@ -29,10 +29,10 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { ASSET_KIND_LABEL, PROJECT_ASSET_KINDS, formatBytes, type ProjectAssetKind } from '@/lib/projects/assets';
 import { uploadOrgProjectAsset, uploadProjectAsset } from '@/lib/projects/upload-asset';
 import type { ProjectAssetView } from '@/lib/projects/asset-view';
-import { ALWAYS_RESTRICTED_KINDS, ORG_ASSET_KINDS, ORG_ASSET_KIND_LABEL, type AssetSensitivity, type OrgAssetKind } from '@/lib/labelos/org-assets';
+import { ALWAYS_RESTRICTED_KINDS, ORG_ASSET_KIND_LABEL, assignableOrgAssetKinds, type AssetSensitivity, type OrgAssetKind } from '@/lib/labelos/org-assets';
 
 type FileRow = ProjectAssetView & { sensitivity?: AssetSensitivity };
-type Permissions = { write: boolean; restricted: boolean };
+type Permissions = { write: boolean; restricted: boolean; working: boolean };
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 
@@ -45,7 +45,7 @@ export function ProjectFilesSection({ projectId, org }: { projectId: string; org
   const orgId = org?.orgId ?? null;
   const base = orgId ? `/api/org/${orgId}/projects/${projectId}/assets` : `/api/projects/${projectId}/assets`;
   const [assets, setAssets] = useState<FileRow[] | null>(null);
-  const [perms, setPerms] = useState<Permissions>({ write: true, restricted: false });
+  const [perms, setPerms] = useState<Permissions>({ write: true, restricted: false, working: true });
   const [ready, setReady] = useState(true);
   const [sharedWithArtists, setShared] = useState(false);
   const [visibleByDefault, setVisibleByDefault] = useState<boolean | null>(null);
@@ -86,7 +86,8 @@ export function ProjectFilesSection({ projectId, org }: { projectId: string; org
     await Promise.all(list.map(async (file) => {
       try {
         const asset = orgId
-          ? await uploadOrgProjectAsset(orgId, projectId, file)
+          // A member who may add only restricted files (legal) adds them restricted.
+          ? await uploadOrgProjectAsset(orgId, projectId, file, perms.write ? {} : { sensitivity: 'restricted' })
           : await uploadProjectAsset(projectId, file, { inPortal: inPortalForNew });
         setAssets((prev) => [...(prev ?? []), asset]);
       } catch (err) {
@@ -132,10 +133,10 @@ export function ProjectFilesSection({ projectId, org }: { projectId: string; org
 
   if (!ready || assets === null) return null;
 
-  const canAdd = !orgId || perms.write;
-  const canEdit = (a: FileRow) => !orgId || (perms.write && (a.sensitivity !== 'restricted' || perms.restricted));
+  const canAdd = !orgId || perms.write || perms.restricted;
+  const canEdit = (a: FileRow) => !orgId || (a.sensitivity === 'restricted' ? perms.restricted : perms.write);
   const kindLabel = (kind: string) => (orgId ? ORG_ASSET_KIND_LABEL[kind as OrgAssetKind] : ASSET_KIND_LABEL[kind as ProjectAssetKind]) ?? 'File';
-  const kindChoices: readonly string[] = orgId ? ORG_ASSET_KINDS : PROJECT_ASSET_KINDS;
+  const kindChoices: readonly string[] = orgId ? assignableOrgAssetKinds(perms) : PROJECT_ASSET_KINDS;
 
   return (
     <section
@@ -270,7 +271,8 @@ export function ProjectFilesSection({ projectId, org }: { projectId: string; org
                       hint: 'Only people who handle contracts',
                       checked: a.sensitivity === 'restricted',
                       // Shown only where the member may lift or set it, and never for a kind that is always restricted.
-                      hidden: !orgId || !perms.restricted || ALWAYS_RESTRICTED_KINDS.includes(a.kind as OrgAssetKind),
+                      // Lifting or setting it needs both rules: the member must still be able to change the file either way.
+                      hidden: !orgId || !perms.restricted || !perms.write || ALWAYS_RESTRICTED_KINDS.includes(a.kind as OrgAssetKind),
                       onSelect: () => { void patch(a, { sensitivity: a.sensitivity === 'restricted' ? 'normal' : 'restricted' }); },
                     }],
                   },

@@ -105,7 +105,7 @@ test('2 · marketing sees and opens the artwork only; the contract and the sessi
   expect(list.status()).toBe(200);
   const body = await list.json();
   expect(body.assets.map((a: { kind: string }) => a.kind)).toEqual(['artwork']);
-  expect(body.permissions).toEqual({ write: false, restricted: false });
+  expect(body.permissions).toEqual({ write: false, restricted: false, working: false });
   expect(JSON.stringify(body)).not.toMatch(/local:\/\/|r2:\/\//);
 
   const art = await api.get(`${files}/${ids.art}/download`);

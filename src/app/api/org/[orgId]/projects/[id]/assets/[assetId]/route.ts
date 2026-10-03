@@ -84,11 +84,14 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     // The row is gone, so nothing can reach the object any more; removing it
     // is housekeeping and must not fail the delete.
-    const { count } = await access.admin
+    // If the check itself fails, keep the object: an orphan is housekeeping,
+    // a deleted object under a surviving row is a broken file.
+    const { count, error: countErr } = await access.admin
       .from('project_assets')
       .select('id', { count: 'exact', head: true })
       .eq('url', row.url);
-    if (!count) {
+    if (countErr) log.warn('reference check failed; object kept', { assetId, error: errorMessage(countErr) });
+    else if (!count) {
       await deleteProjectAssetObject(row.url).catch((e: unknown) => log.warn('object delete failed', { assetId, error: errorMessage(e) }));
     }
     return NextResponse.json({ success: true });
