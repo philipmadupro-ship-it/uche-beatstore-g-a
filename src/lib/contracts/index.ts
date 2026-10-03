@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
 import { DECISIONS } from '@/lib/contacts/decisions';
 import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
+import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -1007,3 +1008,34 @@ export const OrgUploadCompleteSchema = z.object({
 
 /** POST /api/org/[orgId]/upload/abort. */
 export const OrgUploadSessionSchema = z.object({ sessionId: z.string().min(1).max(64) });
+
+// ── Label OS org files (LABEL-15) ────────────────────────────────────────
+// The presign body is the producer's (ProjectAssetPresignBodySchema). None of
+// these takes `in_portal`: org files are not in any portal (the portal is
+// producer-owned until a later task), and a restricted file never may be.
+
+/** POST /api/org/[orgId]/projects/[id]/assets (JSON) — register a presigned upload. */
+export const OrgAssetRegisterBodySchema = z.object({
+  url: z.string().min(1).max(500),
+  file_name: z.string().min(1).max(300),
+  kind: z.enum(ORG_ASSET_KINDS).optional(),
+  label: z.string().max(200).optional(),
+  sensitivity: z.enum(ASSET_SENSITIVITIES).optional(),
+}).strict();
+export type OrgAssetRegisterBody = z.infer<typeof OrgAssetRegisterBodySchema>;
+
+/** Fields of a multipart POST /api/org/[orgId]/projects/[id]/assets besides the file. */
+export const OrgAssetFormFieldsSchema = z.object({
+  kind: z.enum(ORG_ASSET_KINDS).optional(),
+  label: z.string().max(200).optional(),
+  sensitivity: z.enum(ASSET_SENSITIVITIES).optional(),
+});
+
+/** PATCH /api/org/[orgId]/projects/[id]/assets/[assetId] */
+export const OrgAssetPatchBodySchema = z.object({
+  label: z.string().trim().min(1).max(200).optional(),
+  kind: z.enum(ORG_ASSET_KINDS).optional(),
+  sensitivity: z.enum(ASSET_SENSITIVITIES).optional(),
+  position: z.number().int().min(0).max(100000).optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgAssetPatchBody = z.infer<typeof OrgAssetPatchBodySchema>;

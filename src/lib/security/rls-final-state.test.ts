@@ -360,6 +360,30 @@ describe('final RLS policy state', () => {
     });
   });
 
+  describe('Label OS org files (mig 143, LABEL-15)', () => {
+    const before143 = replay(realMigrations().filter((m) => m.name < '143')).policies;
+
+    it('project_assets keeps its producer policies; read and guard hold sensitivity and the kind class', () => {
+      for (const name of ['project_assets_owner_select', 'project_assets_owner_write']) {
+        expect(policies.get(`project_assets.${name}`), name).toBe(before143.get(`project_assets.${name}`));
+      }
+      for (const name of ['org_member_read', 'org_member_guard']) {
+        const body = policies.get(`project_assets.${name}`) ?? '';
+        expect(body, name).toMatch(/labelos_org_asset_allowed\(p\.org_id, project_assets\.kind, project_assets\.sensitivity\)/);
+        expect(body, name).toMatch(/can_see_org_project\(p\.org_id, p\.id\)/);
+        expect(body, name).not.toMatch(/kind IN \('artwork', 'lyrics'\)/);
+      }
+    });
+
+    it('track_stem_files gains only a guard that hides org rows; its owner policy is unchanged', () => {
+      expect(policies.get('track_stem_files.track_stem_files_owner')).toBe(before143.get('track_stem_files.track_stem_files_owner'));
+      expect(before143.has('track_stem_files.org_member_guard')).toBe(false);
+      expect(policies.get('track_stem_files.org_member_guard')).toMatch(
+        /^\s*AS RESTRICTIVE\s+FOR SELECT\s+USING \(\s*NOT public\.labelos_is_org_track\(track_id\)\s*\)\s*$/i,
+      );
+    });
+  });
+
   it('share_links writes through RLS require the producer', () => {
     for (const name of ['share_links_owner_insert', 'share_links_owner_update']) {
       expect(policies.get(`share_links.${name}`) ?? '', name).toMatch(/WITH CHECK[\s\S]*is_producer\(\)/i);

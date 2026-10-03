@@ -60,6 +60,27 @@ const EXT_MIME: Record<string, string> = {
   mov: 'video/quicktime',
 };
 
+/**
+ * Extra types an ORGANIZATION project accepts (LABEL-15): press photos,
+ * video, split-sheet spreadsheets and DAW sessions. Producer project files
+ * keep exactly the list above — `validateAssetFile` only reads this when a
+ * caller asks for `{ org: true }`. DAW formats have no registered MIME, so
+ * they are stored as an opaque download. `.html` / `.svg` stay refused.
+ */
+const ORG_EXTRA_EXT_MIME: Record<string, string> = {
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+  webm: 'video/webm',
+  m4v: 'video/x-m4v',
+  csv: 'text/csv',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  als: 'application/octet-stream',
+  flp: 'application/octet-stream',
+  ptx: 'application/octet-stream',
+  rpp: 'application/octet-stream',
+  cpr: 'application/octet-stream',
+};
+
 /** Extension, lowercased, without the dot ('' when there is none). */
 export function fileExtension(fileName: string): string {
   const base = fileName.split(/[\\/]/).pop() ?? '';
@@ -78,18 +99,19 @@ export type AssetValidation =
  * listed extension is refused: an `.html` or `.svg` served back from our own
  * origin is a script, not a reference.
  */
-export function validateAssetFile(file: { name: string; size: number }): AssetValidation {
+export function validateAssetFile(file: { name: string; size: number }, opts: { org?: boolean } = {}): AssetValidation {
   if (!file.size || file.size <= 0) return { ok: false, error: 'empty' };
   if (file.size > MAX_ASSET_BYTES) return { ok: false, error: 'too-large' };
   const extension = fileExtension(file.name);
-  const mime = EXT_MIME[extension];
+  const mime = EXT_MIME[extension] ?? (opts.org ? ORG_EXTRA_EXT_MIME[extension] : undefined);
   if (!mime) return { ok: false, error: 'unsupported-type' };
   return { ok: true, extension, mime };
 }
 
-export function assetValidationMessage(error: Exclude<AssetValidation, { ok: true }>['error']): string {
+export function assetValidationMessage(error: Exclude<AssetValidation, { ok: true }>['error'], opts: { org?: boolean } = {}): string {
   if (error === 'empty') return 'That file is empty.';
   if (error === 'too-large') return `Files can be up to ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} MB.`;
+  if (opts.org) return 'That file type is not supported. Use PDF, text, Word, spreadsheets, images, audio, MIDI, video, DAW sessions or ZIP.';
   return 'That file type is not supported. Use PDF, text, Word, images, audio, MIDI, video or ZIP.';
 }
 
@@ -123,20 +145,28 @@ export function assetObjectKey(projectId: string, uniqueId: string, extension: s
   return `project-assets/${projectId}/${uniqueId}.${extension}`;
 }
 
-/** The storage key inside a stored reference, if the reference is a file of this project. */
-export function projectAssetKeyOf(ref: string, projectId: string, allowedBuckets: readonly string[]): string | null {
-  let key: string | null = null;
+/**
+ * The object key inside a stored reference: `r2://<bucket>/<key>` in one of
+ * `allowedBuckets`, or `local://<key>`. Null for anything else. The shape
+ * check on the key is the caller's (projectAssetKeyOf, and the org twin
+ * orgProjectAssetKeyOf in lib/labelos/org-assets).
+ */
+export function assetRefKey(ref: string, allowedBuckets: readonly string[]): string | null {
   if (ref.startsWith('r2://')) {
     const rest = ref.slice(5);
     const slash = rest.indexOf('/');
     if (slash <= 0) return null;
     if (!allowedBuckets.includes(rest.slice(0, slash))) return null;
-    key = rest.slice(slash + 1);
-  } else if (ref.startsWith('local://')) {
-    key = ref.slice(8);
-  } else {
-    return null;
+    return rest.slice(slash + 1);
   }
+  if (ref.startsWith('local://')) return ref.slice(8);
+  return null;
+}
+
+/** The storage key inside a stored reference, if the reference is a file of this project. */
+export function projectAssetKeyOf(ref: string, projectId: string, allowedBuckets: readonly string[]): string | null {
+  const key = assetRefKey(ref, allowedBuckets);
+  if (key === null) return null;
   const pattern = new RegExp(`^project-assets/${projectId.replace(/[^0-9a-f-]/gi, '')}/[A-Za-z0-9_-]{6,64}\\.[a-z0-9]{1,8}$`);
   return pattern.test(key) ? key : null;
 }
