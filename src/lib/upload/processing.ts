@@ -73,7 +73,8 @@ export const STALE_PROCESSING_LOCK_MS = 15 * 60_000;
 /**
  * PostgREST `or` filter for jobs a worker may claim: pending, failed, or
  * processing with an abandoned lock. The timestamp is an ISO string (no
- * commas), so it is safe to interpolate.
+ * commas), so it is safe to interpolate. READS ONLY: PostgREST 12.2 rejects
+ * any `or` on a PATCH, so `claimJob` spells the same rule as two updates.
  */
 export function claimableJobFilter(now: number): string {
   const staleBefore = new Date(now - STALE_PROCESSING_LOCK_MS).toISOString();
@@ -100,7 +101,7 @@ export async function processUploadProcessingJobById(id: string): Promise<{
     .lt('attempts', MAX_PROCESSING_ATTEMPTS)
     .maybeSingle();
   if (error || !data) return null;
-  if (!(await claimJob(id))) return null;
+  if (!(await claimJob(admin, id))) return null;
   return processOneJob(data as UploadProcessingJob);
 }
 
@@ -121,7 +122,7 @@ export async function processUploadProcessingBatch(limit = 3): Promise<{
 
   const results: Array<{ id: string; trackId: string; ok: boolean; error?: string }> = [];
   for (const row of (data ?? []) as UploadProcessingJob[]) {
-    const claimed = await claimJob(row.id);
+    const claimed = await claimJob(admin, row.id);
     if (!claimed) continue;
     const result = await processOneJob(row);
     results.push(result);
@@ -134,21 +135,38 @@ export async function processUploadProcessingBatch(limit = 3): Promise<{
   };
 }
 
-async function claimJob(id: string): Promise<boolean> {
-  const admin = createServiceClient();
-  const { data, error } = await admin
+/**
+ * Claim a job for this worker: the `claimableJobFilter` rule as two
+ * compare-and-set UPDATEs, never one `or=` filter. PostgREST 12.2 rejects ANY
+ * `or` on a PATCH ("column upload_processing_jobs.status does not exist"), so
+ * the single-update claim threw on every call: the immediate pass after
+ * `/complete` logged and gave up, and the cron batch failed on its first job.
+ * Each UPDATE re-checks its condition under the row lock, so two workers
+ * racing for one job cannot both claim it.
+ */
+export async function claimJob(admin: ServiceClient, id: string, now = Date.now()): Promise<boolean> {
+  const stamp = new Date(now).toISOString();
+  const patch = { status: 'processing', locked_at: stamp, updated_at: stamp };
+
+  const fresh = await admin
     .from('upload_processing_jobs')
-    .update({
-      status: 'processing',
-      locked_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .update(patch)
     .eq('id', id)
-    .or(claimableJobFilter(Date.now()))
-    .select('id')
-    .maybeSingle();
-  if (error) throw new Error(`Upload processing claim failed: ${error.message}`);
-  return Boolean(data);
+    .in('status', ['pending', 'failed'])
+    .select('id');
+  if (fresh.error) throw new Error(`Upload processing claim failed: ${fresh.error.message}`);
+  if (Array.isArray(fresh.data) && fresh.data.length > 0) return true;
+
+  const staleBefore = new Date(now - STALE_PROCESSING_LOCK_MS).toISOString();
+  const stale = await admin
+    .from('upload_processing_jobs')
+    .update(patch)
+    .eq('id', id)
+    .eq('status', 'processing')
+    .lt('locked_at', staleBefore)
+    .select('id');
+  if (stale.error) throw new Error(`Upload processing claim failed: ${stale.error.message}`);
+  return Array.isArray(stale.data) && stale.data.length > 0;
 }
 
 async function processOneJob(job: UploadProcessingJob): Promise<{
