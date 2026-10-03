@@ -347,6 +347,23 @@ SELECT public.check_raises('a track that is a release master cannot be deleted',
   'makes a track a release master|release_items');
 RESET ROLE;
 
+-- ── Ownerless org links (project_contacts) ──────────────────────────────
+
+SET ROLE service_role;
+SELECT public.check_ok('an org project links its artist with no owner',
+  $$INSERT INTO public.project_contacts (user_id, project_id, contact_id, role) VALUES (NULL, 'd1440000-0000-4000-8000-000000000012', 'c1440000-0000-4000-8000-0000000000c2', 'artist')$$);
+SELECT public.check_raises('a producer link without an owner is refused, as before',
+  $$INSERT INTO public.project_contacts (user_id, project_id, contact_id) VALUES (NULL, 'd1440000-0000-4000-8000-000000000001', 'c1440000-0000-4000-8000-0000000000c4')$$,
+  'is not owned by');
+SELECT public.check_ok('a producer link with its owner is fine, as before',
+  $$INSERT INTO public.project_contacts (user_id, project_id, contact_id) VALUES ('0b0e1a57-0000-4000-8000-000000000001', 'd1440000-0000-4000-8000-000000000001', 'c1440000-0000-4000-8000-0000000000c4')$$);
+RESET ROLE;
+SET ROLE authenticated;
+SELECT public.as_user(:P);
+SELECT public.check_eq('the producer reads their own link and never an ownerless org link',
+  (SELECT string_agg(project_id::text, ',') FROM public.project_contacts), 'd1440000-0000-4000-8000-000000000001');
+RESET ROLE;
+
 -- ── "On a release" makes a mix finished (06 §2.3) ───────────────────────
 
 SELECT public.check_eq('S1 (inbox, on a draft release) is finished',

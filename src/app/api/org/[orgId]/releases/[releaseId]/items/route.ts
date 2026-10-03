@@ -26,7 +26,7 @@ import {
   toReleaseItemView,
   type ReleaseItemRow,
 } from '@/lib/labelos/releases';
-import { checkItemTracks, fail, itemsOf, releaseRow, writeError } from '../../access';
+import { checkItemTracks, fail, itemsOf, releaseRow, schemaAware, tracklistLocked, writeError } from '../../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,9 +41,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { orgId, releaseId } = await params;
   if (!isSupabaseConfigured()) return unconfigured();
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'release.write', orgId });
-  if (!access.ok) return access.res;
+  if (!access.ok) return (await schemaAware(access)).res;
   const found = await releaseRow(access);
   if (!found.ok) return found.res;
+  const locked = tracklistLocked(found.release);
+  if (locked) return locked.res;
   const parsed = await readBody(req, OrgReleaseItemCreateBodySchema);
   if (!parsed.ok) return parsed.res;
   const body = parsed.data;
@@ -80,9 +82,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { orgId, releaseId } = await params;
   if (!isSupabaseConfigured()) return unconfigured();
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'release.write', orgId });
-  if (!access.ok) return access.res;
+  if (!access.ok) return (await schemaAware(access)).res;
   const found = await releaseRow(access);
   if (!found.ok) return found.res;
+  const locked = tracklistLocked(found.release);
+  if (locked) return locked.res;
   const parsed = await readBody(req, OrgReleaseItemsReorderBodySchema);
   if (!parsed.ok) return parsed.res;
 

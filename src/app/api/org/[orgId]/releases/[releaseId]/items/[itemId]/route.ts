@@ -15,7 +15,7 @@ import { OrgReleaseItemPatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { RELEASE_ITEM_COLUMNS, toReleaseItemView, type ReleaseItemRow } from '@/lib/labelos/releases';
-import { checkItemTracks, itemsOf, releaseRow, writeError, type ObjectAccessOk } from '../../../access';
+import { checkItemTracks, itemsOf, releaseRow, schemaAware, tracklistLocked, writeError, type ObjectAccessOk } from '../../../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,9 +44,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!isSupabaseConfigured()) return unconfigured();
   if (!isUUID(itemId)) return notFound();
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'release.write', orgId });
-  if (!access.ok) return access.res;
+  if (!access.ok) return (await schemaAware(access)).res;
   const found = await releaseRow(access);
   if (!found.ok) return found.res;
+  const locked = tracklistLocked(found.release);
+  if (locked) return locked.res;
   const parsed = await readBody(req, OrgReleaseItemPatchBodySchema);
   if (!parsed.ok) return parsed.res;
 
@@ -78,9 +80,11 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (!isSupabaseConfigured()) return unconfigured();
   if (!isUUID(itemId)) return notFound();
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'release.write', orgId });
-  if (!access.ok) return access.res;
+  if (!access.ok) return (await schemaAware(access)).res;
   const found = await releaseRow(access);
   if (!found.ok) return found.res;
+  const locked = tracklistLocked(found.release);
+  if (locked) return locked.res;
 
   try {
     const { data, error } = await access.admin.rpc('labelos_release_item_remove', {

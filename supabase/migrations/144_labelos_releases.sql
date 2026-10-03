@@ -49,7 +49,14 @@
 --   5. `labelos_release_items_reorder(org, release, item ids[])` and
 --      `labelos_release_item_remove(org, release, item)`: the two
 --      multi-row tracklist writes, each atomic, service_role only.
---   6. "On a release" makes a mix finished (06 §2.3, carried from LABEL-13):
+--   6. `project_contacts.user_id` DROP NOT NULL: the route links a release's
+--      new project to its artist, and an org link has no owner (the 142 / 143
+--      rule) — a producer route that lists project_contacts by user_id must
+--      never pick it up. The producer path of 141's same-owner trigger still
+--      requires user_id = the project's owner, so a producer link without
+--      one is refused as before. (Not enforced as NULL for org links: 141 –
+--      143's local checks write org links with the acting member.)
+--   7. "On a release" makes a mix finished (06 §2.3, carried from LABEL-13):
 --      `labelos_track_is_finished` (141) is replaced with the same rule plus
 --      one arm — a song's own audio is finished when the song is an item of
 --      a release that is not cancelled. Its TS twins move with it:
@@ -422,7 +429,11 @@ REVOKE ALL ON FUNCTION public.labelos_release_item_remove(uuid, uuid, uuid) FROM
 GRANT EXECUTE ON FUNCTION public.labelos_release_items_reorder(uuid, uuid, uuid[]) TO service_role;
 GRANT EXECUTE ON FUNCTION public.labelos_release_item_remove(uuid, uuid, uuid) TO service_role;
 
--- ── 6. "On a release" makes a mix finished ──────────────────────────────
+-- ── 6. Ownerless org links ──────────────────────────────────────────────
+
+ALTER TABLE public.project_contacts ALTER COLUMN user_id DROP NOT NULL;
+
+-- ── 7. "On a release" makes a mix finished ──────────────────────────────
 -- 141's rule, unchanged, plus the release arm (lib/labelos/org-read,
 -- lib/labelos/org-audio, lib/labelos/releases#countsAsOnRelease).
 

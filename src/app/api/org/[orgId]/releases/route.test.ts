@@ -60,13 +60,27 @@ const IX = '80000000-0000-4000-8000-000000000004';
 let current: string | null = null;
 let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
+/** Tables PostgREST answers as missing (an unapplied migration). */
+let missing = new Set<string>();
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: current ? { id: current } : null } }) } }),
 }));
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: () => ({ from: (table: string) => mem.client.from(table), rpc: (name: string, args: Record<string, unknown>) => mem.client.rpc(name, args) }),
+  createClient: () => ({
+    from: (table: string) => {
+      if (!missing.has(table)) return mem.client.from(table);
+      const res = { data: null, error: { message: `Could not find the table 'public.${table}' in the schema cache`, code: 'PGRST205' } };
+      const q: Record<string, unknown> = {};
+      for (const m of ['select', 'eq', 'in', 'is', 'order', 'limit', 'insert', 'update', 'delete']) q[m] = () => q;
+      q.maybeSingle = async () => res;
+      q.single = async () => res;
+      q.then = (ok: (v: unknown) => unknown) => Promise.resolve(res).then(ok);
+      return q;
+    },
+    rpc: (name: string, args: Record<string, unknown>) => mem.client.rpc(name, args),
+  }),
 }));
 vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
 
@@ -121,6 +135,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'eyJtest';
   current = null;
+  missing = new Set();
   db = {
     rpc: RPC,
     tables: {
@@ -242,7 +257,8 @@ describe('POST /releases: release.write', () => {
     expect(view).toMatchObject({ title: 'Nova Album', type: 'album', contactId: C1, upc: '036000291452', targetDate: '2026-12-04', state: 'draft' });
     const project = db.tables.projects.find((p) => p.id === view.projectId)!;
     expect(project).toMatchObject({ org_id: L, user_id: null, name: 'Nova Album' });
-    expect(db.tables.project_contacts.some((pc) => pc.project_id === view.projectId && pc.contact_id === C1)).toBe(true);
+    // The link is an org row: no owner, so no producer route (all filter on user_id) can list it.
+    expect(db.tables.project_contacts.find((pc) => pc.project_id === view.projectId)).toMatchObject({ contact_id: C1, user_id: null });
     const row = db.tables.releases.find((r) => r.id === view.id)!;
     expect(row).toMatchObject({ org_id: L, created_by: AR });
     expect(row).not.toHaveProperty('user_id');
@@ -439,6 +455,56 @@ describe('tracklist: add, reorder, edit, remove', () => {
     expect(bad.status).toBe(400);
     expect((await bad.json()).field).toBe('master_track_id');
     expect((await anItem('PATCH', AR, L, R1, I1, { song_track_id: S2 })).status).toBe(400);
+  });
+});
+
+describe('a tracklist changes only while the release is a draft', () => {
+  it('delivered or cancelled: add, reorder, edit and remove are 409', async () => {
+    for (const state of ['delivered', 'cancelled']) {
+      db.tables.releases[0].state = state;
+      expect((await items('POST', AR, L, R1, { song_track_id: S1, master_track_id: V1 })).status).toBe(409);
+      expect((await items('PATCH', AR, L, R1, { order: [I2, I1] })).status).toBe(409);
+      expect((await anItem('PATCH', AR, L, R1, I1, { explicit: true })).status).toBe(409);
+      expect((await anItem('DELETE', AR, L, R1, I1)).status).toBe(409);
+    }
+    expect(tracklist(R1)).toEqual(['1:I1', '2:I2']);
+    db.tables.releases[0].state = 'draft';
+    expect((await anItem('PATCH', AR, L, R1, I1, { explicit: true })).status).toBe(200);
+  });
+});
+
+describe('before migration 144 (no release tables)', () => {
+  it('the list says schemaReady: false; a create and every per-release route answer 503 naming 144', async () => {
+    missing = new Set(['releases', 'release_items']);
+    const list = await collection('GET', OWN, L);
+    expect(list.status).toBe(200);
+    expect(await list.json()).toEqual({ releases: [], schemaReady: false });
+    const created = await collection('POST', AR, L, { title: 'x', contact_id: C1 });
+    expect(created.status).toBe(503);
+    expect((await created.json()).migration).toBe('144');
+    expect(db.tables.projects).toHaveLength(4);
+    for (const res of [
+      await one('GET', OWN, L, R1),
+      await one('PATCH', AR, L, R1, { title: 'x' }),
+      await one('DELETE', AR, L, R1),
+      await items('POST', AR, L, R1, { song_track_id: S1 }),
+      await items('PATCH', AR, L, R1, { order: [I1, I2] }),
+      await anItem('DELETE', AR, L, R1, I1),
+    ]) {
+      expect(res.status).toBe(503);
+    }
+  });
+});
+
+describe('write errors as the member sees them', () => {
+  it('a position race is a 409 to retry, never a 400 echoing the release id', async () => {
+    const { writeError } = await import('./access');
+    const race = writeError({ code: '23514', message: `release_items: the positions of release ${R1} must be 1..n with no gap` }, 'x');
+    expect(race.res.status).toBe(409);
+    expect(JSON.stringify(await race.res.json())).not.toContain(R1);
+    expect(writeError({ code: '23505', message: 'duplicate key' }, 'x').res.status).toBe(409);
+    expect(writeError({ code: '23514', message: 'releases_upc_format' }, 'x').res.status).toBe(400);
+    expect(writeError({ code: 'XX000', message: 'boom' }, 'Could not').res.status).toBe(500);
   });
 });
 

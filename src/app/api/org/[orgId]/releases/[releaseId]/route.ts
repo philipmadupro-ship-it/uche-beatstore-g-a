@@ -18,7 +18,7 @@ import { OrgReleasePatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { RELEASE_COLUMNS, toReleaseItemView, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
-import { checkArtwork, fail, itemsOf, releaseRow, writeError } from '../access';
+import { checkArtwork, fail, itemsOf, releaseRow, schemaAware, writeError } from '../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { orgId, releaseId } = await params;
   if (!isSupabaseConfigured()) return unconfigured();
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
-  if (!access.ok) return access.res;
+  if (!access.ok) return (await schemaAware(access)).res;
   const found = await releaseRow(access);
   if (!found.ok) return found.res;
   try {
@@ -50,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { orgId, releaseId } = await params;
   if (!isSupabaseConfigured()) return unconfigured();
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'release.write', orgId });
-  if (!access.ok) return access.res;
+  if (!access.ok) return (await schemaAware(access)).res;
   const found = await releaseRow(access);
   if (!found.ok) return found.res;
   const parsed = await readBody(req, OrgReleasePatchBodySchema);
@@ -85,7 +85,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const { orgId, releaseId } = await params;
   if (!isSupabaseConfigured()) return unconfigured();
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'release.write', orgId });
-  if (!access.ok) return access.res;
+  if (!access.ok) return (await schemaAware(access)).res;
   const found = await releaseRow(access);
   if (!found.ok) return found.res;
   const { release } = found;

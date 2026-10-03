@@ -135,7 +135,14 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       .eq('org_id', access.orgId)
       .eq('id', before.id)
       .select('id');
-    if (deleteErr) throw new Error(deleteErr.message);
+    if (deleteErr) {
+      // A release names this contact as its artist (144: no cascade — a
+      // release is not deleted as a side effect of tidying the directory).
+      if (deleteErr.code === '23503') {
+        return NextResponse.json({ error: 'This contact is the artist of a release. Delete the release first.' }, { status: 409 });
+      }
+      throw new Error(deleteErr.message);
+    }
     if (!Array.isArray(removed) || removed.length === 0) return NOT_FOUND();
 
     await recordEvent(

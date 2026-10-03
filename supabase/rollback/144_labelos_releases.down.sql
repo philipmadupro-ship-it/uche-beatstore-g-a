@@ -11,7 +11,10 @@
 --   3. the two functions, then the tables (release_items before releases),
 --      which takes their policies, triggers and constraints with them. Every
 --      release and tracklist is lost; the release projects and their files
---      stay (they are ordinary org projects).
+--      stay (they are ordinary org projects);
+--   4. ownerless project_contacts rows (org links written by the release
+--      route) are deleted so NOT NULL can come back. Only an org project can
+--      hold one: the producer path of the same-owner trigger refuses it.
 
 CREATE OR REPLACE FUNCTION public.labelos_track_is_finished(p_track uuid)
 RETURNS boolean
@@ -56,5 +59,8 @@ DROP TABLE IF EXISTS public.releases;
 DROP FUNCTION IF EXISTS public.release_items_contiguous();
 DROP FUNCTION IF EXISTS public.release_items_integrity();
 DROP FUNCTION IF EXISTS public.releases_integrity();
+
+DELETE FROM public.project_contacts WHERE user_id IS NULL;
+ALTER TABLE public.project_contacts ALTER COLUMN user_id SET NOT NULL;
 
 NOTIFY pgrst, 'reload schema';

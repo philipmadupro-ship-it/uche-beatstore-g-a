@@ -17,7 +17,7 @@
  */
 import { NextResponse } from 'next/server';
 import { requireObjectAccess, type ObjectAccessResult } from '@/lib/auth/org-access';
-import type { OwnershipFail } from '@/lib/auth/ownership';
+import { createServiceClient, type OwnershipFail } from '@/lib/auth/ownership';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import {
   ARTWORK_PROBLEM_MESSAGES,
@@ -40,13 +40,34 @@ export const fail = (status: number, error: string, extra: Record<string, unknow
 export const notReady = () =>
   fail(503, 'Releases need migration 144 applied on Supabase.', { migration: '144', schemaReady: false });
 
+export const conflict = () => fail(409, 'The tracklist changed at the same time; reload and try again');
+
+/**
+ * requireObjectAccess answers 500 when its read of `releases` fails, and
+ * before migration 144 the table does not exist: say so (503 naming the
+ * migration), as every Label OS route does for an unapplied migration.
+ */
+export async function schemaAware(denied: OwnershipFail): Promise<OwnershipFail> {
+  if (denied.res.status !== 500) return denied;
+  const { error } = await createServiceClient().from('releases').select('id').limit(1);
+  return error && isMissingSchema(error) ? notReady() : denied;
+}
+
+/** Only a draft's tracklist changes: a delivered one went out, a cancelled one is not going. */
+export function tracklistLocked(release: ReleaseRow): OwnershipFail | null {
+  return release.state === 'draft' ? null : fail(409, `A ${release.state} release keeps its tracklist`, { field: 'state' });
+}
+
 /** A Postgres error from a write, as the member should see it. */
 export function writeError(error: { code?: string; message?: string }, fallback: string): OwnershipFail {
   if (isMissingSchema(error)) return notReady();
-  // 144's triggers and CHECKs: our own wording, safe to show.
+  // The deferred position check: another edit of the tracklist got there
+  // first (a race, not bad input), so it is a conflict to retry.
+  if (error.code === '23514' && /no gap/.test(error.message ?? '')) return conflict();
+  // 144's other triggers and CHECKs: our own wording, naming no row.
   if (error.code === '23514') return fail(400, error.message ?? fallback);
   // The deferred (release, position) key: two edits of one tracklist at once.
-  if (error.code === '23505') return fail(409, 'The tracklist changed at the same time; reload and try again');
+  if (error.code === '23505') return conflict();
   if (error.code === '23503') return fail(409, 'Something this release points at no longer exists');
   return fail(500, fallback);
 }

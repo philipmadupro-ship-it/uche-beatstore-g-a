@@ -96,8 +96,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   let createdProject = false;
   try {
     if (!projectId) {
-      // Org rows have no owner (142); the project_contacts row carries the
-      // acting member, as every org row of that #44 table does (141).
+      // Org rows have no owner (142, and 144 for project_contacts), so no
+      // producer route — all filter on user_id — can ever reach them.
       const { data, error } = await admin
         .from('projects')
         .insert({ user_id: null, org_id: org, name: body.title })
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       createdProject = true;
       const link = await admin
         .from('project_contacts')
-        .insert({ user_id: access.userId, project_id: projectId, contact_id: artist.object.id, role: 'artist' });
+        .insert({ user_id: null, project_id: projectId, contact_id: artist.object.id, role: 'artist' });
       if (link.error) throw new Error(link.error.message);
     }
 
