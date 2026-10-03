@@ -302,6 +302,20 @@ describe('DELETE /contacts/[id]', () => {
     expect((await call(AOWN, 'DELETE', A, ASELF)).status).toBe(409);
     expect(db.tables.contacts).toHaveLength(6);
   });
+
+  it('409, not 500, when a release names the contact as its artist (144: no cascade)', async () => {
+    const realFrom = mem.client.from;
+    mem.client.from = ((table: string) => {
+      const q = realFrom(table);
+      if (table !== 'contacts') return q;
+      const refused = { data: null, error: { code: '23503', message: 'update or delete on table "contacts" violates foreign key constraint "releases_contact_id_fkey"' } };
+      return { ...q, delete: () => ({ eq: () => ({ eq: () => ({ select: async () => refused }) }) }) };
+    }) as typeof realFrom;
+    const res = await call(AR, 'DELETE', L, C2);
+    expect(res.status).toBe(409);
+    expect(res.json.error).toMatch(/artist of a release/);
+    expect(db.tables.contacts.some((c) => c.id === C2)).toBe(true);
+  });
 });
 
 describe('/members/artists: the roster picker', () => {

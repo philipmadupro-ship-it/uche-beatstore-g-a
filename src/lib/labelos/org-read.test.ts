@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,14 +11,26 @@ import {
 } from './org-read';
 import { recordingClass } from './capabilities';
 import { recordingKindOf } from './recording-kind';
+import { RELEASE_STATES_OFF_RELEASE } from './releases';
 
 const MIGRATION = readFileSync(join(process.cwd(), 'supabase/migrations/141_labelos_org_catalog.sql'), 'utf8').replace(/--[^\n]*/g, '');
 
-/** The body of one CREATE FUNCTION in migration 141. */
+const MIGRATIONS_DIR = join(process.cwd(), 'supabase/migrations');
+
+/**
+ * The body of the LAST CREATE OR REPLACE of a function across the
+ * migrations — what the database runs. `labelos_track_is_finished` was
+ * written by 141 and replaced by 144 (LABEL-16).
+ */
 function functionBody(name: string): string {
-  const m = MIGRATION.match(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\([\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$;`));
-  if (!m) throw new Error(`${name} not found in migration 141`);
-  return m[1];
+  const re = new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\([\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$;`, 'g');
+  let body: string | null = null;
+  for (const file of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort()) {
+    const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8').replace(/--[^\n]*/g, '');
+    for (const m of sql.matchAll(re)) body = m[1];
+  }
+  if (!body) throw new Error(`${name} not found in any migration`);
+  return body;
 }
 
 /** The quoted values of every `<column> [NOT] IN (...)` in a SQL fragment. */
@@ -81,10 +93,29 @@ describe('orgTrackReadClass (the SQL twin of labelos_track_is_finished)', () => 
     }
   });
 
-  it('FINISHED_LINK_RELATIONS are exactly the relation lists in labelos_track_is_finished (migration 141)', () => {
+  it('FINISHED_LINK_RELATIONS are exactly the relation lists in labelos_track_is_finished (141, as replaced by 144)', () => {
     const lists = inLists(functionBody('labelos_track_is_finished'), 'relation');
     expect(lists.length).toBeGreaterThan(0);
     for (const list of lists) expect(list).toEqual([...FINISHED_LINK_RELATIONS]);
+  });
+
+  it('a song on a release is finished at any stage (06 §2.3, LABEL-16)', () => {
+    for (const stage of ['inbox', 'in_review', 'in_development', null]) {
+      expect(orgTrackReadClass({ type: 'song', song_stage: stage, on_release: true }, [])).toBe('finished');
+      expect(orgTrackReadClass({ type: 'song', song_stage: stage, on_release: false }, [])).toBe('working');
+    }
+  });
+
+  it('… but a working link into it still wins, and a non-song is never finished by it', () => {
+    expect(orgTrackReadClass({ type: 'song', song_stage: null, on_release: true }, [{ relation: 'version', fromType: 'song' }])).toBe('working');
+    expect(orgTrackReadClass({ type: 'beat', song_stage: null, on_release: true }, [])).toBe('working');
+  });
+
+  it('the SQL twin has the release arm: a song item of a release that is not cancelled', () => {
+    const body = functionBody('labelos_track_is_finished');
+    expect(body).toMatch(/JOIN public\.release_items ri ON ri\.song_track_id = t\.id/);
+    expect(body).toMatch(/t\.type = 'song'/);
+    expect(inLists(body, 'state')).toEqual([[...RELEASE_STATES_OFF_RELEASE]]);
   });
 });
 

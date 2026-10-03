@@ -10,8 +10,10 @@
  * `table!inner(cols)` embed resolved through `org_id` for organizations,
  * else `<table singular>_id`), eq, in,
  * is, not(col, 'in', '(…)'), order, limit, maybeSingle, single, insert,
- * update, delete, upsert (ignoreDuplicates). Unique keys per table are
- * declared by the test and answered with Postgres' 23505.
+ * update, delete, upsert (ignoreDuplicates), rpc (functions the test
+ * declares in `rpc`, run against the same tables). Unique keys per table are
+ * declared by the test and answered with Postgres' 23505. `order` compares
+ * numbers as numbers.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -23,6 +25,8 @@ export type MemoryDb = {
   tables: Record<string, Row[]>;
   /** column lists that must be unique per table, e.g. { contacts: [['org_id', 'email']] } */
   unique?: Record<string, string[][]>;
+  /** Database functions for `.rpc(name, args)`: answer like PostgREST would. */
+  rpc?: Record<string, (args: Record<string, unknown>, tables: Record<string, Row[]>) => { data: unknown; error: Err | null }>;
 };
 
 const EMBED = /^(\w+)!inner\(([^)]*)\)$/;
@@ -100,7 +104,9 @@ export function memoryAdmin(db: MemoryDb) {
         let rows = [...matching];
         if (order) {
           const { col, asc } = order;
-          rows.sort((a, b) => String(a[col] ?? '').localeCompare(String(b[col] ?? '')) * (asc ? 1 : -1));
+          const cmp = (x: unknown, y: unknown) =>
+            typeof x === 'number' && typeof y === 'number' ? x - y : String(x ?? '').localeCompare(String(y ?? ''));
+          rows.sort((a, b) => cmp(a[col], b[col]) * (asc ? 1 : -1));
         }
         if (limit !== null) rows = rows.slice(0, limit);
         return { data: project(rows), error: null };
@@ -210,5 +216,13 @@ export function memoryAdmin(db: MemoryDb) {
     return b;
   }
 
-  return { client: { from }, writes };
+  async function rpc(name: string, args: Record<string, unknown> = {}) {
+    const fn = db.rpc?.[name];
+    if (!fn) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: 'PGRST202' } };
+    const result = fn(args, db.tables);
+    writes.push({ table: `rpc:${name}`, op: 'rpc', rows: [args] });
+    return result;
+  }
+
+  return { client: { from, rpc }, writes };
 }

@@ -16,6 +16,9 @@
  *     (lib/labelos/org-audio), and the member needs every audio
  *     capability those kinds — and a stem variant — call for. Unclassified
  *     material needs a capability nobody has: 403 for everyone.
+ *     A song that is an item of a release (not cancelled) is its own
+ *     FINISHED mix (06 §2.3, LABEL-16); before migration 144 there are no
+ *     releases, so the lookup failing on a missing table reads as "not on one".
  *     `peaks` (the waveform sidecar, LABEL-14) needs what the audio needs.
  *  3. The variant names a column of the row (or a `stems` row). Its stored
  *     reference is streamed through lib/audio/stream-source, which forwards
@@ -29,6 +32,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireObjectAccess } from '@/lib/auth/org-access';
+import type { AdminClient } from '@/lib/auth/ownership';
 import { streamAudioPreviewSource, streamAudioSource } from '@/lib/audio/stream-source';
 import { OrgAudioQuerySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
@@ -42,6 +46,8 @@ import {
   requiredAudioCapabilities,
   type OrgAudioStemRow,
 } from '@/lib/labelos/org-audio';
+import { countsAsOnRelease } from '@/lib/labelos/releases';
+import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { isR2Configured } from '@/lib/local-store';
 import { createLogger } from '@/lib/log';
 
@@ -96,8 +102,9 @@ export async function GET(req: NextRequest, { params }: Params) {
         : Promise.resolve({ data: [] as OrgAudioStemRow[], error: null }),
     ]);
     for (const r of [trackRes, beatsRes, linksRes, mainBeatRes, stemsRes]) if (r.error) throw new Error(r.error.message);
-    const track = trackRes.data as TrackRow | null;
-    if (!track) return json(404, 'Not found');
+    const row = trackRes.data as TrackRow | null;
+    if (!row) return json(404, 'Not found');
+    const track = { ...row, on_release: row.type === 'song' ? await songIsOnRelease(admin, org, trackId) : false };
 
     const raw = {
       songBeats: (beatsRes.data ?? []) as { song_track_id: string }[],
@@ -137,6 +144,24 @@ export async function GET(req: NextRequest, { params }: Params) {
     log.error('org audio failed', { orgId: org, trackId, error: errorMessage(err) });
     return json(500, 'Could not load the audio');
   }
+}
+
+/**
+ * Is this song an item of a release that is not cancelled (LABEL-16)? Only
+ * a song's own audio depends on it, so only songs ask. Before migration 144
+ * there is no release table, which means no release.
+ */
+async function songIsOnRelease(admin: AdminClient, org: string, trackId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from('release_items')
+    .select('release_id, releases!inner(state)')
+    .eq('song_track_id', trackId)
+    .eq('org_id', org);
+  if (error) {
+    if (isMissingSchema(error)) return false;
+    throw new Error(error.message);
+  }
+  return countsAsOnRelease((data ?? []) as unknown as { releases: { state: string } | null }[]);
 }
 
 /** Headers only: the storage stream GET opened is cancelled, never read. */
