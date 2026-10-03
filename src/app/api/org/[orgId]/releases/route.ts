@@ -128,6 +128,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         target_date: body.target_date ?? null,
         release_date: body.release_date ?? null,
         artwork_asset_id: body.artwork_asset_id ?? null,
+        state: 'draft',
         created_by: access.userId,
       })
       .select(RELEASE_COLUMNS)
