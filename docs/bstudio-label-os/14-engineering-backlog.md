@@ -844,7 +844,12 @@ Revert the wrapper. Org rows remain and are harmless.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-10, LABEL-11
-**Status:** In Progress (branch label-os/LABEL-15)
+**Status:** Done (2026-10-03) — PR #71. Migration 143 is not applied. Org files are ownerless `project_assets` rows with a `sensitivity` of normal or restricted. Contracts and split sheets are always restricted and never appear in a portal. `track_stem_files` gets the guard and the trigger.
+
+**Orchestrator decisions on #71 (accepted as implemented):**
+- **Who can see what.** Visual kinds (artwork, lyrics, photo, video) need only `catalog.read`. Legal kinds (contract, split sheet) also need `contracts.read`. Everything else counts as working material and also needs `audio.working`.
+- **Who can write.** A member writes only what they can open. Restricted files additionally need `contracts.read` plus `catalog.write` or `rights.write`.
+- **Audit.** A restricted download is audited (`file.restricted_downloaded`) before any byte is sent, and the download fails closed if the audit write fails.
 
 ## Objective
 Artwork, photos, video, documents and contracts as org assets, by extending `main`'s `project_assets` (`17` R2). **No new `files` table.**
@@ -910,7 +915,7 @@ Restore the CHECKs (only if no new kinds are used); drop the columns.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-11, LABEL-15
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-16)
 
 ## Objective
 The release entity and its tracklist, built on song tracks (`17` R1/R2).
@@ -949,6 +954,12 @@ None (LABEL-17 / 33).
 
 ## Carried from LABEL-13 (#69)
 - **"On a release" makes a mix finished** (06 §2.3). Until this task, `audioCapabilityFor('mix', { currentMixOfSelectedSong })` treats only `song_stage = 'selected'` as finished. When release items exist, extend that flag (in `lib/labelos/org-audio.ts#recordingContexts`) and the SQL twin `labelos_track_is_finished` (141) together, and add both to their tests. The two must not drift.
+
+## Carried from LABEL-14 / LABEL-15 (#70, #71)
+- **Ownership.** `releases` and `release_items` are new Label OS tables. They are org-only: `org_id NOT NULL` and no `user_id`. Add them to `labelOsTables()` in `rls-final-state.test.ts`. Writes go through the service role only, using the `labelos_org_rows_service_only` shape.
+- **Artwork.** `artwork_asset_id` must point at an org `project_assets` row of the release's own org with a visual kind (artwork or photo). Enforce this with a trigger.
+- **Read rule.** The read policy follows `catalog.read` plus project scope (`can_see_org_project`), the same as 141/143.
+- Migration number: **144**.
 
 ## Out of Scope
 Gates (LABEL-32); export (LABEL-34).
@@ -1012,6 +1023,10 @@ jsdom tests for the capability-filtered tabs; Playwright spec; existing artist-w
   This needs one migration (next free number).
 - **No org UI lists songs yet.** The upload panel's "Add to song as…" uses `/api/org/[orgId]/upload/targets`, which is narrowed by the project path. The song list and song detail built here should reuse that scope rule.
 - The `complete` rollback leaves a newly created Inbox project in place. That is deliberate: the next upload reuses it.
+
+## Carried from LABEL-15 (#71)
+- **Files section.** `ProjectFilesSection` already has an `org` mode (org routes, org kinds, a Restricted marker, capability-aware controls), but nothing mounts it yet. The org project page built here mounts it.
+- **Duplicate read.** Item routes read the asset row twice: once in `requireObjectAccess`, once in `orgAssetRow`. Fold these together if this task touches `requireObjectAccess`.
 
 ## Out of Scope
 Reviews, credits, direction tabs (later tasks).
