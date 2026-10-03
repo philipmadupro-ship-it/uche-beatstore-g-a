@@ -5,7 +5,9 @@
  * that has checked ownership or portal membership — never by a public URL.
  * Without R2 (local development and the local-db harness) they go under
  * `data/project-assets/`, outside `public/`, as `local://` references, so the
- * local fallback is private too.
+ * local fallback is private too. Org files (LABEL-15) use the same helpers
+ * with keys under `orgs/<org>/assets/<project>/` (lib/labelos/org-assets),
+ * in the private bucket or `data/orgs/` — never `public/`.
  */
 
 import fs from 'node:fs';
@@ -18,10 +20,14 @@ import { getStoredObject, parseR2ObjectRef, privateAudioBucket, r2, r2ObjectRef 
 
 const LOCAL_ROOT = path.join(process.cwd(), 'data');
 
+/** An org file's local key (LABEL-15): `orgs/<org>/assets/<project>/<file>`, still under `data/`. */
+const ORG_LOCAL_KEY = /^orgs\/[0-9a-f-]{36}\/assets\/[0-9a-f-]{36}\/[A-Za-z0-9_-]{6,64}\.[a-z0-9]{1,8}$/;
+
 function localPath(key: string): string {
   const full = path.resolve(LOCAL_ROOT, key);
-  if (!full.startsWith(path.resolve(LOCAL_ROOT, 'project-assets') + path.sep)) throw new Error('Invalid local asset path');
-  return full;
+  if (full.startsWith(path.resolve(LOCAL_ROOT, 'project-assets') + path.sep)) return full;
+  if (ORG_LOCAL_KEY.test(key) && full.startsWith(path.resolve(LOCAL_ROOT, 'orgs') + path.sep)) return full;
+  throw new Error('Invalid local asset path');
 }
 
 /** Buckets a stored project-file reference may point into. */
