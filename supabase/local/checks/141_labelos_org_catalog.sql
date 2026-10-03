@@ -121,9 +121,10 @@ INSERT INTO public.project_tracks (project_id, track_id, position) VALUES
 INSERT INTO public.project_contacts (user_id, project_id, contact_id, role) VALUES
   (:O, :LP1, :C1, 'artist'), (:O, :LP1, :C2, 'featured');
 INSERT INTO public.artist_portals (user_id, contact_id, token) VALUES (:O, :C1, 'l-portal-141');
-INSERT INTO public.project_assets (user_id, project_id, kind, url) VALUES
-  (:O, :LP1, 'artwork', 'r2://private/la'), (:O, :LP1, 'lyrics', 'r2://private/ll'),
-  (:O, :LP1, 'document', 'r2://private/ld'), (:O, :LP1, 'audio', 'r2://private/lau');
+-- Org files have no user_id since 143 (the uploader is created_by).
+INSERT INTO public.project_assets (user_id, created_by, project_id, kind, url) VALUES
+  (NULL, :O, :LP1, 'artwork', 'r2://private/la'), (NULL, :O, :LP1, 'lyrics', 'r2://private/ll'),
+  (NULL, :O, :LP1, 'document', 'r2://private/ld'), (NULL, :O, :LP1, 'audio', 'r2://private/lau');
 INSERT INTO public.song_beats (song_track_id, beat_track_id, user_id) VALUES (:S1, :T3, :O);
 INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES
   (:S1, :S1M, NULL, 'master'), (:S1, :S1D, NULL, 'demo');
@@ -234,6 +235,7 @@ SELECT public.check_eq('every org_member_read policy is SELECT-only, for authent
   'project_comments=SELECT/authenticated/true/true project_contacts=SELECT/authenticated/true/true '
   'projects=SELECT/authenticated/true/true song_beats=SELECT/authenticated/true/true '
   'track_links=SELECT/authenticated/true/true tracks=SELECT/authenticated/true/true');
+-- (track_stem_files' guard arrived with 143, carried from LABEL-13.)
 SELECT public.check_eq('the only other new policies are the RESTRICTIVE SELECT guards, on every table an owner policy could reach an org row through',
   (SELECT string_agg(tablename || '=' || permissive || '/' || cmd, ' ' ORDER BY tablename)
    FROM pg_policies WHERE schemaname = 'public' AND (permissive <> 'PERMISSIVE' OR policyname = 'org_member_guard')),
@@ -243,13 +245,13 @@ SELECT public.check_eq('the only other new policies are the RESTRICTIVE SELECT g
   'project_shares=RESTRICTIVE/SELECT project_tags=RESTRICTIVE/SELECT project_tracks=RESTRICTIVE/SELECT '
   'projects=RESTRICTIVE/SELECT song_beats=RESTRICTIVE/SELECT store_free_downloads=RESTRICTIVE/SELECT '
   'track_collaborators=RESTRICTIVE/SELECT track_licenses=RESTRICTIVE/SELECT track_links=RESTRICTIVE/SELECT '
-  'track_versions=RESTRICTIVE/SELECT tracks=RESTRICTIVE/SELECT');
+  'track_stem_files=RESTRICTIVE/SELECT track_versions=RESTRICTIVE/SELECT tracks=RESTRICTIVE/SELECT');
 SELECT public.check_eq('the service-only write trigger sits on every table the producer can write an org row through',
   (SELECT string_agg(c.relname, ',' ORDER BY c.relname) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
    WHERE t.tgname = 'labelos_org_rows_service_only' AND NOT t.tgisinternal),
   'artist_messages,artist_portals,contact_track_states,project_assets,project_comments,project_contacts,'
   'project_folder_items,project_shares,project_tags,project_tracks,projects,song_beats,track_collaborators,'
-  'track_licenses,track_links,track_versions,tracks');
+  'track_licenses,track_links,track_stem_files,track_versions,tracks');
 SELECT public.check_eq('every permissive policy on these tables is the producer''s from before 141, or org_member_read',
   (SELECT string_agg(DISTINCT policyname, ',' ORDER BY policyname)
    FROM pg_policies WHERE schemaname = 'public' AND permissive = 'PERMISSIVE'
@@ -428,11 +430,10 @@ DELETE FROM public.track_links WHERE from_track_id = :S2;
 
 -- The guards: writing a row is not a read grant. AR "uploaded" a demo and a
 -- file. Since 142 an org track and its links carry no user_id at all (AR is
--- only its created_by), so no owner policy can match them and these hold
--- trivially; the file (project_assets, still owner-stamped until a later
--- task writes org rows there) is the case the guards themselves decide.
+-- only its created_by), and since 143 an org file neither, so no owner
+-- policy can match them; the guards still decide everything else.
 UPDATE public.tracks SET created_by = :AR WHERE id = :S1D;
-UPDATE public.project_assets SET user_id = :AR WHERE kind = 'document' AND project_id = :LP1;
+UPDATE public.project_assets SET created_by = :AR WHERE kind = 'document' AND project_id = :LP1;
 SET ROLE authenticated;
 SELECT public.as_user(:AR);
 SELECT public.check_eq('AR, still in L, reads what they wrote', (SELECT count(*) FROM public.tracks WHERE id = :S1D), 1::bigint);
