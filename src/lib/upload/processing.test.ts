@@ -9,7 +9,7 @@ vi.mock('@/lib/storage/upload', () => ({
   readStoredObject: vi.fn(), uploadPeaksSidecar: vi.fn(), uploadPublicPreview: vi.fn(),
 }));
 
-import { claimableJobFilter, STALE_PROCESSING_LOCK_MS, compareAndSet } from './processing';
+import { claimableJobFilter, claimJob, STALE_PROCESSING_LOCK_MS, compareAndSet } from './processing';
 
 describe('claimableJobFilter', () => {
   it('claims pending and failed jobs', () => {
@@ -26,6 +26,62 @@ describe('claimableJobFilter', () => {
 
   it('keeps the stale window longer than the 300s function ceiling', () => {
     expect(STALE_PROCESSING_LOCK_MS).toBeGreaterThan(300_000);
+  });
+});
+
+/**
+ * PostgREST 12.2 rejects any `or=` filter on a PATCH, so a claim written as
+ * one update with `claimableJobFilter` threw on every job and the queue never
+ * processed anything. The claim is two plain compare-and-set updates instead.
+ */
+describe('claimJob', () => {
+  type Call = [string, ...unknown[]];
+  function fakeAdmin(results: Array<{ data: unknown; error: { message: string } | null }>) {
+    const calls: Call[] = [];
+    let n = 0;
+    const chain: Record<string, (...a: unknown[]) => unknown> = {};
+    for (const m of ['update', 'eq', 'in', 'lt', 'or']) {
+      chain[m] = (...a: unknown[]) => { calls.push([m, ...a]); return chain; };
+    }
+    chain.select = () => Promise.resolve(results[n++] ?? { data: [], error: null });
+    const admin = { from: (t: string) => { calls.push(['from', t]); return chain; } };
+    return { admin: admin as never, calls };
+  }
+  const now = Date.parse('2026-10-03T12:00:00.000Z');
+  const stamp = new Date(now).toISOString();
+  const patch = { status: 'processing', locked_at: stamp, updated_at: stamp };
+
+  it('claims a pending or failed job in one update, without an or filter', async () => {
+    const { admin, calls } = fakeAdmin([{ data: [{ id: 'j1' }], error: null }]);
+    expect(await claimJob(admin, 'j1', now)).toBe(true);
+    expect(calls).toEqual([
+      ['from', 'upload_processing_jobs'], ['update', patch], ['eq', 'id', 'j1'], ['in', 'status', ['pending', 'failed']],
+    ]);
+  });
+
+  it('reclaims a processing job only once its lock is stale', async () => {
+    const { admin, calls } = fakeAdmin([{ data: [], error: null }, { data: [{ id: 'j1' }], error: null }]);
+    expect(await claimJob(admin, 'j1', now)).toBe(true);
+    expect(calls.slice(4)).toEqual([
+      ['from', 'upload_processing_jobs'], ['update', patch], ['eq', 'id', 'j1'], ['eq', 'status', 'processing'],
+      ['lt', 'locked_at', new Date(now - STALE_PROCESSING_LOCK_MS).toISOString()],
+    ]);
+  });
+
+  it('gives up when another worker holds a live lock (or the job is done)', async () => {
+    const { admin } = fakeAdmin([{ data: [], error: null }, { data: [], error: null }]);
+    expect(await claimJob(admin, 'j1', now)).toBe(false);
+  });
+
+  it('never sends an or filter on the update', async () => {
+    const { admin, calls } = fakeAdmin([{ data: [], error: null }, { data: [], error: null }]);
+    await claimJob(admin, 'j1', now);
+    expect(calls.some(([m]) => m === 'or')).toBe(false);
+  });
+
+  it('throws on a database error rather than reporting "not claimed"', async () => {
+    const { admin } = fakeAdmin([{ data: null, error: { message: 'boom' } }]);
+    await expect(claimJob(admin, 'j1', now)).rejects.toThrow('Upload processing claim failed: boom');
   });
 });
 
