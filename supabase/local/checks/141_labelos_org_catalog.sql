@@ -102,8 +102,8 @@ INSERT INTO public.artist_messages (user_id, contact_id, author, body) VALUES (:
 INSERT INTO public.contact_track_states (user_id, contact_id, track_id, decision) VALUES (:P, :PC1, :PT1, 'interested');
 INSERT INTO public.project_comments (project_id, track_id, author_name, body) VALUES (:PP1, :PT1, 'Guest', 'nice');
 
--- L's rows. Written as the service role would: no user_id (142), the
--- uploader in created_by.
+-- L's rows. Written as the service role would: no user_id (142; the #44
+-- links since 145), the uploader in created_by.
 INSERT INTO public.projects (id, user_id, org_id, name, inbox_for_contact_id) VALUES
   (:LP1, NULL, :L, 'Nova EP', NULL),
   (:LP2, NULL, :L, 'Inbox · Kilo', :C2),
@@ -119,20 +119,20 @@ UPDATE public.tracks SET beat_track_id = :T3 WHERE id = :S1;
 INSERT INTO public.project_tracks (project_id, track_id, position) VALUES
   (:LP1, :S1, 0), (:LP1, :S1M, 1), (:LP1, :S1D, 2), (:LP2, :S2, 0), (:LP3, :T3, 0);
 INSERT INTO public.project_contacts (user_id, project_id, contact_id, role) VALUES
-  (:O, :LP1, :C1, 'artist'), (:O, :LP1, :C2, 'featured');
-INSERT INTO public.artist_portals (user_id, contact_id, token) VALUES (:O, :C1, 'l-portal-141');
+  (NULL, :LP1, :C1, 'artist'), (NULL, :LP1, :C2, 'featured');
+INSERT INTO public.artist_portals (user_id, contact_id, token) VALUES (NULL, :C1, 'l-portal-141');
 -- Org files have no user_id since 143 (the uploader is created_by).
 INSERT INTO public.project_assets (user_id, created_by, project_id, kind, url) VALUES
   (NULL, :O, :LP1, 'artwork', 'r2://private/la'), (NULL, :O, :LP1, 'lyrics', 'r2://private/ll'),
   (NULL, :O, :LP1, 'document', 'r2://private/ld'), (NULL, :O, :LP1, 'audio', 'r2://private/lau');
-INSERT INTO public.song_beats (song_track_id, beat_track_id, user_id) VALUES (:S1, :T3, :O);
+INSERT INTO public.song_beats (song_track_id, beat_track_id, user_id) VALUES (:S1, :T3, NULL);
 INSERT INTO public.track_links (from_track_id, to_track_id, user_id, relation) VALUES
   (:S1, :S1M, NULL, 'master'), (:S1, :S1D, NULL, 'demo');
 INSERT INTO public.artist_messages (user_id, contact_id, project_id, author, body) VALUES
-  (:O, :C1, NULL, 'producer', 'welcome'),
-  (:O, :C1, :LP3, 'producer', 'about the beat pool');
+  (NULL, :C1, NULL, 'producer', 'welcome'),
+  (NULL, :C1, :LP3, 'producer', 'about the beat pool');
 INSERT INTO public.contact_track_states (user_id, contact_id, track_id, project_id, decision) VALUES
-  (:O, :C1, :S1M, :LP1, 'selected'), (:O, :C1, :S1D, :LP1, 'interested');
+  (NULL, :C1, :S1M, :LP1, 'selected'), (NULL, :C1, :S1D, :LP1, 'interested');
 INSERT INTO public.project_shares (project_id, token) VALUES (:LP1, 'l-share-141');
 INSERT INTO public.project_comments (project_id, track_id, author_name, body, share_token) VALUES
   (:LP1, :S1, 'A&R', 'on the single', NULL),
@@ -603,7 +603,7 @@ SELECT public.check_raises('project_comments: an L2 contact''s thread on an L pr
 
 -- Org case accepted (the setup above already wrote one of each); a few more.
 SELECT public.check_ok('song_beats: an L song on an L beat',
-  $$INSERT INTO public.song_beats (song_track_id, beat_track_id, user_id, position) VALUES ('e1410000-0000-4000-8000-000000000014', 'e1410000-0000-4000-8000-000000000015', 'a1410000-0000-4000-8000-000000000002', 0)$$);
+  $$INSERT INTO public.song_beats (song_track_id, beat_track_id, user_id, position) VALUES ('e1410000-0000-4000-8000-000000000014', 'e1410000-0000-4000-8000-000000000015', NULL, 0)$$);
 SELECT public.check_ok('project_comments: an L contact''s thread on an L project',
   $$INSERT INTO public.project_comments (project_id, author_name, body, contact_id) VALUES ('d1410000-0000-4000-8000-000000000011', 'Nova', 'x', 'c1410000-0000-4000-8000-0000000000c1')$$);
 SELECT public.check_ok('tracks.beat_track_id: an L song on an L beat',

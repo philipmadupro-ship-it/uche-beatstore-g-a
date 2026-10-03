@@ -81,7 +81,7 @@ INSERT INTO public.projects (id, user_id, org_id, name, inbox_for_contact_id) VA
   (:LP1, NULL, :L, 'Nova EP', NULL),
   (:LP2, NULL, :L, 'Inbox · Kilo', :C2),
   (:XP1, NULL, :L2, 'L2 project', NULL);
-INSERT INTO public.project_contacts (user_id, project_id, contact_id, role) VALUES (:O, :LP1, :C1, 'artist');
+INSERT INTO public.project_contacts (user_id, project_id, contact_id, role) VALUES (NULL, :LP1, :C1, 'artist');
 INSERT INTO public.tracks (id, user_id, org_id, created_by, title, type, audio_url, song_stage) VALUES
   (:S1, NULL, :L, :AR, 'Nova single', 'song', 'r2://private/orgs/l/s1', 'inbox'),
   (:M1, NULL, :L, :AR, 'Nova single (master)', 'song', 'r2://private/orgs/l/m1', NULL),

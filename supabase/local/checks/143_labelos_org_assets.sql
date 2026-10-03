@@ -65,7 +65,7 @@ INSERT INTO public.track_stem_files (track_id, user_id, label, url) VALUES (:PT1
 INSERT INTO public.projects (id, user_id, org_id, name) VALUES
   (:LP1, NULL, :L, 'Nova EP'),
   (:XP1, NULL, :L2, 'L2 project');
-INSERT INTO public.project_contacts (user_id, project_id, contact_id, role) VALUES (:O, :LP1, :C1, 'artist');
+INSERT INTO public.project_contacts (user_id, project_id, contact_id, role) VALUES (NULL, :LP1, :C1, 'artist');
 INSERT INTO public.tracks (id, user_id, org_id, created_by, title, type, audio_url, song_stage) VALUES
   (:LS1, NULL, :L, :AR, 'Nova single', 'song', 'r2://private/orgs/l/tracks/s1', 'inbox');
 INSERT INTO public.project_tracks (project_id, track_id, position) VALUES (:LP1, :LS1, 0);
