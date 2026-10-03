@@ -915,7 +915,16 @@ Restore the CHECKs (only if no new kinds are used); drop the columns.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-11, LABEL-15
-**Status:** In Progress (branch label-os/LABEL-16)
+**Status:** Done (2026-10-03) — PR #72. Migration 144, not applied: org-only `releases` and `release_items` tables, a `project_contacts.user_id` that can be NULL, and "on a release" makes a mix finished in SQL and in both TS twins.
+
+**Orchestrator decisions on #72 (accepted as implemented):**
+- A cancelled release does not count as "on a release".
+- A `version` chosen as an item's master stays working material. Link a released alternate mix as `master` instead. Widening this is a D4 product call.
+- Artwork must be a file of the release's own project.
+- `releases.contact_id` is NOT NULL, and deleting that contact returns 409.
+- The tracklist is editable only while the release is a draft. A delivered or imported release cannot be deleted; cancel it instead.
+- Deleting a release keeps its project.
+- Items expose ids only.
 
 ## Objective
 The release entity and its tracklist, built on song tracks (`17` R1/R2).
@@ -976,7 +985,7 @@ Drop the tables.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-14, LABEL-15, LABEL-16
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-17)
 
 ## Objective
 The org artist workspace and song view, built from `main`'s workspace components (`17` R12), plus the Releases tab.
@@ -1027,6 +1036,11 @@ jsdom tests for the capability-filtered tabs; Playwright spec; existing artist-w
 ## Carried from LABEL-15 (#71)
 - **Files section.** `ProjectFilesSection` already has an `org` mode (org routes, org kinds, a Restricted marker, capability-aware controls), but nothing mounts it yet. The org project page built here mounts it.
 - **Duplicate read.** Item routes read the asset row twice: once in `requireObjectAccess`, once in `orgAssetRow`. Fold these together if this task touches `requireObjectAccess`.
+
+## Carried from LABEL-16 (#72)
+- **`project_contacts`.** Migration 144 made `project_contacts.user_id` nullable, and release-created links are ownerless. Add the CHECK in this task's migration (**145**): an org project's link has no `user_id`, and a producer link must have one. Do this through the same-owner trigger's org path, because the CHECK cannot see the project. Then amend the 141–143 local checks, which still write org links with the acting member. The "ownerless" carry from LABEL-14 above covers the other #44 tables.
+- **Song titles.** Release items expose track ids only. The Releases tab joins titles through the track routes, so the scope rules and D4 still apply.
+- **Scope walk.** There are two TS copies of the project-scope walk: `orgProjectIdsInScope` (list) and `artistsThroughProjects` (single object). Add a test holding them equal to each other and to SQL `can_see_org_project`, or merge them, while this task touches org-access.
 
 ## Out of Scope
 Reviews, credits, direction tabs (later tasks).
