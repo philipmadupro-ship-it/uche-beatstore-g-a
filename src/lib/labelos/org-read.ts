@@ -6,17 +6,18 @@
  * A row policy cannot run `songRecordings` (recording-kind.ts) per row, so
  * the database uses a NARROWER rule than the routes' per-recording one:
  *
- *  - a track is `finished` only when it is a selected song's own audio, or a
- *    song's `master` / `instrumental`, AND nothing links to it as working
- *    material (a beat, loop, topline, version or demo). Everything else —
- *    including material R1 does not classify — reads as `working`;
+ *  - a track is `finished` only when it is the own audio of a song that is
+ *    selected or on a release (one not cancelled — LABEL-16, migration 144),
+ *    or a song's `master` / `instrumental`, AND nothing links to it as
+ *    working material (a beat, loop, topline, version or demo). Everything
+ *    else — including material R1 does not classify — reads as `working`;
  *  - `working` rows need `audio.working`; `finished` rows need
  *    `audio.finished` (or `audio.working`). So marketing (D4) never sees a
  *    demo's row through PostgREST, even where a route might list it.
  *
- * The finer split (a selected song's older versions are working, a mix on a
- * release is finished) stays with the routes (LABEL-13/16). A row the
- * database calls working that a route calls finished is the safe direction.
+ * The finer split (a selected song's older versions are working) stays with
+ * the routes (LABEL-13). A row the database calls working that a route calls
+ * finished is the safe direction.
  */
 
 import type { LinkRelation } from '@/lib/tracks/links';
@@ -35,6 +36,8 @@ export const OPEN_ASSET_KINDS = ['artwork', 'lyrics'] as const;
 export interface OrgReadTrack {
   type: string | null;
   song_stage: string | null;
+  /** The song is an item of a release that is not cancelled (lib/labelos/releases#countsAsOnRelease). */
+  on_release?: boolean;
 }
 
 /** One link INTO the track: `relation` as seen from the track it hangs off. */
@@ -47,7 +50,7 @@ export function orgTrackReadClass(track: OrgReadTrack, inbound: readonly Inbound
   const finished = FINISHED_LINK_RELATIONS as readonly string[];
   if (inbound.some((l) => !finished.includes(l.relation))) return 'working';
   if (inbound.some((l) => finished.includes(l.relation) && l.fromType === 'song')) return 'finished';
-  if (track.type === 'song' && track.song_stage === 'selected') return 'finished';
+  if (track.type === 'song' && (track.song_stage === 'selected' || track.on_release === true)) return 'finished';
   return 'working';
 }
 

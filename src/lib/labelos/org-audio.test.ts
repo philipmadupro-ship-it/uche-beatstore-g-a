@@ -50,6 +50,23 @@ describe('recordingContexts — the kind comes from where the track sits', () =>
     expect(recordingContexts({ type: 'song', song_stage: 'selected' }, [])).toEqual([{ kind: 'mix', current: true, capability: 'audio.finished' }]);
   });
 
+  it('a song on a release is its own FINISHED mix (06 §2.3, LABEL-16), whatever its stage', () => {
+    for (const stage of ['inbox', 'in_review', 'in_development', null]) {
+      expect(recordingContexts({ type: 'song', song_stage: stage, on_release: true }, [])).toEqual([{ kind: 'mix', current: true, capability: 'audio.finished' }]);
+      expect(recordingContexts({ type: 'song', song_stage: stage, on_release: false }, [])).toEqual([{ kind: 'mix', current: true, capability: 'audio.working' }]);
+    }
+  });
+
+  it('being on a release finishes only the song\'s own audio: a working take of it still needs audio.working', () => {
+    const linked = linksOf('alt', { links: [link('song', 'alt', 'version')] });
+    const caps = requiredAudioCapabilities({ type: 'song', song_stage: null, on_release: true }, linked, FULL);
+    expect([...caps!].sort()).toEqual(['audio.finished', 'audio.working']);
+  });
+
+  it('on_release says nothing about a track that is not a song', () => {
+    expect(recordingContexts({ type: 'beat', song_stage: null, on_release: true }, [])).toEqual([{ kind: 'beat_source', current: false, capability: 'audio.working' }]);
+  });
+
   it("a song-type file linked as a song's master is a master (the relation decides, not the type)", () => {
     const linked = linksOf('mst', { links: [link('song', 'mst', 'master')] });
     expect(recordingContexts({ type: 'song', song_stage: null }, linked)).toEqual([{ kind: 'master', current: false, capability: 'audio.finished' }]);

@@ -16,6 +16,9 @@
  *     (lib/labelos/org-audio), and the member needs every audio
  *     capability those kinds — and a stem variant — call for. Unclassified
  *     material needs a capability nobody has: 403 for everyone.
+ *     A song that is an item of a release (not cancelled) is its own
+ *     FINISHED mix (06 §2.3, LABEL-16); before migration 144 there are no
+ *     releases, so the lookup failing on a missing table reads as "not on one".
  *     `peaks` (the waveform sidecar, LABEL-14) needs what the audio needs.
  *  3. The variant names a column of the row (or a `stems` row). Its stored
  *     reference is streamed through lib/audio/stream-source, which forwards
@@ -42,6 +45,8 @@ import {
   requiredAudioCapabilities,
   type OrgAudioStemRow,
 } from '@/lib/labelos/org-audio';
+import { countsAsOnRelease } from '@/lib/labelos/releases';
+import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { isR2Configured } from '@/lib/local-store';
 import { createLogger } from '@/lib/log';
 
@@ -81,7 +86,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   try {
     // Independent reads in one round trip. Only links INTO this track
     // classify it (lib/labelos/org-audio); the stems row only for a stem.
-    const [trackRes, beatsRes, linksRes, mainBeatRes, stemsRes] = await Promise.all([
+    const [trackRes, beatsRes, linksRes, mainBeatRes, stemsRes, releaseRes] = await Promise.all([
       admin
         .from('tracks')
         .select('id, title, type, song_stage, audio_url, wav_url, preview_url, peaks_url')
@@ -94,10 +99,14 @@ export async function GET(req: NextRequest, { params }: Params) {
       variant.kind === 'stem'
         ? admin.from('stems').select('vocals_url, drums_url, bass_url, other_url').eq('track_id', trackId).eq('status', 'done')
         : Promise.resolve({ data: [] as OrgAudioStemRow[], error: null }),
+      admin.from('release_items').select('release_id, releases!inner(state)').eq('song_track_id', trackId).eq('org_id', org),
     ]);
     for (const r of [trackRes, beatsRes, linksRes, mainBeatRes, stemsRes]) if (r.error) throw new Error(r.error.message);
-    const track = trackRes.data as TrackRow | null;
-    if (!track) return json(404, 'Not found');
+    if (releaseRes.error && !isMissingSchema(releaseRes.error)) throw new Error(releaseRes.error.message);
+    const row = trackRes.data as TrackRow | null;
+    if (!row) return json(404, 'Not found');
+    const releaseRows = (releaseRes.error ? [] : releaseRes.data ?? []) as unknown as { releases: { state: string } | null }[];
+    const track = { ...row, on_release: countsAsOnRelease(releaseRows) };
 
     const raw = {
       songBeats: (beatsRes.data ?? []) as { song_track_id: string }[],

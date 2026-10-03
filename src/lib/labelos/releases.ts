@@ -37,6 +37,9 @@ export const RELEASE_ARTWORK_KINDS = ['artwork', 'photo'] as const;
  */
 export const RELEASE_STATES_OFF_RELEASE = ['cancelled'] as const;
 
+/** A tracklist's ceiling (a box set is well under it); also the reorder body's. */
+export const RELEASE_MAX_ITEMS = 200;
+
 export type ReleaseRow = {
   id: string;
   org_id: string;

@@ -19,6 +19,8 @@ import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
 import { DECISIONS } from '@/lib/contacts/decisions';
 import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
 import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
+import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers';
+import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -1039,3 +1041,117 @@ export const OrgAssetPatchBodySchema = z.object({
   position: z.number().int().min(0).max(100000).optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type OrgAssetPatchBody = z.infer<typeof OrgAssetPatchBodySchema>;
+
+// ── Label OS releases (LABEL-16) ─────────────────────────────────────────
+// None of these takes `org_id`, a `user_id` or a gate / delivery / store
+// field: the org is the path, gates are LABEL-32, delivery LABEL-33 and the
+// store LABEL-42. `state` moves only between draft and cancelled here.
+
+/**
+ * An industry code field (lib/labelos/identifiers): normalised on the way
+ * in, blank → null, and an invalid code is a 400 whose message names the
+ * field ("upc: not a valid UPC/EAN …") at that path.
+ */
+export function identifierField(kind: IdentifierKind) {
+  return z
+    .string()
+    .max(40)
+    .nullable()
+    .transform((raw, ctx) => {
+      if (raw === null || raw.trim() === '') return null;
+      const parsed = parseIdentifier(kind, raw);
+      if (!parsed.ok) {
+        ctx.addIssue({ code: 'custom', message: parsed.error });
+        return z.NEVER;
+      }
+      return parsed.value;
+    });
+}
+
+/** Free text, trimmed; blank → null. */
+const releaseText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .transform((v) => (v === null || v === '' ? null : v));
+
+/** A calendar date (YYYY-MM-DD) that exists; null clears it. */
+const releaseDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, 'Not a calendar date')
+  .nullable();
+
+const releaseFields = {
+  title: z.string().trim().min(1, 'Name the release').max(300),
+  type: z.enum(RELEASE_TYPES),
+  upc: identifierField('upc'),
+  label_name: releaseText(200),
+  c_line: releaseText(200),
+  p_line: releaseText(200),
+  primary_genre: releaseText(80),
+  target_date: releaseDate,
+  release_date: releaseDate,
+  artwork_asset_id: z.string().uuid().nullable(),
+};
+
+/** POST /api/org/[orgId]/releases. No `project_id` → the route creates the release's project. */
+export const OrgReleaseCreateBodySchema = z.object({
+  title: releaseFields.title,
+  contact_id: z.string().uuid(),
+  project_id: z.string().uuid().optional(),
+  type: releaseFields.type.optional(),
+  upc: releaseFields.upc.optional(),
+  label_name: releaseFields.label_name.optional(),
+  c_line: releaseFields.c_line.optional(),
+  p_line: releaseFields.p_line.optional(),
+  primary_genre: releaseFields.primary_genre.optional(),
+  target_date: releaseFields.target_date.optional(),
+  release_date: releaseFields.release_date.optional(),
+  artwork_asset_id: releaseFields.artwork_asset_id.optional(),
+}).strict();
+export type OrgReleaseCreateBody = z.infer<typeof OrgReleaseCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/releases/[releaseId]. The project and the artist are fixed. */
+export const OrgReleasePatchBodySchema = z.object({
+  title: releaseFields.title.optional(),
+  type: releaseFields.type.optional(),
+  upc: releaseFields.upc.optional(),
+  label_name: releaseFields.label_name.optional(),
+  c_line: releaseFields.c_line.optional(),
+  p_line: releaseFields.p_line.optional(),
+  primary_genre: releaseFields.primary_genre.optional(),
+  target_date: releaseFields.target_date.optional(),
+  release_date: releaseFields.release_date.optional(),
+  artwork_asset_id: releaseFields.artwork_asset_id.optional(),
+  state: z.enum(['draft', 'cancelled']).optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgReleasePatchBody = z.infer<typeof OrgReleasePatchBodySchema>;
+
+/** POST /api/org/[orgId]/releases/[releaseId]/items — appended at the end. No master = the song itself. */
+export const OrgReleaseItemCreateBodySchema = z.object({
+  song_track_id: z.string().uuid(),
+  master_track_id: z.string().uuid().optional(),
+  version_title: releaseText(200).optional(),
+  explicit: z.boolean().optional(),
+}).strict();
+export type OrgReleaseItemCreateBody = z.infer<typeof OrgReleaseItemCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/releases/[releaseId]/items — the whole tracklist, in its new order. */
+export const OrgReleaseItemsReorderBodySchema = z.object({
+  order: z.array(z.string().uuid()).min(1).max(RELEASE_MAX_ITEMS),
+}).strict();
+export type OrgReleaseItemsReorderBody = z.infer<typeof OrgReleaseItemsReorderBodySchema>;
+
+/** PATCH /api/org/[orgId]/releases/[releaseId]/items/[itemId]. The song is fixed; remove and add to change it. */
+export const OrgReleaseItemPatchBodySchema = z.object({
+  master_track_id: z.string().uuid().optional(),
+  version_title: releaseText(200).optional(),
+  explicit: z.boolean().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgReleaseItemPatchBody = z.infer<typeof OrgReleaseItemPatchBodySchema>;

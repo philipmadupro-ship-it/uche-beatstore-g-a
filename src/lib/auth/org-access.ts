@@ -254,7 +254,12 @@ export async function requireOrgCapability(orgId: string, cap: Capability): Prom
  * LABEL-12), the same path as the SQL `can_see_org_project` /
  * `can_see_org_track` (migration 141). scopedOrgQuery still lists none of
  * them to a scoped member; a list route for them must narrow by that path
- * first.
+ * first (`orgProjectIdsInScope`).
+ *
+ * `releases` (LABEL-16) carry their artist in `contact_id`, but who READS
+ * one is decided by its project, as migration 144's policy does
+ * (`can_see_org_project` on `project_id`), so the contact is deliberately
+ * not its scope key here.
  */
 export const ORG_OBJECT_TABLES = {
   contacts: { contact: 'id', project: null },
@@ -264,6 +269,7 @@ export const ORG_OBJECT_TABLES = {
   project_comments: { contact: null, project: 'project_id' },
   activity_events: { contact: 'artist_id', project: 'project_id' },
   org_invitations: { contact: null, project: 'project_id' },
+  releases: { contact: null, project: 'project_id' },
 } as const satisfies Record<string, { contact: string | null; project: string | null }>;
 
 export type OrgObjectTable = keyof typeof ORG_OBJECT_TABLES;
@@ -406,6 +412,34 @@ export async function requireObjectAccess(opts: {
   }
   if (!access.capabilities.has(cap)) return FORBIDDEN();
   return { ...access, object };
+}
+
+/**
+ * The org projects a member's artist scope reaches (inbox artist or a
+ * project_contacts contact in scope — the TS twin of `can_see_org_project`),
+ * for list routes over project-keyed tables. null = the whole org (no
+ * narrowing); [] = nothing. Throws when a read fails.
+ */
+export async function orgProjectIdsInScope(admin: AdminClient, ctx: OrgContext): Promise<string[] | null> {
+  if (ctx.artistScope === null) return null;
+  const contacts = [...ctx.artistScope];
+  if (contacts.length === 0) return [];
+  const [inbox, linked] = await Promise.all([
+    admin.from('projects').select('id').eq('org_id', ctx.orgId).in('inbox_for_contact_id', contacts),
+    admin.from('project_contacts').select('project_id').in('contact_id', contacts),
+  ]);
+  if (inbox.error) throw new Error(`Scope lookup failed: ${inbox.error.message}`);
+  if (linked.error) throw new Error(`Scope lookup failed: ${linked.error.message}`);
+  const ids = new Set(((inbox.data ?? []) as { id: string }[]).map((p) => p.id));
+  const linkedIds = [...new Set(((linked.data ?? []) as { project_id: string }[]).map((l) => l.project_id))];
+  if (linkedIds.length > 0) {
+    // A contact of this org can only be linked to this org's projects (141's
+    // trigger), but the read is scoped to the org all the same.
+    const inOrg = await admin.from('projects').select('id').eq('org_id', ctx.orgId).in('id', linkedIds);
+    if (inOrg.error) throw new Error(`Scope lookup failed: ${inOrg.error.message}`);
+    for (const p of (inOrg.data ?? []) as { id: string }[]) ids.add(p.id);
+  }
+  return [...ids].sort();
 }
 
 /**

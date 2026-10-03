@@ -317,6 +317,23 @@ describe('D4 headline cases', () => {
     expect((await get(MK, L, T.song)).status).toBe(200);
   });
 
+  it("a song's current mix becomes finished when the song is on a release (LABEL-16), and not once it is cancelled", async () => {
+    const R = '70000000-0000-4000-8000-000000000001';
+    expect((await get(MK, L, T.song)).status).toBe(403);
+    db.tables.releases = [{ id: R, org_id: L, project_id: P1, contact_id: C1, title: 'EP', state: 'draft' }];
+    db.tables.release_items = [{ id: u(90), release_id: R, org_id: L, position: 1, song_track_id: T.song, master_track_id: T.song }];
+    expect((await get(MK, L, T.song)).status).toBe(200);
+    db.tables.releases[0].state = 'cancelled';
+    expect((await get(MK, L, T.song)).status).toBe(403);
+  });
+
+  it('a release item of ANOTHER org naming the track changes nothing', async () => {
+    const R = '70000000-0000-4000-8000-000000000002';
+    db.tables.releases = [{ id: R, org_id: L2, project_id: P1, contact_id: C1, title: 'EP', state: 'draft' }];
+    db.tables.release_items = [{ id: u(91), release_id: R, org_id: L2, position: 1, song_track_id: T.song, master_track_id: T.song }];
+    expect((await get(MK, L, T.song)).status).toBe(403);
+  });
+
   it('a revoked audio.working holds even for an owner-preset function', async () => {
     db.tables.org_members.find((m) => m.user_id === AR && m.org_id === L)!.cap_revokes = ['audio.working'];
     expect((await get(AR, L, T.topline)).status).toBe(403);
