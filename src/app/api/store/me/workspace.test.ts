@@ -193,7 +193,7 @@ describe('GET /api/store/me?view=beats', () => {
     }
   });
 
-  it('a delisted beat the buyer owns still shows and can play, but has no storefront page', async () => {
+  it('a delisted beat the buyer owns still shows, plays, and has no storefront page', async () => {
     const { GET } = await import('./route');
     const { beats } = await (await GET(get('?session=1&view=beats'))).json();
     expect(beats.find((b: { id: string }) => b.id === B)).toMatchObject({

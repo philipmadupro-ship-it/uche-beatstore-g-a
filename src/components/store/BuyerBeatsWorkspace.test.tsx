@@ -106,9 +106,9 @@ describe('BuyerBeatsWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Play Night Shift' }));
     const s = usePlayer.getState();
     expect(s.currentTrack?.id).toBe('night');
-    expect(s.currentTrack?.audio_url).toBe('/api/store/preview/night');
+    expect(s.currentTrack?.audio_url).toBe('/api/store/me/preview/night?session=1');
     expect(s.isPlaying).toBe(true);
-    // the owned-but-delisted beat is queued too: the preview route lets its owner through
+    // the owned-but-delisted beat is queued too: the buyer route streams it
     expect(s.queue.map((t) => t.id)).toEqual(['ask', 'cold', 'night', 'gone']);
     const pause = screen.getByRole('button', { name: 'Pause Night Shift' });
     fireEvent.click(pause);
@@ -125,7 +125,14 @@ describe('BuyerBeatsWorkspace', () => {
     expect(within(row).queryByRole('link', { name: 'Delisted One' })).toBeNull();
     fireEvent.click(within(row).getByRole('button', { name: /Play Delisted One/ }));
     expect(usePlayer.getState().currentTrack?.id).toBe('gone');
-    expect(usePlayer.getState().currentTrack?.audio_url).toBe('/api/store/preview/gone');
+    expect(usePlayer.getState().currentTrack?.audio_url).toBe('/api/store/me/preview/gone?session=1');
+  });
+
+  it('a request on a beat that is no longer listed has no Play', async () => {
+    respond = () => json({ email: 'a@b.test', beats: [beat('x', { title: 'Asked For', status: 'requested', canAddToProject: false, playable: false, available: false, openUrl: null, license: null, offer: { status: 'pending', price_usd: 5 } })] });
+    mount();
+    await screen.findByText('Asked For');
+    expect(screen.queryByRole('button', { name: /Play Asked For/ })).toBeNull();
   });
 
   it('selecting beats reveals Create project, which posts the ids with the name, then clears', async () => {
