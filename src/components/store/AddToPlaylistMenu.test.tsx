@@ -36,7 +36,7 @@ afterEach(cleanup);
 
 async function openMenu() {
   render(<AddToPlaylistMenu trackId="beat" trackTitle="Night Shift" />);
-  const trigger = await screen.findByRole('button', { name: 'Add to playlist' });
+  const trigger = await screen.findByRole('button', { name: 'Add to project' });
   await waitFor(() => expect(fetchBuyerLibrary).toHaveBeenCalled());
   fireEvent.click(trigger);
   return screen.findByRole('menu');
@@ -67,7 +67,7 @@ describe('AddToPlaylistMenu', () => {
   it('creates a playlist named after the beat and puts the beat in it', async () => {
     identity.current = { query: 'session=1', mode: 'session' };
     await openMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: /New playlist with this beat/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /New project with this beat/ }));
     await waitFor(() => expect(addToPlaylist).toHaveBeenCalledWith('new-pl', 'beat'));
     expect(createPlaylist).toHaveBeenCalledWith('Night Shift');
   });

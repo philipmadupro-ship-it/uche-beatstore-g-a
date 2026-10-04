@@ -80,8 +80,16 @@ describe('buildBuyerBeats', () => {
 
   it('a delisted beat the buyer owns keeps its metadata and still plays', () => {
     const [b] = build({ licenses: [license(['a'])], tracks: [track('a', { store_listed: false })] });
-    expect(b).toMatchObject({ available: true, playable: true, canAddToProject: true, title: 'Beat a', bpm: 140 });
+    expect(b).toMatchObject({ available: true, listed: false, playable: true, canAddToProject: true, title: 'Beat a', bpm: 140 });
     expect(beatToPlayerTrack(b)?.audio_url).toBe('/api/store/me/preview/a?session=1');
+  });
+
+  it('a delisted track of an active bundle plays for its owner too', () => {
+    const [b] = build({
+      bundles: [{ project_id: 'p1', created_at: '2026-09-01T00:00:00Z', download_url: '/store/projects/access/tok' }], bundleTracks: [{ project_id: 'p1', track_id: 'a' }],
+      tracks: [track('a', { store_listed: false })],
+    });
+    expect(b).toMatchObject({ status: 'owned', playable: true });
   });
 
   it('a revoked exclusive no longer plays', () => {
@@ -90,7 +98,7 @@ describe('buildBuyerBeats', () => {
       offers: [offer('a')],
       tracks: [track('a', { store_listed: false })],
     });
-    expect(beats[0]).toMatchObject({ status: 'requested', playable: false });
+    expect(beats[0]).toMatchObject({ status: 'requested', playable: false, available: false });
     expect(beatToPlayerTrack(beats[0])).toBeNull();
   });
 
@@ -99,7 +107,7 @@ describe('buildBuyerBeats', () => {
       offers: [offer('a', { track_title: 'Stored Title' })],
       tracks: [track('a', { store_listed: false, title: 'Secret', cover_url: 'https://x/c.jpg', bpm: 99 })],
     });
-    expect(b).toMatchObject({ title: 'Stored Title', available: false, playable: false, canAddToProject: false, bpm: null, cover_url: null });
+    expect(b).toMatchObject({ title: 'Stored Title', available: false, playable: false, canAddToProject: false, listed: false, bpm: null, cover_url: null });
   });
 
   it('never carries a media field', () => {
