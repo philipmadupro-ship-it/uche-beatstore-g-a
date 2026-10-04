@@ -9,6 +9,10 @@ import {
   isRetriableStatus,
   isLiveStatus,
   sameFile,
+  isPresignedUrlFresh,
+  shouldResignPart,
+  PRESIGNED_PART_REUSE_MS,
+  PRESIGNED_PART_TTL_MS,
 } from './progress';
 
 const MIB = 1024 * 1024;
@@ -189,5 +193,33 @@ describe('isRetriableStatus', () => {
     expect(isRetriableStatus(401)).toBe(false);
     expect(isRetriableStatus(403)).toBe(false);
     expect(isRetriableStatus(404)).toBe(false);
+  });
+});
+
+describe('presigned part URLs', () => {
+  it('reuses a batch URL only well inside its 15 minute life', () => {
+    const t0 = 1_000_000;
+    expect(isPresignedUrlFresh(t0, t0)).toBe(true);
+    expect(isPresignedUrlFresh(t0, t0 + PRESIGNED_PART_REUSE_MS - 1)).toBe(true);
+    expect(isPresignedUrlFresh(t0, t0 + PRESIGNED_PART_REUSE_MS)).toBe(false);
+    expect(isPresignedUrlFresh(t0, t0 + PRESIGNED_PART_TTL_MS)).toBe(false);
+    // Leaves time for the PUT itself before the bucket rejects the signature.
+    expect(PRESIGNED_PART_TTL_MS - PRESIGNED_PART_REUSE_MS).toBeGreaterThanOrEqual(5 * 60 * 1000);
+  });
+
+  it('re-signs once when a batch URL is refused, including an expired 403', () => {
+    expect(isRetriableStatus(403)).toBe(false);
+    expect(shouldResignPart({ fromBatch: true, status: 403 })).toBe(true);
+    expect(shouldResignPart({ fromBatch: true, status: 0 })).toBe(true);
+    expect(shouldResignPart({ fromBatch: true, status: 503 })).toBe(true);
+  });
+
+  it('does not re-sign a URL signed for this attempt', () => {
+    expect(shouldResignPart({ fromBatch: false, status: 403 })).toBe(false);
+    expect(shouldResignPart({ fromBatch: false, status: 0 })).toBe(false);
+  });
+
+  it('does not re-sign after a success', () => {
+    expect(shouldResignPart({ fromBatch: true, status: 200 })).toBe(false);
   });
 });

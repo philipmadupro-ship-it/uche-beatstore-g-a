@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser, createServiceClient } from '@/lib/auth/ownership';
+import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
-import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { normalizeEmail } from '@/lib/contacts/email';
-import { sessionBuyerEmail } from '@/lib/store/buyer-purchases';
+import { resolveBuyerEmail as resolveEmail } from '@/lib/store/buyer-identity';
+import { buyerOwnsTrack } from '@/lib/store/buyer-ownership';
+import { loadBuyerBeats, loadBuyerOwnedTrackIds } from '@/lib/store/buyer-beats';
+import { BUYER_PROJECT_MAX_TRACKS } from '@/lib/store/buyer-workspace';
 import {
   buildBuyerLibraryShape,
   collectBuyerLibraryTrackIds,
@@ -84,7 +86,7 @@ async function upsertLeadContact(
  *     { action: 'log_play',         track_id }
  *     { action: 'set_favorite',     track_id, favorited }
  *     { action: 'toggle_favorite',  track_id }   (legacy clients)
- *     { action: 'create_playlist',  name }
+ *     { action: 'create_playlist',  name, track_ids? }   (≤50; "Create project")
  *     { action: 'add_to_playlist',  playlist_id, track_id }
  *     { action: 'remove_from_playlist', playlist_id, track_id }
  *     { action: 'delete_playlist',  playlist_id }
@@ -93,34 +95,6 @@ async function upsertLeadContact(
  * The RLS policies on the new tables refuse public PostgREST access so
  * this route is the only path in.
  */
-
-async function readClaims(token: string | null) {
-  if (!token) return null;
-  return verifyBuyerToken(token);
-}
-
-async function resolveEmail(req: NextRequest): Promise<{ email: string } | null> {
-  const { searchParams } = new URL(req.url);
-  const token = searchParams.get('token');
-  const sessionMode = searchParams.get('session') === '1';
-
-  // Every buyer_* row is keyed on the canonical email, whichever proof of
-  // identity the caller brings — a token and a session for the same person
-  // must land on the same rows.
-  if (token) {
-    const claims = await readClaims(token);
-    return claims ? { email: normalizeEmail(claims.email) } : null;
-  }
-  if (sessionMode) {
-    const result = await requireUser();
-    if (!result.ok) return null;
-    // Same canonical email the token path carries (tokens are signed over a
-    // lowercased email), so a session and a token share one library.
-    const email = await sessionBuyerEmail(createServiceClient(), result.userId);
-    return email ? { email } : null;
-  }
-  return null;
-}
 
 /**
  * A buyer can only put a track into their library that the storefront
@@ -142,6 +116,32 @@ async function isStoreListedTrack(
   return Boolean(data);
 }
 
+/**
+ * Which of `trackIds` this buyer may put in a playlist: beats the storefront
+ * lists, plus beats they paid for (an exclusive delists the beat it sells, so
+ * the buyer who owns it would otherwise be unable to keep it in a project).
+ * Ownership is only looked up for ids the listing check did not already clear.
+ */
+async function addableTrackIds(
+  admin: ReturnType<typeof createServiceClient>,
+  email: string,
+  trackIds: string[],
+): Promise<Set<string>> {
+  const ok = new Set<string>();
+  if (trackIds.length === 0) return ok;
+  const { data, error } = await admin
+    .from('tracks')
+    .select('id')
+    .in('id', trackIds)
+    .eq('store_listed', true);
+  if (error) throw error;
+  for (const row of (data ?? []) as Array<{ id: string }>) ok.add(row.id);
+  if (trackIds.every((id) => ok.has(id))) return ok;
+  const owned = await loadBuyerOwnedTrackIds(admin, email);
+  for (const id of trackIds) if (owned.has(id)) ok.add(id);
+  return ok;
+}
+
 const trackNotFound = () => NextResponse.json({ error: 'Track not found' }, { status: 404 });
 
 export async function GET(req: NextRequest) {
@@ -151,10 +151,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid or expired link' }, { status: 400 });
     }
     const { email } = resolved;
+    const wantsBeats = new URL(req.url).searchParams.get('view') === 'beats';
     if (!isSupabaseConfigured()) {
-      return NextResponse.json({ email, history: [], favorites: [], playlists: [] });
+      return NextResponse.json(wantsBeats
+        ? { email, beats: [] }
+        : { email, history: [], favorites: [], playlists: [] });
     }
     const admin = createServiceClient();
+
+    // The "My beats" workspace: owned + offered beats. A separate view, so the
+    // wishlist sync that reads this route on every store navigation does not
+    // pay for purchases and offers it never shows.
+    if (wantsBeats) {
+      return NextResponse.json({ email, beats: await loadBuyerBeats(admin, email) });
+    }
 
     const [historyRes, favRes, plRes] = await Promise.all([
       admin
@@ -250,7 +260,11 @@ const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('log_play'), track_id: z.string().uuid() }),
   z.object({ action: z.literal('set_favorite'), track_id: z.string().uuid(), favorited: z.boolean() }),
   z.object({ action: z.literal('toggle_favorite'), track_id: z.string().uuid() }),
-  z.object({ action: z.literal('create_playlist'), name: z.string().trim().min(1).max(80) }),
+  z.object({
+    action: z.literal('create_playlist'),
+    name: z.string().trim().min(1).max(80),
+    track_ids: z.array(z.string().uuid()).max(BUYER_PROJECT_MAX_TRACKS).optional(),
+  }),
   z.object({ action: z.literal('add_to_playlist'), playlist_id: z.string().uuid(), track_id: z.string().uuid() }),
   z.object({ action: z.literal('remove_from_playlist'), playlist_id: z.string().uuid(), track_id: z.string().uuid() }),
   z.object({ action: z.literal('delete_playlist'), playlist_id: z.string().uuid() }),
@@ -275,7 +289,13 @@ export async function POST(req: NextRequest) {
       case 'log_play': {
         // Append-only history. We do NOT dedupe — repeated plays are
         // signal, not noise. Trim handled at read time via LIMIT.
-        if (!(await isStoreListedTrack(admin, parsed.data.track_id))) return trackNotFound();
+        // A beat the buyer owns counts even when the sale delisted it (an
+        // exclusive does), so playing it from the account can be logged.
+        // Anything else still has to be on the store: owned-or-listed only.
+        const { track_id } = parsed.data;
+        const loggable = (await isStoreListedTrack(admin, track_id))
+          || (await buyerOwnsTrack(admin, email, track_id));
+        if (!loggable) return trackNotFound();
         const { error } = await admin
           .from('buyer_listening_history')
           .insert({ email, track_id: parsed.data.track_id });
@@ -333,13 +353,29 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, favorited: true });
       }
       case 'create_playlist': {
+        // "Create project" sends the beats too. Every one is checked BEFORE
+        // anything is written, so a bad id leaves no half-made playlist.
+        const trackIds = [...new Set(parsed.data.track_ids ?? [])];
+        if (trackIds.length > 0) {
+          const addable = await addableTrackIds(admin, email, trackIds);
+          if (!trackIds.every((id) => addable.has(id))) return trackNotFound();
+        }
         const { data, error } = await admin
           .from('buyer_playlists')
           .insert({ email, name: parsed.data.name })
           .select('id, name, created_at, updated_at')
           .single();
         if (error) throw error;
-        return NextResponse.json({ playlist: { ...data, track_ids: [] } });
+        if (trackIds.length > 0) {
+          const { error: rowsError } = await admin
+            .from('buyer_playlist_tracks')
+            .insert(trackIds.map((track_id, position) => ({ playlist_id: data.id, track_id, position })));
+          if (rowsError) {
+            await admin.from('buyer_playlists').delete().eq('id', data.id).eq('email', email);
+            throw rowsError;
+          }
+        }
+        return NextResponse.json({ playlist: { ...data, track_ids: trackIds } });
       }
       case 'add_to_playlist': {
         // Verify ownership (the playlist belongs to this buyer)
@@ -350,7 +386,11 @@ export async function POST(req: NextRequest) {
           .eq('email', email)
           .maybeSingle();
         if (!own) return NextResponse.json({ error: 'Playlist not found' }, { status: 404 });
-        if (!(await isStoreListedTrack(admin, parsed.data.track_id))) return trackNotFound();
+        if (!(await isStoreListedTrack(admin, parsed.data.track_id))) {
+          // Not listed: still fine when the buyer paid for it.
+          const addable = await addableTrackIds(admin, email, [parsed.data.track_id]);
+          if (!addable.has(parsed.data.track_id)) return trackNotFound();
+        }
 
         // Append after the highest position, not at the row count: a count
         // lands on an occupied slot whenever the list has a gap.

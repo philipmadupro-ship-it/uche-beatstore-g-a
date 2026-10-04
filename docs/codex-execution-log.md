@@ -9425,3 +9425,51 @@ Follow-up (same PR): `charge.dispute.closed`.
 Tests: `dispute-rule.test.ts`; webhook cases for won (the WHERE clause asserted, not just the payload), warning_closed, lost, charge_refunded, unrecognised/absent statuses, no payment intent, bundle un-expire (both lookups, only-expired filter), bundle left revoked on a refunded charge and on a Stripe failure, "could not restore" wording, and idempotence. The restore cases fail on the old handler. The test harness now records the filters applied to each write so WHERE clauses can be asserted.
 
 Not verified against a real Stripe dispute: the event shape (`status`, `payment_intent`, `charge` on the dispute object) is from Stripe's documented Dispute object, and the tests construct it, not capture it. A Stripe CLI `stripe trigger charge.dispute.closed` against a test-mode endpoint would confirm.
+
+## 2026-10-02 - Play a beat from the buyer account (BUYER-04)
+
+Reported: a buyer should be able to play an owned or requested beat from their account.
+
+**Reproduced by code trace** (no live Supabase in the session; browser run against a stubbed Supabase + stubbed data endpoints): signed in, `/store/account/me`. Every beat in Recently played, Favorites and the playlists was a `<Link>` to `/store/<id>`, and the purchased beats were text. Nothing on the page called `usePlayer`, although `StoreLayoutClient` already mounts the global `PlayerBar` there. Refresh, sign-out and viewport made no difference.
+
+**Root cause, two layers.** (1) The library payload is metadata only and no account component drove the player. (2) The only public audio route, `/api/store/preview/[id]`, serves a beat only if the store lists it or a featured bundle holds it; a bought exclusive is delisted on sale, so the beat the buyer paid most for would have played nothing even with a button.
+
+Changes (no schema change):
+- `lib/store/buyer-playback.ts` — summary -> player `Track` and queue (unavailable rows skipped, a beat once). Source is the buyer route below, never `preview_url` / `wav_url` / a master.
+- `GET /api/store/me/preview/[id]` — token or session identity (`lib/store/buyer-identity.ts`, extracted from `/api/store/me` so both resolve the same canonical email). Streams the SAME public preview clip. Allowed when the buyer owns the beat (`lib/store/buyer-ownership.ts`: an active license with `download_unlocked !== false`, or an unexpired bundle containing it) or the public route would serve it; otherwise 404. `cache-control: private`.
+- `/store/account/me` — play/pause on library tiles, playlist rows and each purchased beat, through the existing `usePlayer` / `PlayerBar`. The button is a sibling of the tile's link, never inside it. A revoked purchase offers no play. Pressing the playing beat pauses it; pressing another replaces the queue with the list it was pressed in.
+- `loadBuyerPurchases` items now carry cover / type / bpm / key / scale / duration (same `tracks` read, no extra query) so a purchased beat has a length in the bar.
+
+Tests: `buyer-playback.test.ts`; `api/store/me/preview/[id]/route.test.ts` (no identity, malformed id, owned-and-delisted, bundle, not-owned, refunded, expired bundle, listed, no-preview-never-master, email keying); `account/me/page.test.tsx` (real page + real player store; 6 of 7 fail on the old page); `e2e/buyer-account-playback.spec.ts` at 1280 and 390 (audio element plays, request goes to the buyer route as `session=1`, one audible element, pause, keyboard).
+
+Not changed: playing from the account does not write `buyer_listening_history` (`log_play` 404s a delisted beat, so an owned exclusive would never log); the legacy `/store/account/[token]` page has no playback; project-bundle rows still open the delivery page, which has Play all.
+
+## 2026-10-02 - BUYER-04 follow-ups (stacks on #60)
+
+Four small items left over from "Play a beat from the buyer account".
+
+- **Owned plays are logged.** `/api/store/me` `log_play` accepts a beat that is store-listed OR owned (`buyerOwnsTrack`), so an owned exclusive, delisted on sale, can enter `buyer_listening_history`. An unowned, unlisted beat still 404s. `set_favorite` and `add_to_playlist` keep the `store_listed` gate on purpose: favouriting or playlisting a delisted beat is not what this was for, and a test pins that ownership does not loosen them. The account page logs when a *different* beat starts (not on pause/resume, not on Next inside the queue), and is the only writer there — the store grid logs through `trackStoreEvent`, which these pages never call, so nothing double-counts.
+- **Legacy `/store/account/[token]` plays.** `hooks/useBuyerPlayback(identityQuery)` replaces the page-local `useAccountPlayback`; `session=1` on `/me`, `token=<encoded>` here. History, favourites and purchased beats play through the global player (`StoreLayoutClient` hides the bar only on checkout/download, so it is mounted at this path); revoked purchases offer no play. `logPlay(trackId, identityQuery?)` takes the page's identity: without it the session marker outranks the token and a play could land in another account's library. Not added: playlist track lists (that page only ever listed playlist names).
+- **Bundle rows.** Their button read "Open" with a download icon, though the page it opens leads with Play all. Now "Open to listen" with a play icon, on both account pages. No inline bundle playback.
+- **Lint.** Unused `err` in `/api/store/promo` removed (optional catch binding).
+
+Tests: `me/route.test.ts` (owned+delisted logs, unowned+unlisted 404, listed skips the ownership lookup, ownership does not loosen favourite/playlist); `account/me/page.test.tsx` and new `account/[token]/page.test.tsx` (log once per start, none on pause/resume, token identity wins over a session marker, revoked offers no play, bundle label); `e2e/buyer-account-playback.spec.ts` gains the token-page flow at 1280 and 390.
+
+Known quirk, unchanged: the token page re-encodes `params.token` with `encodeURIComponent`; real tokens are base64url so it is a no-op for them.
+
+
+## 2026-10-02 - Buyer "My beats" workspace on /store/account/me (BUYER-01)
+
+Asked for: an artist/rapper-personalised buyer workspace reusing the Library's philosophy for owned and requested beats; acceptance "filter, sort, play and create project". Decisions taken with the owner: **create project = a buyer playlist**, **requested = offers only**, **personalised = derived from ownership**. No migration.
+
+**Reproduced** (stubbed APIs, 1280 and 390 px): the page listed purchases as one text line per order, favourites and history as links, and had no Play, no filter or sort, and no way to group beats except an empty-playlist name field. Offers (`buyer_offers`, mig 068) were never readable by the buyer. First wrong layer: the read model, not any write path.
+
+Changes:
+- `lib/store/buyer-workspace.ts` (pure, Vitest): merge purchases + bought-bundle tracks + offers into one row per beat. Owned beats win over requested; a revoked purchase owns nothing; metadata shows only for a listed or owned beat (a delisted, merely requested beat keeps the title the offer stored); built field by field, so no media URL can ride along. `filterBuyerBeats` / `sortBuyerBeats`, `ownedSound` + `describeOwnedSound` (the personalisation), `projectTrackIds`, `beatToPlayerTrack` (always the PUBLIC preview route, never a master).
+- `lib/store/buyer-beats.ts`: the queries. Reuses `loadBuyerPurchases`, so the buyer's orders and "My beats" cannot disagree on ownership.
+- `/api/store/me`: `GET ?view=beats` (a separate view so the wishlist sync that reads this route on every store navigation does not pay for it); `create_playlist` accepts `track_ids` (≤50, all checked before anything is written, rolled back if the rows fail); `add_to_playlist` now accepts a beat the buyer paid for even when it is delisted. Every read and write is keyed on the email the session/token proved, never the body.
+- `components/store/BuyerBeatsWorkspace` on `/store/account/me`.
+
+Tests: `buyer-workspace.test.ts`, `api/store/me/workspace.test.ts` (in-memory PostgREST stand-in that really filters: cross-buyer, token == session, revoked, expired bundle, no leak of media/private fields/offer messages, all-or-nothing project create, owned-but-delisted add), `BuyerBeatsWorkspace.test.tsx` (jsdom), `e2e/buyer-workspace.spec.ts` (1280 + 390; APIs stubbed).
+
+Not changed: a delisted owned beat cannot play here (the public preview route serves listed / featured-bundle beats only); the delivery page plays it. Offers are matched on the lowercased email the offer form stored, which is unverified at write time, so a buyer sees offers made under their address by anyone. The playlist section is still headed "My playlists".
