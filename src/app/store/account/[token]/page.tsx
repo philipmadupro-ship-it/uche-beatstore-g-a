@@ -336,7 +336,7 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
             <Link href="/store/account" className="text-white/60 hover:text-white underline underline-offset-2">
               Sign in with this email
             </Link>{' '}
-            to keep the same purchases, favourites and playlists without a link that expires.
+            to keep the same purchases, favourites and projects without a link that expires.
           </p>
         </footer>
       </div>
@@ -377,7 +377,7 @@ function BuyerLibrary({ token }: { token: string }) {
       if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
       return j.playlist as BuyerLibraryPlaylist;
     },
-    onSuccess: () => { setNewPlaylistName(''); toast.success('Playlist created'); refresh(); },
+    onSuccess: () => { setNewPlaylistName(''); toast.success('Project created'); refresh(); },
     onError: (e: Error) => toast.error('Could not create', e.message),
   });
 
@@ -393,7 +393,7 @@ function BuyerLibrary({ token }: { token: string }) {
         throw new Error(j.error ?? `HTTP ${res.status}`);
       }
     },
-    onSuccess: () => { toast.success('Playlist deleted'); refresh(); },
+    onSuccess: () => { toast.success('Project deleted'); refresh(); },
     onError: (e: Error) => toast.error('Could not delete', e.message),
   });
 
@@ -463,14 +463,14 @@ function BuyerLibrary({ token }: { token: string }) {
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4">
         <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-3">
           <ListMusic size={11} />
-          My playlists ({data.playlists.length})
+          Projects ({data.playlists.length})
         </p>
         <div className="flex items-center gap-2 mb-3">
           <input
             type="text"
             value={newPlaylistName}
             onChange={(e) => setNewPlaylistName(e.target.value)}
-            placeholder="New playlist name"
+            placeholder="New project name"
             maxLength={80}
             onKeyDown={(e) => { if (e.key === 'Enter' && newPlaylistName.trim()) createMut.mutate(newPlaylistName.trim()); }}
             className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
@@ -504,7 +504,7 @@ function BuyerLibrary({ token }: { token: string }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (confirm(`Delete playlist "${p.name}"?`)) deleteMut.mutate(p.id);
+                    if (confirm(`Delete project "${p.name}"?`)) deleteMut.mutate(p.id);
                   }}
                   title="Delete"
                   className="w-7 h-7 rounded-md border border-white/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-900/40 transition-colors"

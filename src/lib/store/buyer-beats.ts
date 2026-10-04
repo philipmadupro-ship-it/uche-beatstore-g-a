@@ -10,6 +10,8 @@
  */
 import type { createServiceClient } from '@/lib/auth/ownership';
 import { loadBuyerPurchases } from '@/lib/store/buyer-purchases';
+import { OFFER_VERIFIED_COLUMN, isMissingOfferVerifiedColumn } from '@/lib/store/offer-identity';
+import { createLogger } from '@/lib/log';
 import {
   buildBuyerBeats,
   type BuyerBeat,
@@ -18,6 +20,8 @@ import {
 } from '@/lib/store/buyer-workspace';
 
 type Admin = ReturnType<typeof createServiceClient>;
+
+const log = createLogger('store.buyer-beats');
 
 type Purchases = Awaited<ReturnType<typeof loadBuyerPurchases>>;
 
@@ -57,10 +61,21 @@ export async function loadBuyerBeats(admin: Admin, email: string): Promise<Buyer
       .from('buyer_offers')
       .select('id, track_id, track_title, offered_price_usd, status, created_at')
       .eq('buyer_email', email)
+      // POST /api/store/offer is public, so an address on an offer is only a
+      // claim. Show the buyer the offers made while signed in as them, never
+      // one someone else typed their address into (mig 139).
+      .eq(OFFER_VERIFIED_COLUMN, true)
       .order('created_at', { ascending: false }),
   ]);
-  if (offerRes.error) throw offerRes.error;
-  const offers = (offerRes.data ?? []) as BuyerBeatOfferInput[];
+  let offers: BuyerBeatOfferInput[] = [];
+  if (offerRes.error) {
+    // Before migration 139 nothing is provably the buyer's: show no offers
+    // rather than the planted ones. Owned beats are unaffected.
+    if (!isMissingOfferVerifiedColumn(offerRes.error)) throw offerRes.error;
+    log.warn('buyer_offers.buyer_email_verified missing — apply migration 139; offers hidden');
+  } else {
+    offers = (offerRes.data ?? []) as BuyerBeatOfferInput[];
+  }
   const bundleTracks = await loadBundleTracks(admin, purchases);
 
   const trackIds = [...new Set([

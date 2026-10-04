@@ -14,7 +14,7 @@ import type { BuyerBeat } from '@/lib/store/buyer-workspace';
 const beat = (id: string, over: Partial<BuyerBeat> = {}): BuyerBeat => ({
   id, title: `Beat ${id}`, cover_url: null, type: 'beat', bpm: 140, key: 'F', scale: 'minor', duration_seconds: 100,
   status: 'owned', since: '2026-09-10T00:00:00Z', license: 'lease',
-  offer: null, playable: true, canAddToProject: true, openUrl: `/store/download?session_id=${id}`, available: true,
+  offer: null, listed: true, playable: true, canAddToProject: true, openUrl: `/store/download?session_id=${id}`, available: true,
   ...over,
 });
 
@@ -25,7 +25,7 @@ const BEATS: BuyerBeat[] = [
     title: 'Asked For', status: 'requested', license: null, openUrl: null, bpm: 120, since: '2026-09-12T00:00:00Z',
     offer: { status: 'pending', price_usd: 300 },
   }),
-  beat('gone', { title: 'Delisted One', playable: true, openUrl: '/store/download?session_id=gone', since: '2026-09-01T00:00:00Z' }),
+  beat('gone', { title: 'Delisted One', listed: false, playable: true, openUrl: '/store/download?session_id=gone', since: '2026-09-01T00:00:00Z' }),
 ];
 
 let respond: (url: string, init?: RequestInit) => Response | Promise<Response>;
@@ -115,12 +115,17 @@ describe('BuyerBeatsWorkspace', () => {
     expect(usePlayer.getState().isPlaying).toBe(false);
   });
 
-  it('a delisted beat the buyer owns plays, and keeps Open', async () => {
+  it('an owned beat the store delisted still plays, keeps Open, and its title is not a dead storefront link', async () => {
     mount();
     await screen.findByText('Delisted One');
-    expect(screen.getByRole('button', { name: 'Play Delisted One' })).toBeTruthy();
     const row = screen.getByText('Delisted One').closest('li')!;
+    expect(within(row).getByRole('button', { name: /Play Delisted One/ })).toBeTruthy();
     expect(within(row).getByRole('link', { name: /Open/ }).getAttribute('href')).toBe('/store/download?session_id=gone');
+    // /store/[id] 404s for a delisted beat, so the title must not link there
+    expect(within(row).queryByRole('link', { name: 'Delisted One' })).toBeNull();
+    fireEvent.click(within(row).getByRole('button', { name: /Play Delisted One/ }));
+    expect(usePlayer.getState().currentTrack?.id).toBe('gone');
+    expect(usePlayer.getState().currentTrack?.audio_url).toBe('/api/store/me/preview/gone?session=1');
   });
 
   it('a request on a beat that is no longer listed has no Play', async () => {
@@ -161,9 +166,11 @@ describe('BuyerBeatsWorkspace', () => {
   });
 
   it('a request on a delisted beat cannot be selected', async () => {
-    respond = () => json({ email: 'a@b.test', beats: [beat('x', { title: 'Asked For', status: 'requested', canAddToProject: false, playable: false, available: false, openUrl: null, license: null, offer: { status: 'pending', price_usd: 5 } })] });
+    respond = () => json({ email: 'a@b.test', beats: [beat('x', { title: 'Asked For', status: 'requested', canAddToProject: false, listed: false, playable: false, available: false, openUrl: null, license: null, offer: { status: 'pending', price_usd: 5 } })] });
     mount();
     await screen.findByText('Asked For');
     expect(screen.queryByRole('checkbox', { name: 'Select Asked For' })).toBeNull();
+    // not owned and not listed: the preview route would 404, so no Play either
+    expect(screen.queryByRole('button', { name: /Play Asked For/ })).toBeNull();
   });
 });

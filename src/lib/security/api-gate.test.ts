@@ -20,6 +20,11 @@ describe('isPublicApiPath', () => {
 });
 
 describe('requiresProducerForApi', () => {
+  it('lets a signed-in buyer reach the preview and peaks routes (owners stream delisted beats)', () => {
+    for (const p of ['/api/store/preview/abc', '/api/store/peaks/abc', '/api/store/offer']) {
+      expect(requiresProducerForApi(p, true)).toBe(false);
+    }
+  });
   it('leaves signed-out requests to the route (cron bearer, 401s)', () => {
     expect(requiresProducerForApi('/api/email', false)).toBe(false);
   });
