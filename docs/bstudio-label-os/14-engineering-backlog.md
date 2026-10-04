@@ -985,7 +985,32 @@ Drop the tables.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-14, LABEL-15, LABEL-16
-**Status:** In Progress (branch label-os/LABEL-17)
+**Status:** In Review (2026-10-04) — PR into the Label OS branch. Migration 145, not applied: org rows on the #44 workspace tables have no owner.
+
+**Built (for the orchestrator's merge gate):**
+- **Pages.** `/o/<slug>/artists/<id>`, `/songs/<id>` and `/projects/<id>` are server pages. Anything out of scope or missing is a real 404, the same answer as the API (`/api/org/[orgId]/artists/[contactId]/workspace`, `/songs/[trackId]`, `/projects/[id]`). The roster cards link to the workspace.
+- **Tabs.** Overview · Projects · Songs · Releases · Files. The tab strip is the producer workspace's own (`WorkspaceTabBar` / `useUrlTab`, extracted with the same DOM), so `/contacts/[id]` is unchanged. Beats, Activity, Notes and Messages are not here: they belong to later tasks (22–28).
+- **Song view.** Recordings come from `songRecordings`, play through `usePlayer` from the LABEL-13 org audio route, and A/B switches at the same moment (`abSeekFraction`).
+- **Restricted, not empty.** What a role may not hear (D4) is absent from the payload; the page says how many are restricted (07 §3.4). Marketing gets no demos, loops, toplines or songs still in development.
+- **Org project page** mounts `ProjectFilesSection` in its `org` mode (the LABEL-15 carry).
+- **Migration 145.** `user_id` is nullable on `contact_track_states`, `artist_portals`, `artist_messages` and `song_beats` (`project_contacts` since 144). The rule is in each same-owner trigger's org path (an org row has no owner), because a CHECK cannot see the parent. The producer path is unchanged. The 141 / 143 / 144 local checks now write org links ownerless.
+- **Scope walk.** `artistProjects` is now the one "this artist's projects" read (workspace and upload targets). `org-access-scope-parity.test.ts` holds it, `orgProjectIdsInScope` and the single-object walk equal to each other and to the written rule of `can_see_org_project`; the SQL side is in the 145 local check.
+
+**Verification:** `tsc`, `vitest` (385 files), `npm run db:local:check` (145 and its rollback), `e2e/label-org-workspace.spec.ts` against the real-database stack (6 tests: tabs at 1440 and 390, A/B at both, scoped member 404s, marketing restricted), and the existing `e2e:real-db` flows, including the artist-workspace ones.
+
+**Not done / carried:**
+- A/B keeping the moment is proven by the unit tests (`abSeekFraction`, `OrgSongView.test.tsx`), not in the browser: the local stack has no audio files, so the e2e asserts the UI state and the URL.
+- `requireObjectAccess` / `orgAssetRow` still read the asset row twice (optional fold from LABEL-15). Not touched.
+- No DB guard for "exactly one roster artist" in an artist org (optional from LABEL-10). Not added.
+- Two e2e flows (`artist-workspace-phase2` 1, `label-org-members` 3) failed once in a full 58-test run and passed when run alone. Timing under load, not this change.
+
+**Found, not fixed (from the `/code-review` of the whole Label OS branch against `main`; none is in this task's diff, all need a decision before the final merge):**
+- **Producer routes still treat `user_id IS NULL` as the producer's own**, while org tracks and projects have been ownerless since 142. Three routes can therefore reach org rows with the service role:
+  - `src/app/api/activity/route.ts` — `ownerFilter` and the track / project helpers: org activity can appear in the producer's feed (only the contacts helper was made strict, in #65);
+  - `src/app/api/tracks/[id]/similar/route.ts` — the candidate pool is `select('*')` with `user_id.is.null` and no `org_id` filter, so org tracks (with their `r2://` references) can come back;
+  - `src/app/api/tracks/tags/bulk/route.ts` and `src/app/api/tracks/tags/route.ts` — the "owned tracks" check includes `user_id IS NULL`, so the producer can tag, and list tags of, org tracks.
+  The fix is to add `org_id IS NULL` (or drop the null-owner allowance, as mig 097 intended) to each; one small task, ahead of the final merge.
+- **Producer reads now select `org_id`** (`src/lib/auth/ownership.ts#requireRowOwnership`, `src/lib/db.ts#scopedList`). On a database where 141 is not applied they return 500. The runbook order (apply Label OS migrations, then merge) covers it; if the code is ever deployed first, the library and projects pages fail.
 
 ## Objective
 The org artist workspace and song view, built from `main`'s workspace components (`17` R12), plus the Releases tab.
@@ -1092,6 +1117,11 @@ Counts respect scope; no leak of out-of-scope artist counts.
 ## Carried from LABEL-12 (#68)
 - **R-08 explain-plan pass.** 141 adds a SECURITY DEFINER lookup per row on producer PostgREST reads of the guarded tables (`project_tracks`, `play_head_pings`, `track_licenses`, …) and on member reads of org rows. Most producer routes use the service role and skip RLS. Before Phase 2 closes, run `EXPLAIN ANALYZE` at catalogue scale (10k tracks, the `test:scale` fixtures) for the Overview's queries and for one producer PostgREST read of a guarded table. Record the numbers in the PR. If a guard dominates, wrap the helper as `(SELECT fn(col))` or index the lookup; never drop the guard.
 - Overview lists for an artists-scoped member must narrow by the project path (see LABEL-14's note on `scopedOrgQuery`).
+
+## Carried from LABEL-17
+- **Reuse the reads.** `lib/labelos/org-workspace.ts` has `stageCounts` and `partitionSongs`; `org-workspace-store.ts` has `artistProjects`, and `orgProjectIdsInScope` (`lib/auth/org-access.ts`) narrows lists for a scoped member. `summarizeRoster()` should call these, not re-derive the scope walk (the parity test in `org-access-scope-parity.test.ts` holds the three equal).
+- **Restricted counts.** A member's songs are filtered by D4 (finished music only for marketing). The overview must count only songs the member may see, and may show the restricted count the way the workspace does, but never a title.
+- **Releases.** `OrgArtistWorkspace.releases` already lists an artist's releases with state and target date; "next release" is the first draft.
 
 ## Out of Scope
 Needs attention; digest.

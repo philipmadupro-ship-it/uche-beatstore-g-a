@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
+import { artistProjects } from '@/lib/labelos/org-workspace-store';
 import { createLogger } from '@/lib/log';
 import { isUUID } from '@/lib/validate';
 
@@ -31,20 +32,9 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { admin } = access;
   const org = access.object.orgId;
   try {
-    const [inboxRes, linkedRes] = await Promise.all([
-      admin.from('projects').select('id').eq('org_id', org).eq('inbox_for_contact_id', contactId),
-      admin.from('project_contacts').select('project_id').eq('contact_id', contactId),
-    ]);
-    if (inboxRes.error) throw new Error(inboxRes.error.message);
-    if (linkedRes.error) throw new Error(linkedRes.error.message);
-    const candidates = [
-      ...((inboxRes.data ?? []) as { id: string }[]).map((p) => p.id),
-      ...((linkedRes.data ?? []) as { project_id: string }[]).map((p) => p.project_id),
-    ];
-    if (candidates.length === 0) return NextResponse.json({ songs: [] });
-    const projectsRes = await admin.from('projects').select('id').in('id', [...new Set(candidates)]).eq('org_id', org);
-    if (projectsRes.error) throw new Error(projectsRes.error.message);
-    const projectIds = ((projectsRes.data ?? []) as { id: string }[]).map((p) => p.id);
+    // The artist's projects of this org (Inbox + project_contacts), the
+    // same rule the org workspace lists (lib/labelos/org-workspace-store).
+    const projectIds = (await artistProjects(admin, org, contactId)).map((p) => p.id);
     if (projectIds.length === 0) return NextResponse.json({ songs: [] });
 
     const linksRes = await admin.from('project_tracks').select('track_id').in('project_id', projectIds);

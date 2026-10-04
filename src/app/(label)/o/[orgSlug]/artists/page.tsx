@@ -7,10 +7,9 @@
  * set of components). A member limited to some artists sees only those; one
  * limited to none sees an empty roster and is told why.
  *
- * Cards do not link yet: the org artist workspace (ArtistWorkspaceTabs in
- * org context) needs the org's projects, which arrive with LABEL-12.
- * Adding and editing people is the /api/org/[orgId]/contacts routes; the
- * page stays the roster list this task's UX calls for.
+ * Each card opens the artist's org workspace (LABEL-17,
+ * /o/<slug>/artists/<contactId>). Adding and editing people is the
+ * /api/org/[orgId]/contacts routes; the page stays the roster list.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { PageContainer } from '@/components/layout/PageHeader';
@@ -75,7 +74,7 @@ export default function OrgArtistsPage() {
         artists={artists}
         ready
         failed={load.state === 'failed'}
-        linkFor={() => null}
+        linkFor={(id) => `/o/${shell.org.slug}/artists/${id}`}
         emptyText={empty}
       />
     </PageContainer>
