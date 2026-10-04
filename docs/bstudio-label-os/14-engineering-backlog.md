@@ -985,7 +985,7 @@ Drop the tables.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-14, LABEL-15, LABEL-16
-**Status:** In Review (2026-10-04) — PR into the Label OS branch. Migration 145, not applied: org rows on the #44 workspace tables have no owner.
+**Status:** Done (2026-10-04) — PR #74. Migration 145, not applied: org rows on the #44 workspace tables have no owner.
 
 **Built (for the orchestrator's merge gate):**
 - **Pages.** `/o/<slug>/artists/<id>`, `/songs/<id>` and `/projects/<id>` are server pages. Anything out of scope or missing is a real 404, the same answer as the API (`/api/org/[orgId]/artists/[contactId]/workspace`, `/songs/[trackId]`, `/projects/[id]`). The roster cards link to the workspace.
@@ -1082,7 +1082,7 @@ Flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-17
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-18)
 
 ## Objective
 The owner's roster-level view: artists × songs by stage, next release.
