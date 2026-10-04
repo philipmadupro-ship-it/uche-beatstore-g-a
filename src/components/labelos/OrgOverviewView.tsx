@@ -11,7 +11,7 @@ import type { OrgOverview } from '@/lib/labelos/overview-store';
 import type { NextRelease } from '@/lib/labelos/overview';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
-const NUM = 'w-16 shrink-0 text-right font-mono text-[12px] tabular-nums text-white/80';
+const NUM = 'w-16 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/80';
 
 function releaseText(r: NextRelease): string {
   return r.targetDate ? `${r.title} · ${r.targetDate}` : r.title;
