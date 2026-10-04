@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
 import fs from 'node:fs';
@@ -111,6 +111,57 @@ export async function uploadPrivateAudio(fileBuffer: Buffer, fileName: string, c
   await r2.send(command);
 
   return r2ObjectRef(bucketName, objectKey);
+}
+
+/**
+ * Write a private object under a CALLER-CHOSEN key and return its r2:// ref.
+ * Unlike uploadPrivateAudio (random key per call) this overwrites, so a key
+ * derived from the content's identity is a cache: writing it twice is one
+ * object, not two. Fails closed without a private bucket, like the above.
+ */
+export async function putPrivateObject(key: string, body: Buffer, contentType: string): Promise<string> {
+  const bucketName = privateAudioBucket();
+  await r2.send(new PutObjectCommand({ Bucket: bucketName, Key: key, Body: body, ContentType: contentType }));
+  return r2ObjectRef(bucketName, key);
+}
+
+/** Every key in the private bucket under `prefix` (paginated). */
+export async function listPrivateKeys(prefix: string): Promise<string[]> {
+  const bucket = privateAudioBucket();
+  const keys: string[] = [];
+  let token: string | undefined;
+  do {
+    const page = await r2.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }));
+    for (const o of page.Contents ?? []) if (o.Key) keys.push(o.Key);
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+  return keys;
+}
+
+/** Delete keys from the private bucket, in the batches of 1000 S3 allows. */
+export async function deletePrivateKeys(keys: string[]): Promise<void> {
+  const bucket = privateAudioBucket();
+  for (let i = 0; i < keys.length; i += 1000) {
+    const chunk = keys.slice(i, i + 1000);
+    const out = await r2.send(new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: { Objects: chunk.map((Key) => ({ Key })), Quiet: true },
+    }));
+    if (out.Errors?.length) throw new Error(`Delete failed for ${out.Errors.length} object(s): ${out.Errors[0].Message ?? out.Errors[0].Code}`);
+  }
+}
+
+/** Whether an r2:// object exists (a one-byte ranged GET; false on any miss). */
+export async function storedObjectExists(source: string): Promise<boolean> {
+  try {
+    const object = await getStoredObject(source, 'bytes=0-0');
+    if (!object?.Body) return false;
+    // Drop the body: only the existence mattered.
+    await object.Body.transformToByteArray();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -9328,6 +9328,104 @@ Tests: `buyer-session.test.ts` (3 new): a lost marker with a live session is res
 
 Not changed: the session is shared with the producer's dashboard login, so a producer browsing `/store` while signed in now syncs hearts under their own email and `upsertLeadContact` creates a lead for them (as opening `/store/account/me` already did). Skipping that needs the server to know the producer's email; left for a follow-up. `syncedIdentity` is keyed on the query string (`session=1`), not the user id, so switching accounts without signing out through `/store/account/me` would not re-sync until reload.
 
+## 2026-10-02 - Buyer download system: held exclusives, quiet failures, same-origin URLs (BUYER-05)
+
+Task: make the post-purchase download path (`/store/download` → `/api/store/delivery` → `/api/store/download-file`) demonstrably tied to purchase and permission.
+
+**Audited, already correct (tests added, no change needed):** unknown session → 404, missing params → 400, track outside the purchase → 403, refunded/disputed (`download_unlocked = false`) → 403, MP3-only tier cannot reach WAV/stems, a WAV master cannot be streamed through an MP3 entitlement, an expired/refunded project link → 403, and `download-file` already hid internal errors.
+
+**Reproduced and fixed** (route tests failed before the change):
+- **A double-sold exclusive stayed downloadable.** The webhook claims exclusivity with a conditional UPDATE; the loser's `license_purchases` row is flagged `needs_refund_review` but written with `download_unlocked = true`, and neither route read the flag. Both routes now ask `lib/store/purchase-access.ts#purchaseAccess`; a flagged row answers 403 with a "producer is reviewing this" message. The hold ends when the producer marks the sale reviewed on /sales (documented as "once you've refunded") or when the refund webhook clears `download_unlocked`. The /sales badge tooltip says so.
+- **`/api/store/delivery` returned `errorMessage(err)` on a 500**, i.e. DB/storage internals on a public route. `download-file` had been fixed already; delivery now logs the detail and returns a fixed sentence.
+- **`download-file` ignored a failed purchase lookup** and fell through to the project branch, answering 404 "Purchase not found" for a paid buyer on a transient (or missing-column) error. It now throws → 500.
+- **The page saved silently on failure.** An `<a download>` at a route that answers 403 JSON shows nothing on the page (Chrome files a failed download). `lib/store/download-failure.ts#probeDownload` asks the route for one byte (`Range: bytes=0-0`) first; a refusal toasts the route's own sentence (4xx only; a 5xx gets a fixed line), a pass saves.
+- **Download URLs are relative** (they were `NEXT_PUBLIC_APP_URL`-prefixed). The pre-check is a `fetch`, which a different origin (www vs apex, a preview alias) would block by CORS, and the file should come from the origin the buyer is on anyway.
+
+Tests: `purchase-access.test.ts`, `download-failure.test.ts`, route tests for both routes (+12), `page.test.tsx` (jsdom), `e2e/store-download.spec.ts` (1280 and 390 px, API stubbed, real browser download event and filename). Not run against a real database: both routes use the service client, so RLS does not apply to them; the authorization is the route code, which the route tests exercise.
+
+Not changed (see report): 
+
+Follow-up (same PR): `/api/store/projects/access/[token]/download` now logs the detail and returns a fixed "Download failed" on a 500 (new `route.test.ts`; also covers 404 for unknown/expired token).
+
+Follow-up (same PR): the flagged buyer's email. `runFulfillment` step 4 re-reads `needs_refund_review` and, when set, sends `lib/store/held-purchase-email.ts` ("Your purchase is being reviewed": payment received, exclusive sold at the same moment, producer will be in touch) instead of "your files are ready" — no download button, no license PDF attached. Same `deliverFulfillmentEmail` job key, so retries stay idempotent.
+
+**A hazard this exposed, fixed here:** the webhook decided "double sale" from a failed conditional claim alone. A re-delivered event re-runs fulfilment for a purchase that already claimed the track, the claim fails against itself, and the legitimate winner was flagged. Harmless while the flag was a badge; with the flag now holding downloads and triggering this email it would lock out the buyer who paid first. `lib/store/exclusive-claim.ts#trackHeldByAnotherBuyer` now requires another LIVE exclusive purchase of the track (unlocked and not itself flagged — the loser's row also names the track) before the flag is written; if that lookup errors it falls back to the old behaviour (flag). Tests: webhook loser and winner-retry cases (both failed on the old code), `exclusive-claim.test.ts`.
+
+Not changed: the license PDF is still generated and stored on a flagged row (just not emailed); `/api/sales/resend` and `/api/store/orders/resend` will still email the download link to a flagged buyer, which then shows the hold message.
+
+Follow-up (same PR): the partial-refund rule. `charge.refunded` fires for every refund, and the handler treated each as a full one: status `refunded`, downloads revoked, bundle link expired and, for an exclusive, the track re-listed (`exclusive_sold = false`) while the buyer still held the license. `lib/store/refund-rule.ts#refundAccessEffect` now decides: dispute → revoke; `refunded: true` or `amount_refunded >= amount` → revoke; a partial refund → keep. A kept partial refund changes nothing in the DB and writes a producer notification ("Partial refund — $10.00 of $300.00 … refund the rest in Stripe to revoke them"). An event whose shape cannot be read revokes, as before. The last of several partial refunds arrives with `refunded: true` and revokes then.
+
+Found alongside, same branch: refunding the LOSER of a double sale — the way a held purchase is resolved — re-listed the track for sale while the winner still held it exclusively. The re-list now skips any track another live exclusive purchase holds (`trackHeldByAnotherBuyer`).
+
+Tests: `refund-rule.test.ts`; webhook cases for partial (no writes but the notification), full-with-amounts, dispute, and loser refund (the partial and loser cases fail on the old handler). 
+
+Follow-up (same PR): download audit log and rate limit.
+
+**Audit log, no migration.** One `store_events` row (`event_type: 'download'`) per file granted or refused on a known purchase, written by `lib/store/download-audit.ts` from `/api/store/download-file` and the bundle-token download. `store_events` was built open ("new event types never need a migration"), already has producer-only read RLS and a salted IP hash, and the funnel/analytics readers ignore types they don't know. The public `/api/store/event` endpoint validates a closed enum that excludes `download` (tested through the real schema), so the log cannot be forged from a browser. A new table would also have needed a migration number: 136–138 are claimed by `claude/happy-bardeen-rnosf3` / `label-os/*` and 139 by #64. Metadata: purchase kind, purchase id, format, outcome, and for a refusal the reason (`revoked`, `under-review`, `expired`, `track-not-in-purchase`, `format-not-permitted`, `file-missing`). It deliberately omits the Stripe session id and bundle token (bearer credentials). The write is best-effort and awaited, so a failed insert is logged and never blocks a paid download. The page's one-byte pre-check sends `X-Download-Probe` and a resumed download asks for the middle of the file; neither counts (`shouldLogGrant`). Unknown sessions/tokens are not logged: no seller to attribute them to, and a flood of guesses is not an audit.
+
+**Rate limit, no migration.** The durable limiter already existed (`rateLimitDurable`, mig 074, in-memory fallback). `/api/store/download-file` and the bundle-token download share a per-IP bucket of 240/min; `/api/store/delivery` (which returns the buyer's email for a session id) gets 60/min. 429 + `Retry-After: 60`, checked before any lookup. The page shows the route's sentence.
+
+**Not built:** anything that READS the log. The rows are queryable by the producer (RLS), but /sales shows no "downloaded N times / last on" yet — that is the natural next step and needs a join on `metadata->>purchase_id`. Also not done: a per-purchase download cap, and retention for old `download` rows.
+
+Tests: `download-audit.test.ts` (rule, row shape, no credential, hashed IP, never throws, forgery guard), route tests for all three routes (11 fail on the old routes), page 429 case.
+
+Follow-up (same PR): a lease on a WAV master.
+
+**The defect.** A lease tier promises `['MP3']`. `delivery` only advertised the master's own format, and `download-file` (correctly, since the earlier security fix) refused a WAV to an MP3-only tier. For a track whose `audio_url` is a WAV — the common case — the buyer paid, the page said "No files available for download", and nothing could be fetched. Checkout had let the sale through. Reproduced as route tests (delivery listed nothing; download-file answered 403) and then end to end.
+
+**The fix, without a schema change.** The first design was a `tracks.mp3_url` column filled at upload and by the backfill cron. Dropped: the cron runs once a day on this plan (a WAV-mastered catalogue would stay unbuyable for weeks), a revert of a track version changes `audio_url` and would leave a stale MP3 on the row, and migration numbers 136–139 are already claimed by other branches. Instead the derivative's KEY is derived from the track id and a hash of `audio_url` (`mp3DeliverableKey`), so existence of the key is the whole state and a replaced master can never be served an old MP3. `lib/audio/mp3-deliverable.ts` is the pure orchestration with injected dependencies (every branch tested with fakes); `mp3-deliverable.server.ts` wires R2 + ffmpeg. `convert.ts#makeDeliveryMp3Buffer` is a 320 kbps stereo 44.1 kHz libmp3lame pass over the whole master (the 96 kbps 75 s public preview is a different thing and untouched).
+- `/api/store/delivery`: offers `mp3` for a tier that includes it on a transcodable non-MP3 master.
+- `/api/store/download-file?format=mp3`: serves the stored derivative, making it first if needed; if it was made but could not be stored the bytes are served directly; if it cannot be made, 503 + `Retry-After`, audit `file-missing`, one deduped `fulfillment_alert` to the producer. It never falls back to the master. `format=wav` is still refused to an MP3-only tier.
+- Upload processing makes it eagerly from the master already in memory (non-fatal). `next.config.ts` traces ffmpeg into `/api/store/download-file`; the route has `maxDuration = 120`.
+- Side effect, intended: exclusive and bundle tiers include MP3, so `format=mp3` now returns a real MP3 for them too (it used to return the WAV master named `.wav`).
+
+Tests: `mp3-deliverable.test.ts` (rules, key, reuse, create, store-failure, no-storage, cannot-make → null, upload-time), `convert-delivery.test.ts` (REAL ffmpeg over a generated WAV: valid stereo MP3, whole length, not a clip), route tests for delivery and download-file, and `mp3-integration.test.ts` — the real route, real `ensureTrackMp3` and real ffmpeg over a WAV on disk, DB stubbed: a lease receives a genuine MP3 and the WAV is refused (fails on the old routes).
+
+Not verified: ffmpeg actually running inside the Vercel function for `/api/store/download-file`. It is traced the same way as the upload routes, whose earlier "never traced" failure is documented in `lib/audio/preview-clip.ts`, and `/api/audio/diagnostics` reports it; but I could not run on Vercel. If it does not run there, the buyer sees "being prepared" and the producer is alerted, and the eager upload-time path is the fallback for new tracks. 
+
+Follow-up (same PR): the producer-visible "MP3 ready" indicator.
+
+The drawer's new **Delivery** section (`TrackDeliverySection`, after Linked) shows a pill — MP3 ready (mint) for an MP3 master or a stored derivative, "MP3 not made yet" for a convertible master with none, "No MP3 possible" for an unconvertible file, "No audio" — plus one sentence of explanation, and **Make MP3 now** for the pending case. `lib/audio/mp3-status.ts#mp3Status` is the single mapping (pure, tested; `derivativeExists` of null — unchecked — is never reported as ready). `GET /api/tracks/[id]/mp3` returns it (one storage lookup for the key `mp3DeliverableKey` names); `POST` runs the same `ensureTrackMp3` a buyer's first download would, answering 503 (not a false ready) if it cannot be made or stored and 409 when there is nothing to make. Both are owner-gated through `requireRowOwnership` and re-read the row with the owner filter, since the service client bypasses RLS; failures return fixed text, never internals. ffmpeg is traced into the new route in `next.config.ts`.
+
+**Per track, not on list rows — deliberately.** No column holds this state (that was the point of the no-migration design), so a list badge means one R2 lookup per visible row; a 300-row library would fire 300 requests to answer a question the producer asks about one track. If a list-level signal is wanted, the honest cheap one is static ("master is not an MP3") with no claim about whether the derivative exists.
+
+The section re-checks when `audio_url` changes (a version revert swaps the master, and the old derivative key no longer applies) and renders nothing in local mode (501). A failed check says "Could not check the MP3" with Retry rather than guessing.
+
+Tests: `mp3-status.test.ts`, route tests (signed out 401 / another producer's track 403 / missing 404 each read nothing; owner filter asserted; status; make success; 503 cannot make; 503 not stored; 409; no internal leak), `TrackDeliverySection.test.tsx` (ready, pending → make → ready, make fails, check fails + Retry, 501 hides, re-check on master change), and `e2e/track-delivery.spec.ts` in the real drawer at 1280 and 390 px (the library has no All tracks toggle on phones; the spec handles both).
+
+Follow-up (same PR): deleting superseded MP3s.
+
+**Where orphans come from.** The derivative's key hashes `audio_url`, so a changed master leaves the old MP3 behind. `audio_url` is written in exactly one place — the version-revert route — and a track delete is a bare DB delete. The MP3 feature has not reached production, so there is no existing backlog to sweep; three hooks cover the lifecycle:
+1. **A new derivative is stored** (`EnsureMp3Deps.prune`): every other `deliverables/<track>-*.mp3` is superseded.
+2. **A version revert** (`revert/route.ts`): prune everything except the key for the restored master (kept if it was already made).
+3. **A track delete** (`[id]/route.ts` DELETE, after ownership is proven and the row is gone): remove all of them. Masters, previews and peaks are not touched; they were never deleted on track delete and that is a wider storage-GC question this does not take on.
+
+**The selection is the safety boundary.** `supersededDeliverableKeys` returns a key only if it matches exactly `deliverables/<this track's uuid>-<12 hex>.mp3` and is not the current key; the track id must itself be a uuid before it is interpolated into the pattern. The adversarial test feeds it a master, another track's derivative, wrong extensions, `..` traversal, the bare prefix and an empty string and expects nothing back. `listPrivateKeys` (paginated) and `deletePrivateKeys` (batches of 1000, throws on a per-object S3 error) only touch the private bucket. Pruning is best-effort and never throws: a failed cleanup must not fail the download, revert or delete that triggered it; without R2 (local dev) it is a no-op.
+
+**Known small race, accepted.** A request that read the track before a revert can store the OLD master's key after the revert and prune the NEW one; the next request regenerates it. Nothing is served stale (the key is derived from the master it was made from).
+
+Tests: pure selection (adversarial), prune with fakes, ensure prunes only on a NEW derivative (not on exists / MP3 master / unstored; a failing prune doesn't lose the result), a lifecycle test over an in-memory object store (one MP3 per track through a master change, another track's untouched, delete removes only that track's, masters and stems intact), `private-keys.test.ts` (pagination, 1000-batching, error surfaced), and route tests for revert and DELETE (prune on success with the right arguments; none on a failed revert or a track the caller does not own) — the two hook tests fail without the hooks.
+
+Not verified: against real R2 (ListObjectsV2 / DeleteObjects). The S3 client is exercised with its `send` spied, so command shapes are asserted but not accepted by a live bucket; the token needs `s3:ListBucket` and `s3:DeleteObject` on the private bucket, which the upload and delete helpers already imply for delete but list is new.
+
+Follow-up (same PR): `charge.dispute.closed`.
+
+**The gap.** `charge.dispute.created` revokes access immediately (status `disputed`, `download_unlocked = false`, bundle link expired), and nothing ever undid it: a buyer whose dispute the producer WON — they paid, the bank sided with the seller — stayed locked out of files they own, until the producer hand-edited the database.
+
+**The rule** (`lib/store/dispute-rule.ts`, pure and tested). `won` and `warning_closed` restore; `lost` and `charge_refunded` stay revoked; anything else (an open status in a "closed" event, or a status Stripe adds later) does nothing — leaving access revoked is recoverable, restoring files on a sale we cannot classify is not.
+
+**The handler** (`/api/stripe/webhook`, new case):
+- **Track licenses:** `UPDATE … SET status='paid', download_unlocked=true WHERE stripe_payment_intent = … AND status = 'disputed'`. The status guard is the protection against a later full refund (which moved the row to `refunded`) being reversed. `needs_refund_review` is untouched, so a double-sold exclusive stays held after a won dispute.
+- **Bundles:** no status column, and both a refund and a dispute revoke by setting `expires_at = now()`, so the row cannot say which. Before un-expiring (`expires_at = null`, by payment intent and by checkout session, only rows currently expired) it retrieves the charge from Stripe: refunded, or Stripe unreachable → left revoked and logged. Setting null is a faithful undo because the webhook never writes `expires_at` at creation.
+- Notifies the producer: "Dispute won", "Dispute inquiry closed", or "Dispute lost" with whether downloads were restored; silent for `charge_refunded` (the refund event already notified). Bundle sales are now covered too (the created-notification only looked at `license_purchases`; the closed one falls back to `project_access_links`).
+- Every write is conditional, so a redelivered event is a no-op.
+
+**Required prod config:** the Stripe webhook endpoint must also be subscribed to `charge.dispute.closed` (Dashboard → Developers → Webhooks), or this never fires. `/api/stripe/diagnostics` now lists it as a required event and reports it missing.
+
+Tests: `dispute-rule.test.ts`; webhook cases for won (the WHERE clause asserted, not just the payload), warning_closed, lost, charge_refunded, unrecognised/absent statuses, no payment intent, bundle un-expire (both lookups, only-expired filter), bundle left revoked on a refunded charge and on a Stripe failure, "could not restore" wording, and idempotence. The restore cases fail on the old handler. The test harness now records the filters applied to each write so WHERE clauses can be asserted.
+
+Not verified against a real Stripe dispute: the event shape (`status`, `payment_intent`, `charge` on the dispute object) is from Stripe's documented Dispute object, and the tests construct it, not capture it. A Stripe CLI `stripe trigger charge.dispute.closed` against a test-mode endpoint would confirm.
+
 ## 2026-10-02 - Buyer "My beats" workspace on /store/account/me (BUYER-01)
 
 Asked for: an artist/rapper-personalised buyer workspace reusing the Library's philosophy for owned and requested beats; acceptance "filter, sort, play and create project". Decisions taken with the owner: **create project = a buyer playlist**, **requested = offers only**, **personalised = derived from ownership**. No migration.

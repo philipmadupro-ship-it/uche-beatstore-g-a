@@ -98,3 +98,21 @@ async function streamSource(
     headers: out,
   });
 }
+
+/**
+ * A download response for bytes already in memory (a derivative that could not
+ * be stored). Same headers as a streamed attachment: private, no-store, named.
+ */
+export function bufferDownloadResponse(buffer: Buffer, filename: string, contentType: string): Response {
+  const safe = filename.replace(/[\r\n"\\]/g, '_');
+  return new Response(new Uint8Array(buffer), {
+    status: 200,
+    headers: {
+      'content-type': contentType,
+      'content-length': String(buffer.length),
+      'content-disposition': `attachment; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'cache-control': 'private, no-store',
+      'x-content-type-options': 'nosniff',
+    },
+  });
+}

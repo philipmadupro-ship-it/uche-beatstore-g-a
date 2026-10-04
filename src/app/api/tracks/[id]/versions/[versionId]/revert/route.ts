@@ -4,6 +4,7 @@ import { nextVersionLabel } from '@/lib/naming';
 import { requireRowOwnership } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { pruneTrackMp3s } from '@/lib/audio/mp3-deliverable.server';
 const log = createLogger('api.tracks.id.versions.versionId.revert');
 
 export const runtime = 'nodejs';
@@ -101,6 +102,11 @@ export async function POST(
         .select()
         .single();
       if (error) throw error;
+
+      // The master just changed, so the lease MP3 made from the old one is
+      // superseded (its key is derived from audio_url). Keep the one for the
+      // restored master if it was made before. Best-effort.
+      await pruneTrackMp3s({ id, audio_url: target.audio_url });
 
       return NextResponse.json({ track: updated });
     }

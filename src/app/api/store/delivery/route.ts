@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
-import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { isProjectAccessActive } from '@/lib/store/project-access';
+import { purchaseAccess } from '@/lib/store/purchase-access';
+import { canDeriveMp3 } from '@/lib/audio/mp3-deliverable';
+import { clientIp, rateLimitDurable } from '@/lib/security/rate-limit';
 import {
   canDownloadFormat,
   parsePurchaseLineItem,
@@ -22,6 +24,7 @@ type PurchaseRow = {
   created_at: string;
   status: string;
   download_unlocked: boolean;
+  needs_refund_review?: boolean | null;
   license_type?: string | null;
   track_ids?: unknown;
   line_items?: unknown;
@@ -86,8 +89,9 @@ type StemRow = {
  *     ]
  *   }
  *
- * Download URLs are entitlement-checked API URLs. They do not include raw
- * storage URLs; the gated route validates the session again before streaming.
+ * Download URLs are entitlement-checked API URLs, relative so they stay on the
+ * origin the buyer is actually on. They do not include raw storage URLs; the
+ * gated route validates the session again before streaming.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -100,14 +104,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
+  // The lookup returns the buyer's email for a session id, so it is capped per
+  // IP like the downloads it leads to (a lower cap: a page load is one call).
+  if (!(await rateLimitDurable(`dl-list:${clientIp(req)}`, 60, 60_000))) {
+    return NextResponse.json(
+      { error: 'Too many requests. Wait a minute and try again.' },
+      { status: 429, headers: { 'Retry-After': '60' } },
+    );
+  }
+
   try {
     const admin = createServiceClient();
-    const APP_URL = getAppUrl();
 
     // ── Validate purchase ──────────────────────────────────────────────────
     const { data: purchase, error: pErr } = await admin
       .from('license_purchases')
-      .select('id, buyer_email, amount_usd, created_at, status, download_unlocked, license_type, track_ids, line_items')
+      .select('id, buyer_email, amount_usd, created_at, status, download_unlocked, needs_refund_review, license_type, track_ids, line_items')
       .eq('stripe_session_id', sessionId)
       .maybeSingle();
 
@@ -142,11 +154,11 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
       }
     }
-    if (!isProjectPurchase && !purchase?.download_unlocked) {
-      return NextResponse.json(
-        { error: 'Download access revoked (refunded or disputed)' },
-        { status: 403 },
-      );
+    if (!isProjectPurchase && purchase) {
+      const access = purchaseAccess(purchase as PurchaseRow);
+      if (!access.allowed) {
+        return NextResponse.json({ error: access.message }, { status: 403 });
+      }
     }
 
     let trackIds: string[] = [];
@@ -217,7 +229,7 @@ export async function GET(req: NextRequest) {
 
     // ── Build per-track downloads array ────────────────────────────────────
     function proxied(format: string, trackId: string): string {
-      return `${APP_URL}/api/store/download-file?session_id=${encodeURIComponent(sessionId!)}&track_id=${encodeURIComponent(trackId)}&format=${encodeURIComponent(format)}`;
+      return `/api/store/download-file?session_id=${encodeURIComponent(sessionId!)}&track_id=${encodeURIComponent(trackId)}&format=${encodeURIComponent(format)}`;
     }
 
     const tracksWithDownloads = tracks.map((t) => {
@@ -229,6 +241,14 @@ export async function GET(req: NextRequest) {
       ).toLowerCase();
 
       const downloads: Array<{ format: string; label: string; proxied_url: string }> = [];
+
+      // A tier that includes MP3 on a track whose master is not one (usually a
+      // WAV): the MP3 is made from the master when it is first downloaded
+      // (/api/store/download-file), so it is offered here whether or not it
+      // exists yet. Without this such a lease listed nothing at all.
+      if (item && canDeriveMp3(t.audio_url) && canDownloadFormat(item, 'mp3')) {
+        downloads.push({ format: 'mp3', label: 'MP3', proxied_url: proxied('mp3', t.id) });
+      }
 
       const mainFormat = audioExt === 'wav' ? 'wav' : audioExt;
       if (t.audio_url && item && canDownloadFormat(item, mainFormat)) {
@@ -303,6 +323,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     log.error('delivery lookup failed', { sessionId, error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    // Public route: log the detail, never return it (DB/storage internals).
+    return NextResponse.json({ error: 'Could not load your delivery' }, { status: 500 });
   }
 }

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUrl } from '@/lib/env';
 import { Resend } from 'resend';
+import { trackHeldByAnotherBuyer, type OtherPurchase } from '@/lib/store/exclusive-claim';
+import { buildHeldPurchaseEmail } from '@/lib/store/held-purchase-email';
+import { refundAccessEffect } from '@/lib/store/refund-rule';
+import { disputeClosedEffect } from '@/lib/store/dispute-rule';
 import { getStripe } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
@@ -47,6 +51,14 @@ type WebhookEvent = {
 };
 type WebhookCharge = {
   payment_intent?: string | null;
+  refunded?: boolean | null;
+  amount?: number | null;
+  amount_refunded?: number | null;
+};
+type WebhookDispute = {
+  status?: string | null;
+  payment_intent?: string | null;
+  charge?: string | null;
 };
 type TrackTitleRow = {
   id: string;
@@ -340,12 +352,33 @@ async function runFulfillment(params: {
           const claimedIds = new Set((claimed ?? []).map((t) => t.id as string));
           const lost = exclusiveTrackIds.filter((id) => !claimedIds.has(id));
 
+          // A failed claim is "already sold", but a re-delivered event re-runs
+          // a purchase that claimed the track itself. Only a live exclusive
+          // held by ANOTHER purchase makes this a double sale; the flag holds
+          // the buyer's downloads, so it must never land on the winner.
+          let confirmedLost = lost;
           if (lost.length > 0) {
+            const { data: others, error: othersError } = await admin
+              .from('license_purchases')
+              .select('track_ids, line_items, license_type, download_unlocked, needs_refund_review')
+              .neq('stripe_session_id', session.id)
+              .overlaps('track_ids', lost);
+            if (!othersError) {
+              confirmedLost = lost.filter((id) =>
+                trackHeldByAnotherBuyer(id, (others ?? []) as OtherPurchase[]));
+            } else {
+              log.warn('could not confirm exclusive holder; treating as double sale', {
+                sessionId: session.id, error: othersError.message,
+              });
+            }
+          }
+
+          if (confirmedLost.length > 0) {
             // This buyer paid for an exclusive that was already sold. Flag the
             // purchase so /sales can surface it for refund rather than leaving
             // the producer to discover it from a complaint.
             log.error('EXCLUSIVE DOUBLE SALE — track already sold when payment landed', {
-              trackIds: lost,
+              trackIds: confirmedLost,
               sessionId: session.id,
               buyerEmail: meta.buyer_email ?? null,
             });
@@ -535,7 +568,7 @@ async function runFulfillment(params: {
       // Re-fetch the flag in case a concurrent execution already sent the email
       const { data: purchaseRow } = await admin
         .from('license_purchases')
-        .select('fulfillment_email_sent')
+        .select('fulfillment_email_sent, needs_refund_review')
         .eq('id', purchaseId)
         .maybeSingle();
 
@@ -580,6 +613,28 @@ async function runFulfillment(params: {
              📜 Your signed-style <a href="${contractPdfUrl}" style="color: #FFFFFF; text-decoration: underline;">license agreement (PDF)</a> is attached to this email.
            </p>`
         : '';
+
+      // A buyer whose exclusive sold twice is told so, not "your files are
+      // ready" with a link the download page will refuse.
+      if (purchaseRow?.needs_refund_review === true) {
+        const held = buildHeldPurchaseEmail({ totalPaid: fmt(totalCents) });
+        await deliverFulfillmentEmail({
+          admin,
+          kind: 'track',
+          referenceId: purchaseId,
+          sellerUserId: meta.seller_user_id || null,
+          stripeSessionId: session.id,
+          to: meta.buyer_email,
+          subject: held.subject,
+          html: held.html,
+        });
+        await admin
+          .from('license_purchases')
+          .update({ fulfillment_email_sent: true })
+          .eq('id', purchaseId);
+        log.info('held-purchase email sent', { purchaseId, to: meta.buyer_email });
+        return;
+      }
 
       await deliverFulfillmentEmail({
         admin,
@@ -1088,10 +1143,46 @@ export async function POST(req: NextRequest) {
       }
 
       // ── charge.refunded / charge.dispute.created ───────────────────────────
-      // Both events revoke download access. The purchase row is kept for audit.
+      // A full refund or a dispute revokes download access; a PARTIAL refund
+      // leaves the sale in force (lib/store/refund-rule.ts). The purchase row
+      // is kept for audit either way.
       case 'charge.refunded':
       case 'charge.dispute.created': {
         const charge = event.data.object as WebhookCharge;
+
+        if (refundAccessEffect(event.type, charge) === 'keep') {
+          // Nothing is revoked, re-listed or re-statused: the buyer still holds
+          // what they paid for. The producer is told so the refund is not
+          // mistaken for a cancelled sale.
+          log.info('partial refund — access kept', {
+            payment_intent: charge.payment_intent,
+            amount_refunded: charge.amount_refunded ?? null,
+          });
+          try {
+            const { data: partialPurchase } = await admin
+              .from('license_purchases')
+              .select('seller_user_id, amount_usd, buyer_email')
+              .eq('stripe_payment_intent', charge.payment_intent)
+              .maybeSingle();
+            const partial = partialPurchase as PurchaseNotificationRow | null;
+            if (partial?.seller_user_id) {
+              const refunded = typeof charge.amount_refunded === 'number'
+                ? `$${(charge.amount_refunded / 100).toFixed(2)}`
+                : 'Part';
+              await admin.from('notifications').insert({
+                user_id: partial.seller_user_id,
+                kind: 'refund',
+                title: `Partial refund — ${refunded} of $${Number(partial.amount_usd ?? 0).toFixed(2)}`,
+                body: `${partial.buyer_email ?? 'The buyer'} keeps their downloads. Refund the rest in Stripe to revoke them.`,
+                data: { payment_intent: charge.payment_intent, amount_refunded: charge.amount_refunded ?? null },
+              });
+            }
+          } catch (ne) {
+            log.warn('notification insert failed on partial refund', { error: errorMessage(ne) });
+          }
+          break;
+        }
+
         const newStatus = event.type === 'charge.refunded' ? 'refunded' : 'disputed';
 
         const { error } = await admin
@@ -1187,17 +1278,135 @@ export async function POST(req: NextRequest) {
                 .map(parsePurchaseLineItem)
                 .filter((li: PurchaseLineItem | null): li is PurchaseLineItem => li?.license_type === 'exclusive')
                 .map((li) => li.track_id);
+              // Refunding the LOSER of a double sale (how a hold is resolved)
+              // must not re-open a track the winner still holds exclusively.
+              let relistable = exclusiveTracks;
               if (exclusiveTracks.length > 0) {
+                const { data: others, error: othersError } = await admin
+                  .from('license_purchases')
+                  .select('track_ids, line_items, license_type, download_unlocked, needs_refund_review')
+                  .neq('stripe_payment_intent', charge.payment_intent)
+                  .overlaps('track_ids', exclusiveTracks);
+                if (!othersError && Array.isArray(others)) {
+                  relistable = exclusiveTracks.filter((id) =>
+                    !trackHeldByAnotherBuyer(id, others as OtherPurchase[]));
+                }
+              }
+              if (relistable.length > 0) {
                 await admin
                   .from('tracks')
                   .update({ exclusive_sold: false, store_listed: true })
-                  .in('id', exclusiveTracks);
-                log.info('refunded exclusive tracks re-listed', { track_ids: exclusiveTracks });
+                  .in('id', relistable);
+                log.info('refunded exclusive tracks re-listed', { track_ids: relistable });
               }
             }
           } catch (err) {
             log.warn('exclusive re-list on refund failed', { error: errorMessage(err) });
           }
+        }
+        break;
+      }
+
+      // ── charge.dispute.closed ──────────────────────────────────────────────
+      // `charge.dispute.created` revoked the buyer's downloads. When the
+      // dispute closes in the seller's favour that is undone; when the bank
+      // keeps the money (or the charge was refunded) access stays revoked.
+      // See lib/store/dispute-rule.ts. Every write is conditional, so a
+      // redelivered event is a no-op.
+      case 'charge.dispute.closed': {
+        const dispute = event.data.object as WebhookDispute;
+        const effect = disputeClosedEffect(dispute.status);
+        const paymentIntent = dispute.payment_intent;
+        log.info('dispute closed', { status: dispute.status ?? null, effect, payment_intent: paymentIntent ?? null });
+
+        if (effect === 'ignore' || !paymentIntent) break;
+
+        let restored = false;
+        if (effect === 'restore') {
+          // Track licenses: only a row still marked 'disputed' comes back. A
+          // row a later full refund moved to 'refunded' must stay revoked.
+          const { data: licenseRows, error: licenseErr } = await admin
+            .from('license_purchases')
+            .update({ status: 'paid', download_unlocked: true })
+            .eq('stripe_payment_intent', paymentIntent)
+            .eq('status', 'disputed')
+            .select('id');
+          if (licenseErr) {
+            log.warn('dispute-won restore failed (license)', { payment_intent: paymentIntent, error: errorMessage(licenseErr) });
+          } else if ((licenseRows ?? []).length > 0) {
+            restored = true;
+          }
+
+          // Project bundles have no status column: both a refund and a dispute
+          // revoke by expiring the link, so the link cannot say which one did.
+          // Ask Stripe whether the charge was refunded; if that cannot be
+          // established, leave it revoked and say so.
+          try {
+            const charge = dispute.charge ? await stripe.charges.retrieve(dispute.charge) : null;
+            if (!charge) {
+              log.warn('dispute-won: no charge on the dispute, bundle left revoked', { payment_intent: paymentIntent });
+            } else if (charge.refunded) {
+              log.info('dispute-won: charge was refunded, bundle stays revoked', { payment_intent: paymentIntent });
+            } else {
+              const sessions = await stripe.checkout.sessions.list({ payment_intent: paymentIntent, limit: 10 });
+              const sessionIds = sessions.data.map((x) => x.id);
+              const byIntent = await admin
+                .from('project_access_links')
+                .update({ expires_at: null })
+                .eq('stripe_payment_intent', paymentIntent)
+                .not('expires_at', 'is', null)
+                .select('id');
+              const bySession = sessionIds.length > 0
+                ? await admin
+                    .from('project_access_links')
+                    .update({ expires_at: null })
+                    .in('stripe_session_id', sessionIds)
+                    .not('expires_at', 'is', null)
+                    .select('id')
+                : { data: [], error: null };
+              if (byIntent.error) log.warn('dispute-won restore failed (bundle, by intent)', { error: errorMessage(byIntent.error) });
+              if (bySession.error) log.warn('dispute-won restore failed (bundle, by session)', { error: errorMessage(bySession.error) });
+              if ((byIntent.data ?? []).length > 0 || (bySession.data ?? []).length > 0) restored = true;
+            }
+          } catch (err) {
+            log.warn('dispute-won bundle restore threw; bundle left revoked', { payment_intent: paymentIntent, error: errorMessage(err) });
+          }
+        }
+
+        // Tell the producer how it ended. A dispute closed as `charge_refunded`
+        // is a refund, which has already notified them.
+        if (dispute.status === 'charge_refunded') break;
+        try {
+          const { data: licenseSale } = await admin
+            .from('license_purchases')
+            .select('seller_user_id, amount_usd, buyer_email')
+            .eq('stripe_payment_intent', paymentIntent)
+            .maybeSingle();
+          const { data: bundleSale } = licenseSale
+            ? { data: null }
+            : await admin
+                .from('project_access_links')
+                .select('seller_user_id, amount_usd, buyer_email')
+                .eq('stripe_payment_intent', paymentIntent)
+                .maybeSingle();
+          const sale = (licenseSale ?? bundleSale) as PurchaseNotificationRow | null;
+          if (sale?.seller_user_id) {
+            const amount = `$${Number(sale.amount_usd ?? 0).toFixed(2)}`;
+            const won = effect === 'restore';
+            await admin.from('notifications').insert({
+              user_id: sale.seller_user_id,
+              kind: 'dispute',
+              title: dispute.status === 'warning_closed'
+                ? `Dispute inquiry closed — ${amount}`
+                : won ? `Dispute won — ${amount}` : `Dispute lost — ${amount}`,
+              body: won
+                ? `${sale.buyer_email ?? 'The buyer'}'s downloads ${restored ? 'are restored' : 'could not be restored automatically — check /sales'}.`
+                : `${sale.buyer_email ?? 'The buyer'}'s downloads stay revoked.`,
+              data: { payment_intent: paymentIntent, dispute_status: dispute.status ?? null, restored },
+            });
+          }
+        } catch (ne) {
+          log.warn('notification insert failed on dispute close', { error: errorMessage(ne) });
         }
         break;
       }
