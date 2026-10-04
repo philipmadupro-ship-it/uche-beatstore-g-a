@@ -9,7 +9,7 @@
  * Supports what the Label OS routes use: select (column lists, one
  * `table!inner(cols)` embed resolved through `org_id` for organizations,
  * else `<table singular>_id`), eq, in,
- * is, not(col, 'in', '(…)'), order, limit, maybeSingle, single, insert,
+ * is, not(col, 'in', '(…)'), order, limit, range, maybeSingle, single, insert,
  * update, delete, upsert (ignoreDuplicates), rpc (functions the test
  * declares in `rpc`, run against the same tables). Unique keys per table are
  * declared by the test and answered with Postgres' 23505. `order` compares
@@ -23,6 +23,8 @@ type Err = { message: string; code?: string };
 
 export type MemoryDb = {
   tables: Record<string, Row[]>;
+  /** PostgREST's `max-rows`: a select never returns more than this, silently (the cap a paging read must survive). */
+  maxRows?: number;
   /** column lists that must be unique per table, e.g. { contacts: [['org_id', 'email']] } */
   unique?: Record<string, string[][]>;
   /** Database functions for `.rpc(name, args)`: answer like PostgREST would. */
@@ -72,8 +74,9 @@ export function memoryAdmin(db: MemoryDb) {
     let payload: Row[] = [];
     let patch: Row = {};
     let ignoreDuplicates = false;
-    let order: { col: string; asc: boolean } | null = null;
+    const orders: { col: string; asc: boolean }[] = [];
     let limit: number | null = null;
+    let offset = 0;
     let returning = false;
 
     const rowsOf = () => (db.tables[table] ??= []);
@@ -102,13 +105,20 @@ export function memoryAdmin(db: MemoryDb) {
       const matching = rowsOf().filter((r) => filters.every((f) => f(r)));
       if (mode === 'select') {
         let rows = [...matching];
-        if (order) {
-          const { col, asc } = order;
+        if (orders.length > 0) {
           const cmp = (x: unknown, y: unknown) =>
             typeof x === 'number' && typeof y === 'number' ? x - y : String(x ?? '').localeCompare(String(y ?? ''));
-          rows.sort((a, b) => cmp(a[col], b[col]) * (asc ? 1 : -1));
+          // Chained `.order()` calls break ties in call order, as PostgREST does.
+          rows.sort((a, b) => {
+            for (const { col, asc } of orders) {
+              const c = cmp(a[col], b[col]) * (asc ? 1 : -1);
+              if (c !== 0) return c;
+            }
+            return 0;
+          });
         }
-        if (limit !== null) rows = rows.slice(0, limit);
+        if (limit !== null || offset > 0) rows = rows.slice(offset, limit === null ? undefined : offset + limit);
+        if (db.maxRows) rows = rows.slice(0, db.maxRows);
         return { data: project(rows), error: null };
       }
       if (mode === 'insert' || mode === 'upsert') {
@@ -189,11 +199,16 @@ export function memoryAdmin(db: MemoryDb) {
         return b;
       },
       order(col: string, opts?: { ascending?: boolean }) {
-        order = { col, asc: opts?.ascending !== false };
+        orders.push({ col, asc: opts?.ascending !== false });
         return b;
       },
       limit(n: number) {
         limit = n;
+        return b;
+      },
+      range(from: number, to: number) {
+        offset = from;
+        limit = to - from + 1;
         return b;
       },
       async maybeSingle() {
