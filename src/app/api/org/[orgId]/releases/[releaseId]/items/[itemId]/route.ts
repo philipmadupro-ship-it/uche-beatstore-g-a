@@ -14,7 +14,8 @@ import { isUUID, readBody } from '@/lib/validate';
 import { OrgReleaseItemPatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { RELEASE_ITEM_COLUMNS, toReleaseItemView, type ReleaseItemRow } from '@/lib/labelos/releases';
+import { recordEvent } from '@/lib/labelos/activity';
+import { RELEASE_ITEM_COLUMNS, releaseEventSubject, toReleaseItemView, type ReleaseItemRow } from '@/lib/labelos/releases';
 import { checkItemTracks, itemsOf, releaseRow, schemaAware, tracklistLocked, writeError, type ObjectAccessOk } from '../../../access';
 
 export const runtime = 'nodejs';
@@ -68,6 +69,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .select(RELEASE_ITEM_COLUMNS)
       .single();
     if (error || !data) return writeError(error ?? {}, 'Could not save the item').res;
+    await recordEvent(
+      access.admin,
+      { orgId: access.object.orgId, userId: access.userId },
+      'release.updated',
+      releaseEventSubject(found.release),
+      { items: 'edited', item_id: item.id, fields: Object.keys(parsed.data).sort() },
+    );
     return NextResponse.json({ item: toReleaseItemView(data as unknown as ReleaseItemRow) });
   } catch (err) {
     log.error('patch failed', { releaseId, itemId, error: errorMessage(err) });
@@ -94,6 +102,13 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     });
     if (error) return writeError(error, 'Could not remove the item').res;
     if (data !== true) return notFound();
+    await recordEvent(
+      access.admin,
+      { orgId: access.object.orgId, userId: access.userId },
+      'release.updated',
+      releaseEventSubject(found.release),
+      { items: 'removed', item_id: itemId },
+    );
     const items = await itemsOf(access, found.release.id);
     return NextResponse.json({ items: items.map(toReleaseItemView) });
   } catch (err) {

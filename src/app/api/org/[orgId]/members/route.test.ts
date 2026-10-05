@@ -1,5 +1,12 @@
 /**
  * GET / PATCH / DELETE /api/org/[orgId]/members (LABEL-09).
+ *
+ * LABEL-19: PATCH and DELETE call one audit function each (migration 146)
+ * that makes the change AND writes the event in one transaction. The fake
+ * `rpc` below stands in for it; that a failing audit insert leaves the
+ * change undone is proven against a real database in
+ * supabase/local/checks/146_labelos_audit_rpc.sql. Here: the route sends the
+ * right arguments, maps the answers, and writes nothing else.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -103,7 +110,6 @@ vi.mock('@/lib/auth/org-access', () => {
 });
 vi.mock('@/lib/labelos/activity', () => ({
   recordEvent: async (...args: unknown[]) => {
-    if (auditFails) throw new Error('audit event was not recorded');
     events.push(args.slice(1));
     return { ok: true, id: 'e1' };
   },
@@ -142,6 +148,20 @@ function answer(chain: Chain): Answer {
   return { data: listRows ?? [row({ user_id: ME, role: 'owner', functions: [] }), row()], error: null };
 }
 
+function rpc(name: string, args: Record<string, unknown>): Answer {
+  if (auditFails) return { data: null, error: { message: 'audit insert refused' } };
+  if (name === 'labelos_audit_member_update') {
+    if (updateError) return { data: null, error: updateError };
+    if (!target) return { data: { error: 'not_found' }, error: null };
+    return { data: { member: { ...target, ...(args.p_patch as object) } }, error: null };
+  }
+  if (name === 'labelos_audit_member_remove') {
+    if (deleteError) return { data: null, error: deleteError };
+    return { data: target ? { removed: true } : { error: 'not_found' }, error: null };
+  }
+  return { data: null, error: { message: `unexpected rpc ${name}` } };
+}
+
 const { GET, PATCH, DELETE } = await import('./route');
 const params = { params: Promise.resolve({ orgId: ORG }) };
 const patch = (body: unknown) =>
@@ -163,7 +183,7 @@ beforeEach(() => {
   listRows = null;
   scopeRows = [];
   replaced.length = 0;
-  admin = fakeAdmin({ answer });
+  admin = fakeAdmin({ answer, rpc });
 });
 
 describe('GET members', () => {
@@ -207,28 +227,34 @@ describe('GET members', () => {
 });
 
 describe('PATCH members', () => {
-  it('an admin changes a member’s functions: one update by (org, user), one audit event', async () => {
+  it('an admin changes a member’s functions: ONE audit function call by (org, user), no separate write', async () => {
     const res = await patch({ user_id: THEM, functions: ['marketing'] });
     expect(res.status).toBe(200);
     expect((await res.json()).member).toMatchObject({ user_id: THEM, functions: ['marketing'] });
     expect(capRequested).toBe('members.manage');
-    const update = admin.chains.find((c) => opOf(c, 'update'))!;
-    expect(opOf(update, 'update')!.args[0]).toEqual({ functions: ['marketing'] });
-    expect(eqs(update)).toEqual({ org_id: ORG, user_id: THEM });
-    expect(events).toEqual([
-      [
-        { orgId: ORG, userId: ME },
-        'member.capabilities_changed',
-        { type: 'member', id: THEM },
-        { functions: { from: ['a_and_r'], to: ['marketing'] } },
-      ],
+    expect(admin.rpcs).toEqual([
+      {
+        name: 'labelos_audit_member_update',
+        args: {
+          p_org: ORG,
+          p_actor: ME,
+          p_user: THEM,
+          p_patch: { functions: ['marketing'] },
+          p_verb: 'member.capabilities_changed',
+          p_payload: { functions: { from: ['a_and_r'], to: ['marketing'] } },
+        },
+      },
     ]);
+    // The event is the function's; the route writes neither a row nor an event itself.
+    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
+    expect(events).toEqual([]);
   });
 
-  it('a role change is ONE member.role_changed event', async () => {
+  it('a role change is ONE member.role_changed event, carried by the function', async () => {
     await patch({ user_id: THEM, role: 'admin' });
-    expect(events.map((e) => e[1])).toEqual(['member.role_changed']);
-    expect(events[0][3]).toEqual({ role: { from: 'member', to: 'admin' }, functions: { from: ['a_and_r'], to: [] } });
+    expect(admin.rpcs).toHaveLength(1);
+    expect(admin.rpcs[0].args.p_verb).toBe('member.role_changed');
+    expect(admin.rpcs[0].args.p_payload).toEqual({ role: { from: 'member', to: 'admin' }, functions: { from: ['a_and_r'], to: [] } });
   });
 
   it('another CHECK violation is a 500, not a misleading last-owner 409', async () => {
@@ -248,7 +274,7 @@ describe('PATCH members', () => {
     expect((await patch({ user_id: THEM, cap_grants: ['members.manage'] })).status).toBe(400);
     expect((await patch({ user_id: THEM })).status).toBe(400);
     expect((await patch({ user_id: 'nope', role: 'admin' })).status).toBe(400);
-    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
+    expect(admin.rpcs).toEqual([]);
   });
 
   it('404 for someone who is not a member of this org', async () => {
@@ -264,7 +290,7 @@ describe('PATCH members', () => {
     const last = await patch({ user_id: OWNER2, role: 'admin' });
     expect(last.status).toBe(409);
     expect((await last.json()).error).toMatch(/at least one owner/);
-    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
+    expect(admin.rpcs).toEqual([]);
   });
 
   it('a race the trigger catches is 409, not a raw database error', async () => {
@@ -289,65 +315,87 @@ describe('PATCH members', () => {
   it('an unchanged value writes nothing', async () => {
     const res = await patch({ user_id: THEM, functions: ['a_and_r'] });
     expect(res.status).toBe(200);
-    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
+    expect(admin.rpcs).toEqual([]);
     expect(events).toEqual([]);
   });
 
-  it('when the audit event cannot be written, the change is undone and the request fails', async () => {
+  it('when the audit function fails the request fails, and the route writes nothing to compensate', async () => {
     auditFails = true;
     const res = await patch({ user_id: THEM, functions: ['marketing'] });
     expect(res.status).toBe(500);
-    const updates = admin.chains.filter((c) => opOf(c, 'update'));
-    expect(updates.map((c) => opOf(c, 'update')!.args[0])).toEqual([{ functions: ['marketing'] }, { functions: ['a_and_r'] }]);
-    expect(eqs(updates[1])).toEqual({ org_id: ORG, user_id: THEM });
+    // The rollback is the transaction's (146's local check); no revert write exists here.
+    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
+    expect(admin.rpcs).toHaveLength(1);
+  });
+
+  it('answers 503, not 500, when migration 146 is not applied', async () => {
+    updateError = { code: 'PGRST202', message: 'Could not find the function public.labelos_audit_member_update' };
+    const res = await patch({ user_id: THEM, functions: ['marketing'] });
+    expect(res.status).toBe(503);
+    expect((await res.json()).error).toMatch(/146/);
+  });
+
+  it('404 when the function finds no such member', async () => {
+    // The row was read, then removed by someone else before the function ran.
+    const read = target;
+    admin = fakeAdmin({
+      answer: (c) => (opOf(c, 'maybeSingle') ? { data: read, error: null } : answer(c)),
+      rpc: () => ({ data: { error: 'not_found' }, error: null }),
+    });
+    expect((await patch({ user_id: THEM, role: 'admin' })).status).toBe(404);
   });
 });
 
 describe('artist scope rows follow the membership (LABEL-10)', () => {
-  it('widening a limited member to the whole org clears their artists, and the event names them', async () => {
+  it('widening a limited member to the whole org is one function call; clearing their artists is the function’s (146 check)', async () => {
     target = row({ scope: 'artists' });
     scopeRows = [C2, C1];
     const res = await patch({ user_id: THEM, scope: 'org' });
     expect(res.status).toBe(200);
-    expect(replaced).toEqual([[]]);
-    expect(events[0][1]).toBe('member.scope_changed');
-    expect(events[0][3]).toMatchObject({ scope: { from: 'artists', to: 'org' }, contact_ids: { from: [C1, C2], to: [] } });
+    expect(admin.rpcs[0].args).toMatchObject({ p_verb: 'member.scope_changed', p_patch: { scope: 'org' } });
+    expect(admin.rpcs[0].args).not.toHaveProperty('p_clear_artists');
+    expect(replaced).toEqual([]);
   });
 
   it('a change that keeps the member limited leaves their artists alone', async () => {
     target = row({ scope: 'artists' });
     scopeRows = [C1];
     expect((await patch({ user_id: THEM, functions: ['marketing'] })).status).toBe(200);
+    expect(admin.rpcs[0].args).toMatchObject({ p_patch: { functions: ['marketing'] }, p_verb: 'member.capabilities_changed' });
     expect(replaced).toEqual([]);
-    expect(events[0][3]).not.toHaveProperty('contact_ids');
   });
 
-  it('if the audit event fails after clearing, the membership AND the list are put back', async () => {
+  it('a failed function leaves the route with nothing to put back', async () => {
     target = row({ scope: 'artists' });
     scopeRows = [C1];
     auditFails = true;
     expect((await patch({ user_id: THEM, scope: 'org' })).status).toBe(500);
-    expect(replaced).toEqual([[], [C1]]);
-    const updates = admin.chains.filter((c) => opOf(c, 'update')).map((c) => opOf(c, 'update')!.args[0]);
-    expect(updates).toEqual([{ scope: 'org' }, { scope: 'artists' }]);
+    expect(replaced).toEqual([]);
+    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
   });
 
-  it('a removal rolled back for a missing audit event restores the artists the cascade took', async () => {
+  it('a failed removal has no restore write either: the artists never left', async () => {
     target = row({ scope: 'artists' });
     scopeRows = [C1, C2];
     auditFails = true;
     expect((await del(THEM)).status).toBe(500);
-    expect(replaced).toEqual([[C1, C2]]);
+    expect(replaced).toEqual([]);
+    expect(admin.chains.some((c) => opOf(c, 'insert'))).toBe(false);
   });
 });
 
 describe('DELETE members', () => {
-  it('removes a member by (org, user) and records member.removed', async () => {
+  it('removes a member by (org, user) through the audit function (member.removed)', async () => {
     const res = await del(THEM);
     expect(res.status).toBe(200);
-    const d = admin.chains.find((c) => opOf(c, 'delete'))!;
-    expect(eqs(d)).toEqual({ org_id: ORG, user_id: THEM });
-    expect(events.map((e) => [e[1], e[3]])).toEqual([['member.removed', { role: 'member', functions: ['a_and_r'], scope: 'org' }]]);
+    expect(admin.rpcs).toEqual([
+      {
+        name: 'labelos_audit_member_remove',
+        args: { p_org: ORG, p_actor: ME, p_user: THEM, p_payload: { role: 'member', functions: ['a_and_r'], scope: 'org' } },
+      },
+    ]);
+    expect(admin.chains.some((c) => opOf(c, 'delete'))).toBe(false);
+    expect(events).toEqual([]);
   });
 
   it('400 without a uuid; 404 when not a member; 403 without members.manage', async () => {
@@ -374,10 +422,9 @@ describe('DELETE members', () => {
     expect((await del(OWNER2)).status).toBe(403);
   });
 
-  it('when member.removed cannot be written, the membership is restored', async () => {
+  it('when the audit function fails, the request fails (the membership is untouched: one transaction)', async () => {
     auditFails = true;
     expect((await del(THEM)).status).toBe(500);
-    const restore = admin.chains.find((c) => opOf(c, 'insert'))!;
-    expect(opOf(restore, 'insert')!.args[0]).toEqual({ org_id: ORG, ...row() });
+    expect(admin.chains.some((c) => opOf(c, 'insert'))).toBe(false);
   });
 });

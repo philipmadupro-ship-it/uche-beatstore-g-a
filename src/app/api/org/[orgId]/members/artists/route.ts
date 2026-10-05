@@ -12,7 +12,8 @@
  *       /members first); every id must be on THIS org's roster. An empty
  *       list is allowed: the member then sees nothing. Audited as
  *       `member.artists_changed`; if the event cannot be written the list
- *       is put back and the request fails.
+ *       is not changed and the request fails: the list and the event are
+ *       one transaction (LABEL-19, migration 146).
  *
  * Rows are addressed by (org, user) through `memberArtistScopeQuery` and
  * `memberRowQuery`, never a `user_id` filter in this file.
@@ -27,7 +28,7 @@ import {
 } from '@/lib/auth/org-access';
 import { OrgMemberArtistsBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
-import { recordEvent } from '@/lib/labelos/activity';
+import { AUDIT_RPC_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { toArtistScope } from '@/lib/labelos/artist-scope';
 import { missingRosterContacts } from '@/lib/labelos/org-contacts';
 import { createLogger } from '@/lib/log';
@@ -97,34 +98,29 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ orgI
       return NextResponse.json({ user_id: userId, scoped: true, contact_ids: before });
     }
 
-    const { error: writeErr } = await scopes.replace(wanted);
-    if (writeErr) {
-      // replace() fails narrow; put the old list back rather than leave a
-      // list nobody chose.
-      const { error: revertErr } = await scopes.replace(before);
-      if (revertErr) log.error('restoring an artist scope after a failed change failed', { orgId: access.orgId, error: revertErr.message });
-      throw new Error(writeErr.message);
-    }
-
-    try {
-      await recordEvent(
-        access.admin,
-        { orgId: access.orgId, userId: access.userId },
-        'member.artists_changed',
-        { type: 'member', id: userId },
-        // The change, not both whole lists: it stays small however long the
-        // list is (recordEvent caps payloads at 16 KB).
-        {
-          added: wanted.filter((id) => !before.includes(id)),
-          removed: before.filter((id) => !wanted.includes(id)),
-          count: wanted.length,
-        },
+    // The list and `member.artists_changed` are one transaction. The payload
+    // is the change, not both whole lists: it stays small however long the
+    // list is (events are capped at 16 KB).
+    const { data: result, error: rpcErr } = await auditRpc(access.admin, 'memberArtistsSet', {
+      p_org: access.orgId,
+      p_actor: access.userId,
+      p_user: userId,
+      p_contact_ids: wanted,
+      p_payload: {
+        added: wanted.filter((id) => !before.includes(id)),
+        removed: before.filter((id) => !wanted.includes(id)),
+        count: wanted.length,
+      },
+    });
+    if (isMissingAuditRpc(rpcErr)) return NextResponse.json({ error: AUDIT_RPC_NOT_READY }, { status: 503 });
+    if (rpcErr) throw new Error(rpcErr.message);
+    if (result?.error === 'not_found') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (result?.error === 'not_scoped') {
+      // Widened by someone else after this request read the member.
+      return NextResponse.json(
+        { error: 'This member sees the whole organization. Limit them to some artists first.' },
+        { status: 400 },
       );
-    } catch (err) {
-      // A scope change nobody can account for must not stand.
-      const { error: revertErr } = await scopes.replace(before);
-      if (revertErr) log.error('reverting an unaudited artist scope failed', { orgId: access.orgId, error: revertErr.message });
-      throw err;
     }
     return NextResponse.json({ user_id: userId, scoped: true, contact_ids: wanted });
   } catch (err) {

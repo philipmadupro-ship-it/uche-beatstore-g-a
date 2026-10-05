@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   AUDIT_VERBS,
   AuditEventError,
+  DEFAULT_VISIBILITY,
   VERBS,
+  defaultVisibility,
+  fileEventVisibility,
   isAuditVerb,
   recordEvent,
   type ActivityAdmin,
@@ -86,6 +89,80 @@ describe('verb vocabulary', () => {
   });
 });
 
+describe('default visibility (D4, D5, 08 §B4)', () => {
+  it('names every verb, and only the two classes', () => {
+    expect(Object.keys(DEFAULT_VISIBILITY).sort()).toEqual([...VERBS].sort());
+    for (const v of VERBS) expect(['internal', 'artist']).toContain(defaultVisibility(v));
+  });
+
+  it('shows the creative record to the creative side and the song’s artist', () => {
+    for (const v of [
+      'song.created',
+      'song.stage_changed',
+      'song.reviewed',
+      'recording.uploaded',
+      'project.created',
+      'credit.proposed',
+      'credit.confirmed',
+      'credit.disputed',
+      'release.created',
+      'release.updated',
+      'release.deleted',
+      'release.delivered',
+    ] as const) {
+      expect(defaultVisibility(v), v).toBe('artist');
+    }
+  });
+
+  it('keeps the business side internal', () => {
+    for (const v of [
+      'org.created',
+      'org.settings_changed',
+      'member.joined',
+      'member.removed',
+      'member.role_changed',
+      'member.scope_changed',
+      'member.capabilities_changed',
+      'member.artists_changed',
+      'invitation.created',
+      'invitation.revoked',
+      'contact.created',
+      'contact.updated',
+      'contact.deleted',
+      'project.member_added',
+      'project.member_removed',
+      'share.created',
+      'share.revoked',
+      'recording.downloaded',
+      'recording.copied',
+      'file.restricted_downloaded',
+      'split_sheet.circulated',
+      'approval.requested',
+      'approval.decided',
+      'connection.requested',
+      'connection.accepted',
+      'connection.ended',
+    ] as const) {
+      expect(defaultVisibility(v), v).toBe('internal');
+    }
+  });
+
+  it('a file event is artist-visible only when the file never was restricted (fail closed on anything unknown)', () => {
+    expect(fileEventVisibility('normal')).toBe('artist');
+    expect(fileEventVisibility('normal', 'normal')).toBe('artist');
+    expect(fileEventVisibility('restricted')).toBe('internal');
+    expect(fileEventVisibility('normal', 'restricted')).toBe('internal');
+    expect(fileEventVisibility('restricted', 'normal')).toBe('internal');
+    expect(fileEventVisibility(undefined)).toBe('internal');
+    expect(fileEventVisibility(null, 'normal')).toBe('internal');
+    expect(fileEventVisibility()).toBe('artist'); // nothing to judge by: callers always pass one
+  });
+
+  it('files default to internal: a restricted file must never be shown by accident', () => {
+    for (const v of ['file.uploaded', 'file.updated', 'file.deleted'] as const) expect(defaultVisibility(v)).toBe('internal');
+  });
+});
+
 describe('recordEvent', () => {
   it('writes one activity_events row with the context keys denormalised', async () => {
     const r = await recordEvent(
@@ -118,10 +195,19 @@ describe('recordEvent', () => {
     ]);
   });
 
-  it('defaults to business-internal visibility (least visible) and an empty payload', async () => {
+  it('defaults visibility per verb and to an empty payload', async () => {
     await recordEvent(admin, ctx, 'recording.uploaded', { type: 'track', id: SUBJECT });
-    expect(inserted[0].row.visibility).toBe('internal');
+    expect(inserted[0].row.visibility).toBe('artist');
     expect(inserted[0].row.payload).toEqual({});
+    await recordEvent(admin, ctx, 'contact.created', { type: 'contact', id: SUBJECT });
+    expect(inserted[1].row.visibility).toBe('internal');
+  });
+
+  it('lets a route override the default for one event', async () => {
+    await recordEvent(admin, ctx, 'file.uploaded', { type: 'asset', id: SUBJECT }, {}, { visibility: 'artist' });
+    expect(inserted[0].row.visibility).toBe('artist');
+    await recordEvent(admin, ctx, 'song.created', { type: 'track', id: SUBJECT }, {}, { visibility: 'internal' });
+    expect(inserted[1].row.visibility).toBe('internal');
   });
 
   it('takes a null actor for system events', async () => {

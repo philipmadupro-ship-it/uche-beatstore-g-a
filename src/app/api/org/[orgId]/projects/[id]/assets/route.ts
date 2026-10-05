@@ -23,7 +23,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { OrgAssetFormFieldsSchema, OrgAssetRegisterBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { recordEvent } from '@/lib/labelos/activity';
+import { fileEventVisibility, recordEvent } from '@/lib/labelos/activity';
 import {
   assetValidationMessage,
   defaultAssetLabel,
@@ -211,7 +211,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       { kind, sensitivity },
       // A restricted file's existence is business-internal; the rest is
       // creative-side work the project's artist may see (D5).
-      { visibility: sensitivity === 'restricted' ? 'internal' : 'artist' },
+      { visibility: fileEventVisibility(sensitivity) },
     );
     return NextResponse.json({ asset: toOrgAssetView(row) }, { status: 201 });
   } catch (err) {

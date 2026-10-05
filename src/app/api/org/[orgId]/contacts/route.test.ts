@@ -13,6 +13,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { auditRpcMemory } from '@/lib/labelos/mocks/audit-rpc-memory';
 import { memoryAdmin, type MemoryDb } from '@/lib/labelos/mocks/memory-db';
 
 const L = '10000000-0000-4000-8000-000000000001';
@@ -36,6 +37,7 @@ const ASELF = '30000000-0000-4000-8000-0000000000a5';
 const PC1 = '30000000-0000-4000-8000-0000000000b1';
 
 let current: string | null = null;
+let failAudit = false;
 let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
 
@@ -64,6 +66,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'eyJtest';
   current = null;
+  failAudit = false;
   db = {
     tables: {
       organizations: [
@@ -98,6 +101,7 @@ beforeEach(() => {
       activity_events: [],
     },
     unique: { contacts: [['org_id', 'email']], member_artist_scopes: [['org_id', 'user_id', 'contact_id']] },
+    rpc: auditRpcMemory({ failAudit: () => failAudit }),
   };
   mem = memoryAdmin(db);
 });
@@ -328,6 +332,13 @@ describe('/members/artists: the roster picker', () => {
     expect(db.tables.activity_events).toMatchObject([
       { verb: 'member.artists_changed', audit: true, subject_id: SC, payload: { added: [C2], removed: [C1], count: 1 } },
     ]);
+  });
+
+  it('a failed audit event leaves the member’s list exactly as it was (the function is one transaction)', async () => {
+    failAudit = true;
+    expect((await artists(OWN, 'PUT', L, { user_id: SC, contact_ids: [C2] })).status).toBe(500);
+    expect(db.tables.member_artist_scopes.filter((r) => r.user_id === SC)).toEqual([{ org_id: L, user_id: SC, contact_id: C1 }]);
+    expect(db.tables.activity_events).toEqual([]);
   });
 
   it('an empty list means the member sees nothing', async () => {

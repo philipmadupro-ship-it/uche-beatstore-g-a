@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireObjectAccess, scopedOrgQuery } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
-import { recordEvent } from '@/lib/labelos/activity';
+import { AUDIT_RPC_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.org.invitations.revoke');
@@ -45,45 +45,23 @@ export async function DELETE(
       return NextResponse.json({ error: 'This invitation was already accepted. Remove the member instead.' }, { status: 409 });
     }
 
-    // Only a still-pending row: an accept racing this request wins or loses
-    // on the row lock, never both.
-    const { data: updated, error: updateErr } = await admin
-      .from('org_invitations')
-      .update({ revoked_at: new Date().toISOString() })
-      .eq('org_id', access.orgId)
-      .eq('id', id)
-      .is('accepted_at', null)
-      .is('revoked_at', null)
-      .select('revoked_at');
-    if (updateErr) throw new Error(updateErr.message);
-    const row = Array.isArray(updated) ? (updated[0] as { revoked_at: string } | undefined) : undefined;
-    if (!row) {
+    // Only a still-pending row, and `invitation.revoked`, in one transaction:
+    // an accept racing this request wins or loses on the row lock, never
+    // both, and a revocation with no audit row cannot exist.
+    const { data: result, error: rpcErr } = await auditRpc(admin, 'invitationRevoke', {
+      p_org: access.orgId,
+      p_actor: access.userId,
+      p_id: id,
+      p_payload: { email: before.email },
+    });
+    if (isMissingAuditRpc(rpcErr)) return NextResponse.json({ error: AUDIT_RPC_NOT_READY }, { status: 503 });
+    if (rpcErr) throw new Error(rpcErr.message);
+    if (result?.error === 'not_pending') {
       const after = await read();
       if (after?.revoked_at) return NextResponse.json({ revoked: true, revoked_at: after.revoked_at });
       return NextResponse.json({ error: 'This invitation was already accepted. Remove the member instead.' }, { status: 409 });
     }
-
-    try {
-      await recordEvent(
-        admin,
-        { orgId: access.orgId, userId: access.userId },
-        'invitation.revoked',
-        { type: 'invitation', id },
-        { email: before.email },
-      );
-    } catch (err) {
-      // A revocation with no audit row must not stand, or a retry would see
-      // `revoked_at` and answer 200 without ever recording it. Undo exactly
-      // this revocation; the retry then revokes and records together.
-      await admin
-        .from('org_invitations')
-        .update({ revoked_at: null })
-        .eq('org_id', access.orgId)
-        .eq('id', id)
-        .eq('revoked_at', row.revoked_at);
-      throw err;
-    }
-    return NextResponse.json({ revoked: true, revoked_at: row.revoked_at });
+    return NextResponse.json({ revoked: true, revoked_at: result?.revoked_at ?? null });
   } catch (err) {
     log.error('revoke invitation failed', { orgId: access.orgId, invitationId: id, error: errorMessage(err) });
     return NextResponse.json({ error: 'Could not revoke the invitation' }, { status: 500 });

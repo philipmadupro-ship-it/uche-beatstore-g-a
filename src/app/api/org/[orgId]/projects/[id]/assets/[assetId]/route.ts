@@ -16,6 +16,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { OrgAssetPatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
+import { fileEventVisibility, recordEvent } from '@/lib/labelos/activity';
 import { createLogger } from '@/lib/log';
 import { canWriteOrgAsset, ORG_ASSET_COLUMNS, resolveSensitivity, toOrgAssetView, type AssetSensitivity, type OrgAssetRow } from '@/lib/labelos/org-assets';
 import { deleteProjectAssetObject } from '@/lib/storage/project-assets';
@@ -56,6 +57,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .select(ORG_ASSET_COLUMNS)
       .single();
     if (error) throw error;
+    await recordEvent(
+      access.admin,
+      { orgId: access.object.orgId, userId: access.userId },
+      'file.updated',
+      { type: 'asset', id: assetId, projectId: current.project_id },
+      { fields: Object.keys(parsed.data).sort(), kind, sensitivity },
+      // A file that is, or was, restricted keeps its history business-internal.
+      { visibility: fileEventVisibility(sensitivity, current.sensitivity) },
+    );
     return NextResponse.json({ asset: toOrgAssetView(data as OrgAssetRow) });
   } catch (err) {
     log.error('patch failed', { id, assetId, error: errorMessage(err) });
@@ -82,6 +92,14 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     if (error) throw error;
     const row = (data as Array<{ url: string }> | null)?.[0];
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    await recordEvent(
+      access.admin,
+      { orgId: access.object.orgId, userId: access.userId },
+      'file.deleted',
+      { type: 'asset', id: assetId, projectId: found.row.project_id },
+      { kind: found.row.kind, sensitivity: found.row.sensitivity },
+      { visibility: fileEventVisibility(found.row.sensitivity) },
+    );
     // The row is gone, so nothing can reach the object any more; removing it
     // is housekeeping and must not fail the delete.
     // If the check itself fails, keep the object: an orphan is housekeeping,

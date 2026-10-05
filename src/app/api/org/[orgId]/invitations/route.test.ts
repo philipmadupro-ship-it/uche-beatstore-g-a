@@ -1,5 +1,11 @@
 /**
  * POST /api/org/[orgId]/invitations and DELETE …/[invitationId] (LABEL-08).
+ *
+ * LABEL-19: creating and revoking call one audit function each (migration
+ * 146) that does the write AND the event in one transaction, and enforces one
+ * pending invitation per address under a lock. The fake `rpc` stands in for
+ * it; the rollback and the lock are proven against Postgres in
+ * supabase/local/checks/146_labelos_audit_rpc.sql.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,11 +22,11 @@ let orgKind = 'label';
 let allowed = true;
 let rateCalls = 0;
 let pending: unknown[] = [];
-let pendingAfterInsert: unknown[] | null = null;
+let racePending: string | null = null;
+let revokeResult: Record<string, unknown> = { revoked_at: '2026-10-01T00:00:00Z' };
 let auditFails = false;
 let emailResult: { sent: boolean; reason?: string } = { sent: true };
 let revokeRow: { accepted_at: string | null; revoked_at: string | null } | null = null;
-let updateReturns: unknown[] = [];
 let admin: ReturnType<typeof fakeAdmin>;
 const events: unknown[][] = [];
 const emails: Record<string, unknown>[] = [];
@@ -53,7 +59,6 @@ vi.mock('@/lib/auth/org-access', () => ({
 }));
 vi.mock('@/lib/labelos/activity', () => ({
   recordEvent: async (...args: unknown[]) => {
-    if (auditFails) throw new Error('audit event was not recorded');
     events.push(args.slice(1));
     return { ok: true, id: 'e1' };
   },
@@ -86,20 +91,27 @@ function answer(chain: Chain): Answer {
   }
   if (chain.table === 'organizations') return { data: { name: 'Night Shift' }, error: null };
   if (chain.table === 'org_invitations') {
-    if (opOf(chain, 'insert')) {
-      const row = opOf(chain, 'insert')!.args[0] as Record<string, unknown>;
-      return {
-        data: { id: INV, email: row.email, role: row.role, functions: row.functions, artist_ids: row.artist_ids, expires_at: row.expires_at, accepted_at: null, revoked_at: null, created_at: 'now' },
-        error: null,
-      };
-    }
-    if (opOf(chain, 'update')) return { data: updateReturns, error: null };
-    if (opOf(chain, 'delete')) return { data: null, error: null };
+    // The route never writes the table itself any more: only reads.
+    expect(opOf(chain, 'insert') ?? opOf(chain, 'update') ?? opOf(chain, 'delete')).toBeUndefined();
     if (opOf(chain, 'maybeSingle')) return { data: revokeRow ? { id: INV, email: 'a@b.test', ...revokeRow } : null, error: null };
-    const inserted = admin.chains.some((c) => c.table === 'org_invitations' && opOf(c, 'insert'));
-    return { data: inserted && pendingAfterInsert ? pendingAfterInsert : pending, error: null };
+    return { data: pending, error: null };
   }
   return { data: null, error: null };
+}
+
+function rpc(name: string, args: Record<string, unknown>): Answer {
+  if (auditFails) return { data: null, error: { message: 'audit insert refused' } };
+  if (name === 'labelos_audit_invitation_create') {
+    if (racePending) return { data: { error: 'pending', id: racePending }, error: null };
+    return {
+      data: {
+        invitation: { id: INV, email: args.p_email, role: args.p_role, functions: args.p_functions, artist_ids: args.p_artist_ids, expires_at: args.p_expires_at, accepted_at: null, revoked_at: null, created_at: 'now' },
+      },
+      error: null,
+    };
+  }
+  if (name === 'labelos_audit_invitation_revoke') return { data: revokeResult, error: null };
+  return { data: null, error: { message: `unexpected rpc ${name}` } };
 }
 
 beforeEach(() => {
@@ -109,15 +121,15 @@ beforeEach(() => {
   allowed = true;
   rateCalls = 0;
   pending = [];
-  pendingAfterInsert = null;
+  racePending = null;
+  revokeResult = { revoked_at: '2026-10-01T00:00:00Z' };
   auditFails = false;
   emailResult = { sent: true };
   revokeRow = { accepted_at: null, revoked_at: null };
-  updateReturns = [{ revoked_at: '2026-10-01T00:00:00Z' }];
   events.length = 0;
   emails.length = 0;
   logged.length = 0;
-  admin = fakeAdmin({ answer });
+  admin = fakeAdmin({ answer, rpc });
 });
 
 async function create(body: unknown) {
@@ -136,7 +148,7 @@ async function revoke() {
   return { status: res.status, json: await res.json() };
 }
 
-const insertOf = () => opOf(admin.chains.find((c) => c.table === 'org_invitations' && opOf(c, 'insert'))!, 'insert')!.args[0] as Record<string, unknown>;
+const rpcArgs = () => admin.rpcs.find((r) => r.name === 'labelos_audit_invitation_create')!.args;
 
 describe('POST invitations: contact_ids (LABEL-10)', () => {
   const FOREIGN = '66666666-6666-4666-8666-666666666666';
@@ -164,7 +176,7 @@ describe('POST invitations', () => {
     expect(admin.chains).toEqual([]);
   });
 
-  it('creates: normalised email, hashed token, 7-day expiry, email with the join link, audit event', async () => {
+  it('creates: normalised email, hashed token, 7-day expiry, email with the join link, one audit function call', async () => {
     const before = Date.now();
     const r = await create({ email: '  Nova@Example.COM ', role: 'member', functions: ['a_and_r'], contact_ids: [C1] });
     expect(r.status).toBe(201);
@@ -173,10 +185,10 @@ describe('POST invitations', () => {
       invitation: { id: INV, email: 'nova@example.com', role: 'member', functions: ['a_and_r'], contact_ids: [C1] },
     });
 
-    const row = insertOf();
-    expect(row).toMatchObject({ org_id: ORG, email: 'nova@example.com', role: 'member', functions: ['a_and_r'], artist_ids: [C1], invited_by: INVITER });
+    const row = rpcArgs();
+    expect(row).toMatchObject({ p_org: ORG, p_actor: INVITER, p_email: 'nova@example.com', p_role: 'member', p_functions: ['a_and_r'], p_artist_ids: [C1] });
     expect(row).not.toHaveProperty('token');
-    const expires = Date.parse(String(row.expires_at));
+    const expires = Date.parse(String(row.p_expires_at));
     expect(expires - before).toBeGreaterThanOrEqual(7 * 86_400_000 - 1000);
     expect(expires - before).toBeLessThanOrEqual(7 * 86_400_000 + 1000);
 
@@ -184,23 +196,18 @@ describe('POST invitations', () => {
     const url = String(emails[0].url);
     const token = url.split('/join/')[1];
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(row.token_hash).toBe(hashInvitationToken(token));
+    expect(row.p_token_hash).toBe(hashInvitationToken(token));
     expect(emails[0]).toMatchObject({ to: 'nova@example.com', orgName: 'Night Shift', inviterName: 'Uche', role: 'member' });
 
     // …and nowhere else.
     expect(JSON.stringify(r.json)).not.toContain(token);
-    expect(JSON.stringify(r.json)).not.toContain(String(row.token_hash));
-    expect(JSON.stringify(events)).not.toContain(token);
+    expect(JSON.stringify(r.json)).not.toContain(String(row.p_token_hash));
+    expect(JSON.stringify(row.p_payload)).not.toContain(token);
     expect(JSON.stringify(logged)).not.toContain(token);
 
-    expect(events).toEqual([
-      [
-        { orgId: ORG, userId: INVITER },
-        'invitation.created',
-        { type: 'invitation', id: INV },
-        { email: 'nova@example.com', role: 'member', functions: ['a_and_r'], contact_ids: [C1], scope: 'artists' },
-      ],
-    ]);
+    // The event is the function's payload; the route records nothing itself.
+    expect(row.p_payload).toEqual({ email: 'nova@example.com', role: 'member', functions: ['a_and_r'], contact_ids: [C1], scope: 'artists' });
+    expect(events).toEqual([]);
   });
 
   it('reads pending invitations scoped to the org', async () => {
@@ -219,7 +226,7 @@ describe('POST invitations', () => {
     if (extra.kind) orgKind = extra.kind;
     const r = await create({ email: 'a@b.test', role, functions: extra.functions ?? [] });
     expect(r.status).toBe(400);
-    expect(admin.chains.some((c) => opOf(c, 'insert'))).toBe(false);
+    expect(admin.rpcs).toEqual([]);
   });
 
   it('400 on a bad email or unknown fields', async () => {
@@ -240,20 +247,13 @@ describe('POST invitations', () => {
     expect(rateCalls).toBe(0);
   });
 
-  it('loses a race to an older pending invitation: removes its own row, 409, no email, no event', async () => {
+  it('409 when the function finds an older pending invitation (the race is decided under its lock): no email', async () => {
     const OLDER = '66666666-6666-4666-8666-666666666666';
-    pendingAfterInsert = [{ id: OLDER }, { id: INV }];
+    racePending = OLDER;
     const r = await create({ email: 'a@b.test', role: 'member' });
     expect(r).toMatchObject({ status: 409, json: { invitationId: OLDER } });
-    const del = admin.chains.find((c) => c.table === 'org_invitations' && opOf(c, 'delete'))!;
-    expect(eqs(del)).toEqual({ org_id: ORG, id: INV });
     expect(emails).toEqual([]);
     expect(events).toEqual([]);
-  });
-
-  it('wins the race when it is the oldest', async () => {
-    pendingAfterInsert = [{ id: INV }, { id: '66666666-6666-4666-8666-666666666666' }];
-    expect((await create({ email: 'a@b.test', role: 'member' })).status).toBe(201);
   });
 
   it('429 when rate-limited', async () => {
@@ -262,12 +262,18 @@ describe('POST invitations', () => {
     expect(emails).toEqual([]);
   });
 
-  it('removes the invitation again when the audit event cannot be written', async () => {
+  it('when the audit function fails the request fails, no email goes out and the route writes nothing to undo', async () => {
     auditFails = true;
     const r = await create({ email: 'a@b.test', role: 'member' });
     expect(r.status).toBe(500);
-    const del = admin.chains.find((c) => c.table === 'org_invitations' && opOf(c, 'delete'))!;
-    expect(eqs(del)).toEqual({ org_id: ORG, id: INV });
+    expect(admin.chains.some((c) => c.table === 'org_invitations' && opOf(c, 'delete'))).toBe(false);
+    expect(emails).toEqual([]);
+  });
+
+  it('503, not 500, when migration 146 is not applied', async () => {
+    admin = fakeAdmin({ answer, rpc: () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.labelos_audit_invitation_create' } }) });
+    const r = await create({ email: 'a@b.test', role: 'member' });
+    expect(r.status).toBe(503);
     expect(emails).toEqual([]);
   });
 
@@ -285,30 +291,28 @@ describe('DELETE invitation', () => {
     expect((await revoke()).status).toBe(404);
   });
 
-  it('revokes a pending invitation once, org-scoped, with an audit event', async () => {
+  it('revokes a pending invitation once, org-scoped, through the audit function', async () => {
     const r = await revoke();
     expect(r).toEqual({ status: 200, json: { revoked: true, revoked_at: '2026-10-01T00:00:00Z' } });
-    const upd = admin.chains.find((c) => opOf(c, 'update'))!;
-    expect(eqs(upd)).toEqual({ org_id: ORG, id: INV });
-    expect(upd.ops.filter((o) => o.op === 'is').map((o) => o.args)).toEqual([['accepted_at', null], ['revoked_at', null]]);
-    expect(events).toEqual([[{ orgId: ORG, userId: INVITER }, 'invitation.revoked', { type: 'invitation', id: INV }, { email: 'a@b.test' }]]);
+    expect(admin.rpcs).toEqual([
+      { name: 'labelos_audit_invitation_revoke', args: { p_org: ORG, p_actor: INVITER, p_id: INV, p_payload: { email: 'a@b.test' } } },
+    ]);
+    expect(events).toEqual([]);
   });
 
   it('is idempotent on an already revoked invitation', async () => {
     revokeRow = { accepted_at: null, revoked_at: '2026-09-30T00:00:00Z' };
     const r = await revoke();
     expect(r).toEqual({ status: 200, json: { revoked: true, revoked_at: '2026-09-30T00:00:00Z' } });
-    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
+    expect(admin.rpcs).toEqual([]);
     expect(events).toEqual([]);
   });
 
-  it('undoes the revocation when its audit event cannot be written', async () => {
+  it('a failed audit function fails the request, with nothing to undo (one transaction)', async () => {
     auditFails = true;
     const r = await revoke();
     expect(r.status).toBe(500);
-    const updates = admin.chains.filter((c) => opOf(c, 'update'));
-    expect(updates.map((c) => opOf(c, 'update')!.args[0])).toEqual([{ revoked_at: expect.any(String) }, { revoked_at: null }]);
-    expect(eqs(updates[1])).toEqual({ org_id: ORG, id: INV, revoked_at: '2026-10-01T00:00:00Z' });
+    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
   });
 
   it('409 on an accepted invitation', async () => {
@@ -318,7 +322,7 @@ describe('DELETE invitation', () => {
   });
 
   it('409 when an accept wins the race', async () => {
-    updateReturns = [];
+    revokeResult = { error: 'not_pending' };
     let reads = 0;
     admin = fakeAdmin({
       answer: (chain) => {
@@ -328,6 +332,7 @@ describe('DELETE invitation', () => {
         }
         return answer(chain);
       },
+      rpc,
     });
     expect((await revoke()).status).toBe(409);
     expect(events).toEqual([]);

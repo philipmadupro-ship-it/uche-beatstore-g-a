@@ -458,6 +458,62 @@ describe('tracklist: add, reorder, edit, remove', () => {
   });
 });
 
+describe('every release change is recorded (LABEL-19)', () => {
+  const events = () => db.tables.activity_events.map((e) => ({ verb: e.verb, artist: e.artist_id, project: e.project_id, release: e.release_id, payload: e.payload, visibility: e.visibility }));
+  const ctx = { artist: C1, project: LP1, release: R1, visibility: 'artist' };
+
+  it('an edit is release.updated, with the artist, project and release it concerns and the fields it touched', async () => {
+    await one('PATCH', AR, L, R1, { title: 'Nova EP (Deluxe)', label_name: 'L Records' });
+    expect(events()).toEqual([{ verb: 'release.updated', ...ctx, payload: { fields: ['label_name', 'title'] } }]);
+    expect(db.tables.activity_events[0]).toMatchObject({ actor_id: AR, audit: false, subject_type: 'release', subject_id: R1 });
+  });
+
+  it('a cancel carries the state it moved from and to', async () => {
+    await one('PATCH', AR, L, R1, { state: 'cancelled' });
+    expect(events()[0].payload).toEqual({ fields: ['state'], state: { from: 'draft', to: 'cancelled' } });
+  });
+
+  it('a refused or invalid change records nothing', async () => {
+    await one('PATCH', MKT, L, R1, { title: 'x' });
+    await one('PATCH', AR, L, R1, { upc: '4006381333932' });
+    await one('PATCH', AR, L, R1, { state: 'delivered' });
+    expect(db.tables.activity_events).toEqual([]);
+  });
+
+  it('a delete is release.deleted; a refused delete is nothing', async () => {
+    await one('DELETE', MKT, L, R2);
+    expect(db.tables.activity_events).toEqual([]);
+    await one('DELETE', AR, L, R2);
+    expect(db.tables.activity_events).toHaveLength(1);
+    expect(db.tables.activity_events[0]).toMatchObject({ verb: 'release.deleted', release_id: R2, actor_id: AR, visibility: 'artist' });
+  });
+
+  it('adding, reordering, editing and removing a tracklist item are release.updated with what changed', async () => {
+    await items('POST', AR, L, R1, { song_track_id: S1 });
+    await anItem('PATCH', AR, L, R1, I1, { explicit: true });
+    await anItem('DELETE', AR, L, R1, I2);
+    const got = events();
+    expect(got.every((e) => e.verb === 'release.updated' && e.release === R1 && e.artist === C1 && e.project === LP1 && e.visibility === 'artist')).toBe(true);
+    expect(got.map((e) => (e.payload as { items: string }).items)).toEqual(['added', 'edited', 'removed']);
+    expect(got[0].payload).toEqual({ items: 'added', song_track_id: S1 });
+    expect(got[1].payload).toEqual({ items: 'edited', item_id: I1, fields: ['explicit'] });
+    expect(got[2].payload).toEqual({ items: 'removed', item_id: I2 });
+  });
+
+  it('a reorder that succeeds is one release.updated; one that is refused is none', async () => {
+    await items('PATCH', AR, L, R1, { order: [I1] });
+    expect(db.tables.activity_events).toEqual([]);
+    await items('PATCH', AR, L, R1, { order: [I2, I1] });
+    expect(events().map((e) => e.payload)).toEqual([{ items: 'reordered', count: 2 }]);
+  });
+
+  it('a delivered or cancelled release refuses tracklist edits, and records none', async () => {
+    db.tables.releases[0].state = 'delivered';
+    await items('POST', AR, L, R1, { song_track_id: S1 });
+    expect(db.tables.activity_events).toEqual([]);
+  });
+});
+
 describe('a tracklist changes only while the release is a draft', () => {
   it('delivered or cancelled: add, reorder, edit and remove are 409', async () => {
     for (const state of ['delivered', 'cancelled']) {

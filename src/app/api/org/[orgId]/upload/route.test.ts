@@ -289,12 +289,58 @@ describe('complete: material is linked to its song in the same request', () => {
   });
 });
 
-describe('complete: the session gate', () => {
-  async function initAs(who: string, intent: Body = song()) {
-    const res = await call('init', who, L, { ...file(), as: intent });
-    return (await res.json()).sessionId as string;
-  }
+describe('complete: the upload is recorded (LABEL-19)', () => {
+  it('a new song is song.created for its artist, in the Inbox, visible to the creative side', async () => {
+    const res = await upload(AR, song(C2), 'One 140 Fm.wav');
+    const { track } = await res.json();
+    expect(db.tables.activity_events).toEqual([
+      expect.objectContaining({
+        org_id: L,
+        actor_id: AR,
+        verb: 'song.created',
+        subject_type: 'track',
+        subject_id: track.id,
+        artist_id: C2,
+        project_id: track.projectIds[0],
+        song_id: track.id,
+        audit: false,
+        visibility: 'artist',
+        payload: { title: 'One', song_stage: 'inbox' },
+      }),
+    ]);
+  });
 
+  it('material linked to a song is recording.uploaded against that song, not a second song', async () => {
+    const res = await upload(AR, link('demo'));
+    const { track } = await res.json();
+    expect(db.tables.activity_events).toEqual([
+      expect.objectContaining({
+        verb: 'recording.uploaded',
+        subject_id: track.id,
+        song_id: S1,
+        project_id: LP1,
+        visibility: 'artist',
+        payload: { relation: 'demo', type: 'song' },
+      }),
+    ]);
+  });
+
+  it('an upload that fails records nothing', async () => {
+    const sid = await initAs(AR, link('master'));
+    failWritesTo = 'track_links';
+    expect((await call('complete', AR, L, { sessionId: sid, as: link('master') })).status).toBe(500);
+    storage.sniffOk = false;
+    expect((await call('complete', AR, L, { sessionId: await initAs(AR), as: song() })).status).toBe(415);
+    expect(db.tables.activity_events ?? []).toEqual([]);
+  });
+});
+
+async function initAs(who: string, intent: Body = song()) {
+  const res = await call('init', who, L, { ...file(), as: intent });
+  return (await res.json()).sessionId as string;
+}
+
+describe('complete: the session gate', () => {
   it('another member\'s session is 404', async () => {
     const sid = await initAs(AR);
     expect((await call('complete', OWN, L, { sessionId: sid, as: song() })).status).toBe(404);
