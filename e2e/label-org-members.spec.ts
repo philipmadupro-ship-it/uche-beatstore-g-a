@@ -94,9 +94,11 @@ for (const width of [1440, 390]) {
       await expect(orgs.getByRole('link', { name: new RegExp(NAME) })).toHaveAttribute('href', `/o/${SLUG}`);
       await orgs.getByRole('link', { name: new RegExp(NAME) }).click();
 
-      // /o/<slug> lands on the members page until LABEL-18's overview.
-      await expect(page).toHaveURL(new RegExp(`${MEMBERS}$`), { timeout: 30_000 }); // first compile in dev
+      // /o/<slug> is the Overview (LABEL-18); the members page is one step on.
+      await expect(page).toHaveURL(new RegExp(`/o/${SLUG}$`), { timeout: 30_000 }); // first compile in dev
+      await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
       await expect(page.getByRole('button', { name: new RegExp(`Organization: ${NAME}`) })).toBeVisible();
+      await page.goto(MEMBERS);
       await expect(page.getByRole('heading', { name: '2 members' })).toBeVisible();
       const me = page.getByTestId(`member-${PRODUCER_ID}`);
       const dana = page.getByTestId(`member-${BUYER_ID}`);
