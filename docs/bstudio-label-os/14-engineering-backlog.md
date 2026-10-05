@@ -1082,7 +1082,18 @@ Flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-17
-**Status:** In Progress (branch label-os/LABEL-18)
+**Status:** Done (2026-10-05) — PR #76. No migration. `GET /api/org/[orgId]/overview` and the Overview page at `/o/<slug>` (one row per roster artist: songs by stage, next release, a restricted count that never carries a title). Reuses the LABEL-17 reads, so the scope-parity test needed no new walk.
+
+**Orchestrator decisions on #76 (accepted as implemented):**
+- Overview columns: Demos = inbox + in review + shortlisted; Dev = in development; Selected = selected. On hold / passed / archived count only in the totals (07 §2.1 names three columns but not the mapping).
+- Next release = the earliest dated draft (undated after dated, then oldest). Delivered and cancelled are never "next".
+- A song in a project shared by two artists counts on both rows; `totals.songs` counts it once.
+- The roster excludes workspace-mode contacts with no artist role, as `/artists` does, so the two agree.
+- Reads are chunked (200 ids) and paged with `range`, because PostgREST caps a response silently at `max-rows`.
+
+**Open before the final merge (found, not fixed — decide when the Label OS branch is readied for `main`):**
+- **R-08 guard cost.** An `authenticated` PostgREST read of all 10k org `tracks` rows takes 7.8 s (the member read policy runs a SECURITY DEFINER lookup per row, about 0.8 ms each). Nothing in the app issues that read today, since org routes use the service role. The fix is a migration (wrap the helper as `(SELECT fn(col))` or index the lookup); never drop the guard.
+- **Producer routes that treat `user_id IS NULL` as the producer's own** (see LABEL-17's "Found, not fixed"): `api/activity`, `api/tracks/[id]/similar`, `api/tracks/tags/bulk`, `api/tracks/tags`.
 
 ## Objective
 The owner's roster-level view: artists × songs by stage, next release.
@@ -1146,7 +1157,7 @@ Flag off.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-18
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-19)
 
 ## Objective
 Every Label OS mutation records an event, and audit-class mutations are atomic with their event.
