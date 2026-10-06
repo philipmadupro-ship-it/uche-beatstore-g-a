@@ -109,7 +109,7 @@ export function ActivityDigestView({ events, names, projectArtists, view, orgSlu
                     const { actor, text } = describeLine(line, names);
                     const who = viewerId && line.actorId === viewerId ? 'You' : actor;
                     return (
-                      <li key={line.key} className="flex items-baseline gap-3 px-4 py-3 text-[12px] leading-relaxed text-white/60" data-testid="digest-line">
+                      <li key={line.key} className="flex items-baseline gap-3 px-4 py-3 text-[11px] leading-relaxed text-white/60" data-testid="digest-line">
                         <span className="min-w-0 flex-1">
                           <span className="text-white/80">{who}</span> {text}
                         </span>
