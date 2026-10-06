@@ -132,7 +132,7 @@ export function ProjectMembersPanel({ orgId, orgName, projectId }: { orgId: stri
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="producer@example.com"
-            className="min-h-9 w-full rounded-lg border border-white/10 bg-[#090907] px-3 text-[12px] text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none sm:w-64"
+            className="min-h-9 w-full rounded-lg border border-white/10 bg-[#090907] px-3 text-[11px] text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none sm:w-64"
           />
           <Dropdown aria-label="Role" value={role} onChange={(v) => setRole(v as ExternalProjectRole)} options={roleOptions} />
           <label className={`flex items-center gap-2 text-[11px] ${downloadsApply ? 'text-white/70' : 'text-white/30'}`}>
