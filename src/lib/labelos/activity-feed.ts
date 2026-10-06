@@ -34,6 +34,7 @@ import type { ArtistScope } from './artist-scope';
 import { scopeAllowsContact } from './artist-scope';
 import type { DigestEvent, EventSummary, ReleaseItemsChange } from './digest';
 import { isSongStage } from './song-stage';
+import { isReviewVerdict } from './song-review';
 
 /** The columns a feed reads from `activity_events`. */
 export const ACTIVITY_COLUMNS =
@@ -87,6 +88,12 @@ function summarize(payload: unknown, verb: string): EventSummary {
   const from = str(p.from);
   const to = str(p.to);
   if (verb === 'song.stage_changed' && isSongStage(from) && isSongStage(to)) out.move = { from, to };
+  if (verb === 'song.reviewed') {
+    // Rating and verdict only (null = the reviewer cleared it): the payload never holds the note, and a feed would not spread it if it did.
+    const rating = p.rating === null ? null : typeof p.rating === 'number' && Number.isInteger(p.rating) && p.rating >= 1 && p.rating <= 5 ? p.rating : undefined;
+    const verdict = p.verdict === null ? null : isReviewVerdict(p.verdict) ? p.verdict : undefined;
+    if (rating !== undefined || verdict !== undefined) out.review = { ...(rating !== undefined ? { rating } : {}), ...(verdict !== undefined ? { verdict } : {}) };
+  }
   const stage = str(p.song_stage);
   if (stage) out.stage = stage;
   return out;

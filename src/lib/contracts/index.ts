@@ -23,6 +23,7 @@ import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers'
 import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
 import { CURSOR_RE } from '@/lib/labelos/activity-feed';
 import { SONG_STAGES } from '@/lib/labelos/song-stage';
+import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -1209,6 +1210,18 @@ export const OrgSongStageBodySchema = z.object({
   from: z.enum(SONG_STAGES).optional(),
 }).strict();
 export type OrgSongStageBody = z.infer<typeof OrgSongStageBodySchema>;
+
+/**
+ * PUT /api/org/[orgId]/tracks/[id]/reviews (LABEL-25): MY review of a song.
+ * Each field is optional: omitted keeps what is there, `null` clears it. The
+ * merged review must still hold a rating, a verdict or a note.
+ */
+export const OrgSongReviewBodySchema = z.object({
+  rating: z.number().int().min(1).max(5).nullable().optional(),
+  verdict: z.enum(REVIEW_VERDICTS).nullable().optional(),
+  note: z.string().max(NOTE_MAX).nullable().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Send a rating, a verdict or a note' });
+export type OrgSongReviewBody = z.infer<typeof OrgSongReviewBodySchema>;
 
 /** POST /api/org/[orgId]/releases/[releaseId]/items — appended at the end. No master = the song itself. */
 export const OrgReleaseItemCreateBodySchema = z.object({

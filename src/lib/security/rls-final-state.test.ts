@@ -96,6 +96,8 @@ function labelOsTables(): string[] {
     'release_items',
     // 148_labelos_project_members.sql (LABEL-21)
     'project_members',
+    // 149_labelos_song_reviews.sql (LABEL-25)
+    'song_reviews',
   ];
 }
 
@@ -115,6 +117,8 @@ const ORG_HELPERS = [
   'can_see_project',
   // 147 (LABEL-20): the projects an artists-scoped member's scope reaches, for activity_events.
   'labelos_scoped_projects',
+  // 149 (LABEL-25): the songs of the scoped projects, for song_reviews.
+  'labelos_scoped_tracks',
 ];
 const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 
@@ -431,7 +435,8 @@ describe('final RLS policy state', () => {
       // role routes (externalCan); no policy on any other table mentions
       // project_members or can_see_project, so their own JWT reads none of it.
       for (const [key, body] of before148) expect(policies.get(key), key).toBe(body);
-      const added = [...policies.keys()].filter((k) => !before148.has(k) && !k.startsWith('project_members.'));
+      // 149 (LABEL-25) adds the song_reviews read policy; it is held by the mentions check below to give an external member no path either.
+      const added = [...policies.keys()].filter((k) => !before148.has(k) && !k.startsWith('project_members.') && !k.startsWith('song_reviews.'));
       expect(added).toEqual([]);
       const mentions = [...policies]
         .filter(([k, body]) => !k.startsWith('project_members.') && /project_members|can_see_project\s*\(/.test(body))
