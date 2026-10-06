@@ -29,6 +29,10 @@ describe('org switcher', () => {
     expect(currentOrg(orgs, '/o/ns')?.slug).toBe('ns');
     expect(currentOrg(orgs, '/library')?.slug).toBe('uche');
     expect(currentOrg(orgs, '/o/elsewhere')).toBeNull();
+    // LABEL-21: a shared project is someone else's org — none of mine is current there.
+    expect(currentOrg(orgs, '/shared')).toBeNull();
+    expect(currentOrg(orgs, '/shared/9f1c')).toBeNull();
+    expect(currentOrg(orgs, '/sharedx')?.slug).toBe('uche');
     expect(currentOrg([{ slug: 'ns', home: '/o/ns' }], '/library')).toBeNull();
   });
 });

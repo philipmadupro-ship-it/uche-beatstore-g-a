@@ -74,18 +74,20 @@ export function isLabelOsJoinPagePath(pathname: string): boolean {
 }
 
 /**
- * The Label OS page namespace: `/o` and everything under `/o/`. Exact segment
- * match, because `/offline` and `/orders`-style paths share the letter.
+ * The Label OS page namespaces: `/o` and everything under `/o/`, and
+ * `/shared` (LABEL-21, "Shared with me" — the external project member's own
+ * pages, outside any org shell). Exact segment match, because `/offline`,
+ * `/orders` and `/share` (the legacy track share page) look alike.
  */
 export function isLabelOsPagePath(pathname: string): boolean {
-  return pathname === '/o' || pathname.startsWith('/o/');
+  return pathname === '/o' || pathname.startsWith('/o/') || pathname === '/shared' || pathname.startsWith('/shared/');
 }
 
 /**
  * Which check the proxy runs on an /api request from this caller:
  *  - `none`     signed out, a public route, or not an /api path at all;
- *  - `member`   a Label OS path: the caller must belong to some org (or, from
- *               LABEL-21, some project). This is coarse admission only; the
+ *  - `member`   a Label OS path: the caller must belong to some org or (LABEL-21)
+ *               some project. This is coarse admission only; the
  *               routes check org and capability (lib/auth/org-access.ts);
  *  - `session`  `/api/org/join` only: being signed in is enough to reach the
  *               route, which does all of the authorisation itself;

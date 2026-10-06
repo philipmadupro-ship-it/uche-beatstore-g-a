@@ -26,12 +26,21 @@
  *     (orgAudioSourceAllowed, D8). Nothing is presigned, so no URL —
  *     private or public — ever reaches the client, in JSON or a Location.
  *
- * External project members (LABEL-21) do not exist yet: anyone who is not
- * an org member is 404 here, and the `recording.downloaded` audit for them
- * arrives with that task.
+ * External project members (LABEL-21, 06 §2.6): a person admitted to a
+ * project through `project_members` may hear, and per role download, THE
+ * RECORDINGS OF THAT PROJECT — a track that sits in a project they are a live
+ * member of, in the route's org; anything else is the same 404 a stranger
+ * gets. They are not org members, so D4's audio classes do not apply to
+ * them; `externalCan` decides, per request, read live:
+ *   - stream (preview, peaks, the master in the player)  → `listen`
+ *   - `download=1`, the WAV, a stem                       → `download_masters`
+ *     (viewer / commenter only when the membership allows downloads)
+ * Handing the file over is AUDITED: `recording.downloaded` is recorded BEFORE
+ * the first byte (audit-class — if the event cannot be written the file is
+ * not served, 500). Only GET records; HEAD streams nothing.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireObjectAccess } from '@/lib/auth/org-access';
+import { requireTrackActor } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { streamAudioPreviewSource, streamAudioSource } from '@/lib/audio/stream-source';
 import { OrgAudioQuerySchema } from '@/lib/contracts';
@@ -46,6 +55,8 @@ import {
   requiredAudioCapabilities,
   type OrgAudioStemRow,
 } from '@/lib/labelos/org-audio';
+import { AuditEventError, recordEvent } from '@/lib/labelos/activity';
+import { externalAudioAction, externalAudioIsAudited, externalMayAny, membershipsGranting } from '@/lib/labelos/project-members';
 import { countsAsOnRelease } from '@/lib/labelos/releases';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { isR2Configured } from '@/lib/local-store';
@@ -72,21 +83,29 @@ type TrackRow = {
 const json = (status: number, error: string) =>
   NextResponse.json({ error }, { status, headers: { 'Cache-Control': 'no-store' } });
 
-export async function GET(req: NextRequest, { params }: Params) {
+export async function GET(req: NextRequest, ctx: Params) {
+  return serve(req, ctx, { head: false });
+}
+
+async function serve(req: NextRequest, { params }: Params, opts: { head: boolean }) {
   const { orgId, trackId } = await params;
-  const access = await requireObjectAccess({ table: 'tracks', id: trackId, cap: 'catalog.read', orgId });
-  if (!access.ok) return access.res;
+  const actor = await requireTrackActor({ trackId, orgId, cap: 'catalog.read' });
+  if (!actor.ok) return actor.res;
 
   const query = OrgAudioQuerySchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
   if (!query.success) return json(400, query.error.issues[0]?.message ?? 'Invalid query');
   const variant = parseOrgAudioVariant(query.data.variant);
   if (!variant) return json(400, 'Unknown audio variant');
 
-  const { admin } = access;
-  const org = access.object.orgId;
+  const { admin } = actor.access;
+  const org = actor.kind === 'org' ? actor.access.object.orgId : actor.access.orgId;
   try {
     // Independent reads in one round trip. Only links INTO this track
-    // classify it (lib/labelos/org-audio); the stems row only for a stem.
+    // classify it (lib/labelos/org-audio); the stems row only for a stem. An
+    // external member's access is the §2.6 table, not D4's classes, so the
+    // link reads that only classification needs are skipped for them — a
+    // player asks for the same recording in many Range requests.
+    const noRows = Promise.resolve({ data: [] as unknown[], error: null });
     const [trackRes, beatsRes, linksRes, mainBeatRes, stemsRes] = await Promise.all([
       admin
         .from('tracks')
@@ -94,9 +113,9 @@ export async function GET(req: NextRequest, { params }: Params) {
         .eq('id', trackId)
         .eq('org_id', org)
         .maybeSingle(),
-      admin.from('song_beats').select('song_track_id').eq('beat_track_id', trackId),
-      admin.from('track_links').select('from_track_id, relation').eq('to_track_id', trackId),
-      admin.from('tracks').select('id').eq('beat_track_id', trackId).eq('org_id', org),
+      actor.kind === 'external' ? noRows : admin.from('song_beats').select('song_track_id').eq('beat_track_id', trackId),
+      actor.kind === 'external' ? noRows : admin.from('track_links').select('from_track_id, relation').eq('to_track_id', trackId),
+      actor.kind === 'external' ? noRows : admin.from('tracks').select('id').eq('beat_track_id', trackId).eq('org_id', org),
       variant.kind === 'stem'
         ? admin.from('stems').select('vocals_url, drums_url, bass_url, other_url').eq('track_id', trackId).eq('status', 'done')
         : Promise.resolve({ data: [] as OrgAudioStemRow[], error: null }),
@@ -104,7 +123,12 @@ export async function GET(req: NextRequest, { params }: Params) {
     for (const r of [trackRes, beatsRes, linksRes, mainBeatRes, stemsRes]) if (r.error) throw new Error(r.error.message);
     const row = trackRes.data as TrackRow | null;
     if (!row) return json(404, 'Not found');
-    const track = { ...row, on_release: row.type === 'song' ? await songIsOnRelease(admin, org, trackId) : false };
+    // Only an org member's access depends on D4's classes, which need the
+    // release lookup; an external member's is the §2.6 table.
+    const track = {
+      ...row,
+      on_release: actor.kind === 'org' && row.type === 'song' ? await songIsOnRelease(admin, org, trackId) : false,
+    };
 
     const raw = {
       songBeats: (beatsRes.data ?? []) as { song_track_id: string }[],
@@ -119,8 +143,19 @@ export async function GET(req: NextRequest, { params }: Params) {
       for (const row of (fromRes.data ?? []) as { id: string; type: string | null }[]) types.set(row.id, row.type);
     }
 
-    const required = requiredAudioCapabilities(track, inboundLinks(raw, types), variant);
-    if (!orgAudioAllowed(access.capabilities, required)) return json(403, 'Forbidden');
+    const download = query.data.download === '1';
+    let audited: { projectId: string; role: string } | null = null;
+    if (actor.kind === 'external') {
+      const action = externalAudioAction(variant, download);
+      if (!externalMayAny(actor.access.memberships, action)) return json(403, 'Forbidden');
+      if (externalAudioIsAudited(action)) {
+        const granting = membershipsGranting(actor.access.memberships, action)[0];
+        audited = { projectId: granting.projectId, role: granting.role };
+      }
+    } else {
+      const required = requiredAudioCapabilities(track, inboundLinks(raw, types), variant);
+      if (!orgAudioAllowed(actor.access.capabilities, required)) return json(403, 'Forbidden');
+    }
 
     const stems = (stemsRes.data ?? []) as OrgAudioStemRow[];
     const source = orgAudioSource(track, variant, stems);
@@ -132,16 +167,27 @@ export async function GET(req: NextRequest, { params }: Params) {
       return json(403, 'Source not allowed');
     }
 
-    const upstream =
-      query.data.download === '1'
-        ? await streamAudioSource(req, source, orgAudioFilename(track.title, variant, source))
-        : await streamAudioPreviewSource(req, source);
+    // 06 §6: an external member's download is an audit event, written first —
+    // a download nobody can account for does not happen.
+    if (audited && !opts.head) {
+      await recordEvent(
+        admin,
+        { orgId: org, userId: actor.access.userId },
+        'recording.downloaded',
+        { type: 'track', id: trackId, projectId: audited.projectId },
+        { variant: variant.kind === 'stem' ? `stem:${variant.stem}` : variant.kind, role: audited.role, by: 'project_member' },
+      );
+    }
+
+    const upstream = download
+      ? await streamAudioSource(req, source, orgAudioFilename(track.title, variant, source))
+      : await streamAudioPreviewSource(req, source);
 
     const headers = new Headers(upstream.headers);
     headers.set('cache-control', 'private, no-store');
     return new Response(upstream.body, { status: upstream.status, headers });
   } catch (err) {
-    log.error('org audio failed', { orgId: org, trackId, error: errorMessage(err) });
+    log.error('org audio failed', { orgId: org, trackId, error: errorMessage(err), audit: err instanceof AuditEventError });
     return json(500, 'Could not load the audio');
   }
 }
@@ -166,7 +212,7 @@ async function songIsOnRelease(admin: AdminClient, org: string, trackId: string)
 
 /** Headers only: the storage stream GET opened is cancelled, never read. */
 export async function HEAD(req: NextRequest, ctx: Params) {
-  const res = await GET(req, ctx);
+  const res = await serve(req, ctx, { head: true });
   await res.body?.cancel().catch(() => {});
   return new Response(null, { status: res.status, headers: res.headers });
 }

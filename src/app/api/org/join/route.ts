@@ -16,11 +16,17 @@
  *    membership and the `member.joined` audit event in one transaction.
  *    Accepting twice is idempotent. A mismatch is 403 without the address.
  *
+ * A PROJECT invitation (LABEL-21) goes through the same two actions. The
+ * preview names the project, the role and the org, and whether the caller is
+ * already on the project; accepting admits them to that one project
+ * (`project_members`, never `org_members`) and answers with where it opens.
+ * An external member is never told the org's slug.
+ *
  * The token travels in the body (never an API query string) and this route
  * never logs or echoes it. Attempts are rate-limited per client.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { liveMembership, sessionIdentity } from '@/lib/auth/org-access';
+import { liveMembership, liveProjectMembership, sessionIdentity } from '@/lib/auth/org-access';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { normalizeEmailOrNull } from '@/lib/contacts/email';
 import { OrgJoinBodySchema } from '@/lib/contracts';
@@ -46,6 +52,8 @@ type PreviewRow = {
   role: string;
   functions: string[] | null;
   project_id: string | null;
+  project_role: string | null;
+  project_allow_downloads: boolean | null;
   invited_by: string | null;
   expires_at: string;
   accepted_at: string | null;
@@ -75,27 +83,58 @@ export async function POST(req: NextRequest) {
     if (action === 'preview') {
       const { data, error } = await admin
         .from('org_invitations')
-        .select('org_id, email, role, functions, project_id, invited_by, expires_at, accepted_at, revoked_at, organizations!inner(name, slug, kind, deleted_at)')
+        .select('org_id, email, role, functions, project_id, project_role, project_allow_downloads, invited_by, expires_at, accepted_at, revoked_at, organizations!inner(name, slug, kind, deleted_at)')
         .eq('token_hash', tokenHash)
         .maybeSingle();
       if (error) throw new Error(error.message);
       const row = data as PreviewRow | null;
       const org = row ? (Array.isArray(row.organizations) ? row.organizations[0] : row.organizations) : null;
-      if (!row || !org || org.deleted_at || row.project_id || row.role === 'owner') return NOT_FOUND();
+      if (!row || !org || org.deleted_at || row.role === 'owner') return NOT_FOUND();
 
+      // A project invitation (LABEL-21) is about ONE project: whether the
+      // caller is already on it, and the inviter's authority, are asked of
+      // the project, not the org.
+      const projectId = row.project_id;
       let emailMatches: boolean | null = null;
       let member = false;
       if (session) {
         emailMatches = normalizeEmailOrNull(session.email) === row.email;
-        if (emailMatches) member = (await liveMembership(admin, row.org_id, session.userId)) !== null;
+        if (emailMatches) {
+          member = projectId
+            ? (await liveProjectMembership(admin, row.org_id, projectId, session.userId)) !== null
+            : (await liveMembership(admin, row.org_id, session.userId)) !== null;
+        }
       }
 
       // Same rule as labelos_accept_invitation: an invitation whose inviter
-      // no longer holds members.manage reads as withdrawn.
+      // no longer holds members.manage (an org invitation) or share.external
+      // (a project invitation) reads as withdrawn.
       let state = invitationState(row);
       if (state === 'pending') {
         const inviter = row.invited_by ? await liveMembership(admin, row.org_id, row.invited_by) : null;
-        if (!inviter?.capabilities.has('members.manage')) state = 'revoked';
+        if (!inviter?.capabilities.has(projectId ? 'share.external' : 'members.manage')) state = 'revoked';
+      }
+
+      if (projectId) {
+        const { data: proj, error: projErr } = await admin.from('projects').select('name').eq('id', projectId).eq('org_id', row.org_id).maybeSingle();
+        if (projErr) throw new Error(projErr.message);
+        const project = proj as { name: string | null } | null;
+        if (!project) return NOT_FOUND();
+        return NextResponse.json({
+          org: { name: org.name, kind: org.kind },
+          project: {
+            name: project.name ?? 'Untitled project',
+            role: row.project_role ?? 'viewer',
+            allowDownloads: row.project_allow_downloads === true,
+            ...(member ? { href: `/shared/${projectId}` } : {}),
+          },
+          role: row.project_role ?? 'viewer',
+          functions: [],
+          state,
+          signedIn: !!session,
+          emailMatches,
+          member,
+        });
       }
 
       return NextResponse.json({
@@ -119,6 +158,16 @@ export async function POST(req: NextRequest) {
 
     const { data: org } = await admin.from('organizations').select('name, slug, kind').eq('id', outcome.orgId).maybeSingle();
     const o = org as { name: string; slug: string; kind: string } | null;
+    if (outcome.projectId) {
+      // Admitted to one project: say where it opens, never the org's slug.
+      const { data: proj } = await admin.from('projects').select('name').eq('id', outcome.projectId).eq('org_id', outcome.orgId).maybeSingle();
+      return NextResponse.json({
+        joined: true,
+        alreadyMember: outcome.alreadyMember,
+        org: { name: o?.name ?? null },
+        project: { id: outcome.projectId, name: (proj as { name: string | null } | null)?.name ?? null, href: `/shared/${outcome.projectId}` },
+      });
+    }
     return NextResponse.json({
       joined: true,
       alreadyMember: outcome.alreadyMember,

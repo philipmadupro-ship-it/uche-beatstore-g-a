@@ -351,7 +351,7 @@ describe('GET invitations (LABEL-09)', () => {
     ]);
     const chain = admin.chains[0];
     expect(eqs(chain)).toEqual({ org_id: ORG });
-    expect(chain.ops.filter((o) => o.op === 'is').map((o) => o.args)).toEqual([['accepted_at', null], ['revoked_at', null]]);
+    expect(chain.ops.filter((o) => o.op === 'is').map((o) => o.args)).toEqual([['project_id', null], ['accepted_at', null], ['revoked_at', null]]); // project invitations are listed on their project (LABEL-21)
     expect(opOf(chain, 'gt')?.args[0]).toBe('expires_at');
     expect(String(opOf(chain, 'select')?.args[0])).not.toContain('token');
   });

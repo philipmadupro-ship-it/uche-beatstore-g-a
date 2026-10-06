@@ -11,6 +11,9 @@
  *   memberArtistsSet    member.artists_changed
  *   invitationCreate    invitation.created
  *   invitationRevoke    invitation.revoked
+ *   projectInvitationCreate  invitation.created for ONE project (148, LABEL-21)
+ *   projectMemberUpdate      project.member_changed
+ *   projectMemberRemove      project.member_removed
  *
  * Accepting an invitation (`member.joined`) is 138's
  * `labelos_accept_invitation` (lib/labelos/invitations.ts), which already
@@ -35,6 +38,10 @@ export const AUDIT_RPCS = {
   memberArtistsSet: 'labelos_audit_member_artists_set',
   invitationCreate: 'labelos_audit_invitation_create',
   invitationRevoke: 'labelos_audit_invitation_revoke',
+  // Migration 148 (LABEL-21): external project members.
+  projectInvitationCreate: 'labelos_audit_project_invitation_create',
+  projectMemberUpdate: 'labelos_audit_project_member_update',
+  projectMemberRemove: 'labelos_audit_project_member_remove',
 } as const;
 export type AuditRpcKey = keyof typeof AUDIT_RPCS;
 
@@ -62,6 +69,27 @@ export type AuditRpcArgs = {
     p_payload: EventPayload;
   };
   invitationRevoke: { p_org: string; p_actor: string; p_id: string; p_payload: EventPayload };
+  projectInvitationCreate: {
+    p_org: string;
+    p_actor: string;
+    p_project: string;
+    p_email: string;
+    p_role: string;
+    p_allow_downloads: boolean;
+    p_token_hash: string;
+    p_expires_at: string;
+    p_payload: EventPayload;
+  };
+  projectMemberUpdate: {
+    p_org: string;
+    p_actor: string;
+    p_project: string;
+    p_user: string;
+    /** Only the keys that change: role, allow_downloads, expires_at. */
+    p_patch: Record<string, unknown>;
+    p_payload: EventPayload;
+  };
+  projectMemberRemove: { p_org: string; p_actor: string; p_project: string; p_user: string; p_payload: EventPayload };
 };
 
 export type AuditRpcError = { message: string; code?: string };
@@ -93,3 +121,16 @@ export function isMissingAuditRpc(error: AuditRpcError | null): boolean {
 }
 
 export const AUDIT_RPC_NOT_READY = 'Auditing is not set up yet (migration 146 has not been applied).';
+export const PROJECT_MEMBERS_NOT_READY = 'External project members are not set up yet (migration 148 has not been applied).';
+
+/**
+ * Migration 148 is not applied: PostgREST cannot find a project-member
+ * function, or the `project_members` table (42P01 / PGRST205). Answered as
+ * "not ready", never a raw 500.
+ */
+export function isMissingProjectMembers(error: { message: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code === 'PGRST205' || error.code === '42P01') return /project_members/.test(error.message);
+  if (!/labelos_audit_project_|project_members|labelos_user_has_cap/.test(error.message)) return false;
+  return error.code === 'PGRST202' || error.code === '42883' || /could not find the (function|table)|does not exist/i.test(error.message);
+}

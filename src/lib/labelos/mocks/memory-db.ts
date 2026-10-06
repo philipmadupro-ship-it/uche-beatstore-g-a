@@ -6,7 +6,8 @@
  * the test answer it, a wrong or missing filter here returns the wrong rows,
  * so cross-org and out-of-scope leaks show up as failing assertions.
  *
- * Supports what the Label OS routes use: select (column lists, one
+ * Supports what the Label OS routes use (gt / gte / lt / lte compare as strings,
+ * which orders ISO timestamps correctly): select (column lists, one
  * `table!inner(cols)` embed resolved through `org_id` for organizations,
  * else `<table singular>_id`), eq, in,
  * is, not(col, 'in', '(…)'), order, limit, range, maybeSingle, single, insert,
@@ -190,6 +191,22 @@ export function memoryAdmin(db: MemoryDb) {
       },
       is(col: string, v: null) {
         filters.push((r) => (r[col] ?? null) === v);
+        return b;
+      },
+      gt(col: string, v: unknown) {
+        filters.push((r) => r[col] !== null && r[col] !== undefined && String(r[col]) > String(v));
+        return b;
+      },
+      gte(col: string, v: unknown) {
+        filters.push((r) => r[col] !== null && r[col] !== undefined && String(r[col]) >= String(v));
+        return b;
+      },
+      lt(col: string, v: unknown) {
+        filters.push((r) => r[col] !== null && r[col] !== undefined && String(r[col]) < String(v));
+        return b;
+      },
+      lte(col: string, v: unknown) {
+        filters.push((r) => r[col] !== null && r[col] !== undefined && String(r[col]) <= String(v));
         return b;
       },
       not(col: string, op: string, list: string) {

@@ -5,12 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
 
 let mine: unknown;
-vi.mock('@/lib/auth/org-access', () => ({ myOrganizations: async () => mine }));
+let shared: unknown;
+vi.mock('@/lib/auth/org-access', () => ({ myOrganizations: async () => mine, myExternalProjects: async () => shared }));
 
 const { GET } = await import('./route');
 
 beforeEach(() => {
   mine = { ok: true, userId: 'u', isProducer: true, orgs: [] };
+  shared = { ok: true, userId: 'u', projects: [] };
 });
 
 describe('GET /api/org', () => {
@@ -33,6 +35,23 @@ describe('GET /api/org', () => {
       ],
       shared: [],
     });
+  });
+
+  it('"Shared with me" lists the external projects, id / name / href only', async () => {
+    shared = {
+      ok: true,
+      userId: 'u',
+      projects: [{ id: 'p1', orgId: 'o1', name: 'Uche × Producer X', orgName: 'Night Shift', role: 'contributor', href: '/shared/p1' }],
+    };
+    expect((await (await GET()).json()).shared).toEqual([{ id: 'p1', name: 'Uche × Producer X', href: '/shared/p1' }]);
+  });
+
+  it('a failed shared read leaves the switcher working, with nothing shared', async () => {
+    shared = { ok: false, res: NextResponse.json({ error: 'Could not list shared projects' }, { status: 500 }) };
+    mine = { ok: true, userId: 'u', isProducer: false, orgs: [{ id: 'a', name: 'A', slug: 'a', kind: 'label', role: 'member' }] };
+    const res = await GET();
+    expect(res.status).toBe(200);
+    expect((await res.json()).shared).toEqual([]);
   });
 
   it('passes a refusal through', async () => {

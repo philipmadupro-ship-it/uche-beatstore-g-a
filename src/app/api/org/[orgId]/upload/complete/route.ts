@@ -1,5 +1,5 @@
 /**
- * POST /api/org/[orgId]/upload/complete (LABEL-14) — finish an org upload
+ * POST /api/org/[orgId]/upload/complete (LABEL-14, LABEL-21) — finish an org upload
  * and create what it is: `{ sessionId, analysis?, as }`.
  *
  *  1. The intent is authorised again (../access): `catalog.write` on the
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const intent = await authorizeOrgUploadIntent(orgId, body.as);
   if (!intent.ok) return intent.res;
-  const { access } = intent;
+  const { access, external } = intent;
   const { admin } = access;
   const org = access.orgId;
 
@@ -165,7 +165,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       projectIds = [inbox.projectId];
     } else {
       await addOrgLink(admin, { orgId: org, fromId: body.as.songId, toId: row.id, relation: body.as.relation });
-      projectIds = await orgProjectsOfTrack(admin, org, body.as.songId);
+      // An external member's version goes into THEIR project(s) only (LABEL-21,
+      // planExternalUpload); an org member's into every project of the song.
+      projectIds = external ? external.projectIds : await orgProjectsOfTrack(admin, org, body.as.songId);
     }
     await addTrackToOrgProjects(admin, { orgId: org, trackId: row.id, projectIds });
   } catch (err) {
@@ -193,7 +195,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       who,
       'recording.uploaded',
       { type: 'track', id: row.id, projectId: projectIds[0] ?? null, songId: body.as.songId },
-      { relation: body.as.relation, type: row.type },
+      { relation: body.as.relation, type: row.type, ...(external ? { by: 'project_member' } : {}) },
     );
   }
 

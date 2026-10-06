@@ -33,6 +33,9 @@ export async function DELETE(
     const read = async () => {
       const { data, error } = await scopedOrgQuery(admin, 'org_invitations', access, 'id, email, accepted_at, revoked_at')
         .eq('id', id)
+        // A project invitation (LABEL-21) is withdrawn on its project, with
+        // `share.external`; here it is not found.
+        .is('project_id', null)
         .maybeSingle();
       if (error) throw new Error(error.message);
       return data as Row | null;

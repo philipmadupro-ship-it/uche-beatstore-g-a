@@ -15,6 +15,9 @@ const USER = '33333333-3333-4333-8333-333333333333';
 let session: { userId: string; email: string | null } | null = null;
 let liveMember = false;
 let inviterCanManage = true;
+let inviterCanShare = true;
+let projectMember = false;
+let projectRow: Record<string, unknown> | null = { name: 'Uche × Producer X' };
 let allowed = true;
 let rpcAnswer: Answer = { data: null, error: null };
 let previewRow: Record<string, unknown> | null = null;
@@ -22,12 +25,17 @@ let admin: ReturnType<typeof fakeAdmin>;
 const logged: unknown[] = [];
 
 const INVITER = '44444444-4444-4444-8444-444444444444';
+const PROJECT = '55555555-5555-4555-8555-555555555555';
 vi.mock('@/lib/auth/org-access', () => ({
   sessionIdentity: async () => session,
   liveMembership: async (_admin: unknown, _org: string, user: string) => {
-    if (user === INVITER) return inviterCanManage ? { role: 'admin', capabilities: new Set(['members.manage']) } : { role: 'member', capabilities: new Set() };
+    if (user === INVITER) {
+      const caps = new Set<string>([...(inviterCanManage ? ['members.manage'] : []), ...(inviterCanShare ? ['share.external'] : [])]);
+      return { role: inviterCanManage ? 'admin' : 'member', capabilities: caps };
+    }
     return liveMember ? { role: 'member', capabilities: new Set() } : null;
   },
+  liveProjectMembership: async () => (projectMember ? { projectId: PROJECT, role: 'contributor', allowDownloads: false } : null),
 }));
 vi.mock('@/lib/auth/ownership', () => ({ createServiceClient: () => admin.client }));
 vi.mock('@/lib/security/rate-limit', () => ({ rateLimitDurable: async () => allowed, clientIp: () => '1.2.3.4' }));
@@ -43,6 +51,7 @@ vi.mock('@/lib/log', () => ({
 function answer(chain: Chain): Answer {
   if (chain.table === 'org_invitations') return { data: previewRow, error: null };
   if (chain.table === 'organizations') return { data: { name: 'Night Shift', slug: 'night-shift', kind: 'label' }, error: null };
+  if (chain.table === 'projects') return { data: projectRow, error: null };
   return { data: null, error: null };
 }
 
@@ -50,6 +59,9 @@ beforeEach(() => {
   session = null;
   liveMember = false;
   inviterCanManage = true;
+  inviterCanShare = true;
+  projectMember = false;
+  projectRow = { name: 'Uche × Producer X' };
   allowed = true;
   rpcAnswer = { data: null, error: null };
   previewRow = null;
@@ -214,11 +226,96 @@ describe('preview', () => {
   it.each([
     ['missing', null],
     ['soft-deleted org', row({ organizations: { name: 'x', slug: 'x', kind: 'label', deleted_at: '2026-01-01' } })],
-    ['project invitation (LABEL-21)', row({ project_id: ORG })],
     ['owner invitation', row({ role: 'owner' })],
   ])('404 for %s', async (_label, r) => {
     previewRow = r;
     expect((await post({ token, action: 'preview' })).status).toBe(404);
+  });
+});
+
+describe('a project invitation (LABEL-21)', () => {
+  const projectInvite = (over: Record<string, unknown> = {}) => ({
+    org_id: ORG,
+    email: 'guest@local.test',
+    role: 'member',
+    functions: [],
+    project_id: PROJECT,
+    project_role: 'contributor',
+    project_allow_downloads: false,
+    invited_by: INVITER,
+    expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+    accepted_at: null,
+    revoked_at: null,
+    organizations: { name: 'Night Shift', slug: 'night-shift', kind: 'label', deleted_at: null },
+    ...over,
+  });
+
+  it('preview: the project, the role and the org name — never the slug or the address', async () => {
+    previewRow = projectInvite();
+    const r = await post({ token, action: 'preview' });
+    expect(r).toEqual({
+      status: 200,
+      json: {
+        org: { name: 'Night Shift', kind: 'label' },
+        project: { name: 'Uche × Producer X', role: 'contributor', allowDownloads: false },
+        role: 'contributor',
+        functions: [],
+        state: 'pending',
+        signedIn: false,
+        emailMatches: null,
+        member: false,
+      },
+    });
+    expect(JSON.stringify(r.json)).not.toMatch(/night-shift|guest@/);
+  });
+
+  it('preview: a person already on the project gets where it opens, not the org slug', async () => {
+    session = { userId: USER, email: 'guest@local.test' };
+    projectMember = true;
+    previewRow = projectInvite({ accepted_at: new Date().toISOString() });
+    const r = await post({ token, action: 'preview' });
+    expect(r.json).toMatchObject({ state: 'accepted', member: true, project: { href: `/shared/${PROJECT}` } });
+    expect(JSON.stringify(r.json)).not.toContain('night-shift');
+  });
+
+  it('preview: withdrawn when the inviter no longer holds share.external (members.manage is not enough)', async () => {
+    inviterCanShare = false;
+    previewRow = projectInvite();
+    expect((await post({ token, action: 'preview' })).json.state).toBe('revoked');
+    inviterCanShare = true;
+    inviterCanManage = false;
+    expect((await post({ token, action: 'preview' })).json.state).toBe('pending');
+  });
+
+  it('preview: 404 when the project is gone', async () => {
+    projectRow = null;
+    previewRow = projectInvite();
+    expect((await post({ token, action: 'preview' })).status).toBe(404);
+  });
+
+  it('accept: admitted to the one project; the answer opens it and never names the org slug', async () => {
+    session = { userId: USER, email: 'guest@local.test' };
+    rpcAnswer = { data: { status: 'joined', org_id: ORG, project_id: PROJECT }, error: null };
+    const r = await post({ token, action: 'accept' });
+    expect(r).toEqual({
+      status: 200,
+      json: {
+        joined: true,
+        alreadyMember: false,
+        org: { name: 'Night Shift' },
+        project: { id: PROJECT, name: 'Uche × Producer X', href: `/shared/${PROJECT}` },
+      },
+    });
+    expect(JSON.stringify(r.json)).not.toContain('night-shift');
+    // Same function, same arguments: the hash and the session user.
+    expect(admin.rpcs).toEqual([{ name: 'labelos_accept_invitation', args: { p_token_hash: hashInvitationToken(token), p_user: USER } }]);
+  });
+
+  it('accept twice is idempotent', async () => {
+    session = { userId: USER, email: 'guest@local.test' };
+    rpcAnswer = { data: { status: 'already_member', org_id: ORG, project_id: PROJECT }, error: null };
+    const r = await post({ token, action: 'accept' });
+    expect(r.json).toMatchObject({ joined: true, alreadyMember: true, project: { href: `/shared/${PROJECT}` } });
   });
 });
 
