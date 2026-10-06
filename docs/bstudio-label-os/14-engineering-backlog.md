@@ -1234,7 +1234,18 @@ Revert the functions; routes fall back to `recordEvent`.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-19
-**Status:** In Progress (branch label-os/LABEL-20)
+**Status:** Done (2026-10-06) — PR #80. Migration 147, not applied: `activity_events` read policy gains the artist-scope predicate. `GET /api/org/[orgId]/activity` (artist / project / song feeds), `POST /api/org/[orgId]/overview/seen`, the pure `lib/labelos/digest.ts`, "Since your last visit" on the Overview and an Activity tab on the artist workspace.
+
+**Orchestrator decisions on #80 (accepted as implemented):**
+- Scope rule (`eventVisibleTo`, the SQL policy and the route agree): `catalog.read`; `internal` rows need `business.read.internal`; whole-org members read everything; an event naming an artist is judged by that artist alone, one naming only a project by the project's scope; an event naming neither (members, invitations, settings) is whole-org only.
+- D4 on top, in the route: events about a song the member may not read are counted as "restricted", never listed (the song feed answers 404).
+- The policy uses three hashed uncorrelated subplans, with no per-row SECURITY DEFINER call (100k events: whole-org read unchanged at about 7 ms, scoped read 29 ms and now correct).
+- One assertion in 136's local check changed on purpose: a roster artist no longer reads an org-level event.
+
+**Open before the final merge (owner decisions, not blocking):**
+- `last_seen_overview_at` is one value per user, not per org (opening org A's Overview marks org B's digest seen). The fix is a schema change (the column on `org_members`, or a jsonb map).
+- The `activity_events` policy has no D4 song-row predicate (the route has it). A member reading the table with their own JWT could read a working song's `song.created` title. No app route issues that read.
+
 
 ## Objective
 Grouped, scope-safe feeds for the org overview, artist, project and song.
@@ -1274,6 +1285,26 @@ One grouped line per actor per day. No per-event toasts.
 - **Context keys:** release and new-song events carry `artist_id`; project-file events carry `project_id` only.
 - **History is complete from creation:** orgs from 137 have a backfilled `org.created` (`payload.source = 'backfill'`).
 
+**Built (for the orchestrator's merge gate):**
+- **Migration 147 (not applied).** Closes the carried gap: `activity_events_member_read` now has the artist-scope predicate. Whole-org members (`scope = 'org'`, never role `artist`) read every event of their org; a scoped member or roster artist reads an event that names one of their artists (`member_artist_scopes`), or that names only a project in their scope (`labelos_scoped_projects()`); an event naming an artist is judged by the artist alone (a visible project does not widen it); **an event naming neither (members, invitations, settings, contact removals) is whole-org only**, and a `song_id` alone does not place an event (song events carry an artist or a project; a future song-only event stays hidden from scoped members until it names one). `catalog.read` and the internal class are unchanged. No per-row SECURITY DEFINER call: every scope disjunct is an uncorrelated subquery. Also two partial indexes (feeds by project and by song). `user_profiles.last_seen_overview_at` already existed since 136, so 147's `ADD COLUMN IF NOT EXISTS` is a no-op. Producer-era behaviour untouched. Rollback file and local check added; 136's check had one assertion edited (a roster artist can no longer read a context-free event, which is the point).
+- **`lib/labelos/digest.ts` (pure, written test-first, 33 tests).** artist → day → actor, ONE line per actor per day, `describeLine` words ("Sam added 3 demos, created a project and added a file"). 10 uploads inside 10 minutes are one line (so are 10 spread over the day: the per-day rule subsumes the 10-minute one). A release's events are one part: `release.updated` with `payload.items` (added | removed | reordered | edited) reads "edited the tracklist of ‘EP’", `payload.state.to = cancelled` reads "cancelled ‘EP’", a created release absorbs its first edits, a delete absorbs everything. Views: overview, artist, project (day → actor) and song (one line per event, the audit view). Days are calendar days in the viewer's zone (UTC on the server and for hydration, the browser's zone right after). `VERB_PHRASES` is total over `Verb` (a test holds it).
+- **`lib/labelos/activity-feed.ts` + `activity-store.ts`.** `eventVisibleTo` (the TS twin of 147's policy; the route filters with it because the service role bypasses RLS), `toFeedEvent` (field by field, a whitelisted payload summary — never the payload, an email or a token), D4 on top (`withholdHiddenSongs`: events about a song whose row the member may not read are counted as `restricted`, never listed; the song feed answers 404), `projectArtistsFor` (a project-only event is filed under the artists the member holds, so a heading never names an artist outside their scope). Reads reuse `orgProjectIdsInScope`, `artistProjects`, `orgTrackFacts` + `memberSeesTrackRow` and `scopedOrgQuery` (for contact names). Paging is a `(created_at, id)` keyset cursor (`<created_at>_<id>`), so events written in one transaction are never split by a page boundary; the scan is bounded (3000 rows) and never silent (`hasMore` + `nextBefore`). `asOf` trails the clock by 10 s (the database stamps a row with its transaction start).
+- **`GET /api/org/[orgId]/activity`** (`?artist|project|song`, `since`, `before`, `limit`; Zod contract `OrgActivityQuerySchema`) and **`POST /api/org/[orgId]/overview/seen`** (the session's own `last_seen_overview_at`, monotonic and atomic by two plain conditional updates — PostgREST rejects `or=` on a PATCH — never past now, the body cannot name a user; on `NO_EVENT_HANDLERS` with its reason).
+- **UI.** The Overview's "Since your last visit" (`OverviewDigest`, server-read for this member, "Show earlier" paging, "Mark all seen", marks the digest seen through `asOf` when the member LEAVES — not on alt-tab — and never toasts) and the artist **Activity** tab (`ArtistActivityTab`, a new tab in `OrgArtistWorkspaceTabs`). The digest failing never takes the roster down.
+
+**Verification:** `tsc`, `eslint --quiet`, `vitest` (5,398 tests, +98), `next build` (CI stub env) and `check-store-dynamic`; `npm run db:local:check` (147's check: as `authenticated` with each member's own claims — scoped A&R, roster artist, owner, another org's owner, a non-member, the producer and anon — the events each reads, the scope sets equal to `can_see_artist` / `can_see_org_project`, current-scope follow-through, append-only, `last_seen_overview_at` unwritable and no wider to read than 136; plus the rollback). `e2e/label-org-activity.spec.ts` (registered in `e2e:real-db`; 8 tests, 1440 + 390): the real release / invitation routes write events the feed groups; a scoped member gets none of Kilo's through the route AND through RLS (the test fails on 136's policy: Kilo's and the internal rows come back); ten uploads inside ten minutes are one line; leaving marks the digest seen; the Activity tab; a paged read through real PostgREST with the cursor loses and repeats nothing across four events sharing one instant; `last_seen_overview_at` unwritable through PostgREST. `e2e:real-db` as a whole: 67 / 70 first run; the three failures (`artist-workspace-phase2` 1, `phase3` 5, `label-org-roster` 2 — the last because my own 100k-event EXPLAIN org was still in the local database) pass on re-run.
+**R-08 explain (100k events, 20 artists, 200 projects, local Postgres 16, as `authenticated`):** whole-org owner, newest 100: 6.9 ms before, 7.1 ms after; full count 4.02 s → 4.09 s (unchanged: the cost is 136's two `has_org_cap` calls per row). Scoped A&R, newest 100: 13 ms before (**returning every artist's events — the leak**) → 29 ms after (only theirs); full count 10.8 s → 1.4 s. A first draft that called `can_see_artist` / `can_see_org_project` per row measured 816 ms for the newest 100, which is why the scope is three hashed subplans instead.
+
+**Not done / found, not fixed:**
+- **`last_seen_overview_at` is ONE value per user, not per org** (the column the spec names, on `user_profiles`). A member of two orgs who opens org A's Overview marks org B's digest seen too. The natural fix is `last_seen_overview_at` on `org_members` (one value per user per org), or a jsonb map; a decision for the orchestrator (it is a schema change to a column 136 created).
+- **Co-members can read each other's `last_seen_overview_at`** (136's `user_profiles` SELECT policy: the user and anyone sharing a live org). Unchanged and no wider; narrowing it would need a column-level grant that also hides it from the user's own PostgREST reads.
+- **The policy has no D4 song-row predicate.** The route withholds events about songs the member may not read (marketing never sees a working demo's `song.created` title); a member reading `activity_events` with their own JWT can still read it. Adding `can_read_org_track` per song event would cost a per-row definer call and hide a deleted song's history; no org route issues that read today.
+- **Project and song feeds have an API and no UI** (the song history view belongs with the song page); only the Overview digest and the artist Activity tab are screens.
+- A scoped member's Overview digest is a bounded scan filtered in TypeScript (the database filters only by org and visibility); an org with far more unrelated activity than theirs pages ("Show earlier") instead of narrowing in SQL.
+- A `song.stage_changed` / `song.reviewed` line has generic words ("moved a song to a new stage"): LABEL-24/25 define the payloads and should extend `summarize` in `activity-feed.ts` and `VERB_PHRASES`.
+- The producer routes `api/activity`, `api/tracks/[id]/similar`, `api/tracks/tags/bulk` and `api/tracks/tags` still treat `user_id IS NULL` as the producer's own while org rows are ownerless; the R-08 member-read cost on 141's guarded tables stands (PR #76). Neither is touched here.
+- Lessons for the next session: after `next build`, delete `.next` before `next dev` (a stale production build made every `/api/org/[orgId]/…` route answer a Next 404); and PostgREST ANDs repeated `or=` params, but rejects `or=` on a PATCH.
+
 ## Out of Scope
 Email/Slack digests (LABEL-38).
 
@@ -1289,7 +1320,7 @@ Flag off.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-14, LABEL-19, D3
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-21; runs in parallel with LABEL-20, migration 148 reserved)
 
 ## Objective
 Invite a person with their own account into one org project as viewer, commenter, contributor or editor.
@@ -1468,7 +1499,7 @@ Drop the table and column.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-20
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-24; no migration)
 
 ## Objective
 Validated stage transitions with history.
@@ -1499,6 +1530,23 @@ Per `07` §2.3.
 
 ## Tests
 `song-stage.test.ts`; route test.
+
+**Built (for the orchestrator's merge gate):**
+- **`lib/labelos/song-stage.ts` (pure, tests written first: 960 cases).** `STAGE_TRANSITIONS` is 04 W3's diagram as data; `allowedTransitions(stage, caps, role?)` and `transition(song, to, who?)` (`ok` + `from`/`to`, or a `reason`: `not_a_song` / `unknown_stage` / `same` / `forbidden` / `illegal`, with a message that names both stages). Nothing without `catalog.write`; a roster artist (role `artist`) gets `inbox → in_review` and nothing else. `isReleased(song, releases)` is `countsAsOnRelease`, the audio classifier's rule, so the two cannot drift; `released` is never stored. The test checks the table against an independent edge list and every stage × every capability set the 06 matrix names (owner, admin, each function, a function-less member, a roster artist, an artist with `catalog.write` revoked), both through `allowedTransitions` and through `transition` for every (from, to) pair. `SONG_STAGE_LABEL` moved here (re-exported from `org-workspace.ts`) so the module has no import cycle.
+- **`POST /api/org/[orgId]/tracks/[id]/stage`** `{ to, from? }` (Zod `OrgSongStageBodySchema`; `released` is a 400). `requireObjectAccess` on the track + `catalog.write` (404 outside the member's scope, 403 read-only), then 404 for a row that is not a song with a stage or that D4 hides from the member. Illegal = 409 naming from and to. The write is a compare-and-set on the stage read (`moveSongStage`) and, when the client sends `from`, on what its screen showed: of two people moving one song the loser gets 409. Records `song.stage_changed` `{ from, to }` through `recordEvent`, with the song, its first project (an Inbox first) and that project's artist, so a feed scoped to an artist finds it; `DEFAULT_VISIBILITY` already gave it `artist` (D5) and `activity.test.ts` holds it.
+- **Digest.** `song.stage_changed` with `{ from, to }` now reads "Sam moved Midnight to Selected"; several moves of one song by one actor in one day are ONE part with the first `from` and the last `to`; more than two songs in one line fold into "moved 5 songs to new stages" (a bulk move is not a list of titles). Titles come from a new optional `names.songs`, resolved in `activity-store.ts` for the songs the visible events name. The other collapse rules are untouched; an event without a usable `{ from, to }` keeps the generic words.
+- **UI.** `SongStageControl` (a `Dropdown` of `allowedTransitions`, a plain chip when the member has none or outside the org shell; a failed move toasts the server's reason and leaves the stage as it was) on the org song view and on the artist workspace's Songs tab.
+
+**Verification:** `tsc`, `vitest` (404 files, 6,395 tests), `next build` (CI stub env); `e2e/label-org-song-stage.spec.ts` (registered in `e2e:real-db`; 6 tests against the real stack): the owner walks inbox → … → selected → archived → in review; an illegal move and a stale `from` are 409 and change nothing; the Dropdown on the song page lists `Shortlisted / Passed / On hold / Archived` for an In review song and moves it (also shown on the Songs tab); a member scoped to Nova moves Nova's songs and gets 404 for Kilo's; a roster artist does `inbox → in_review` and every other move is 409 (the page then shows a plain chip); every move wrote `song.stage_changed` `{ from, to }` with `visibility = artist`, Nova and her Inbox, and refused moves wrote nothing. `label-org-workspace`, `-activity`, `-overview`, `-upload` and `-releases` re-run green beside it.
+
+**Not done / found, not fixed (decisions for the orchestrator):**
+- **04 W3's diagram has no way OUT of `on_hold`, `passed` or `archived`**, yet says passed demos "are regularly revisited". I added `on_hold → in_review`, `passed → in_review` and `archived → in_review` (the one reading beyond the diagram, a one-line edit in `STAGE_TRANSITIONS` and its test) rather than strand a song. Also by the diagram, `selected` leaves only by archiving (not passed or held), and `inbox → shortlisted` is not a move.
+- **`isReleased` is `countsAsOnRelease`, as the task says: a song on a DRAFT release counts** (the audio classifier's rule: "not cancelled"). Nothing renders a "Released" badge yet; when something does, decide whether a draft should read as released (04 says "a release that is delivered").
+- **The table does not consult release state.** A song on a delivered release can still be moved to passed, on hold or archived by a member with `catalog.write`; 04 W3 only says `released` is derived, not that it locks the stage. Whether a released song's stage should freeze is a product decision (`isReleased` is ready to gate it).
+- **A move refreshes its own control, not the rest of the page**: the workspace Overview's stage counts are stale until the page reloads (the control does not call `router.refresh()`; the tabs' jsdom tests render without an app router).
+- The song's artist is the first project's inbox / linked artist; a song in several projects of different artists files its event under one of them.
+- Bulk move (07 §2.4 A&R Inbox `S` / `H` / `P` keys and `BatchActionBar`) is not built: it belongs with the A&R Inbox screen, and each song there goes through this route.
+- The project page's song list (`/o/<slug>/projects/[id]`) still shows the stage as a read-only chip.
 
 ## Out of Scope
 Reviews (LABEL-25).

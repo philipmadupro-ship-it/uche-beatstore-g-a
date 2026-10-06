@@ -93,8 +93,12 @@ SELECT public.check_eq('organizations: no member writes',
 
 -- ── Roster artist R ──────────────────────────────────────────────────────
 SELECT set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-00000000000f"}', false);
-SELECT public.check_eq('roster artist sees no business-internal events',
-  (SELECT string_agg(verb, ',') FROM public.activity_events), 'song.created');
+-- 147 (LABEL-20) added the artist-scope predicate: the seeded song.created
+-- names no artist and no project, i.e. it is organization-level, and a roster
+-- artist (always scoped) no longer reads it. Before 147 this read 'song.created'.
+-- What a roster artist DOES read is asserted in 147_labelos_activity_feeds.sql.
+SELECT public.check_eq('roster artist sees no business-internal events, and no org-level one',
+  (SELECT coalesce(string_agg(verb, ','), '') FROM public.activity_events), '');
 SELECT public.check_eq('roster artist never holds contracts.read',
   public.has_org_cap('aaaaaaaa-0000-4000-8000-000000000000', 'contracts.read'), false);
 

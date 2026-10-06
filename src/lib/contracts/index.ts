@@ -21,6 +21,8 @@ import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
 import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
 import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers';
 import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
+import { CURSOR_RE } from '@/lib/labelos/activity-feed';
+import { SONG_STAGES } from '@/lib/labelos/song-stage';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -1002,6 +1004,42 @@ export const OrgAudioQuerySchema = z.object({
 });
 export type OrgAudioQuery = z.infer<typeof OrgAudioQuerySchema>;
 
+// ── Label OS activity feeds (LABEL-20) ───────────────────────────────────
+
+/** Newest events per page of a feed, and the most one page may ask for. */
+export const ORG_ACTIVITY_DEFAULT_LIMIT = 100;
+export const ORG_ACTIVITY_MAX_LIMIT = 200;
+
+/**
+ * GET /api/org/[orgId]/activity query. At most one of `artist` / `project` /
+ * `song` picks the feed (none = the org overview feed). `since` keeps events
+ * after an instant (the overview's "since your last visit"), `before` is the
+ * previous page's `nextBefore` — a `<created_at>_<id>` position, so events
+ * written in one transaction are never split by a page boundary. Instants are
+ * ISO with an offset; anything else is a 400, never a silent default. Empty
+ * values (`?before=`) are read as absent.
+ */
+export const OrgActivityQuerySchema = z
+  .object({
+    artist: z.string().uuid().optional(),
+    project: z.string().uuid().optional(),
+    song: z.string().uuid().optional(),
+    since: z.string().datetime({ offset: true }).optional(),
+    before: z.string().regex(CURSOR_RE, { message: 'before must be a cursor from a previous page' }).optional(),
+    limit: z.coerce.number().int().min(1).max(ORG_ACTIVITY_MAX_LIMIT).default(ORG_ACTIVITY_DEFAULT_LIMIT),
+  })
+  .refine((q) => [q.artist, q.project, q.song].filter(Boolean).length <= 1, { message: 'Ask for one of artist, project or song' });
+export type OrgActivityQuery = z.infer<typeof OrgActivityQuerySchema>;
+
+/**
+ * POST /api/org/[orgId]/overview/seen: the member has looked at the digest up
+ * to `through` (the `asOf` the digest was served with — not "now", or an
+ * event written while the page was open would be marked seen unseen). The
+ * user is always the session's; the body names no one.
+ */
+export const OrgOverviewSeenBodySchema = z.object({ through: z.string().datetime({ offset: true }) }).strict();
+export type OrgOverviewSeenBody = z.infer<typeof OrgOverviewSeenBodySchema>;
+
 // ── Label OS org upload (LABEL-14) ───────────────────────────────────────
 
 /**
@@ -1159,6 +1197,18 @@ export const OrgReleasePatchBodySchema = z.object({
   state: z.enum(['draft', 'cancelled']).optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type OrgReleasePatchBody = z.infer<typeof OrgReleasePatchBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/tracks/[id]/stage (LABEL-24). `to` is a stored stage
+ * (`released` is derived and is not accepted). `from` is the stage the caller
+ * was looking at: when it is no longer the song's stage the move is a 409,
+ * so a stale screen never overwrites someone else's decision.
+ */
+export const OrgSongStageBodySchema = z.object({
+  to: z.enum(SONG_STAGES),
+  from: z.enum(SONG_STAGES).optional(),
+}).strict();
+export type OrgSongStageBody = z.infer<typeof OrgSongStageBodySchema>;
 
 /** POST /api/org/[orgId]/releases/[releaseId]/items — appended at the end. No master = the song itself. */
 export const OrgReleaseItemCreateBodySchema = z.object({

@@ -27,17 +27,17 @@ import type { Capability } from './capabilities';
 import { orgAudioAllowed, type AudioCapability, type OrgAudioVariant } from './org-audio';
 import { orgRowAudioAllows, orgTrackReadClass, type InboundLink } from './org-read';
 import type { SongRecording } from './recording-kind';
-import { isSongStage, type SongStage } from './song-stage';
+import { SONG_STAGE_LABEL, isSongStage, type SongStage } from './song-stage';
 
 // ── Tabs ────────────────────────────────────────────────────────────────
 
 /**
  * The org workspace's tabs, in order. The producer's Beats / Messages /
  * Notes tabs are pitching and CRM surfaces with no org data behind them yet;
- * Activity arrives with the org feeds (LABEL-20); Credits & Rights and
- * Direction are LABEL-27/26 (Out of Scope here).
+ * Activity is the artist's feed (LABEL-20, `/api/org/[orgId]/activity?artist=`);
+ * Credits & Rights and Direction are LABEL-27/26 (Out of Scope here).
  */
-export const ORG_WORKSPACE_TABS = ['overview', 'projects', 'songs', 'releases', 'files'] as const;
+export const ORG_WORKSPACE_TABS = ['overview', 'projects', 'songs', 'releases', 'files', 'activity'] as const;
 export type OrgWorkspaceTab = (typeof ORG_WORKSPACE_TABS)[number];
 
 export const ORG_WORKSPACE_TAB_LABEL: Record<OrgWorkspaceTab, string> = {
@@ -46,6 +46,7 @@ export const ORG_WORKSPACE_TAB_LABEL: Record<OrgWorkspaceTab, string> = {
   songs: 'Songs',
   releases: 'Releases',
   files: 'Files',
+  activity: 'Activity',
 };
 
 /** `?tab=` → a tab; anything else is Overview. */
@@ -55,16 +56,7 @@ export function readOrgWorkspaceTab(raw: string | null | undefined): OrgWorkspac
 
 // ── Stage ───────────────────────────────────────────────────────────────
 
-export const SONG_STAGE_LABEL: Record<SongStage, string> = {
-  inbox: 'Inbox',
-  in_review: 'In review',
-  shortlisted: 'Shortlisted',
-  in_development: 'In development',
-  selected: 'Selected',
-  on_hold: 'On hold',
-  passed: 'Passed',
-  archived: 'Archived',
-};
+export { SONG_STAGE_LABEL };
 
 /** A label for a stored stage; an unknown value reads as itself, never as a stage it is not. */
 export function songStageLabel(stage: string | null | undefined): string {

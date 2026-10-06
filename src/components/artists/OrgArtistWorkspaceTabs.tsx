@@ -4,7 +4,7 @@
  * The artist workspace in an ORGANIZATION (LABEL-17, 07 §2.2, 17 R12) —
  * /o/<slug>/artists/<contactId>.
  *
- *   Overview │ Projects │ Songs │ Releases │ Files
+ *   Overview │ Projects │ Songs │ Releases │ Files │ Activity
  *
  * The producer's ArtistWorkspaceTabs in org context: the same tab strip and
  * URL state (`WorkspaceTabBar`, `useUrlTab`), the same card and row anatomy,
@@ -19,12 +19,13 @@ import Link from 'next/link';
 import { Layers, Lock, Music } from 'lucide-react';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { ProjectFilesSection } from '@/components/projects/ProjectFilesSection';
+import { ArtistActivityTab } from '@/components/labelos/ArtistActivityTab';
 import { OrgUploadPanel } from '@/components/labelos/OrgUploadPanel';
+import { SongStageControl } from '@/components/labelos/SongStageControl';
 import {
   ORG_WORKSPACE_TABS,
   ORG_WORKSPACE_TAB_LABEL,
   readOrgWorkspaceTab,
-  songStageLabel,
   stageCounts,
   type OrgWorkspaceTab,
 } from '@/lib/labelos/org-workspace';
@@ -49,10 +50,12 @@ export function RestrictedNote({ children, testId }: { children: React.ReactNode
   );
 }
 
-export function OrgArtistWorkspaceTabs({ orgId, orgSlug, workspace }: {
+export function OrgArtistWorkspaceTabs({ orgId, orgSlug, workspace, viewerId }: {
   orgId: string;
   orgSlug: string;
   workspace: OrgArtistWorkspace;
+  /** The signed-in member: their own activity lines read "You". */
+  viewerId?: string;
 }) {
   const [tab, go] = useUrlTab<OrgWorkspaceTab>(readTab, 'overview');
   const name = workspace.contact.name;
@@ -81,6 +84,7 @@ export function OrgArtistWorkspaceTabs({ orgId, orgSlug, workspace }: {
         {tab === 'songs' && <SongsTab orgId={orgId} workspace={workspace} base={base} />}
         {tab === 'releases' && <ReleasesTab workspace={workspace} base={base} />}
         {tab === 'files' && <FilesTab orgId={orgId} workspace={workspace} base={base} />}
+        {tab === 'activity' && <ArtistActivityTab orgId={orgId} orgSlug={orgSlug} contactId={workspace.contact.id} viewerId={viewerId} />}
       </div>
     </div>
   );
@@ -223,7 +227,7 @@ function SongsTab({ orgId, workspace, base }: { orgId: string; workspace: OrgArt
                 <Link href={`${base}/songs/${s.id}`} className="block truncate text-[13px] text-white/80 hover:text-white">{s.title ?? 'Untitled'}</Link>
                 <p className="truncate text-[11px] text-white/40">{s.projects.map((p) => p.name).join(' · ')}</p>
               </div>
-              <span className="shrink-0 rounded-lg border border-white/20 px-2 py-0.5 text-[11px] text-white/70">{songStageLabel(s.stage)}</span>
+              <SongStageControl orgId={orgId} songId={s.id} stage={s.stage} testId={`ows-song-stage-${s.id}`} />
             </li>
           ))}
         </ul>
