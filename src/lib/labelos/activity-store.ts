@@ -237,6 +237,7 @@ async function resolveNames(
   const actors: Record<string, string> = {};
   const artists: Record<string, string> = {};
   const releases: Record<string, string> = {};
+  const songs: Record<string, string> = {};
 
   const actorIds = unique(events.map((e) => e.actorId));
   const identities = await memberIdentities(admin as unknown as IdentityAdmin, orgId, actorIds, { withEmail: false });
@@ -278,7 +279,12 @@ async function resolveNames(
     }
   }
 
-  return { names: { actors, artists, releases }, projectArtists };
+  // Song titles, for the stage moves. An event the member sees names a song they may read (the feed already counted the rest as restricted), so the title is theirs to see.
+  const songIds = unique(events.filter((e) => e.verb === 'song.stage_changed').map((e) => e.songId ?? e.subjectId?.toLowerCase()));
+  const songReads = await Promise.all(chunks(songIds).map(async (part) => rows<{ id: string; title: string | null }>(await admin.from('tracks').select('id, title').eq('org_id', orgId).in('id', part), 'song read')));
+  for (const list of songReads) for (const t of list) if (t.title) songs[t.id.toLowerCase()] = t.title;
+
+  return { names: { actors, artists, releases, songs }, projectArtists };
 }
 
 /** The Overview's digest: events since the member's last visit (at most 30 days back), and what it was measured from. */

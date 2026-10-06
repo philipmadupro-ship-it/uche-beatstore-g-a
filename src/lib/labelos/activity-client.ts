@@ -44,6 +44,7 @@ export function appendPage(prev: FeedPage, next: FeedPage): FeedPage {
       actors: { ...prev.names.actors, ...next.names.actors },
       artists: { ...prev.names.artists, ...next.names.artists },
       releases: { ...prev.names.releases, ...next.names.releases },
+      ...(prev.names.songs || next.names.songs ? { songs: { ...prev.names.songs, ...next.names.songs } } : {}),
     },
     projectArtists: { ...prev.projectArtists, ...next.projectArtists },
     restricted: prev.restricted + next.restricted,

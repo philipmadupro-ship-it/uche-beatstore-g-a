@@ -27,7 +27,7 @@ import type { Capability } from './capabilities';
 import { orgAudioAllowed, type AudioCapability, type OrgAudioVariant } from './org-audio';
 import { orgRowAudioAllows, orgTrackReadClass, type InboundLink } from './org-read';
 import type { SongRecording } from './recording-kind';
-import { isSongStage, type SongStage } from './song-stage';
+import { SONG_STAGE_LABEL, isSongStage, type SongStage } from './song-stage';
 
 // ── Tabs ────────────────────────────────────────────────────────────────
 
@@ -56,16 +56,7 @@ export function readOrgWorkspaceTab(raw: string | null | undefined): OrgWorkspac
 
 // ── Stage ───────────────────────────────────────────────────────────────
 
-export const SONG_STAGE_LABEL: Record<SongStage, string> = {
-  inbox: 'Inbox',
-  in_review: 'In review',
-  shortlisted: 'Shortlisted',
-  in_development: 'In development',
-  selected: 'Selected',
-  on_hold: 'On hold',
-  passed: 'Passed',
-  archived: 'Archived',
-};
+export { SONG_STAGE_LABEL };
 
 /** A label for a stored stage; an unknown value reads as itself, never as a stage it is not. */
 export function songStageLabel(stage: string | null | undefined): string {

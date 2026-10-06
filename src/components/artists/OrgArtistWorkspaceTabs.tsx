@@ -21,11 +21,11 @@ import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { ProjectFilesSection } from '@/components/projects/ProjectFilesSection';
 import { ArtistActivityTab } from '@/components/labelos/ArtistActivityTab';
 import { OrgUploadPanel } from '@/components/labelos/OrgUploadPanel';
+import { SongStageControl } from '@/components/labelos/SongStageControl';
 import {
   ORG_WORKSPACE_TABS,
   ORG_WORKSPACE_TAB_LABEL,
   readOrgWorkspaceTab,
-  songStageLabel,
   stageCounts,
   type OrgWorkspaceTab,
 } from '@/lib/labelos/org-workspace';
@@ -227,7 +227,7 @@ function SongsTab({ orgId, workspace, base }: { orgId: string; workspace: OrgArt
                 <Link href={`${base}/songs/${s.id}`} className="block truncate text-[13px] text-white/80 hover:text-white">{s.title ?? 'Untitled'}</Link>
                 <p className="truncate text-[11px] text-white/40">{s.projects.map((p) => p.name).join(' · ')}</p>
               </div>
-              <span className="shrink-0 rounded-lg border border-white/20 px-2 py-0.5 text-[11px] text-white/70">{songStageLabel(s.stage)}</span>
+              <SongStageControl orgId={orgId} songId={s.id} stage={s.stage} testId={`ows-song-stage-${s.id}`} />
             </li>
           ))}
         </ul>
