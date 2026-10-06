@@ -1320,7 +1320,15 @@ Flag off.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-14, LABEL-19, D3
-**Status:** In Progress (branch label-os/LABEL-21; runs in parallel with LABEL-20, migration 148 reserved)
+**Status:** Done (PR #84, squash 72d0c0c, 2026-10-06; migration 148, not applied — apply at final merge, after 146)
+
+**Orchestrator decisions on #84 (accepted as implemented):**
+- Gate: CI green on the latest commit (build-and-test, e2e, secret-scan); first CI run failed `type-scale.test.ts` (`text-[12px]` in `ProjectMembersPanel.tsx`), fixed by the orchestrator (11px) because the session had hit its usage limit. Diff is Label OS only (no producer route, no `pending.sql`).
+- Acceptance verified by: route matrix `external-matrix.test.ts` (every org handler × 4 roles + stranger + signed-out), two-account real-DB e2e (4/4), RLS policy-state test, `db:local:check` (148 check + rollback).
+- Streaming `variant=full` counts as "listen" (a viewer without downloads can capture a stream, as on token shares). Accepted; capture-proof listening needs a lossy full-length derivative (later).
+- D4 audio classes do not apply to external members: the shared project is what is shared.
+- Carries: comments → LABEL-22; propose-own-credit → LABEL-27; expiry control in the Members panel and an entry point for project-only users beyond the emailed link / switcher are not built.
+- Still open before the final merge (unchanged): producer routes treating `user_id IS NULL` as own; R-08 guard cost.
 
 ## Objective
 Invite a person with their own account into one org project as viewer, commenter, contributor or editor.
@@ -1360,6 +1368,32 @@ The Producer X flow (W4) end to end; revoked → 403.
 ## Carried from LABEL-13 (#69)
 - The org audio route answers 404 to anyone who is not an org member. Wire `externalCan` into `GET /api/org/[orgId]/audio/[trackId]` (recordings in their project only) and record `recording.downloaded` for external members, as LABEL-13's spec intended.
 
+**Built (for the orchestrator's merge gate):**
+- **Migration 148 (not applied).** One table, `project_members` (role `viewer | commenter | contributor | editor`, `allow_downloads`, `expires_at`), RLS on with two SELECT policies and no write grant; `can_see_project(project)`; `labelos_user_has_cap`; three audit functions (`labelos_audit_project_invitation_create`, `_project_member_update`, `_project_member_remove`) atomic with their `activity_events` row; and `CREATE OR REPLACE` of `labelos_accept_invitation` (139's — a project invitation writes `project_members`, never `org_members`, records `project.member_added`, and needs the inviter to STILL hold `share.external`) and of `labelos_audit_invitation_create` (146's — its pending lookup ignores project invitations). Local check + rollback in `supabase/local/checks` / `supabase/rollback`.
+- **No policy on any other table gives an external member a read path** (`rls-final-state.test.ts` asserts every pre-148 policy is byte-identical and none mentions `project_members` / `can_see_project`). Their material is read through service-role routes under `externalCan` (06 §2.6), cell for cell.
+- **Access helpers** (`lib/auth/org-access`): `requireExternalProject` / `requireExternalTrack` (404 for everything but a live membership of THAT project, read on every request), `requireProjectActor` / `requireTrackActor` (an org member keeps exactly the org answer; else a live external membership), `requireUploadActor`, `myExternalProjects`, `projectMemberRows`. `lib/labelos/project-members.ts` (pure): liveness, listening vs downloading, the upload plan, invitation and change validation.
+- **Routes.** `GET /api/org/shared`; `GET /api/org` fills `shared`; `GET …/projects/[id]` serves an external member a shared view built field by field (`lib/labelos/shared-project`: no stored reference, stage, artist id or member id); `…/projects/[id]/members` (GET, POST), `…/members/[userId]` (PATCH, DELETE) and `…/invitations/[invitationId]` (DELETE), all behind `share.external` on the project; `/api/org/join` previews and accepts project invitations. **Audio** (`GET …/audio/[trackId]`): recordings of their project only; stream = `listen`; `download=1`, the WAV and a stem = `download_masters` (viewer / commenter only with `allow_downloads`); **every handed-over file is a `recording.downloaded` audit event written BEFORE the first byte** (if it cannot be written the file is not served; HEAD records nothing). **Upload wrapper**: a contributor / editor adds a NEW VERSION of a song in their own project, landing in THAT project only (never the song's other projects), credited to them (`tracks.created_by`, D3); new songs for an artist and master / instrumental / demo material are refused. Project invitations are listed and revoked on their project, not on the org members page.
+- **UI.** The members panel on `/o/<slug>/projects/<id>` (invite, role, downloads, expiry-aware removal with a confirmation, revoke); `/shared` and `/shared/<project>` in their own `(label)/shared` layout with no org chrome (player + uploads tray + the switcher, whose "Shared with me" list is now filled); the join page names the project and the role.
+- **The matrix.** `src/app/api/org/external-matrix.test.ts` walks EVERY handler under `src/app/api/org` as each of the four roles (with the member's own project's ids in every path param), a stranger and a signed-out caller: all 403/404/401 except the thirteen handlers (ten route files) named, with reasons, in `lib/labelos/external-routes.ts`. A new org route that forgets to refuse an external member fails it (proved by mutating one).
+- **A proxy fix that mattered:** `src/proxy.ts`'s matcher excluded any path starting with `share`, which also excluded `/shared` — it would have skipped the flag, the session refresh and the membership gate. `share` is now a whole segment (`proxy-matcher.test.ts`).
+
+**Verification:** `tsc`, `eslint`, `vitest`, `next build`, `npm run db:local:check` (148's check: RLS and grants as `anon` / `authenticated` / `service_role`; an external member reads only their own row and none of the project's tracks, files, comments, contacts, activity or org rows; `can_see_project` for an external member, a whole-org member, an artists-scoped member, a stranger and anon, plus expiry and a soft-deleted org; each audit function rolls its mutation back when its event cannot be written; accept for every refusal (mismatch, unverified, revoked, expired, inviter without `share.external`, used) and the happy path with no `org_members` row; the org path of accept still 139's; D3), unit + route tests, the parity test `org-access-project-parity.test.ts` (every user × every project: the TS walks equal `can_see_project`), and **`e2e/label-org-external-members.spec.ts` with two accounts on the real-database stack** (registered in `e2e:real-db`): the producer invites X from the members panel, X signs in and accepts, sees the project and not the org (404 on `/o/<slug>`, no org link), is refused on ~15 org routes, listens, downloads (one audit event), uploads a version (lands in P1 only, credited, `recording.uploaded`), is demoted to Viewer (download and upload 403 on the next request), removed ("revoked → 403"; the upload stays), an expired membership, a withdrawn invitation, and a signed-out caller with a share token reaches nothing.
+
+**Not done:**
+- **Comments and "propose own credit"** are LABEL-22 / LABEL-27. `externalCan('comment' | 'propose_own_credit')` is ready; the shared page says comments arrive later for roles that hold them, so the page never promises a control it lacks. LABEL-22's org comments route must use `requireProjectActor` and `externalCan('comment')`, and portal / share views keep hiding `internal` rows.
+- **`edit_metadata` (editor)** has no org song PATCH route to wire (no org member can edit song metadata yet either); `externalCan('edit_metadata')` is ready for the route that adds it.
+- Project **files** (`project_assets`) are not shown to external members: their sensitivity classes are LABEL-15's and §2.6 lists none of them.
+- A person whose ONLY membership is a project reaches `/shared` through the emailed link, the switcher or a bookmark; `/login` still sends a non-producer to the buyer account (no change to store behaviour here).
+- The external member's role summary (`projectRoleSummary`) states the §2.6 permission, which is wider than what is built today (see above).
+- A membership has `expires_at` in the table and every check, but no screen sets it yet (the PATCH route takes it; the panel does not offer it).
+- **Decisions a reviewer may want to revisit:**
+  - **Streaming is `listen`, handing the file over is `download_masters`** (06 §2.6, W4 step 4). `variant=full` is the player's stream of the master, so a viewer without `allow_downloads` can still capture a stream, exactly as on a token share page with downloads off; what is blocked and audited is `download=1`, the WAV and the stems. A listen-only role that cannot capture a master needs a lossy full-length private derivative — an infrastructure choice, not made here.
+  - **The audit is written BEFORE the first byte, and once per request.** A failed stream after it still leaves the event (it overstates, never understates), and the ranged requests a download manager makes each leave one. Deduplicating by `Range` would let a client that starts at byte 500 take most of the file unrecorded.
+  - **D4's audio classes do not apply to an external member.** The project is what was shared: they can hear every recording in it, including working material and unclassified files that an org member without `audio.working` / `audio.finished` could not. §2.6 has no "finished only" column.
+  - **A new invitation renews an EXPIRED membership** (invited role and downloads, expiry cleared); an invitation never changes a live one. Nothing in the panel sets an expiry yet.
+  - `labelos_user_has_cap` asks the one `has_org_cap` about the inviter by setting the transaction's JWT claims for the call and putting them back, rather than copying 136's capability tables into a second function; the cost is that an unset claim reads back as `'{}'` for the rest of the transaction (`auth.uid()` is NULL either way).
+- **Carried, not touched:** the producer routes `api/activity`, `api/tracks/[id]/similar`, `api/tracks/tags/bulk`, `api/tracks/tags` still treat `user_id IS NULL` as the producer's own; the R-08 guard cost on member reads of org rows stands.
+
 ## Out of Scope
 Credits proposal UI (LABEL-27).
 
@@ -1375,7 +1409,7 @@ Drop the table; flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-21
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-22; runs in parallel with LABEL-25, migration 150 reserved)
 
 ## Objective
 Threaded, region-pinned comments for org members, by extending `project_comments` (`17` R5). **No new `comments` table.**
@@ -1473,7 +1507,18 @@ Drop the table and column.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-20
-**Status:** In Progress (branch label-os/LABEL-24; no migration)
+**Status:** Done (2026-10-06) — PR #83. No migration. `POST /api/org/[orgId]/tracks/[id]/stage` (song tracks only, `catalog.write`, compare-and-set, illegal move → 409, records `song.stage_changed` `{ from, to }`), the pure transition table in `lib/labelos/song-stage.ts`, `isReleased` derived from `countsAsOnRelease`, a digest line ("Sam moved Midnight to Selected", collapsed per actor per day) and `SongStageControl` on the org song view and the artist workspace.
+
+**Orchestrator decisions on #83 (accepted as implemented):**
+- **Exits from `on_hold`, `passed` and `archived`:** 04 W3's diagram has none, but says passed demos "are regularly revisited". `on_hold | passed | archived → in_review` is allowed (one line in `STAGE_TRANSITIONS` plus its test), so a song is never stranded. `selected` leaves only by archiving, as in the diagram.
+- A roster artist may move their own songs only `inbox → in_review`.
+- `isReleased` is `countsAsOnRelease`, so a song on a draft release counts. Nothing renders a "Released" badge yet.
+
+**Open (not blocking, for later tasks):**
+- The table does not consult release state: a song on a delivered release can still be passed, held or archived.
+- A stage move refreshes its own control only; the workspace Overview stage counts are stale until reload.
+- An event files under the song's first project (Inbox first) and that project's artist, so a song in several artists' projects is visible in one artist's scoped feed.
+- Bulk move (the A&R Inbox keys and `BatchActionBar`) and the project page's read-only stage chip belong to LABEL-25's inbox screen; each song there goes through this route.
 
 ## Objective
 Validated stage transitions with history.
@@ -1537,7 +1582,7 @@ Revert.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-24
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-25; migration 149 reserved)
 
 ## Objective
 Per-reviewer ratings and verdicts, and a fast keyboard review queue.
@@ -1586,7 +1631,7 @@ Discovery analytics.
 **Not done / found, not fixed:**
 - **Decision for the owner: the policy gates reads on `review.comment` (+ scope), narrower than the task's `catalog.read`.** With `catalog.read` alone, a whole-org marketing or legal member could read every rating and note of a working demo straight from PostgREST with their own JWT (the routes' D4 row rule 404s them; the policy would not). `review.comment` is held by owner/admin, A&R, project manager, artist manager and the roster artist, so everyone D5 and 06 name still reads; marketing, legal and engineers read no review (GET answers 403 too). Loosening it to `catalog.read` is one word in the policy and the check.
 - A song in projects of two artists (a project linking both) is readable by both artists' reviews, the same rule as `can_see_org_track`.
-- The external-project-member check (`song_reviews` read as a LABEL-21 member) is deferred to LABEL-21's own migration: they are not org members, so the policy gives them no path, but the test needs `project_members` to exist.
+- The external-project-member check is in `149_*.sql` (LABEL-21 merged meanwhile): an editor on Nova's project with no org membership reads no review, even of the song in their project. The inbox / reviews ROUTES are org-member routes (`requireObjectAccess` needs an `org_members` row), so they give such a member nothing either.
 - Tags and "assign" bulk actions from 07 §2.4 are not built (the task names move stage); the song page still has no review panel (the inbox lists them).
 - `scripts/local-db/seed.sql` and `jwt.mjs` gain two signed-in accounts (artist-a / artist-b) for specs that need two roster artists of one label.
 - `src/lib/labelos/mocks/memory-db.ts`: `upsert` now honours `onConflict` (merges into the row it names); before, it only inserted.

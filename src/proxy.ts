@@ -216,7 +216,10 @@ export const config = {
   // Run on /api too — without it, route handlers see expired cookies.
   // Skip Next internals, static assets, and the public /share/* listener
   // pages (which don't need auth and shouldn't pay the refresh cost).
+  // `share` must be a whole segment: as a bare prefix it also skipped
+  // `/shared` (LABEL-21, "Shared with me"), which needs the flag check, the
+  // session refresh and the membership gate like every Label OS page.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|share|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|share(?:/|$)|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)',
   ],
 };

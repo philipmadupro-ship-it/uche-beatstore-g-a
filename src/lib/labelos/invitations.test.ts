@@ -139,11 +139,15 @@ describe('interpretAcceptResult', () => {
   const ORG = '22222222-2222-4222-8222-222222222222';
 
   it('joined', () => {
-    expect(interpretAcceptResult({ status: 'joined', org_id: ORG }, null)).toEqual({ ok: true, orgId: ORG, alreadyMember: false });
+    expect(interpretAcceptResult({ status: 'joined', org_id: ORG }, null)).toEqual({ ok: true, orgId: ORG, projectId: null, alreadyMember: false });
   });
 
   it('accepting twice is idempotent', () => {
-    expect(interpretAcceptResult({ status: 'already_member', org_id: ORG }, null)).toEqual({ ok: true, orgId: ORG, alreadyMember: true });
+    expect(interpretAcceptResult({ status: 'already_member', org_id: ORG }, null)).toEqual({ ok: true, orgId: ORG, projectId: null, alreadyMember: true });
+    // A project invitation answers with the project (LABEL-21).
+    const PROJECT = '99999999-9999-4999-8999-999999999999';
+    expect(interpretAcceptResult({ status: 'joined', org_id: ORG, project_id: PROJECT }, null)).toEqual({ ok: true, orgId: ORG, projectId: PROJECT, alreadyMember: false });
+    expect(interpretAcceptResult({ status: 'joined', org_id: ORG, project_id: 'nope' }, null)).toMatchObject({ projectId: null });
   });
 
   it.each([

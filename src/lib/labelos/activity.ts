@@ -55,6 +55,7 @@ export const VERBS = [
   // Projects + sharing
   'project.created',
   'project.member_added',
+  'project.member_changed',
   'project.member_removed',
   'share.created',
   'share.revoked',
@@ -100,6 +101,7 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'invitation.created',
   'invitation.revoked',
   'project.member_added',
+  'project.member_changed',
   'project.member_removed',
   'share.created',
   'share.revoked',
@@ -153,6 +155,7 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'contact.deleted': 'internal',
   'project.created': 'artist',
   'project.member_added': 'internal',
+  'project.member_changed': 'internal',
   'project.member_removed': 'internal',
   'share.created': 'internal',
   'share.revoked': 'internal',

@@ -51,10 +51,10 @@ describe('isLabelOsApiPath', () => {
 });
 
 describe('isLabelOsPagePath', () => {
-  it.each(['/o', '/o/', '/o/acme', '/o/acme/artists/1'])('is the namespace: %s', (p) =>
+  it.each(['/o', '/o/', '/o/acme', '/o/acme/artists/1', '/shared', '/shared/', '/shared/9f1c'])('is the namespace: %s', (p) =>
     expect(isLabelOsPagePath(p)).toBe(true),
   );
-  it.each(['/offline', '/orders', '/org', '/oo/x', '/store/orders', '/', '/api/org'])('is not: %s', (p) =>
+  it.each(['/offline', '/orders', '/org', '/oo/x', '/store/orders', '/', '/api/org', '/share/abc', '/shares', '/sharedx', '/projects/shared', '/api/shared'])('is not: %s', (p) =>
     expect(isLabelOsPagePath(p)).toBe(false),
   );
 });

@@ -28,7 +28,7 @@
     "claude:storefront": "bash scripts/claude/commerce-storefront.sh",
     "claude:qa": "bash scripts/claude/qa-test.sh",
     "claude:auto": "bash scripts/claude/task-router.sh",
-    "e2e:real-db": "E2E_REAL_DB=1 playwright test e2e/artist-workspace.spec.ts e2e/artist-workspace-phase2.spec.ts e2e/artist-workspace-phase3.spec.ts e2e/linked-material.spec.ts e2e/contact-roles.spec.ts e2e/portal-roles.spec.ts e2e/label-org-invitations.spec.ts e2e/label-org-members.spec.ts e2e/label-org-roster.spec.ts e2e/label-org-upload.spec.ts e2e/label-org-files.spec.ts e2e/label-org-releases.spec.ts e2e/label-org-workspace.spec.ts e2e/label-org-overview.spec.ts e2e/label-org-audit.spec.ts e2e/label-org-activity.spec.ts e2e/label-org-song-stage.spec.ts e2e/label-org-song-reviews.spec.ts"
+    "e2e:real-db": "E2E_REAL_DB=1 playwright test e2e/artist-workspace.spec.ts e2e/artist-workspace-phase2.spec.ts e2e/artist-workspace-phase3.spec.ts e2e/linked-material.spec.ts e2e/contact-roles.spec.ts e2e/portal-roles.spec.ts e2e/label-org-invitations.spec.ts e2e/label-org-members.spec.ts e2e/label-org-roster.spec.ts e2e/label-org-upload.spec.ts e2e/label-org-files.spec.ts e2e/label-org-releases.spec.ts e2e/label-org-workspace.spec.ts e2e/label-org-overview.spec.ts e2e/label-org-audit.spec.ts e2e/label-org-activity.spec.ts e2e/label-org-song-stage.spec.ts e2e/label-org-external-members.spec.ts e2e/label-org-song-reviews.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1022.0",

@@ -4,7 +4,7 @@
 -- contact_track_states, which is the RECIPIENT's decision on a beat).
 --
 -- LABEL OS — NOT APPLIED. Apply at the final merge of the Label OS branch
--- into main, after 147 and 148. Never part of supabase/apply/pending.sql.
+-- into main, after 148. Never part of supabase/apply/pending.sql.
 --
 -- One new table, org-only (no user_id, the 139/142/143/144 rule):
 --

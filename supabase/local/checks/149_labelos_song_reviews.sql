@@ -17,8 +17,8 @@
 --     org and its identity fixed;
 --   - the policy's set-based scope (labelos_scoped_tracks) agrees with the
 --     per-track helper it replaces (can_see_org_track).
---   (An external project member, LABEL-21, is not an org member and so has no
---   path to the table; that check lands with LABEL-21's own migration.)
+--   - an external project member (LABEL-21, 148: invited to a project, not an
+--     org member) reads no review, even of a song in their own project.
 --
 -- Cast (seed: producer P):
 --   label L : owner O; AR (A&R, whole org); SC (A&R scoped to artist C2);
@@ -37,6 +37,7 @@
 \set X    '''a1490000-0000-4000-8000-000000000006'''
 \set OUT  '''a1490000-0000-4000-8000-000000000007'''
 \set MK   '''a1490000-0000-4000-8000-000000000008'''
+\set EXT  '''a1490000-0000-4000-8000-000000000009'''
 \set L    '''b1490000-0000-4000-8000-000000000001'''
 \set L2   '''b1490000-0000-4000-8000-000000000002'''
 \set C1   '''c1490000-0000-4000-8000-0000000000c1'''
@@ -55,7 +56,7 @@
 
 INSERT INTO auth.users (id, email) VALUES
   (:O, 'o149@local.test'), (:AR, 'ar149@local.test'), (:SC, 'sc149@local.test'),
-  (:ART, 'art149@local.test'), (:ART2, 'art2149@local.test'), (:MK, 'mk149@local.test'), (:X, 'x149@local.test'), (:OUT, 'out149@local.test');
+  (:ART, 'art149@local.test'), (:ART2, 'art2149@local.test'), (:MK, 'mk149@local.test'), (:EXT, 'ext149@local.test'), (:X, 'x149@local.test'), (:OUT, 'out149@local.test');
 INSERT INTO public.organizations (id, name, slug, kind, created_by) VALUES
   (:L, 'Label L', 'label-l-149', 'label', :O),
   (:L2, 'Label L2', 'label-l2-149', 'label', :X);
@@ -79,6 +80,9 @@ INSERT INTO public.projects (id, user_id, org_id, name, inbox_for_contact_id) VA
   (:LP3, NULL, :L, 'Unassigned', NULL),
   (:XP1, NULL, :L2, 'L2 project', NULL);
 INSERT INTO public.project_contacts (user_id, project_id, contact_id, role) VALUES (NULL, :LP1, :C1, 'artist');
+-- An external project member (LABEL-21, 148): invited to Nova's project, NOT a member of the org.
+INSERT INTO public.project_members (org_id, project_id, user_id, role, allow_downloads, invited_by) VALUES
+  (:L, :LP1, :EXT, 'editor', true, :O);
 INSERT INTO public.tracks (id, user_id, org_id, created_by, title, type, audio_url, song_stage) VALUES
   (:S1, NULL, :L, :AR, 'Nova demo', 'song', 'r2://private/orgs/l/s1', 'in_review'),
   (:S2, NULL, :L, :AR, 'Kilo demo', 'song', 'r2://private/orgs/l/s2', 'inbox'),
@@ -232,6 +236,12 @@ SELECT public.check_eq('marketing (whole org, catalog.read, no review ability) r
   public.visible_reviews(), '');
 SELECT public.check_eq('… although it does hold catalog.read: the gate is the review ability, not a broken scope',
   public.has_org_cap(:L, 'catalog.read') AND NOT public.has_org_cap(:L, 'review.comment'), true);
+
+SELECT public.as_user(:EXT);
+SELECT public.check_eq('an external project member (editor on Nova''s project, no org membership) reads no review — not even of the song in their project',
+  public.visible_reviews(), '');
+SELECT public.check_eq('… and the song in their project is S1, so the gate is the policy, not an empty project',
+  (SELECT count(*) FROM public.project_members WHERE user_id = :EXT AND project_id = :LP1), 1::bigint);
 
 SELECT public.as_user(:X);
 SELECT public.check_eq('L2''s owner: only L2''s review', public.visible_reviews(), 'XS1/X');

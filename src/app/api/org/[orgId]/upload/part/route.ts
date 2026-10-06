@@ -6,8 +6,8 @@
  * caller, who still holds `catalog.write` here (../access).
  */
 import { NextRequest } from 'next/server';
-import { requireOrgCapability } from '@/lib/auth/org-access';
 import { handlePartConfirm, handlePartProxy, handlePartSign, type AuthorizeUploadSession } from '@/lib/upload/part-route';
+import { requireUploadActor } from '@/lib/auth/org-access';
 import { orgSessionAuthorizer } from '../access';
 
 export const runtime = 'nodejs';
@@ -19,7 +19,7 @@ async function withGate(
   { params }: Params,
   handle: (authorize: AuthorizeUploadSession) => Promise<Response>,
 ): Promise<Response> {
-  const access = await requireOrgCapability((await params).orgId, 'catalog.write');
+  const access = await requireUploadActor((await params).orgId);
   if (!access.ok) return access.res;
   return handle(orgSessionAuthorizer(access));
 }

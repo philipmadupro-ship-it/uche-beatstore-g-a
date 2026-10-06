@@ -172,7 +172,8 @@ export type AcceptErrorCode =
   | 'failed';
 
 export type AcceptOutcome =
-  | { ok: true; orgId: string; alreadyMember: boolean }
+  /** `projectId` is set for a PROJECT invitation (LABEL-21): the person joined that one project, not the org. */
+  | { ok: true; orgId: string; projectId: string | null; alreadyMember: boolean }
   | { ok: false; status: 403 | 404 | 409 | 410 | 500 | 503; code: AcceptErrorCode; message: string };
 
 /**
@@ -190,7 +191,8 @@ const ACCEPT_ERRORS: Readonly<Record<Exclude<AcceptErrorCode, 'schema_missing' |
     status: 403,
     message: 'Confirm your email address first: open the confirmation email, then accept again.',
   },
-  // Also: the inviter no longer holds members.manage in the org (migration 138).
+  // Also: the inviter no longer holds members.manage (an org invitation, 138) or
+  // share.external (a project invitation, 148) in the org.
   revoked: { status: 410, message: 'This invitation was withdrawn' },
   expired: { status: 410, message: 'This invitation has expired. Ask for a new one.' },
   used: { status: 409, message: 'This invitation has already been used' },
@@ -216,7 +218,8 @@ export function interpretAcceptResult(data: unknown, error: RpcError): AcceptOut
       return { ok: false, code, ...ACCEPT_ERRORS[code] };
     }
     if ((d.status === 'joined' || d.status === 'already_member') && typeof d.org_id === 'string' && isUUID(d.org_id)) {
-      return { ok: true, orgId: d.org_id, alreadyMember: d.status === 'already_member' };
+      const projectId = typeof d.project_id === 'string' && isUUID(d.project_id) ? d.project_id : null;
+      return { ok: true, orgId: d.org_id, projectId, alreadyMember: d.status === 'already_member' };
     }
   }
   return { ok: false, status: 500, code: 'failed', message: 'Could not accept the invitation' };
@@ -267,11 +270,51 @@ export function buildInvitationEmail(opts: {
   return { subject, html, text };
 }
 
+/**
+ * The project invitation email (LABEL-21): names the project and the role,
+ * and says plainly what the link opens — one project, not the organization.
+ * Same look as `buildInvitationEmail`; the link works once and expires in 7 days.
+ */
+export function buildProjectInvitationEmail(opts: {
+  orgName: string;
+  projectName: string;
+  inviterName: string | null;
+  /** The §2.6 role label ("Contributor"). */
+  roleLabel: string;
+  url: string;
+}): { subject: string; html: string; text: string } {
+  const subject = opts.inviterName
+    ? `${opts.inviterName} shared "${opts.projectName}" with you`
+    : `"${opts.projectName}" was shared with you`;
+  const org = escapeHtml(opts.orgName);
+  const project = escapeHtml(opts.projectName);
+  const lead = opts.inviterName ? `${escapeHtml(opts.inviterName)} from ${org} shared` : `${org} shared`;
+  const url = escapeHtml(opts.url);
+  const html = `<div style="background-color:#090907;color:#EEE8DD;padding:40px;font-family:Helvetica,Arial,sans-serif;">
+  <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#AAA294;">Shared with you</p>
+  <h1 style="margin:0 0 16px;font-size:22px;color:#FFFFFF;">${project}</h1>
+  <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#EEE8DD;">${lead} this project with you as <strong style="color:#FFFFFF;">${escapeHtml(opts.roleLabel)}</strong>. You will see this project only, not the rest of ${org}.</p>
+  <p style="margin:0 0 24px;font-size:13px;line-height:1.6;color:#AAA294;">Sign in with this email address to open it. The link works once and expires in 7 days.</p>
+  <a href="${url}" style="background-color:#FFFFFF;color:#090907;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">Open the project</a>
+  <p style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#AAA294;">If you were not expecting this, ignore it. Nothing happens unless you accept.</p>
+</div>`;
+  const text = [
+    `${opts.inviterName ? `${opts.inviterName} from ${opts.orgName} shared` : `${opts.orgName} shared`} "${opts.projectName}" with you as ${opts.roleLabel}. You will see this project only.`,
+    '',
+    `Open: ${opts.url}`,
+    '',
+    'Sign in with this email address to open it. The link works once and expires in 7 days.',
+  ].join('\n');
+  return { subject, html, text };
+}
+
 // ── The join page ───────────────────────────────────────────────────────
 
 /** What `POST /api/org/join { action: 'preview' }` answers. */
 export type InvitationPreview = {
   org: { name: string; kind: string; slug?: string };
+  /** Set for a PROJECT invitation (LABEL-21): the project the person is being admitted to, and nothing else. */
+  project?: { name: string; role: string; allowDownloads: boolean; /** Only for someone who already belongs to the project. */ href?: string } | null;
   role: string;
   functions: string[];
   state: InvitationState;

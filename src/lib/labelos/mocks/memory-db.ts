@@ -6,7 +6,8 @@
  * the test answer it, a wrong or missing filter here returns the wrong rows,
  * so cross-org and out-of-scope leaks show up as failing assertions.
  *
- * Supports what the Label OS routes use: select (column lists, one
+ * Supports what the Label OS routes use (gt / gte / lt / lte compare as strings,
+ * which orders ISO timestamps correctly): select (column lists, one
  * `table!inner(cols)` embed resolved through `org_id` for organizations,
  * else `<table singular>_id`), eq, in,
  * is, gt / gte / lt / lte (string order, which is ISO-timestamp order), `or` (the
