@@ -1459,7 +1459,13 @@ Drop the columns.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-19
-**Status:** In Progress (branch label-os/LABEL-23; runs in parallel with LABEL-22, migration 151 reserved)
+**Status:** Done (PR #90, squash e71f419, 2026-10-06; migration 151, not applied — apply at final merge, after 149 and 150)
+
+**Orchestrator decisions on #90 (accepted as implemented):**
+- Gate: CI green on the latest commit (build-and-test, e2e, secret-scan); diff is Label OS plus the intended producer-route touch (`/api/notifications` now reads `org_id IS NULL`, with a fallback before 151) and the org bell in `TopBar`.
+- Acceptance verified by: route tests (exactly one notification row, to the assignee), real-DB e2e `label-org-tasks.spec.ts` (5/5, each person's own JWT via PostgREST), `db:local:check` (151 check, hashed subplans only per R-08, rollbacks), source-scan test forbidding `notifyDirectAsk` outside the task routes.
+- `label-org-members` test 3 changed from "no bell" to "the org's own bell" for a non-producer member — intended by this task.
+- Carries: the Label OS paragraph of CLAUDE.md still said a non-producer member's shell has no bell (folded in by the orchestrator); releases have no page, so a release task opens the Overview; `invitation` / `approval_requested` / `mention` / `credit_named_you` are in the closed union but nothing writes them yet (their own tasks do).
 
 ## Objective
 Assignable tasks on artist/project/song/release, and notifications only for direct asks.
