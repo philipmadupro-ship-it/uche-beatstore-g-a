@@ -1409,7 +1409,7 @@ Drop the table; flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-21
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-22; runs in parallel with LABEL-25, migration 150 reserved)
 
 ## Objective
 Threaded, region-pinned comments for org members, by extending `project_comments` (`17` R5). **No new `comments` table.**
