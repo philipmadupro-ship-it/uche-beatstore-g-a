@@ -1459,7 +1459,7 @@ Drop the columns.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-19
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-23; runs in parallel with LABEL-22, migration 151 reserved)
 
 ## Objective
 Assignable tasks on artist/project/song/release, and notifications only for direct asks.
@@ -1582,7 +1582,14 @@ Revert.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-24
-**Status:** In Progress (branch label-os/LABEL-25; migration 149 reserved)
+**Status:** Done (PR #88, squash 436b2c7, 2026-10-06; migration 149, not applied — apply at final merge, after 148)
+
+**Orchestrator decisions on #88 (accepted as implemented):**
+- Gate: CI green on the latest commit (build-and-test, e2e, secret-scan). The orchestrator removed two stray `data/upload-staging/*/_meta.json` test artefacts that the base merge had committed (not on the base branch). Diff otherwise Label OS only.
+- Acceptance verified by: route tests, real-DB e2e `label-org-song-reviews.spec.ts` (route AND PostgREST with each artist's own JWT), `db:local:check` as `authenticated` with each member's claims; EXPLAIN at 6,000 reviews shows no per-row SECURITY DEFINER (R-08).
+- Read policy gates on `review.comment` + artist scope (narrower than the task's `catalog.read`): accepted — with `catalog.read` alone a whole-org marketing/legal member could read ratings and notes on working demos with their own JWT. Write needs `review.write`; a roster artist reads every review of their song and cannot rate.
+- Extra `R` key (start review: inbox → in review) accepted: the stage table has no Inbox → Shortlisted move.
+- Carries: tags / assign bulk actions of 07 §2.4 and a review panel on the song page are not built; a song in projects of two artists is readable by both artists' reviews (same rule as `can_see_org_track`).
 
 ## Objective
 Per-reviewer ratings and verdicts, and a fast keyboard review queue.
