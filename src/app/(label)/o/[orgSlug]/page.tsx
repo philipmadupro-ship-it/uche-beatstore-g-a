@@ -3,18 +3,25 @@
  * stage and each artist's next release. A server page, authorised with the
  * same `catalog.read` the API uses. A member without it has no roster to
  * look at, so the org's front door stays its members page (as before).
- * "Needs attention" (LABEL-35) and the activity digest (LABEL-20) are not
- * here yet.
+ * "Since your last visit" (LABEL-20) is the activity digest, read here for
+ * THIS member (their scope, their visibility); "Needs attention" (LABEL-35)
+ * is not here yet.
  */
 import { redirect } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { OrgOverviewView } from '@/components/labelos/OrgOverviewView';
+import { OverviewDigest } from '@/components/labelos/OverviewDigest';
 import { orgShellFor, requireOrgCapability } from '@/lib/auth/org-access';
+import { loadOverviewDigest } from '@/lib/labelos/activity-store';
+import { errorMessage } from '@/lib/errors';
 import { loadOrgOverview } from '@/lib/labelos/overview-store';
+import { createLogger } from '@/lib/log';
 import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
 import { notFound } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
+
+const log = createLogger('page.org.overview');
 
 export default async function OrgHome({ params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
@@ -22,7 +29,14 @@ export default async function OrgHome({ params }: { params: Promise<{ orgSlug: s
   if (!shell) notFound();
   const access = await requireOrgCapability(shell.org.id, 'catalog.read');
   if (!access.ok) redirect(`/o/${encodeURIComponent(orgSlug)}/settings/members`);
-  const overview = await loadOrgOverview(access);
+  // The digest is a second reading of the org: if it fails the roster still shows.
+  const [overview, digest] = await Promise.all([
+    loadOrgOverview(access),
+    loadOverviewDigest(access).catch((err) => {
+      log.error('overview digest failed', { orgId: shell.org.id, error: errorMessage(err) });
+      return null;
+    }),
+  ]);
   const limited = access.artistScope !== null;
 
   return (
@@ -39,6 +53,7 @@ export default async function OrgHome({ params }: { params: Promise<{ orgSlug: s
         </p>
       </header>
       <OrgOverviewView orgSlug={shell.org.slug} overview={overview} limited={limited} />
+      {digest && <OverviewDigest orgId={shell.org.id} orgSlug={shell.org.slug} viewerId={access.userId} feed={digest.feed} since={digest.since} lastSeenAt={digest.lastSeenAt} />}
     </PageContainer>
   );
 }

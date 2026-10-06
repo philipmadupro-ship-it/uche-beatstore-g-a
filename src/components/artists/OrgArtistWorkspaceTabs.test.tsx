@@ -60,7 +60,7 @@ describe('OrgArtistWorkspaceTabs', () => {
   it('uses the workspace tab strip with the org tabs, Overview first', () => {
     open();
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(tabs).toEqual(['Overview', 'Projects2', 'Songs2', 'Releases1', 'Files']);
+    expect(tabs).toEqual(['Overview', 'Projects2', 'Songs2', 'Releases1', 'Files', 'Activity']);
     expect(screen.getByRole('tab', { name: /Overview/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tablist', { name: 'Nova workspace' })).toBeTruthy();
   });

@@ -4,7 +4,7 @@
  * The artist workspace in an ORGANIZATION (LABEL-17, 07 §2.2, 17 R12) —
  * /o/<slug>/artists/<contactId>.
  *
- *   Overview │ Projects │ Songs │ Releases │ Files
+ *   Overview │ Projects │ Songs │ Releases │ Files │ Activity
  *
  * The producer's ArtistWorkspaceTabs in org context: the same tab strip and
  * URL state (`WorkspaceTabBar`, `useUrlTab`), the same card and row anatomy,
@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { Layers, Lock, Music } from 'lucide-react';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { ProjectFilesSection } from '@/components/projects/ProjectFilesSection';
+import { ArtistActivityTab } from '@/components/labelos/ArtistActivityTab';
 import { OrgUploadPanel } from '@/components/labelos/OrgUploadPanel';
 import {
   ORG_WORKSPACE_TABS,
@@ -49,10 +50,12 @@ export function RestrictedNote({ children, testId }: { children: React.ReactNode
   );
 }
 
-export function OrgArtistWorkspaceTabs({ orgId, orgSlug, workspace }: {
+export function OrgArtistWorkspaceTabs({ orgId, orgSlug, workspace, viewerId }: {
   orgId: string;
   orgSlug: string;
   workspace: OrgArtistWorkspace;
+  /** The signed-in member: their own activity lines read "You". */
+  viewerId?: string;
 }) {
   const [tab, go] = useUrlTab<OrgWorkspaceTab>(readTab, 'overview');
   const name = workspace.contact.name;
@@ -81,6 +84,7 @@ export function OrgArtistWorkspaceTabs({ orgId, orgSlug, workspace }: {
         {tab === 'songs' && <SongsTab orgId={orgId} workspace={workspace} base={base} />}
         {tab === 'releases' && <ReleasesTab workspace={workspace} base={base} />}
         {tab === 'files' && <FilesTab orgId={orgId} workspace={workspace} base={base} />}
+        {tab === 'activity' && <ArtistActivityTab orgId={orgId} orgSlug={orgSlug} contactId={workspace.contact.id} viewerId={viewerId} />}
       </div>
     </div>
   );

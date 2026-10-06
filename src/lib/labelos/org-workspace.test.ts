@@ -31,7 +31,8 @@ function facts(track: { type: string; song_stage: string | null; on_release?: bo
 
 describe('tabs', () => {
   it('are the org set, in order, and default to Overview', () => {
-    expect(ORG_WORKSPACE_TABS).toEqual(['overview', 'projects', 'songs', 'releases', 'files']);
+    expect(ORG_WORKSPACE_TABS).toEqual(['overview', 'projects', 'songs', 'releases', 'files', 'activity']);
+    expect(readOrgWorkspaceTab('activity')).toBe('activity');
     expect(readOrgWorkspaceTab('releases')).toBe('releases');
     expect(readOrgWorkspaceTab('beats')).toBe('overview'); // a producer tab is not an org tab
     expect(readOrgWorkspaceTab(null)).toBe('overview');
