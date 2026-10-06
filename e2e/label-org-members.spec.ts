@@ -175,10 +175,12 @@ for (const width of [1440, 390]) {
 
       await page.goto(MEMBERS);
       await expect(page.getByTestId(`member-${BUYER_ID}`)).toContainText('You');
-      // One org, nothing shared: no switcher. Not the producer: no bell, no
-      // storefront, settings or profile links, no producer hubs.
+      // One org, nothing shared: no switcher. Not the producer: no storefront,
+      // settings or profile links, no producer hubs. The bell IS there (LABEL-23):
+      // it is this org's own direct asks, from `/api/org/<id>/notifications` — not
+      // the producer's (`/api/notifications`, asserted below via `producerCalls`).
       await expect(page.getByRole('button', { name: /Organization:/ })).toHaveCount(0);
-      await expect(page.getByRole('button', { name: /^Notifications/ })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /^Notifications/ })).toHaveCount(1);
       await expect(page.getByRole('button', { name: /^Search/ })).toHaveCount(0);
       await expect(page.getByRole('link', { name: 'Open settings' })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Invite' })).toHaveCount(0);
