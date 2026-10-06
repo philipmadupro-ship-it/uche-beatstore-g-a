@@ -1107,6 +1107,34 @@ export const OrgAssetPatchBodySchema = z.object({
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type OrgAssetPatchBody = z.infer<typeof OrgAssetPatchBodySchema>;
 
+// ── Label OS org comments (LABEL-22) ─────────────────────────────────────
+// None of these takes an org, project, user, author or resolver: the org and
+// project are the path, the author is the session, `resolved_by` is the
+// caller. `visibility` is `artist` (default) or `internal`; the route refuses
+// `internal` for anyone who is not on the team.
+
+const COMMENT_UUID = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'Not a valid id');
+
+/** POST /api/org/[orgId]/projects/[id]/comments */
+export const OrgCommentCreateBodySchema = z.object({
+  body: z.string().trim().min(1, 'Comment cannot be empty').max(5000, 'Comment too long'),
+  track_id: COMMENT_UUID.nullish(),
+  parent_id: COMMENT_UUID.nullish(),
+  visibility: z.enum(['artist', 'internal']).optional(),
+  // A moment in the recording. Both or neither; the route drops a half-set pin.
+  region_start: z.number().finite().nonnegative().nullish(),
+  region_end: z.number().finite().positive().nullish(),
+}).strict();
+export type OrgCommentCreateBody = z.infer<typeof OrgCommentCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/projects/[id]/comments/[commentId] — words, who reads it, or resolve / reopen the thread. */
+export const OrgCommentPatchBodySchema = z.object({
+  body: z.string().trim().min(1, 'Comment cannot be empty').max(5000, 'Comment too long').optional(),
+  visibility: z.enum(['artist', 'internal']).optional(),
+  resolved: z.boolean().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgCommentPatchBody = z.infer<typeof OrgCommentPatchBodySchema>;
+
 // ── Label OS releases (LABEL-16) ─────────────────────────────────────────
 // None of these takes `org_id`, a `user_id` or a gate / delivery / store
 // field: the org is the path, gates are LABEL-32, delivery LABEL-33 and the

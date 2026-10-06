@@ -66,6 +66,11 @@ export const VERBS = [
   'recording.uploaded',
   'recording.downloaded',
   'recording.copied',
+  // Comments (LABEL-22; the subject is the comment, never its words)
+  'comment.created',
+  'comment.updated',
+  'comment.resolved',
+  'comment.deleted',
   // Files
   'file.uploaded',
   'file.updated',
@@ -165,6 +170,12 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'recording.uploaded': 'artist',
   'recording.downloaded': 'internal',
   'recording.copied': 'internal',
+  // The creative record (a note on a mix). A route overrides to `internal` for
+  // an internal comment — the event of a team-only note is team-only too.
+  'comment.created': 'artist',
+  'comment.updated': 'artist',
+  'comment.resolved': 'artist',
+  'comment.deleted': 'artist',
   'file.uploaded': 'internal',
   'file.updated': 'internal',
   'file.deleted': 'internal',

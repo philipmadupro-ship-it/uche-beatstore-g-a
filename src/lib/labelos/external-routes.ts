@@ -39,6 +39,16 @@ export const EXTERNAL_ROUTES: Readonly<Record<string, { methods: readonly string
     kind: 'project',
     why: 'The project’s shared view (its songs and recordings, the artist’s name, the role’s controls) for a live member of THIS project.',
   },
+  '[orgId]/projects/[id]/comments/route.ts': {
+    methods: ['GET', 'POST'],
+    kind: 'project',
+    why: 'Read the project’s artist-visible comments, and (commenter and above) comment on its recordings. Never internal notes; never another project.',
+  },
+  '[orgId]/projects/[id]/comments/[commentId]/route.ts': {
+    methods: ['PATCH', 'DELETE'],
+    kind: 'project',
+    why: 'Edit, resolve or delete a comment of THIS project: their own words, or resolving a thread (commenter and above). Never visibility, never an internal note.',
+  },
   '[orgId]/audio/[trackId]/route.ts': {
     methods: ['GET', 'HEAD'],
     kind: 'project',

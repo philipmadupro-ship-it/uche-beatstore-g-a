@@ -430,13 +430,46 @@ describe('final RLS policy state', () => {
       // The material an external member works on is read through the service
       // role routes (externalCan); no policy on any other table mentions
       // project_members or can_see_project, so their own JWT reads none of it.
-      for (const [key, body] of before148) expect(policies.get(key), key).toBe(body);
-      const added = [...policies.keys()].filter((k) => !before148.has(k) && !k.startsWith('project_members.'));
+      const through148 = replay(realMigrations().filter((m) => m.name < '149')).policies;
+      for (const [key, body] of before148) expect(through148.get(key), key).toBe(body);
+      const added = [...through148.keys()].filter((k) => !before148.has(k) && !k.startsWith('project_members.'));
       expect(added).toEqual([]);
+      // ...and nothing later (LABEL-22's 150 included) hands them one either.
       const mentions = [...policies]
         .filter(([k, body]) => !k.startsWith('project_members.') && /project_members|can_see_project\s*\(/.test(body))
         .map(([k]) => k);
       expect(mentions).toEqual([]);
+    });
+  });
+
+  describe('Label OS org comments (mig 150, LABEL-22)', () => {
+    const through148 = replay(realMigrations().filter((m) => m.name < '149')).policies;
+    const comments = (name: string) => policies.get(`project_comments.${name}`) ?? '';
+
+    it('150 changes exactly the two org policies on project_comments and nothing anywhere else', () => {
+      const changed = [...policies.keys()].filter((k) => !through148.has(k) || through148.get(k) !== policies.get(k)).sort();
+      expect(changed).toEqual(['project_comments.org_member_guard', 'project_comments.org_member_read']);
+      for (const key of through148.keys()) expect(policies.has(key), `${key} was dropped`).toBe(true);
+    });
+
+    it('both keep every 141 condition and add the visibility rule: internal comments need the team helper', () => {
+      for (const name of ['org_member_read', 'org_member_guard']) {
+        const body = comments(name);
+        expect(body, name).toMatch(/p\.org_id IS NOT NULL/);
+        expect(body, name).toMatch(/has_org_cap\(p\.org_id, 'catalog\.read'\)/);
+        expect(body, name).toMatch(/can_see_org_project\(p\.org_id, p\.id\)/);
+        expect(body, name).toMatch(/can_see_artist\(p\.org_id, project_comments\.contact_id\)/);
+        expect(body, name).toMatch(/has_org_cap\(p\.org_id, 'share\.external'\)/);
+        expect(body, name).toMatch(/project_comments\.visibility = 'artist' OR public\.labelos_can_read_internal_comments\(p\.org_id\)/);
+      }
+      expect(comments('org_member_guard')).toMatch(/^\s*AS RESTRICTIVE\s+FOR SELECT/i);
+      expect(comments('org_member_read')).toMatch(/FOR SELECT\s+TO authenticated/i);
+    });
+
+    it('no write policy is added; the producer-era owner policy is untouched', () => {
+      const onComments = [...policies.keys()].filter((k) => k.startsWith('project_comments.')).sort();
+      expect(onComments.filter((k) => !through148.has(k))).toEqual([]);
+      expect(policies.get('project_comments.owner_via_project')).toBe(through148.get('project_comments.owner_via_project'));
     });
   });
 
