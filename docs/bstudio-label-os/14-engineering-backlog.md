@@ -1234,7 +1234,18 @@ Revert the functions; routes fall back to `recordEvent`.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-19
-**Status:** In Progress (branch label-os/LABEL-20)
+**Status:** Done (2026-10-06) — PR #80. Migration 147, not applied: `activity_events` read policy gains the artist-scope predicate. `GET /api/org/[orgId]/activity` (artist / project / song feeds), `POST /api/org/[orgId]/overview/seen`, the pure `lib/labelos/digest.ts`, "Since your last visit" on the Overview and an Activity tab on the artist workspace.
+
+**Orchestrator decisions on #80 (accepted as implemented):**
+- Scope rule (`eventVisibleTo`, the SQL policy and the route agree): `catalog.read`; `internal` rows need `business.read.internal`; whole-org members read everything; an event naming an artist is judged by that artist alone, one naming only a project by the project's scope; an event naming neither (members, invitations, settings) is whole-org only.
+- D4 on top, in the route: events about a song the member may not read are counted as "restricted", never listed (the song feed answers 404).
+- The policy uses three hashed uncorrelated subplans, with no per-row SECURITY DEFINER call (100k events: whole-org read unchanged at about 7 ms, scoped read 29 ms and now correct).
+- One assertion in 136's local check changed on purpose: a roster artist no longer reads an org-level event.
+
+**Open before the final merge (owner decisions, not blocking):**
+- `last_seen_overview_at` is one value per user, not per org (opening org A's Overview marks org B's digest seen). The fix is a schema change (the column on `org_members`, or a jsonb map).
+- The `activity_events` policy has no D4 song-row predicate (the route has it). A member reading the table with their own JWT could read a working song's `song.created` title. No app route issues that read.
+
 
 ## Objective
 Grouped, scope-safe feeds for the org overview, artist, project and song.
@@ -1462,7 +1473,7 @@ Drop the table and column.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-20
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-24; no migration)
 
 ## Objective
 Validated stage transitions with history.
