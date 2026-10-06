@@ -94,6 +94,8 @@ function labelOsTables(): string[] {
     // 144_labelos_releases.sql (LABEL-16)
     'releases',
     'release_items',
+    // 148_labelos_project_members.sql (LABEL-21)
+    'project_members',
   ];
 }
 
@@ -101,7 +103,7 @@ function labelOsTables(): string[] {
  * The SQL membership helpers a Label OS policy may key on
  * (06-permission-model.md §3.1). can_see_artist arrived with LABEL-10;
  * can_see_org_project / can_see_org_track / can_read_org_track with LABEL-12;
- * can_see_project arrives with LABEL-21.
+ * can_see_project with LABEL-21.
  */
 const ORG_HELPERS = [
   'org_role',
@@ -406,6 +408,35 @@ describe('final RLS policy state', () => {
       expect(policies.get('track_stem_files.org_member_guard')).toMatch(
         /^\s*AS RESTRICTIVE\s+FOR SELECT\s+USING \(\s*NOT public\.labelos_is_org_track\(track_id\)\s*\)\s*$/i,
       );
+    });
+  });
+
+  describe('Label OS external project members (mig 148, LABEL-21)', () => {
+    const before148 = replay(realMigrations().filter((m) => m.name < '148')).policies;
+    const onMembers = () => [...policies].filter(([k]) => k.startsWith('project_members.'));
+
+    it('project_members has exactly two policies, both SELECT: own live row, or share.external on the row\'s org', () => {
+      expect(onMembers().map(([k]) => k).sort()).toEqual(['project_members.project_members_manage_read', 'project_members.project_members_self_read']);
+      for (const [k, body] of onMembers()) {
+        expect(body, k).toMatch(/^\s*FOR SELECT\b/i);
+        expect(body, k).not.toMatch(/FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i);
+        expect(body, k).not.toMatch(/WITH CHECK/i);
+      }
+      expect(policies.get('project_members.project_members_self_read')).toMatch(/user_id = \(SELECT auth\.uid\(\)\)\s+AND \(SELECT public\.can_see_project\(project_id\)\)/);
+      expect(policies.get('project_members.project_members_manage_read')).toMatch(/has_org_cap\(org_id, 'share\.external'\)/);
+    });
+
+    it('148 gives an external member NO read path to anything: every other policy is exactly what it was', () => {
+      // The material an external member works on is read through the service
+      // role routes (externalCan); no policy on any other table mentions
+      // project_members or can_see_project, so their own JWT reads none of it.
+      for (const [key, body] of before148) expect(policies.get(key), key).toBe(body);
+      const added = [...policies.keys()].filter((k) => !before148.has(k) && !k.startsWith('project_members.'));
+      expect(added).toEqual([]);
+      const mentions = [...policies]
+        .filter(([k, body]) => !k.startsWith('project_members.') && /project_members|can_see_project\s*\(/.test(body))
+        .map(([k]) => k);
+      expect(mentions).toEqual([]);
     });
   });
 

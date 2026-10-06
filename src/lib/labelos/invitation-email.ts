@@ -12,7 +12,7 @@ import { Resend } from 'resend';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { buildInvitationEmail } from './invitations';
+import { buildInvitationEmail, buildProjectInvitationEmail } from './invitations';
 import type { OrgFunction, Role } from './capabilities';
 
 const log = createLogger('lib.labelos.invitation-email');
@@ -67,6 +67,37 @@ export async function sendInvitationEmail(opts: {
     return { sent: true, id: data?.id ?? null };
   } catch (err) {
     log.warn('invitation email failed', { error: errorMessage(err) });
+    return { sent: false, reason: 'failed' };
+  }
+}
+
+/** The project invitation (LABEL-21): the same sending rules, a message that names the project. */
+export async function sendProjectInvitationEmail(opts: {
+  to: string;
+  orgName: string;
+  projectName: string;
+  inviterName: string | null;
+  roleLabel: string;
+  url: string;
+}): Promise<{ sent: true; id: string | null } | { sent: false; reason: 'not_configured' | 'failed' }> {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return { sent: false, reason: 'not_configured' };
+  const message = buildProjectInvitationEmail(opts);
+  try {
+    const { data, error } = await new Resend(key).emails.send({
+      from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+      to: opts.to,
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+    });
+    if (error) {
+      log.warn('project invitation email failed', { error: error.message });
+      return { sent: false, reason: 'failed' };
+    }
+    return { sent: true, id: data?.id ?? null };
+  } catch (err) {
+    log.warn('project invitation email failed', { error: errorMessage(err) });
     return { sent: false, reason: 'failed' };
   }
 }

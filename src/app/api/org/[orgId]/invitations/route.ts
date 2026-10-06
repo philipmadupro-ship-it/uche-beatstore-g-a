@@ -71,6 +71,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ org
   if (!access.ok) return access.res;
   try {
     const { data, error } = await scopedOrgQuery(access.admin, 'org_invitations', access, VIEW_COLUMNS)
+      // Project invitations (LABEL-21) are listed on their project, not here.
+      .is('project_id', null)
       .is('accepted_at', null)
       .is('revoked_at', null)
       .gt('expires_at', new Date().toISOString())
@@ -111,6 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     const pendingFor = () =>
       scopedOrgQuery(admin, 'org_invitations', access, 'id, created_at')
         .eq('email', email)
+        .is('project_id', null)
         .is('accepted_at', null)
         .is('revoked_at', null)
         .gt('expires_at', new Date().toISOString())

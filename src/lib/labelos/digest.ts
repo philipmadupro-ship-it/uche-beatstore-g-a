@@ -359,6 +359,7 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'contact.deleted': { one: 'removed a contact', many: 'removed {n} contacts' },
   'project.created': { one: 'created a project', many: 'created {n} projects' },
   'project.member_added': { one: 'added a project member', many: 'added {n} project members' },
+  'project.member_changed': { one: 'changed a project member\'s access', many: 'changed {n} project members\' access' },
   'project.member_removed': { one: 'removed a project member', many: 'removed {n} project members' },
   'share.created': { one: 'created a share link', many: 'created {n} share links' },
   'share.revoked': { one: 'revoked a share link', many: 'revoked {n} share links' },

@@ -20,17 +20,20 @@ import { useParams } from 'next/navigation';
 import { AlertCircle, CheckCircle2, Loader2, Mail } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { describeGrant, joinStep, type InvitationPreview } from '@/lib/labelos/invitations';
+import { PROJECT_ROLE_LABELS, isExternalProjectRole } from '@/lib/labelos/project-members';
 import { ORG_FUNCTIONS, ROLES, type OrgFunction, type Role } from '@/lib/labelos/capabilities';
 
 type Loaded =
   | { kind: 'loading' }
   | { kind: 'missing'; message: string; notFound: boolean }
   | { kind: 'preview'; preview: InvitationPreview }
-  | { kind: 'joined'; name: string; slug: string | null };
+  | { kind: 'joined'; name: string; slug: string | null; /** A project invitation (LABEL-21): where the one project opens. */ project: { name: string; href: string } | null };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function grantLabel(p: InvitationPreview): string {
+  // A project invitation (LABEL-21): the §2.6 role, on that one project.
+  if (p.project) return `${isExternalProjectRole(p.role) ? PROJECT_ROLE_LABELS[p.role] : p.role} · one project`;
   const role = ROLES.find((r) => r === p.role) as Role | undefined;
   if (!role) return p.role;
   const fns = p.functions.filter((f): f is OrgFunction => (ORG_FUNCTIONS as readonly string[]).includes(f));
@@ -84,8 +87,14 @@ export default function JoinPage() {
     try {
       const { status, body } = await callJoin(token, 'accept');
       const org = body.org as { name?: string; slug?: string } | undefined;
+      const project = body.project as { name?: string; href?: string } | undefined;
       if (status === 200 && org) {
-        setLoaded({ kind: 'joined', name: org.name ?? 'the organization', slug: org.slug ?? null });
+        setLoaded({
+          kind: 'joined',
+          name: org.name ?? 'the organization',
+          slug: org.slug ?? null,
+          project: project?.href ? { name: project.name ?? 'the project', href: project.href } : null,
+        });
       } else {
         setError(typeof body.error === 'string' ? body.error : 'Could not accept the invitation.');
         if (status !== 403) void load();
@@ -211,6 +220,21 @@ function JoinBody(props: {
     );
   }
 
+  if (loaded.kind === 'joined' && loaded.project) {
+    return (
+      <>
+        <Heading>{loaded.project.name}</Heading>
+        <div role="status" className="mt-4 flex items-start gap-2 text-sm leading-6 text-white/80">
+          <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-[#6DC6A4]" aria-hidden="true" />
+          <p>You now have access to {loaded.project.name}, shared by {loaded.name}.</p>
+        </div>
+        <a href={loaded.project.href} className={`${PRIMARY} mt-6`}>
+          Open {loaded.project.name}
+        </a>
+      </>
+    );
+  }
+
   if (loaded.kind === 'joined') {
     return (
       <>
@@ -230,13 +254,25 @@ function JoinBody(props: {
 
   const p = loaded.preview;
   const step = joinStep(p);
+  // A project invitation is about ONE project; its page says so and names what is shared.
+  const subject = p.project ? p.project.name : p.org.name;
 
   return (
     <>
-      <Heading>{p.org.name}</Heading>
+      <Heading>{subject}</Heading>
       <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">{grantLabel(p)}</p>
 
-      {step === 'member' && (
+      {step === 'member' && p.project && (
+        <>
+          <Lead>You already have access to {p.project.name}.</Lead>
+          {p.project.href && (
+            <a href={p.project.href} className={`${PRIMARY} mt-6`}>
+              Open {p.project.name}
+            </a>
+          )}
+        </>
+      )}
+      {step === 'member' && !p.project && (
         <>
           <Lead>You are a member of {p.org.name}.</Lead>
           {p.org.slug && (
@@ -252,9 +288,13 @@ function JoinBody(props: {
 
       {step === 'ready' && (
         <>
-          <Lead>You have been invited to join {p.org.name}.</Lead>
+          <Lead>
+            {p.project
+              ? `${p.org.name} shared ${p.project.name} with you. You will see this project only, not the rest of ${p.org.name}.`
+              : `You have been invited to join ${p.org.name}.`}
+          </Lead>
           <button type="button" onClick={props.onAccept} disabled={busy} className={`${PRIMARY} mt-6`}>
-            {busy ? 'Joining…' : 'Accept invitation'}
+            {busy ? 'Joining…' : p.project ? 'Accept and open the project' : 'Accept invitation'}
           </button>
         </>
       )}

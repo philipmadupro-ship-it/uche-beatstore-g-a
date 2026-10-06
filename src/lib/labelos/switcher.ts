@@ -5,8 +5,8 @@
  *
  *  - Hidden when the user has exactly one org and nothing shared with them
  *    (14, LABEL-09 UX): the producer who never joins anything sees the top
- *    bar they always had. "Shared with me" is LABEL-21's; until then it is
- *    always empty.
+ *    bar they always had. "Shared with me" is the projects they are an
+ *    external member of (LABEL-21, `/shared/<project>`).
  *  - The producer's own producer org IS the dashboard, so its entry goes to
  *    /library. Every other org goes to its shell, /o/<slug>.
  *  - The URL decides which org is current, never a stored choice: every
@@ -49,6 +49,8 @@ export function orgSlugFromPath(pathname: string): string | null {
  * neither (e.g. a shared project, LABEL-21).
  */
 export function currentOrg<T extends { slug: string; home: string }>(orgs: readonly T[], pathname: string): T | null {
+  // A shared project belongs to someone else's org: none of the viewer's own is current there.
+  if (pathname === '/shared' || pathname.startsWith('/shared/')) return null;
   const slug = orgSlugFromPath(pathname);
   if (slug) return orgs.find((o) => o.slug === slug) ?? null;
   return orgs.find((o) => o.home === DASHBOARD_HOME) ?? null;

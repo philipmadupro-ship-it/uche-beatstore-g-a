@@ -33,6 +33,13 @@ const S1 = '50000000-0000-4000-8000-000000000001';
 const B1 = '50000000-0000-4000-8000-000000000002';
 const XS1 = '50000000-0000-4000-8000-000000000003';
 const S1M = '50000000-0000-4000-8000-000000000004';
+// LABEL-21: external project members. S3 sits in two projects, each shared with a different person.
+const EXT_E = u(7); // editor of LP2
+const EXT_V = u(8); // viewer of LP2
+const EXT_E2 = u(9); // editor of LP3 only
+const LP2 = '40000000-0000-4000-8000-0000000000a2';
+const LP3 = '40000000-0000-4000-8000-0000000000a3';
+const S3 = '50000000-0000-4000-8000-000000000005';
 
 let current: string | null = null;
 let db: MemoryDb;
@@ -124,6 +131,8 @@ beforeEach(() => {
         { id: LP1, org_id: L, user_id: null, name: 'Nova EP', inbox_for_contact_id: null, status: 'in_progress', created_at: '2026-01-01' },
         { id: XP1, org_id: L2, user_id: null, name: 'L2', inbox_for_contact_id: null, status: 'in_progress', created_at: '2026-01-01' },
       ],
+      activity_events: [],
+      project_members: [],
       project_contacts: [{ project_id: LP1, contact_id: C1 }],
       project_tracks: [
         { project_id: LP1, track_id: S1, position: 0 },
@@ -422,5 +431,123 @@ describe('targets: an artist\'s songs to add material to', () => {
     expect((await targets(AR, L, D1)).status).toBe(404);
     expect((await targets(FIN, L, C1)).status).toBe(403);
     expect((await targets(AR, L, 'not-a-uuid')).status).toBe(404);
+  });
+});
+
+// ── LABEL-21: an external project member uploads a version, into THEIR project only ──
+
+describe('external project members (LABEL-21)', () => {
+  const version = (songId = S3) => link('version', songId);
+  // S3 sits in two org projects, each shared with a different person; no artist is linked to either.
+  beforeEach(() => {
+    db.tables.projects.push(
+      { id: LP2, org_id: L, user_id: null, name: 'Uche × Producer X', inbox_for_contact_id: null, status: 'in_progress', created_at: '2026-01-01' },
+      { id: LP3, org_id: L, user_id: null, name: 'Second room', inbox_for_contact_id: null, status: 'in_progress', created_at: '2026-01-01' },
+    );
+    db.tables.tracks.push({ id: S3, org_id: L, user_id: null, type: 'song', song_stage: 'in_review', title: 'Uche × Producer X (song)', created_at: '2026-01-04' });
+    db.tables.project_tracks.push({ project_id: LP2, track_id: S3, position: 0 }, { project_id: LP3, track_id: S3, position: 0 });
+    db.tables.project_members.push(
+      { org_id: L, project_id: LP2, user_id: EXT_E, role: 'editor', allow_downloads: false, expires_at: null },
+      { org_id: L, project_id: LP2, user_id: EXT_V, role: 'viewer', allow_downloads: true, expires_at: null },
+      { org_id: L, project_id: LP3, user_id: EXT_E2, role: 'editor', allow_downloads: false, expires_at: null },
+    );
+  });
+  const events = (verb: string) => db.tables.activity_events.filter((e) => e.verb === verb);
+
+  it('an editor adds a version of a song in their project: init, parts, complete — in THEIR project only, credited to them', async () => {
+    const init = await call('init', EXT_E, L, { ...file('v2.wav'), as: version() });
+    expect(init.status).toBe(200);
+    expect(storage.inits).toEqual([{ fileName: 'v2.wav', keyPrefix: `orgs/${L}/tracks` }]);
+    const { sessionId } = await init.json();
+
+    // The parts and the status are theirs, behind the same session gate.
+    const sign = await call('part', EXT_E, L, { sessionId, partNumbers: [1] });
+    expect(sign.status).toBe(200);
+    expect((await status(EXT_E, L, sessionId)).status).toBe(200);
+
+    const done = await call('complete', EXT_E, L, { sessionId, as: version() });
+    expect(done.status).toBe(200);
+    const { track } = await done.json();
+    // The song sits in LP2 AND LP3; the version lands in LP2, the one shared with them.
+    expect(track.projectIds).toEqual([LP2]);
+    expect(tracksOf(LP2)).toContain(track.id);
+    expect(tracksOf(LP3)).not.toContain(track.id);
+    // An org row with no owner, credited to the uploader (D3), linked as a version of the song.
+    expect(db.tables.tracks.find((t) => t.id === track.id)).toMatchObject({ org_id: L, user_id: null, created_by: EXT_E, type: 'song', song_stage: null });
+    expect(db.tables.track_links.find((l) => l.to_track_id === track.id)).toMatchObject({ from_track_id: S3, relation: 'version', user_id: null });
+    // Recorded, as coming from a project member.
+    expect(events('recording.uploaded')).toHaveLength(1);
+    expect(events('recording.uploaded')[0]).toMatchObject({ org_id: L, actor_id: EXT_E, project_id: LP2, payload: { relation: 'version', by: 'project_member' } });
+  });
+
+  it('an ORG member uploading to the same song still lands in every project of it (unchanged)', async () => {
+    const res = await upload(OWN, version());
+    expect(res.status).toBe(200);
+    expect((await res.json()).track.projectIds.sort()).toEqual([LP2, LP3].sort());
+  });
+
+  it.each([
+    ['a viewer', EXT_V, version(), 403],
+    ['a new song for an artist (no artist scope)', EXT_E, song(C1), 404],
+    ['master material', EXT_E, link('master', S3), 403],
+    ['instrumental material', EXT_E, link('instrumental', S3), 403],
+    ['a demo', EXT_E, link('demo', S3), 403],
+    ['a song in the same org that is not in their project', EXT_E, version(S1), 404],
+    ['a song of another org', EXT_E, version(XS1), 404],
+    ['an editor of the OTHER project on this song is fine (control)', EXT_E2, version(), 200],
+    ['a stranger', STRANGER, version(), 404],
+  ] as const)('init: %s → %i', async (_label, who, intent, statusCode) => {
+    const res = await call('init', who, L, { ...file('v2.wav'), as: intent as unknown as Body });
+    expect(res.status).toBe(statusCode);
+    if (statusCode !== 200) expect(storage.inits).toEqual([]);
+  });
+
+  it('not through another org’s path either', async () => {
+    expect((await call('init', EXT_E, L2, { ...file('v2.wav'), as: version() })).status).toBe(404);
+  });
+
+  it('the gate is checked again at complete: removed in between → nothing is finalised or written', async () => {
+    const { sessionId } = await (await call('init', EXT_E, L, { ...file('v2.wav'), as: version() })).json();
+    db.tables.project_members = db.tables.project_members.filter((m) => m.user_id !== EXT_E);
+    const done = await call('complete', EXT_E, L, { sessionId, as: version() });
+    expect(done.status).toBe(404);
+    expect(db.tables.tracks.filter((t) => t.created_by === EXT_E)).toEqual([]);
+    expect(storage.enqueued).toEqual([]);
+  });
+
+  it('demoted to a viewer in between: refused at complete', async () => {
+    const { sessionId } = await (await call('init', EXT_E, L, { ...file('v2.wav'), as: version() })).json();
+    db.tables.project_members.find((m) => m.user_id === EXT_E)!.role = 'viewer';
+    expect((await call('complete', EXT_E, L, { sessionId, as: version() })).status).toBe(403);
+    expect(db.tables.tracks.filter((t) => t.created_by === EXT_E)).toEqual([]);
+  });
+
+  it('a session belongs to its starter: another external member (or the owner) cannot sign, finish or abort it', async () => {
+    const { sessionId } = await (await call('init', EXT_E, L, { ...file('v2.wav'), as: version() })).json();
+    expect((await call('part', EXT_E2, L, { sessionId, partNumbers: [1] })).status).toBe(404);
+    expect((await call('complete', EXT_E2, L, { sessionId, as: version() })).status).toBe(404);
+    expect((await call('abort', EXT_E2, L, { sessionId })).status).toBe(404);
+    expect((await status(EXT_E2, L, sessionId)).status).toBe(404);
+    expect((await call('abort', OWN, L, { sessionId })).status).toBe(404);
+    expect((await call('abort', EXT_E, L, { sessionId })).status).toBe(200);
+  });
+
+  it('a viewer cannot reach the session routes at all', async () => {
+    const { sessionId } = await (await call('init', EXT_E, L, { ...file('v2.wav'), as: version() })).json();
+    expect((await call('part', EXT_V, L, { sessionId, partNumbers: [1] })).status).toBe(403);
+    expect((await status(EXT_V, L, sessionId)).status).toBe(403);
+    expect((await call('abort', EXT_V, L, { sessionId })).status).toBe(403);
+  });
+
+  it('an external member’s upload is still in the project when they are removed (D3)', async () => {
+    const res = await upload(EXT_E, version());
+    const { track } = await res.json();
+    db.tables.project_members = db.tables.project_members.filter((m) => m.user_id !== EXT_E);
+    expect(db.tables.tracks.find((t) => t.id === track.id)).toMatchObject({ created_by: EXT_E });
+    expect(tracksOf(LP2)).toContain(track.id);
+  });
+
+  it('targets (artist-keyed) and every other org route stay closed to them', async () => {
+    expect((await targets(EXT_E, L, C1)).status).toBe(404);
   });
 });

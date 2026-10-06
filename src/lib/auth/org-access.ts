@@ -26,6 +26,18 @@
  *    producer row (org_id IS NULL)", so an id never reveals that something
  *    exists in another tenant. Never 200 across orgs.
  *
+ * External project members (LABEL-21, 06 §2.6): a person with their own
+ * account admitted to ONE org project holds a `project_members` row and no
+ * `org_members` row, so every helper above answers "not a member" for them
+ * by itself — the default is deny. The routes that DO serve them (the
+ * allowlist in lib/labelos/external-routes) go through the helpers at the
+ * bottom: `requireExternalProject` / `requireExternalTrack` for them alone,
+ * `requireProjectActor` / `requireTrackActor` for a route that serves org
+ * members and external members. The membership is read LIVE on every call
+ * (no cache), so removing it or letting it expire takes effect on the next
+ * request. Never an `org_members` lookup for an external member, never a
+ * widening of an org capability: what a role may do is `externalCan`.
+ *
  * Artist scope (06 §2.5, LABEL-10): a member with `scope = 'artists'` (role
  * `artist` always) sees only the roster contacts in `member_artist_scopes`,
  * read live with the membership. requireObjectAccess answers 404 for an
@@ -47,6 +59,7 @@ import {
 } from '@/lib/labelos/capabilities';
 import { artistScopeFilter, scopeAllowsAnyContact, scopeAllowsContact, toArtistScope, type ArtistScope } from '@/lib/labelos/artist-scope';
 import { orgProjectScopeContacts } from '@/lib/labelos/org-read';
+import { externalMayAny, sortSharedProjects, sharedProjectHref, toMembership, type ExternalMembership, type ProjectMemberRow, type SharedProjectRef } from '@/lib/labelos/project-members';
 import { createLogger } from '@/lib/log';
 import { isUUID } from '@/lib/validate';
 
@@ -642,5 +655,294 @@ export async function orgShellFor(slug: string): Promise<OrgShell | null> {
   } catch (err) {
     log.error('org shell read failed', { error: err instanceof Error ? err.message : String(err) });
     return null;
+  }
+}
+
+
+// ── External project members (LABEL-21) ─────────────────────────────────
+
+/**
+ * What an external member's request is answerable for: the org the project
+ * (or track) belongs to, and the member's LIVE membership of each shared
+ * project involved — one for a project, every shared project a track sits in
+ * for a track. No capabilities: `externalCan` answers per action.
+ */
+export type ExternalAccessOk = {
+  ok: true;
+  userId: string;
+  admin: AdminClient;
+  orgId: string;
+  memberships: ExternalMembership[];
+};
+export type ExternalAccessResult = ExternalAccessOk | OwnershipFail;
+
+type MemberRowWithOrg = ProjectMemberRow & {
+  organizations: { deleted_at: string | null } | { deleted_at: string | null }[] | null;
+};
+
+/**
+ * `userId`'s live memberships in `orgId`, optionally narrowed to some
+ * projects: not expired, org not soft-deleted, a known role. Throws on a
+ * database error so the caller fails closed (500), like readMembership.
+ */
+async function readExternalMemberships(
+  admin: AdminClient,
+  userId: string,
+  orgId: string,
+  projectIds?: readonly string[],
+): Promise<ExternalMembership[]> {
+  if (projectIds && projectIds.length === 0) return [];
+  let q = admin
+    .from('project_members')
+    .select('project_id, role, allow_downloads, expires_at, organizations!inner(deleted_at)')
+    .eq('user_id', userId)
+    .eq('org_id', orgId);
+  if (projectIds) q = q.in('project_id', [...projectIds]);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const out: ExternalMembership[] = [];
+  for (const row of (data ?? []) as unknown as MemberRowWithOrg[]) {
+    const org = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
+    if (!org || org.deleted_at) continue;
+    const m = toMembership(row);
+    if (m) out.push(m);
+  }
+  return out;
+}
+
+/** The org of a project row, or null when it is missing or a producer project (org_id NULL). */
+async function projectOrg(admin: AdminClient, projectId: string): Promise<{ orgId: string | null; error: boolean }> {
+  const { data, error } = await admin.from('projects').select('org_id').eq('id', projectId).maybeSingle();
+  if (error) {
+    log.error('project read failed', { projectId, error: error.message });
+    return { orgId: null, error: true };
+  }
+  const org = (data as { org_id?: unknown } | null)?.org_id;
+  return { orgId: typeof org === 'string' && isUUID(org) ? org : null, error: false };
+}
+
+/**
+ * The caller as an external member of THIS project, for a route that serves
+ * them. 401 without a session; 404 for everything else — a malformed id, a
+ * missing or producer project, another org's project (when the route names
+ * an org), a project they are not a live member of. Never 403: whether the
+ * project exists is not theirs to learn.
+ */
+export async function requireExternalProject(opts: { projectId: string; orgId?: string }): Promise<ExternalAccessResult> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  if (!isUUID(opts.projectId)) return NOT_FOUND();
+  const admin = createServiceClient();
+  try {
+    const { orgId: org, error } = await projectOrg(admin, opts.projectId);
+    if (error) return fail(500, 'Could not check project access');
+    if (!org) return NOT_FOUND();
+    if (opts.orgId !== undefined && opts.orgId.toLowerCase() !== org.toLowerCase()) return NOT_FOUND();
+    const memberships = await readExternalMemberships(admin, userId, org, [opts.projectId]);
+    if (memberships.length === 0) return NOT_FOUND();
+    return { ok: true, userId, admin, orgId: org, memberships };
+  } catch (err) {
+    log.error('external project access failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check project access');
+  }
+}
+
+/**
+ * The caller as an external member reaching this TRACK: it is an org track
+ * (org_id set, matching the route's org) that sits in at least one project
+ * they are a live member of. A track in no shared project of theirs is 404,
+ * even one in the same org or the same song's other projects.
+ */
+export async function requireExternalTrack(opts: { trackId: string; orgId?: string }): Promise<ExternalAccessResult> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  if (!isUUID(opts.trackId)) return NOT_FOUND();
+  const admin = createServiceClient();
+  try {
+    const { data, error } = await admin.from('tracks').select('org_id').eq('id', opts.trackId).maybeSingle();
+    if (error) {
+      log.error('track read failed', { trackId: opts.trackId, error: error.message });
+      return fail(500, 'Could not check project access');
+    }
+    const row = data as { org_id?: unknown } | null;
+    if (!row) return NOT_FOUND();
+    const org = typeof row.org_id === 'string' && isUUID(row.org_id) ? row.org_id : null;
+    if (!org) return NOT_FOUND();
+    if (opts.orgId !== undefined && opts.orgId.toLowerCase() !== org.toLowerCase()) return NOT_FOUND();
+
+    const links = await admin.from('project_tracks').select('project_id').eq('track_id', opts.trackId);
+    if (links.error) {
+      log.error('project link read failed', { trackId: opts.trackId, error: links.error.message });
+      return fail(500, 'Could not check project access');
+    }
+    const projectIds = [...new Set(((links.data ?? []) as { project_id: string }[]).map((l) => l.project_id))];
+    const memberships = await readExternalMemberships(admin, userId, org, projectIds);
+    if (memberships.length === 0) return NOT_FOUND();
+    return { ok: true, userId, admin, orgId: org, memberships };
+  } catch (err) {
+    log.error('external track access failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check project access');
+  }
+}
+
+/**
+ * Is the caller an external member with SOME live membership in this org
+ * (optionally one that grants `uploadable`)? For the upload plumbing routes
+ * (part / abort / status), which name a session rather than a project: the
+ * session itself is then bound to the org and to its starter.
+ */
+export async function requireExternalInOrg(
+  orgId: string,
+  mayUpload?: (memberships: readonly ExternalMembership[]) => boolean,
+): Promise<ExternalAccessResult> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  if (!isUUID(orgId)) return NOT_FOUND();
+  const admin = createServiceClient();
+  try {
+    const memberships = await readExternalMemberships(admin, userId, orgId);
+    if (memberships.length === 0 || (mayUpload && !mayUpload(memberships))) return FORBIDDEN();
+    return { ok: true, userId, admin, orgId, memberships };
+  } catch (err) {
+    log.error('external org access failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check project access');
+  }
+}
+
+/**
+ * `userId`'s live membership of ONE project, or null (not a member, expired,
+ * the org is gone, or the read fails). For `/api/org/join`, which asks about
+ * an invitee who is not yet anyone — the external twin of `liveMembership`.
+ */
+export async function liveProjectMembership(
+  admin: AdminClient,
+  orgId: string,
+  projectId: string,
+  userId: string,
+): Promise<ExternalMembership | null> {
+  if (!isUUID(orgId) || !isUUID(projectId) || !isUUID(userId)) return null;
+  try {
+    const all = await readExternalMemberships(admin, userId, orgId, [projectId]);
+    return all[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The gate of the upload SESSION routes (part / abort / status): an org
+ * member who still holds `catalog.write`, else an external member with an
+ * upload-capable membership (`upload_versions`) in this org. Either way
+ * `orgSessionAuthorizer` (the upload routes' ./access) then binds the
+ * session to this org's key and to the caller. A viewer or commenter, and a
+ * stranger, get the org member's refusal (403).
+ */
+export async function requireUploadActor(orgId: string): Promise<(OrgAccessOk | ExternalAccessOk) | OwnershipFail> {
+  const member = await requireOrgCapability(orgId, 'catalog.write');
+  if (member.ok) return member;
+  if (member.res.status === 401) return member;
+  const ext = await requireExternalInOrg(orgId, (ms) => externalMayAny(ms, 'upload_versions'));
+  return ext.ok ? ext : member;
+}
+
+export type ProjectActor =
+  | { ok: true; kind: 'org'; access: OrgAccessOk & { object: OrgObject } }
+  | { ok: true; kind: 'external'; access: ExternalAccessOk };
+export type ProjectActorResult = ProjectActor | OwnershipFail;
+
+/**
+ * A route that serves org members AND external members of a project. An org
+ * member who passes requireObjectAccess (membership, capability, artist
+ * scope) is an `org` actor, exactly as before. Anyone else who is a live
+ * external member of the project is an `external` one. If neither, the
+ * answer is the ORG failure unchanged (404 for a stranger, 403 for a member
+ * lacking the capability), so adding the external path moves no existing
+ * status.
+ */
+export async function requireProjectActor(opts: { projectId: string; orgId?: string; cap: Capability }): Promise<ProjectActorResult> {
+  const asMember = await requireObjectAccess({ table: 'projects', id: opts.projectId, cap: opts.cap, orgId: opts.orgId });
+  if (asMember.ok) return { ok: true, kind: 'org', access: asMember };
+  if (asMember.res.status === 401) return asMember;
+  const external = await requireExternalProject({ projectId: opts.projectId, orgId: opts.orgId });
+  return external.ok ? { ok: true, kind: 'external', access: external } : asMember;
+}
+
+/** requireProjectActor for a track: org access first, else a live external membership of a project it sits in. */
+export async function requireTrackActor(opts: { trackId: string; orgId?: string; cap: Capability }): Promise<ProjectActorResult> {
+  const asMember = await requireObjectAccess({ table: 'tracks', id: opts.trackId, cap: opts.cap, orgId: opts.orgId });
+  if (asMember.ok) return { ok: true, kind: 'org', access: asMember };
+  if (asMember.res.status === 401) return asMember;
+  const external = await requireExternalTrack({ trackId: opts.trackId, orgId: opts.orgId });
+  return external.ok ? { ok: true, kind: 'external', access: external } : asMember;
+}
+
+/**
+ * The `project_members` rows of ONE project of the authorised org, for the
+ * members panel: the org from the context, the project from the (already
+ * authorised) object. Like `memberRowQuery` this is the only place a route
+ * reaches a row by `user_id` — a member's identity, never the tenant — and
+ * it needs `share.external` on the context (asking without throws, a
+ * programming error the route's try/catch turns into a 500, never a read).
+ * Writes are the audit functions (`projectMemberUpdate` / `projectMemberRemove`
+ * in lib/labelos/audit-rpc), not table writes.
+ */
+export function projectMemberRows(admin: AdminClient, ctx: Pick<OrgAccessOk, 'orgId' | 'capabilities'>, projectId: string) {
+  if (!ctx.capabilities.has('share.external')) throw new Error('projectMemberRows: share.external is required');
+  if (!isUUID(projectId)) throw new Error('projectMemberRows: projectId is not a uuid');
+  const all = (columns: string) => admin.from('project_members').select(columns).eq('org_id', ctx.orgId).eq('project_id', projectId);
+  return {
+    list: (columns = '*') => all(columns).order('created_at', { ascending: true }),
+    one: (userId: string, columns = '*') => {
+      if (!isUUID(userId)) throw new Error('projectMemberRows: userId is not a uuid');
+      return all(columns).eq('user_id', userId);
+    },
+  };
+}
+
+// ── "Shared with me" ────────────────────────────────────────────────────
+
+type SharedRow = ProjectMemberRow & {
+  org_id: string;
+  projects: { name: string | null } | { name: string | null }[] | null;
+  organizations: { name: string; deleted_at: string | null } | { name: string; deleted_at: string | null }[] | null;
+};
+
+/**
+ * The projects shared with the caller: their live external memberships, for
+ * the org switcher and `/shared`. Identity, not tenancy — the caller's own
+ * rows, like `myOrganizations`. An expired membership, a soft-deleted org or
+ * an unknown role is left out, the same rows `readExternalMemberships` refuses.
+ */
+export async function myExternalProjects(): Promise<
+  { ok: true; userId: string; projects: (SharedProjectRef & { orgId: string })[] } | OwnershipFail
+> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  const admin = createServiceClient();
+  try {
+    const { data, error } = await admin
+      .from('project_members')
+      .select('org_id, project_id, role, allow_downloads, expires_at, projects!inner(name), organizations!inner(name, deleted_at)')
+      .eq('user_id', userId);
+    if (error) throw new Error(error.message);
+    const projects: (SharedProjectRef & { orgId: string })[] = [];
+    for (const row of (data ?? []) as unknown as SharedRow[]) {
+      const org = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
+      const project = Array.isArray(row.projects) ? row.projects[0] : row.projects;
+      const membership = toMembership(row);
+      if (!org || org.deleted_at || !project || !membership) continue;
+      projects.push({
+        id: row.project_id,
+        orgId: row.org_id,
+        name: project.name ?? 'Untitled project',
+        orgName: org.name,
+        role: membership.role,
+        href: sharedProjectHref(row.project_id),
+      });
+    }
+    return { ok: true, userId, projects: sortSharedProjects(projects) };
+  } catch (err) {
+    log.error('shared project list failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not list shared projects');
   }
 }

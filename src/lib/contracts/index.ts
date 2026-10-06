@@ -926,6 +926,33 @@ export const OrgMemberPatchBodySchema = z.object({
 );
 export type OrgMemberPatchBody = z.infer<typeof OrgMemberPatchBodySchema>;
 
+// ── Label OS external project members (LABEL-21) ─────────────────────────
+
+/**
+ * POST /api/org/[orgId]/projects/[id]/members — invite a person with their
+ * own account to ONE project. The role is one of the four external project
+ * roles (06 §2.6), checked by `validateProjectInvite` (lib/labelos/project-
+ * members); here only bounded. `allow_downloads` is what a viewer or
+ * commenter may do with masters; a contributor or editor always may.
+ */
+export const OrgProjectInviteBodySchema = z.object({
+  email: z.string().trim().email('Enter a valid email address').max(200),
+  role: z.string().min(1).max(40),
+  allow_downloads: z.boolean().optional().default(false),
+}).strict();
+export type OrgProjectInviteBody = z.infer<typeof OrgProjectInviteBodySchema>;
+
+/** PATCH /api/org/[orgId]/projects/[id]/members/[userId]. At least one field; `expires_at: null` clears the expiry. */
+export const OrgProjectMemberPatchBodySchema = z.object({
+  role: z.string().min(1).max(40).optional(),
+  allow_downloads: z.boolean().optional(),
+  expires_at: z.string().max(40).nullable().optional(),
+}).strict().refine(
+  (b) => b.role !== undefined || b.allow_downloads !== undefined || b.expires_at !== undefined,
+  { message: 'Nothing to change' },
+);
+export type OrgProjectMemberPatchBody = z.infer<typeof OrgProjectMemberPatchBodySchema>;
+
 // ── Label OS org contacts + artist scope (LABEL-10) ──────────────────────
 
 /**

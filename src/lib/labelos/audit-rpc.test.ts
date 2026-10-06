@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { defaultVisibility, isAuditVerb, type Verb } from './activity';
 import { AUDIT_RPCS, auditRpc, isMissingAuditRpc, type AuditRpcAdmin } from './audit-rpc';
 
-const SQL = readFileSync(join(process.cwd(), 'supabase/migrations/146_labelos_audit_rpc.sql'), 'utf8');
+const SQL_146 = readFileSync(join(process.cwd(), 'supabase/migrations/146_labelos_audit_rpc.sql'), 'utf8');
+// LABEL-21 adds the project-member family (and replaces labelos_audit_invitation_create, same signature).
+const SQL_148 = readFileSync(join(process.cwd(), 'supabase/migrations/148_labelos_project_members.sql'), 'utf8');
+const SQL = SQL_146 + SQL_148;
 
 describe('auditRpc', () => {
   it('calls the named function with the arguments untouched', async () => {
@@ -41,7 +44,7 @@ describe('auditRpc', () => {
   });
 });
 
-describe('migration 146 holds exactly these functions, service_role only', () => {
+describe('migrations 146 + 148 hold exactly these functions, service_role only', () => {
   for (const [key, name] of Object.entries(AUDIT_RPCS)) {
     it(`${key} → ${name}`, () => {
       expect(SQL).toMatch(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\(`));
@@ -54,24 +57,28 @@ describe('migration 146 holds exactly these functions, service_role only', () =>
 
   it('declares no audit function the TypeScript does not know', () => {
     const declared = [...SQL.matchAll(/CREATE OR REPLACE FUNCTION public\.(labelos_audit_\w+)\(/g)].map((m) => m[1]);
-    expect(declared.filter((n) => n !== 'labelos_audit_insert').sort()).toEqual(Object.values(AUDIT_RPCS).sort());
+    const helpers = ['labelos_audit_insert', 'labelos_audit_insert_project'];
+    // 148 replaces labelos_audit_invitation_create: declared in both files, still one function.
+    expect([...new Set(declared)].filter((n) => !helpers.includes(n)).sort()).toEqual(Object.values(AUDIT_RPCS).sort());
   });
 
   it('writes only verbs whose default visibility is internal (the helper hardcodes it)', () => {
-    const written = [...SQL.matchAll(/'((?:member|invitation)\.[a-z_]+)'/g)].map((m) => m[1]);
+    const written = [...SQL.matchAll(/'((?:member|invitation|project)\.[a-z_]+)'/g)].map((m) => m[1]);
     expect(written.length).toBeGreaterThan(5);
     for (const verb of new Set(written)) expect(defaultVisibility(verb as Verb), verb).toBe('internal');
     for (const verb of new Set(written)) expect(isAuditVerb(verb), verb).toBe(true);
   });
 
-  it('keeps the event helper private (no EXECUTE for anyone but its owner)', () => {
+  it('keeps the event helpers private (no EXECUTE for anyone but their owner)', () => {
     expect(SQL).toMatch(/REVOKE ALL ON FUNCTION public\.labelos_audit_insert\([^)]*\) FROM PUBLIC, anon, authenticated, service_role;/);
+    expect(SQL).toMatch(/REVOKE ALL ON FUNCTION public\.labelos_audit_insert_project\([^)]*\) FROM PUBLIC, anon, authenticated, service_role;/);
     expect(SQL).not.toMatch(/GRANT EXECUTE ON FUNCTION public\.labelos_audit_insert/);
   });
 
   it('every function is SECURITY DEFINER with a pinned search_path', () => {
     const bodies = SQL.split(/CREATE OR REPLACE FUNCTION /).slice(1);
-    expect(bodies).toHaveLength(Object.keys(AUDIT_RPCS).length + 1);
+    // 146: the five + its helper; 148: the three + its helper + the replaced create, user_has_cap, can_see_project, the accept function, the integrity trigger.
+    expect(bodies.length).toBeGreaterThanOrEqual(Object.keys(AUDIT_RPCS).length + 2);
     for (const b of bodies) {
       expect(b).toMatch(/SECURITY DEFINER\s+SET search_path = public/);
     }

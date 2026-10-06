@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { Music } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ProjectFilesSection } from '@/components/projects/ProjectFilesSection';
+import { ProjectMembersPanel } from '@/components/labelos/ProjectMembersPanel';
 import { RestrictedNote } from '@/components/artists/OrgArtistWorkspaceTabs';
 import { orgShellFor, requireObjectAccess } from '@/lib/auth/org-access';
 import { songStageLabel } from '@/lib/labelos/org-workspace';
@@ -66,6 +67,11 @@ export default async function OrgProjectPage({ params }: { params: Promise<{ org
           <RestrictedNote>{`${detail.restrictedSongs} song${detail.restrictedSongs === 1 ? '' : 's'} still in development: restricted. Your role hears finished music only.`}</RestrictedNote>
         )}
       </section>
+
+      {/* LABEL-21: people from outside the org, for members who may share externally. */}
+      {shell.capabilities.includes('share.external') && (
+        <ProjectMembersPanel orgId={shell.org.id} orgName={shell.org.name} projectId={detail.project.id} />
+      )}
 
       <ProjectFilesSection projectId={detail.project.id} org={{ orgId: shell.org.id }} />
     </PageContainer>

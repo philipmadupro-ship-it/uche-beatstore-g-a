@@ -4,12 +4,12 @@
  * the org session gate (../access).
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireOrgCapability } from '@/lib/auth/org-access';
 import { OrgUploadSessionSchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { abortMultipart } from '@/lib/storage/multipart';
 import { deleteSession, getSession, markStatus } from '@/lib/storage/upload-sessions';
+import { requireUploadActor } from '@/lib/auth/org-access';
 import { orgSessionAuthorizer } from '../access';
 
 export const runtime = 'nodejs';
@@ -20,7 +20,7 @@ type Params = { params: Promise<{ orgId: string }> };
 
 export async function POST(req: NextRequest, { params }: Params) {
   const { orgId } = await params;
-  const access = await requireOrgCapability(orgId, 'catalog.write');
+  const access = await requireUploadActor(orgId);
   if (!access.ok) return access.res;
   const parsed = OrgUploadSessionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
