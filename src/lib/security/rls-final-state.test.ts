@@ -94,6 +94,8 @@ function labelOsTables(): string[] {
     // 144_labelos_releases.sql (LABEL-16)
     'releases',
     'release_items',
+    // 149_labelos_song_reviews.sql (LABEL-25)
+    'song_reviews',
   ];
 }
 
@@ -113,6 +115,8 @@ const ORG_HELPERS = [
   'can_see_project',
   // 147 (LABEL-20): the projects an artists-scoped member's scope reaches, for activity_events.
   'labelos_scoped_projects',
+  // 149 (LABEL-25): the songs of the scoped projects, for song_reviews.
+  'labelos_scoped_tracks',
 ];
 const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 

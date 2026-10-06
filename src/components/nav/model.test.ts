@@ -87,6 +87,13 @@ describe('navGroupsFor', () => {
     ]);
   });
 
+  it('the A&R inbox entry is for members who can review (LABEL-25), and only there', () => {
+    const items = (caps: string[]) => navGroupsFor('label', new Set(caps), { slug: 'ns', viewerIsProducer: false }).find((g) => g.key === 'roster')?.items.map((i) => i.href);
+    expect(items(['catalog.read', 'review.write'])).toEqual(['/o/ns/artists', '/o/ns/ar']);
+    expect(items(['catalog.read', 'review.comment'])).toEqual(['/o/ns/artists']);
+    expect(items(['catalog.read'])).toEqual(['/o/ns/artists']);
+  });
+
   it('the Artists hub needs catalog.read, and is for label and artist orgs only (LABEL-10)', () => {
     expect(navGroupsFor('label', new Set(), { slug: 'ns', viewerIsProducer: false }).map((g) => g.key)).toEqual(['org']);
     expect(navGroupsFor('artist', new Set(['catalog.read']), { slug: 'nova', viewerIsProducer: false }).map((g) => g.key)).toEqual(['roster', 'org']);

@@ -75,6 +75,9 @@ describe('toFeedEvent', () => {
     expect(toFeedEvent(row({ verb: 'song.stage_changed', payload: { from: 'inbox', to: 'in_review', note: 'x' } })).summary).toEqual({ move: { from: 'inbox', to: 'in_review' } });
     expect(toFeedEvent(row({ verb: 'song.stage_changed', payload: { from: 'inbox', to: 'released' } })).summary).toEqual({});
     expect(toFeedEvent(row({ verb: 'song.stage_changed', payload: { from: 'inbox' } })).summary).toEqual({});
+    expect(toFeedEvent(row({ verb: 'song.reviewed', payload: { rating: 4, verdict: 'shortlist', noted: true, note: 'secret' } })).summary).toEqual({ review: { rating: 4, verdict: 'shortlist' } });
+    expect(toFeedEvent(row({ verb: 'song.reviewed', payload: { rating: 9, verdict: 'love', noted: true } })).summary).toEqual({});
+    expect(toFeedEvent(row({ verb: 'song.reviewed', payload: { rating: null, verdict: 'hold' } })).summary).toEqual({ review: { rating: null, verdict: 'hold' } });
     // Only that verb: another verb's payload with from/to is not a stage move.
     expect(toFeedEvent(row({ verb: 'release.updated', payload: { from: 'inbox', to: 'in_review' } })).summary).toEqual({});
   });

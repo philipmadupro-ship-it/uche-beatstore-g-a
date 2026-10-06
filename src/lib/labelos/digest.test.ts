@@ -415,3 +415,63 @@ describe('song.stage_changed (LABEL-24)', () => {
     expect(lines.map((l) => describeLine(l, NAMES).text)).toEqual(['moved Midnight to Shortlisted', 'moved Midnight to In review']);
   });
 });
+
+describe('song.reviewed (LABEL-25)', () => {
+  const review = (songId: string, at: string, rev: { rating?: number | null; verdict?: string | null }, over: Partial<DigestEvent> = {}) =>
+    ev({ verb: 'song.reviewed', at, artistId: NOVA, songId, subjectId: songId, summary: { review: rev }, ...over });
+  const lineOf = (events: DigestEvent[], names: DigestNames = NAMES) => describeLine(buildDigest(events, { view: 'overview' }).sections[0].days[0].lines[0], names);
+
+  it('reads "Sam reviewed Midnight: 4 of 5, Shortlist"', () => {
+    expect(lineOf([review(S1, '2026-10-05T10:00:00Z', { rating: 4, verdict: 'shortlist' })])).toEqual({ actor: 'Sam', text: 'reviewed Midnight: 4 of 5, Shortlist' });
+  });
+
+  it('names only what was given', () => {
+    expect(lineOf([review(S1, '2026-10-05T10:00:00Z', { rating: 2 })]).text).toBe('reviewed Midnight: 2 of 5');
+    expect(lineOf([review(S1, '2026-10-05T10:00:00Z', { verdict: 'changes_requested' })]).text).toBe('reviewed Midnight: Changes requested');
+    expect(lineOf([review(S1, '2026-10-05T10:00:00Z', { rating: null, verdict: null })]).text).toBe('reviewed Midnight'); // a note-only review: nothing to name but the song
+    expect(lineOf([review(S1, '2026-10-05T10:00:00Z', {})]).text).toBe('reviewed a song'); // no usable summary
+  });
+
+  it('collapses one actor re-rating one song in a day to the last review', () => {
+    const d = buildDigest([
+      review(S1, '2026-10-05T09:00:00Z', { rating: 2 }),
+      review(S1, '2026-10-05T10:00:00Z', { rating: 5, verdict: 'shortlist' }),
+    ], { view: 'overview' });
+    const [line] = d.sections[0].days[0].lines;
+    expect(line.parts).toHaveLength(1);
+    expect(describeLine(line, NAMES).text).toBe('reviewed Midnight: 5 of 5, Shortlist');
+  });
+
+  it('a later save that clears the rating removes it from the line; one that leaves a field out keeps the earlier one', () => {
+    const cleared = buildDigest([
+      review(S1, '2026-10-05T09:00:00Z', { rating: 2, verdict: 'hold' }),
+      review(S1, '2026-10-05T10:00:00Z', { rating: null }),
+    ], { view: 'overview' }).sections[0].days[0].lines[0];
+    expect(describeLine(cleared, NAMES).text).toBe('reviewed Midnight: Hold');
+    const kept = buildDigest([
+      review(S1, '2026-10-05T09:00:00Z', { rating: 2 }),
+      review(S1, '2026-10-05T10:00:00Z', { verdict: 'pass' }),
+    ], { view: 'overview' }).sections[0].days[0].lines[0];
+    expect(describeLine(kept, NAMES).text).toBe('reviewed Midnight: 2 of 5, Pass');
+  });
+
+  it('keeps two songs as two parts and folds more than two into a count', () => {
+    expect(lineOf([review(S1, '2026-10-05T09:00:00Z', { rating: 4 }), review(S2, '2026-10-05T10:00:00Z', { verdict: 'pass' })]).text)
+      .toBe('reviewed Midnight: 4 of 5 and reviewed Dawn: Pass');
+    const many = lineOf([
+      review(S1, '2026-10-05T09:00:00Z', { rating: 4 }),
+      review(S2, '2026-10-05T10:00:00Z', { rating: 3 }),
+      review(S3, '2026-10-05T11:00:00Z', { rating: 1 }),
+    ]);
+    expect(many.text).toBe('reviewed 3 songs');
+  });
+
+  it('keeps reading an event without a usable summary generically', () => {
+    expect(lineOf([ev({ verb: 'song.reviewed', at: '2026-10-05T09:00:00Z', artistId: NOVA })]).text).toBe('reviewed a song');
+  });
+
+  it('never carries a note: the summary type has no field for one', () => {
+    const e = review(S1, '2026-10-05T10:00:00Z', { rating: 4 });
+    expect(Object.keys(e.summary.review ?? {})).not.toContain('note');
+  });
+});
