@@ -1498,6 +1498,23 @@ Migrating `contact_tasks`.
 ## Rollback
 Drop the table and column.
 
+### Built (LABEL-23 implementer's note — the Status line above is the orchestrator's)
+- **Migration 151** (not applied): `tasks` (typed nullable FKs `artist_id` / `project_id` / `song_id` / `release_id`, CHECK at most one; integrity trigger; service-role writes only; ONE read policy: creator, assignee or owner/admin, inside the member's artist scope, uncorrelated hashed subplans — `EXPLAIN` asserted in the local check) and `notifications.org_id` (nullable; RESTRICTIVE member-only SELECT policy; the 141 service-only trigger, so no member forges or edits an org notification through PostgREST). New helper `labelos_scoped_releases()`.
+- **Who sees a task (D1 "each side its own"):** its maker, its assignee and an owner/admin — never "everyone who can read the song". Assignment needs `tasks.write`, and the assignee must be a live member who can reach the task's object exactly as opening it would (artist scope; D4 for a song's row), so a task never names something its assignee cannot see. A task is 404 (not 403) to anyone it is not visible to; the assignee may tick it off, only its maker or an owner/admin deletes it.
+- **Routes:** `GET|POST /api/org/[orgId]/tasks` (`?view=mine|asked`, or `?kind=&id=` for one object), `PATCH|DELETE …/tasks/[taskId]`, `GET …/tasks/assignees`, `GET|PATCH …/notifications` (the bell under an org; recipient AND org in every query, `lib/labelos/notification-store.ts`). New activity verbs `task.created|updated|completed|deleted` (internal visibility, digest phrases, subject type `task`).
+- **`lib/labelos/notify.ts`:** closed union `task_assigned | approval_requested | mention | credit_named_you | invitation`; `notifyDirectAsk` takes ONE recipient, never notifies the asker, never throws; `notify.test.ts` fails a broadcast-sounding kind, and a source scan fails any `notifications` insert under `lib/labelos` / `api/org` outside it and any caller outside the task routes. Only `task_assigned` has a caller today — the others are written by their tasks (approvals LABEL-32, credits LABEL-26/27, invitations, mentions).
+- **Producer bell untouched:** `/api/notifications` now reads `org_id IS NULL` (it falls back to the old query if migration 151 is not applied), so a Label OS ask never reaches it or its badge; its tests assert the filter and the fallback.
+- **UI:** "My work" (+ "Waiting on others") on the org Overview, tasks inline on the song view and on each release in the artist workspace's Releases tab, and the TopBar bell is the org's own under `/o/<slug>` (the producer's store-attention and activity log stay producer-only).
+
+### Verification
+`npm run db:local:check` (151's check as `authenticated` / `anon` + rollbacks), the route tests against the real `org-access` and an evaluating in-memory database, the extended external-member matrix (no external role reads or changes a task or notification even when rows name them), `e2e/label-org-tasks.spec.ts` against the real database (added to `e2e:real-db`).
+
+### Not done
+- Releases have no page of their own, so a `task_assigned` ask about a release opens the Overview ("My work").
+- `invitation`, `approval_requested`, `mention` and `credit_named_you` are in the union and the bell's icon/link vocabulary but nothing writes them yet.
+- No due-date reminders, recurrence or email for tasks (direct ask = the bell and, with the existing opt-in, an OS notification while a tab is open).
+- `CLAUDE.md`'s Label OS paragraph is not extended here (LABEL-22 edits the same line in parallel); this note and the PR carry the conventions until the orchestrator folds them in.
+
 ---
 
 # LABEL-24 — Song stage machine

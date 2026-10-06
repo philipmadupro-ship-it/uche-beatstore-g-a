@@ -46,6 +46,8 @@ const ASSET = '60000000-0000-4000-8000-000000000001';
 const RELEASE = '70000000-0000-4000-8000-000000000001';
 const ITEM = '70000000-0000-4000-8000-000000000002';
 const INV = '80000000-0000-4000-8000-000000000001';
+const TASK = '90000000-0000-4000-8000-000000000001';
+const NOTE = '90000000-0000-4000-8000-000000000002';
 
 const ROLES = { viewer: VIEWER, commenter: COMMENTER, contributor: CONTRIBUTOR, editor: EDITOR } as const;
 
@@ -103,6 +105,10 @@ function seed(): MemoryDb {
       releases: [{ id: RELEASE, org_id: L, project_id: P1, contact_id: C1, state: 'planned', title: 'EP' }],
       release_items: [{ id: ITEM, org_id: L, release_id: RELEASE, position: 1, song_track_id: S1 }],
       activity_events: [],
+      // LABEL-23: rows that even NAME an external member (a stale assignment, a notification addressed to them)
+      // must not be readable by them — they are not org members.
+      tasks: [{ id: TASK, org_id: L, title: 'Clear the sample', assignee_id: EDITOR, created_by: OWNER, song_id: S1, artist_id: null, project_id: null, release_id: null, created_at: '2026-10-01', done_at: null }],
+      notifications: [{ id: NOTE, user_id: EDITOR, org_id: L, kind: 'task_assigned', title: 'Owner assigned you a task', body: 'Clear the sample', data: null, read: false, created_at: '2026-10-01' }],
       user_profiles: [],
       creator_profiles: [],
       track_links: [],
@@ -154,6 +160,7 @@ function paramsFor(path: string): Record<string, string> {
     itemId: ITEM,
     invitationId: INV,
     userId: EDITOR,
+    taskId: TASK,
   };
   return Object.fromEntries(names.map((n) => [n, values[n] ?? P1]));
 }
@@ -221,6 +228,42 @@ describe('an external member × every org route', () => {
       expect([401, 403, 404], `${method} ${path}`).toContain(res.status);
     }
   });
+});
+
+describe('LABEL-23: tasks and notifications are not an external member\'s (route by route)', () => {
+  const routes = [
+    ['[orgId]/tasks/route.ts', 'GET', '?view=mine'],
+    ['[orgId]/tasks/route.ts', 'GET', `?kind=song&id=${S1}`],
+    ['[orgId]/tasks/route.ts', 'POST', ''],
+    ['[orgId]/tasks/[taskId]/route.ts', 'PATCH', ''],
+    ['[orgId]/tasks/[taskId]/route.ts', 'DELETE', ''],
+    ['[orgId]/tasks/assignees/route.ts', 'GET', ''],
+    ['[orgId]/notifications/route.ts', 'GET', ''],
+    ['[orgId]/notifications/route.ts', 'PATCH', '?action=read_all'],
+  ] as const;
+
+  it('the routes exist and none of them is on the external allowlist', () => {
+    for (const [path, method] of routes) {
+      expect(files, path).toContain(path);
+      expect(externalRouteKeys(), `${path}:${method}`).not.toContain(`${path}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: a task assigned to them and a notification addressed to them are still unreadable and unchangeable`, async () => {
+      for (const [path, method, query] of routes) {
+        const res = await call(path, method, user, {
+          query,
+          body: method === 'POST' ? { title: 'x', assignee_id: user, target: { kind: 'song', id: S1 } } : method === 'PATCH' ? { done: true } : undefined,
+        });
+        expect([403, 404], `${method} ${path}${query} answered ${res.status}`).toContain(res.status);
+      }
+      expect(db.tables.tasks).toHaveLength(1);
+      expect(db.tables.tasks[0].done_at ?? null).toBeNull();
+      expect(db.tables.notifications[0].read).toBe(false);
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
 });
 
 describe('the allowlisted routes', () => {

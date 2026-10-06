@@ -22,6 +22,7 @@ import { ProjectFilesSection } from '@/components/projects/ProjectFilesSection';
 import { ArtistActivityTab } from '@/components/labelos/ArtistActivityTab';
 import { OrgUploadPanel } from '@/components/labelos/OrgUploadPanel';
 import { SongStageControl } from '@/components/labelos/SongStageControl';
+import { TasksPanel } from '@/components/labelos/TasksPanel';
 import {
   ORG_WORKSPACE_TABS,
   ORG_WORKSPACE_TAB_LABEL,
@@ -82,7 +83,7 @@ export function OrgArtistWorkspaceTabs({ orgId, orgSlug, workspace, viewerId }: 
         {tab === 'overview' && <OverviewTab workspace={workspace} base={base} onOpen={go} />}
         {tab === 'projects' && <ProjectsTab workspace={workspace} base={base} />}
         {tab === 'songs' && <SongsTab orgId={orgId} workspace={workspace} base={base} />}
-        {tab === 'releases' && <ReleasesTab workspace={workspace} base={base} />}
+        {tab === 'releases' && <ReleasesTab orgId={orgId} workspace={workspace} base={base} />}
         {tab === 'files' && <FilesTab orgId={orgId} workspace={workspace} base={base} />}
         {tab === 'activity' && <ArtistActivityTab orgId={orgId} orgSlug={orgSlug} contactId={workspace.contact.id} viewerId={viewerId} />}
       </div>
@@ -246,7 +247,7 @@ function releaseMeta(r: OrgWorkspaceRelease): string {
   return [RELEASE_TYPE_LABEL[r.type] ?? r.type, r.state, date ? new Date(`${date}T00:00:00`).toLocaleDateString() : null].filter(Boolean).join(' · ');
 }
 
-function ReleasesTab({ workspace, base }: { workspace: OrgArtistWorkspace; base: string }) {
+function ReleasesTab({ orgId, workspace, base }: { orgId: string; workspace: OrgArtistWorkspace; base: string }) {
   if (!workspace.releasesReady) return <p className={EMPTY}>Releases need migration 144 applied on Supabase.</p>;
   if (workspace.releases.length === 0) return <p className={EMPTY}>No releases for {workspace.contact.name} yet.</p>;
   return (
@@ -273,6 +274,9 @@ function ReleasesTab({ workspace, base }: { workspace: OrgArtistWorkspace; base:
               ))}
             </ol>
           )}
+          <div className="mt-4">
+            <TasksPanel orgId={orgId} object={{ kind: 'release', id: r.id }} testId={`ows-release-tasks-${r.id}`} />
+          </div>
         </li>
       ))}
     </ul>
