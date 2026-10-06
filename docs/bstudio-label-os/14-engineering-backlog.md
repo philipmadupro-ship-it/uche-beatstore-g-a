@@ -1195,6 +1195,22 @@ None.
 
 Also from LABEL-07 (#57): orgs created by migration 137's backfill have no `org.created` event (only orgs created through `POST /api/profile` record one). Backfill them here if the feed needs a complete history.
 
+**Built (for the orchestrator's merge gate):**
+- **Migration 146 (not applied; SQL functions only).** `labelos_audit_member_update`, `_member_remove`, `_member_artists_set`, `_invitation_create`, `_invitation_revoke`, each doing the mutation and the `activity_events` insert in one transaction; a private `labelos_audit_insert` helper. SECURITY DEFINER, owner postgres, `EXECUTE` for `service_role` only. `/api/org/[orgId]/members` (PATCH, DELETE), `…/members/artists` (PUT) and `…/invitations` (POST, DELETE) call them through `auditRpc` (`lib/labelos/audit-rpc.ts`) and lost their compensating writes (undo-the-update, restore-the-member, delete-the-invitation). `invitation_create` also decides "one pending invitation per address" under an advisory lock, replacing the insert / re-check / delete dance. A missing function answers 503 naming 146, like the other routes before their migration. `member.joined` was already atomic in 138.
+- **Events on the routes that had none:** `PATCH|DELETE …/assets/[assetId]` (`file.updated`, `file.deleted`), `PATCH|DELETE …/releases/[id]` and the tracklist routes (`release.updated`, `release.deleted`; one verb for item add / reorder / edit / remove, the payload says which), `POST …/upload/complete` (`song.created` for a new song, `recording.uploaded` for linked material). New verbs: `file.updated`, `file.deleted`, `release.updated`, `release.deleted`.
+- **Coverage test.** `lib/labelos/event-coverage.ts` (pure; fixtures prove it fails a handler with no event, ignores comments and sibling handlers, flags a stale exemption) + `src/app/api/org/coverage.test.ts` over the real routes. `NO_EVENT_HANDLERS` has six entries, each with its reason: presign, and upload `init` / `part` (POST, PATCH, PUT) / `abort`, which are storage plumbing — the event is `…/upload/complete`'s.
+- **Carried decision (a): default visibility per verb** (`DEFAULT_VISIBILITY`, `lib/labelos/activity.ts`, total over `Verb`, tested). `artist` = what was made, moved on or credited (songs, recordings, projects, credits, releases): A&R / producers / engineers (catalog.read, no business.read.internal) and the song's artist read it (D5). `internal` = members, invitations, contacts, sharing, who downloaded what, split sheets, approvals, org settings, connections (D4). Files default `internal`; the file routes pass `artist` only for a file that is not, and was not, restricted. A route still may pass `visibility` for one event.
+- **Carried decision (b): `org.created` backfill — done**, in 146: one event per org without one (`source: 'backfill'`, dated to the org's own `created_at`, actor `created_by`), so LABEL-20's feed has a complete history. Idempotent; the rollback removes exactly those rows.
+
+**Verification:** `tsc`, `vitest` (5,300 tests), `next build`, `npm run db:local:check` (146's check: grants asserted for service_role / authenticated / anon through `has_function_privilege` and by calling as each role; for every function a trigger that makes the `activity_events` insert fail proves the mutation is NOT there afterwards, including the cleared artist list and the removed member; the backfill; the rollback). `e2e/label-org-audit.spec.ts` (registered in `e2e:real-db`) drives the real routes and PostgREST: audit events written with the change, the last owner refused with nothing recorded (also through the function, via 136's deferred trigger), `authenticated` refused on the RPC, an A&R member reading the creative events and none of the business ones under the real RLS policy.
+
+**Not done:**
+- **Split transitions, approvals, delivery.** No mutating route exists for them yet (credits LABEL-30, approvals LABEL-32, delivery LABEL-33), so there is nothing to make atomic. Each adds its function (same `labelos_audit_insert` helper, same grants) with its route; the `Verb` list and `AUDIT_VERBS` already hold them. `recording.downloaded` / `file.restricted_downloaded` are audit verbs written by `recordEvent` before the bytes stream; they read, so there is no mutation to bundle.
+- Events carry `artist_id` only where the route knows it cheaply (release events, upload of a new song). Project-file events and `recording.uploaded` for linked material carry the project / song, not the artist; LABEL-20 can join through them.
+- **`activity_events` RLS has no artist-scope predicate** (136's policy: `catalog.read` + `visibility = 'artist'` or `business.read.internal`; its comment defers scope to "once LABEL-10 exists", and 139–146 never added it). Now that creative verbs default to `artist`, an artists-scoped member or a roster artist who queries the table directly with their own JWT can read `artist` events of artists outside their scope (`song.created` carries the title). The app never exposes that read (feeds are service-role routes), so it belongs to LABEL-20 ("events filtered by current scope"): add a scope predicate to the policy there, before any feed ships, failing closed for scoped members on events with no `artist_id`.
+- The member routes read the member, plan the change and then call the function; two admins acting at once can record a `from` value the other change already moved (the database still keeps one owner). Unchanged from before 146; an expected-old-values compare inside the functions would close it.
+- The producer routes `api/activity`, `api/tracks/[id]/similar`, `api/tracks/tags/bulk`, `api/tracks/tags` still treat `user_id IS NULL` as the producer's own, and the R-08 guard cost on member reads stands (PR #76); neither is touched here.
+
 ## Out of Scope
 Feeds (LABEL-20).
 
@@ -1243,6 +1259,12 @@ One grouped line per actor per day. No per-event toasts.
 ## Tests
 - `digest.test.ts`.
 - Route visibility tests.
+
+## Carried from LABEL-19
+- **Visibility is decided at write time per verb** (`defaultVisibility`, `lib/labelos/activity.ts`): the feed reads `activity_events` under 136's policy, so an A&R member already sees only `artist` rows. Apply `08` §B4's *current-scope* rule on top (artist scope via `can_see_artist` / the route helpers); do not re-derive visibility from the verb in the digest.
+- **Verbs added:** `file.updated`, `file.deleted`, `release.updated`, `release.deleted`. A tracklist edit is `release.updated` with `payload.items` ∈ `added | removed | reordered | edited`; a cancel is `payload.state`. The digest's collapse rules should group these rather than print five lines for one reordering.
+- **Context keys:** release and new-song events carry `artist_id`; project-file events carry `project_id` only.
+- **History is complete from creation:** orgs from 137 have a backfilled `org.created` (`payload.source = 'backfill'`).
 
 ## Out of Scope
 Email/Slack digests (LABEL-38).

@@ -37,6 +37,7 @@ import { orgUploadTrackFields, orgUploadTrackView, type OrgUploadTrackRow } from
 import { createLogger } from '@/lib/log';
 import { completeMultipart, listParts } from '@/lib/storage/multipart';
 import { deleteStoredObject } from '@/lib/storage/upload';
+import { recordEvent } from '@/lib/labelos/activity';
 import { deleteSession, getSession, markStatus } from '@/lib/storage/upload-sessions';
 import { addOrgLink } from '@/lib/tracks/links-store';
 import { enqueueUploadProcessingJob, processUploadProcessingJobById } from '@/lib/upload/processing';
@@ -171,6 +172,29 @@ export async function POST(req: NextRequest, { params }: Params) {
     log.error('org upload placement failed', { orgId: org, error: errorMessage(err) });
     await rollback();
     return json(500, 'Could not save the upload');
+  }
+
+  // Everyday events, best effort (the upload is done either way). A new song
+  // is `song.created` (its audio is the song's mix, not a second event); material
+  // linked to an existing song is `recording.uploaded`. Both are creative-side
+  // work: the default visibility (D5) shows them to the song's artist.
+  const who = { orgId: org, userId: access.userId };
+  if (body.as.kind === 'song') {
+    await recordEvent(
+      admin,
+      who,
+      'song.created',
+      { type: 'track', id: row.id, artistId: body.as.contactId, projectId: projectIds[0] ?? null, songId: row.id },
+      { title: row.title, song_stage: row.song_stage },
+    );
+  } else {
+    await recordEvent(
+      admin,
+      who,
+      'recording.uploaded',
+      { type: 'track', id: row.id, projectId: projectIds[0] ?? null, songId: body.as.songId },
+      { relation: body.as.relation, type: row.type },
+    );
   }
 
   try {

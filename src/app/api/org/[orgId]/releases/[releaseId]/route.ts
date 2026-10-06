@@ -17,7 +17,8 @@ import { readBody } from '@/lib/validate';
 import { OrgReleasePatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { RELEASE_COLUMNS, toReleaseItemView, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
+import { recordEvent } from '@/lib/labelos/activity';
+import { RELEASE_COLUMNS, releaseEventSubject, toReleaseItemView, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
 import { checkArtwork, fail, itemsOf, releaseRow, schemaAware, writeError } from '../access';
 
 export const runtime = 'nodejs';
@@ -74,6 +75,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .select(RELEASE_COLUMNS)
       .single();
     if (error || !data) return writeError(error ?? {}, 'Could not save the release').res;
+    await recordEvent(
+      access.admin,
+      { orgId: access.object.orgId, userId: access.userId },
+      'release.updated',
+      releaseEventSubject(release),
+      {
+        fields: Object.keys(parsed.data).sort(),
+        ...(parsed.data.state && parsed.data.state !== release.state ? { state: { from: release.state, to: parsed.data.state } } : {}),
+      },
+    );
     return NextResponse.json({ release: toReleaseView(data as unknown as ReleaseRow) }, { headers: NO_STORE });
   } catch (err) {
     log.error('patch failed', { releaseId, error: errorMessage(err) });
@@ -101,6 +112,13 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       .select('id');
     if (error) return writeError(error, 'Could not delete the release').res;
     if (!(data as unknown[] | null)?.length) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    await recordEvent(
+      access.admin,
+      { orgId: access.object.orgId, userId: access.userId },
+      'release.deleted',
+      releaseEventSubject(release),
+      { title: release.title, type: release.type },
+    );
     return NextResponse.json({ success: true });
   } catch (err) {
     log.error('delete failed', { releaseId, error: errorMessage(err) });

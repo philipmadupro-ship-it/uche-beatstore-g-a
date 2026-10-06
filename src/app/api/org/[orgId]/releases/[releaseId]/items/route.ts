@@ -18,9 +18,11 @@ import { readBody } from '@/lib/validate';
 import { OrgReleaseItemCreateBodySchema, OrgReleaseItemsReorderBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { recordEvent } from '@/lib/labelos/activity';
 import {
   nextItemPosition,
   planReorder,
+  releaseEventSubject,
   RELEASE_ITEM_COLUMNS,
   RELEASE_MAX_ITEMS,
   toReleaseItemView,
@@ -71,6 +73,13 @@ export async function POST(req: NextRequest, { params }: Params) {
       .select(RELEASE_ITEM_COLUMNS)
       .single();
     if (error || !data) return writeError(error ?? {}, 'Could not add the song').res;
+    await recordEvent(
+      access.admin,
+      { orgId: access.object.orgId, userId: access.userId },
+      'release.updated',
+      releaseEventSubject(found.release),
+      { items: 'added', song_track_id: body.song_track_id },
+    );
     return NextResponse.json({ item: toReleaseItemView(data as unknown as ReleaseItemRow) }, { status: 201 });
   } catch (err) {
     log.error('add failed', { releaseId, error: errorMessage(err) });
@@ -105,6 +114,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return writeError(error, 'Could not reorder the tracklist').res;
     }
     const after = await itemsOf(access, found.release.id);
+    await recordEvent(
+      access.admin,
+      { orgId: access.object.orgId, userId: access.userId },
+      'release.updated',
+      releaseEventSubject(found.release),
+      { items: 'reordered', count: after.length },
+    );
     return NextResponse.json({ items: after.map(toReleaseItemView) });
   } catch (err) {
     log.error('reorder failed', { releaseId, error: errorMessage(err) });

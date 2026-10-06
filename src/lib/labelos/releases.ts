@@ -17,6 +17,7 @@
  *    `store_listed`). Gates (LABEL-32) and "released" (LABEL-33) are derived
  *    and not part of this module; nothing here sets those columns.
  */
+import type { EventSubject } from './activity';
 
 export const RELEASE_TYPES = ['single', 'ep', 'album', 'mixtape', 'compilation'] as const;
 export type ReleaseType = (typeof RELEASE_TYPES)[number];
@@ -39,6 +40,11 @@ export const RELEASE_STATES_OFF_RELEASE = ['cancelled'] as const;
 
 /** A tracklist's ceiling (a box set is well under it); also the reorder body's. */
 export const RELEASE_MAX_ITEMS = 200;
+
+/** The context every release event carries (08 §B3): the release, its artist and its project. */
+export function releaseEventSubject(r: Pick<ReleaseRow, 'id' | 'contact_id' | 'project_id'>): EventSubject {
+  return { type: 'release', id: r.id, artistId: r.contact_id, projectId: r.project_id, releaseId: r.id };
+}
 
 export type ReleaseRow = {
   id: string;

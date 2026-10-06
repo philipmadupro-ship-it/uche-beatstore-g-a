@@ -15,8 +15,10 @@
  *  - 32 random bytes; only their sha-256 is stored. The token leaves this
  *    route in exactly one place, the email, and is never logged or returned.
  *  - 7-day expiry. Rate-limited per org and per address (rate_limits, 074).
- *  - `invitation.created` is an audit event; if it cannot be written the
- *    invitation is removed again and the request fails.
+ *  - `invitation.created` is an audit event, written by the database function
+ *    that inserts the invitation (LABEL-19, migration 146): one transaction,
+ *    and the same function enforces one pending invitation per address under
+ *    a lock, so two simultaneous requests cannot both create one.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOrgCapability, scopedOrgQuery } from '@/lib/auth/org-access';
@@ -24,7 +26,7 @@ import { OrgInvitationCreateBodySchema } from '@/lib/contracts';
 import { normalizeEmail } from '@/lib/contacts/email';
 import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
-import { recordEvent } from '@/lib/labelos/activity';
+import { AUDIT_RPC_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { inviterDisplayName, sendInvitationEmail } from '@/lib/labelos/invitation-email';
 import { INVITATION_TTL_MS, newInvitationToken, validateInvitationGrant } from '@/lib/labelos/invitations';
 import { missingRosterContacts } from '@/lib/labelos/org-contacts';
@@ -143,47 +145,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     }
 
     const { token, tokenHash } = newInvitationToken();
-    const { data: inserted, error: insertErr } = await admin
-      .from('org_invitations')
-      .insert({
-        org_id: access.orgId,
-        email,
-        role: grant.role,
-        functions: grant.functions,
-        artist_ids: grant.contactIds,
-        token_hash: tokenHash,
-        expires_at: new Date(Date.now() + INVITATION_TTL_MS).toISOString(),
-        invited_by: access.userId,
-      })
-      .select(VIEW_COLUMNS)
-      .single();
-    if (insertErr || !inserted) throw new Error(insertErr?.message ?? 'insert returned nothing');
-    const invitation = inserted as InvitationRow;
-
-    // Two requests for one address can both pass the check above. After
-    // inserting, the oldest pending row wins and any later one removes
-    // itself, so exactly one survives whatever the interleaving.
-    const after = await pendingFor();
-    if (after.error) throw new Error(after.error.message);
-    const oldest = ((after.data ?? []) as unknown as { id: string }[])[0];
-    if (oldest && oldest.id !== invitation.id) {
-      await admin.from('org_invitations').delete().eq('org_id', access.orgId).eq('id', invitation.id);
-      return conflict(oldest.id);
-    }
-
-    try {
-      await recordEvent(
-        admin,
-        { orgId: access.orgId, userId: access.userId },
-        'invitation.created',
-        { type: 'invitation', id: invitation.id },
-        { email, role: grant.role, functions: grant.functions, contact_ids: grant.contactIds, scope: grant.scope },
-      );
-    } catch (err) {
-      // An invitation nobody can account for must not exist.
-      await admin.from('org_invitations').delete().eq('org_id', access.orgId).eq('id', invitation.id);
-      throw err;
-    }
+    const { data: result, error: rpcErr } = await auditRpc(admin, 'invitationCreate', {
+      p_org: access.orgId,
+      p_actor: access.userId,
+      p_email: email,
+      p_role: grant.role,
+      p_functions: grant.functions,
+      p_artist_ids: grant.contactIds,
+      p_token_hash: tokenHash,
+      p_expires_at: new Date(Date.now() + INVITATION_TTL_MS).toISOString(),
+      p_payload: { email, role: grant.role, functions: grant.functions, contact_ids: grant.contactIds, scope: grant.scope },
+    });
+    if (isMissingAuditRpc(rpcErr)) return NextResponse.json({ error: AUDIT_RPC_NOT_READY }, { status: 503 });
+    if (rpcErr) throw new Error(rpcErr.message);
+    if (result?.error === 'pending') return conflict(String(result.id ?? ''));
+    const invitation = (result?.invitation ?? null) as InvitationRow | null;
+    if (!invitation) throw new Error('invitation insert returned nothing');
 
     const sent = await sendInvitationEmail({
       to: email,

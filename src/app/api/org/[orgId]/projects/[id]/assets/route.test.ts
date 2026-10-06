@@ -416,6 +416,24 @@ describe('PATCH / DELETE', () => {
     const res = await item('PATCH', AR, L, LP1, A_ART, { label: 'Front cover' });
     expect(res.status).toBe(200);
     expect(row(A_ART)).toMatchObject({ label: 'Front cover', sensitivity: 'normal' });
+    expect(db.tables.activity_events).toEqual([
+      expect.objectContaining({
+        verb: 'file.updated',
+        actor_id: AR,
+        subject_id: A_ART,
+        project_id: LP1,
+        audit: false,
+        visibility: 'artist',
+        payload: { fields: ['label'], kind: 'artwork', sensitivity: 'normal' },
+      }),
+    ]);
+  });
+
+  it('a change to a restricted file is recorded business-internal, and a refused one is not recorded at all', async () => {
+    expect((await item('PATCH', AR, L, LP1, A_CON, { label: 'x' })).status).toBe(403);
+    expect(db.tables.activity_events).toEqual([]);
+    await item('PATCH', OWN, L, LP1, A_CON, { label: 'Signed' });
+    expect(db.tables.activity_events).toEqual([expect.objectContaining({ verb: 'file.updated', subject_id: A_CON, visibility: 'internal' })]);
   });
 
   it('A&R cannot touch the contract (403), nor restrict a file they could then not open', async () => {
@@ -448,6 +466,9 @@ describe('PATCH / DELETE', () => {
     expect((await item('DELETE', AR, L, LP1, A_SES)).status).toBe(200);
     expect(row(A_SES)).toBeUndefined();
     expect(storage.deleted).toEqual([url]);
+    expect(db.tables.activity_events).toEqual([
+      expect.objectContaining({ verb: 'file.deleted', actor_id: AR, subject_id: A_SES, project_id: LP1, audit: false, visibility: 'artist' }),
+    ]);
     expect((await item('DELETE', AR, L, LP1, A_CON)).status).toBe(403);
     expect((await item('DELETE', MKT, L, LP1, A_ART)).status).toBe(403);
     expect((await item('DELETE', OWN, L, PP1, P_FILE)).status).toBe(404);

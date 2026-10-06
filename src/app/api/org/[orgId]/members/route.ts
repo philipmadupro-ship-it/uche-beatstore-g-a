@@ -16,20 +16,20 @@
  * Artist scope rows (member_artist_scopes, LABEL-10) follow the membership:
  * a change that leaves a member seeing the whole org clears their list (so
  * a later limit starts from none, never from a list nobody chose for it),
- * named in the event's payload; a removal's rollback restores the list the
- * FK cascade took.
+ * named in the event's payload.
  *
  * The last owner is never demoted or removed: 409, checked here and held by
  * 136's deferred trigger, whose error is answered as the same 409 rather
- * than a raw database error. Each change is an audit event (member.*); if it
- * cannot be written the change is undone and the request fails.
+ * than a raw database error. Each change is an audit event (member.*) written
+ * by the database function that makes the change (LABEL-19, migration 146):
+ * the change, the cleared artist list and the event are one transaction, so
+ * if the event cannot be written none of it happened.
  *
  * A member row is addressed by (org, user) through `memberRowQuery`, never a
  * `user_id` filter in this file.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  memberArtistScopeQuery,
   memberRowQuery,
   requireOrgCapability,
   requireOrgMember,
@@ -38,7 +38,7 @@ import {
 } from '@/lib/auth/org-access';
 import { OrgMemberPatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
-import { recordEvent } from '@/lib/labelos/activity';
+import { AUDIT_RPC_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { memberIdentities, type IdentityAdmin } from '@/lib/labelos/member-identity';
 import { planMemberChange, planMemberRemoval, type MemberState } from '@/lib/labelos/members';
 import { toArtistScope } from '@/lib/labelos/artist-scope';
@@ -132,12 +132,6 @@ async function ownerCount(access: OrgAccessOk): Promise<number> {
   return count ?? 0;
 }
 
-/** A member's artist scope list, or [] for one who sees the whole org. */
-async function scopeListOf(access: OrgAccessOk, row: MemberRow): Promise<string[]> {
-  if (toArtistScope(row.role, row.scope, []) === null) return [];
-  return memberArtistScopeQuery(access.admin, access, row.user_id).list();
-}
-
 async function readMember(access: OrgAccessOk, userId: string): Promise<MemberRow | null> {
   const { data, error } = await memberRowQuery(access.admin, access, userId).select(COLUMNS).maybeSingle();
   if (error) throw new Error(error.message);
@@ -191,52 +185,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ or
     if (!plan.ok) return NextResponse.json({ error: plan.error }, { status: plan.status });
     if (plan.noop) return NextResponse.json({ member: toView(before, access.userId) });
 
-    const { data: updated, error: updateErr } = await memberRowQuery(admin, access, userId).update(plan.patch).select(COLUMNS);
-    if (isLastOwnerError(updateErr)) return NextResponse.json({ error: LAST_OWNER }, { status: 409 });
-    if (updateErr) throw new Error(updateErr.message);
-    const after = (Array.isArray(updated) ? updated[0] : null) as MemberRow | null;
-    if (!after) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    // Put back exactly the fields this request changed, and the artist list
-    // if it was cleared. supabase-js resolves with { error }, so check it.
-    const scopes = memberArtistScopeQuery(admin, access, userId);
-    let cleared: string[] = [];
-    const undo = async () => {
-      const revert: Record<string, unknown> = {};
-      for (const key of Object.keys(plan.patch) as (keyof MemberRow)[]) revert[key] = before[key];
-      const { error: revertErr } = await memberRowQuery(admin, access, userId).update(revert);
-      if (revertErr) log.error('reverting an unaudited member change failed', { orgId: access.orgId, error: revertErr.message });
-      if (cleared.length > 0) {
-        const { error: restoreErr } = await scopes.replace(cleared);
-        if (restoreErr) log.error('restoring a cleared artist scope failed', { orgId: access.orgId, error: restoreErr.message });
-      }
-    };
-
-    try {
-      // Widened to the whole org: the old artist list goes (LABEL-10).
-      if (toArtistScope(after.role, after.scope, []) === null) {
-        const list = await scopeListOf(access, before);
-        if (list.length > 0) {
-          const { error: clearErr } = await scopes.replace([]);
-          if (clearErr) throw new Error(clearErr.message);
-          cleared = list;
-        }
-      }
-      if (plan.event) {
-        await recordEvent(
-          admin,
-          { orgId: access.orgId, userId: access.userId },
-          plan.event.verb,
-          { type: 'member', id: userId },
-          cleared.length > 0 ? { ...plan.event.payload, contact_ids: { from: cleared, to: [] } } : plan.event.payload,
-        );
-      }
-    } catch (err) {
-      // A change nobody can account for must not stand. (One event per
-      // request, so nothing of it was recorded.)
-      await undo();
-      throw err;
-    }
+    // The change, the cleared artist list (a member now seeing the whole org
+    // starts a later limit from none; the function decides that from the row
+    // under its lock) and the audit event: one transaction.
+    const { data: result, error: rpcErr } = await auditRpc(admin, 'memberUpdate', {
+      p_org: access.orgId,
+      p_actor: access.userId,
+      p_user: userId,
+      p_patch: plan.patch,
+      p_verb: plan.event!.verb,
+      p_payload: plan.event!.payload,
+    });
+    if (isMissingAuditRpc(rpcErr)) return NextResponse.json({ error: AUDIT_RPC_NOT_READY }, { status: 503 });
+    if (isLastOwnerError(rpcErr)) return NextResponse.json({ error: LAST_OWNER }, { status: 409 });
+    if (rpcErr) throw new Error(rpcErr.message);
+    if (result?.error === 'not_found') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const after = (result?.member ?? null) as MemberRow | null;
+    if (!after) throw new Error('member update returned no row');
     return NextResponse.json({ member: toView(after, access.userId) });
   } catch (err) {
     log.error('change member failed', { orgId: access.orgId, error: errorMessage(err) });
@@ -264,34 +229,17 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ o
     );
     if (!plan.ok) return NextResponse.json({ error: plan.error }, { status: plan.status });
 
-    // The FK cascade takes the artist list with the membership; keep it for
-    // the rollback below.
-    const list = await scopeListOf(access, before);
-    const { data: removed, error: deleteErr } = await memberRowQuery(admin, access, userId).delete().select('user_id');
-    if (isLastOwnerError(deleteErr)) return NextResponse.json({ error: LAST_OWNER }, { status: 409 });
-    if (deleteErr) throw new Error(deleteErr.message);
-    if (!Array.isArray(removed) || removed.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    try {
-      await recordEvent(
-        admin,
-        { orgId: access.orgId, userId: access.userId },
-        'member.removed',
-        { type: 'member', id: userId },
-        { role: before.role, functions: before.functions ?? [], scope: before.scope },
-      );
-    } catch (err) {
-      // Removal with no audit row must not stand: restore the membership.
-      // A full row in this org, written by the service role (136 has no
-      // insert policy; this is the same path invitation-accept uses).
-      const { error: restoreErr } = await admin.from('org_members').insert({ org_id: access.orgId, ...before });
-      if (restoreErr) log.error('restoring a removed member failed', { orgId: access.orgId, error: restoreErr.message });
-      if (!restoreErr && list.length > 0) {
-        const { error: scopeErr } = await memberArtistScopeQuery(admin, access, userId).replace(list);
-        if (scopeErr) log.error('restoring a removed member’s artists failed', { orgId: access.orgId, error: scopeErr.message });
-      }
-      throw err;
-    }
+    // The membership (its artist list goes with it) and `member.removed`: one transaction.
+    const { data: result, error: rpcErr } = await auditRpc(admin, 'memberRemove', {
+      p_org: access.orgId,
+      p_actor: access.userId,
+      p_user: userId,
+      p_payload: { role: before.role, functions: before.functions ?? [], scope: before.scope },
+    });
+    if (isMissingAuditRpc(rpcErr)) return NextResponse.json({ error: AUDIT_RPC_NOT_READY }, { status: 503 });
+    if (isLastOwnerError(rpcErr)) return NextResponse.json({ error: LAST_OWNER }, { status: 409 });
+    if (rpcErr) throw new Error(rpcErr.message);
+    if (result?.error === 'not_found') return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ removed: true });
   } catch (err) {
     log.error('remove member failed', { orgId: access.orgId, error: errorMessage(err) });

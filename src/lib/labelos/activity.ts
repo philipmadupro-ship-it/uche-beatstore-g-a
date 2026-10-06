@@ -12,13 +12,17 @@
  *  - audit (06 §6: membership, sharing, restricted downloads, credit and
  *    split decisions, approvals, delivery): NOT best effort. A failed write
  *    throws `AuditEventError`, so a route that forgets to check still fails.
- *    LABEL-19 moves these into one RPC with the mutation, so the two commit
- *    or roll back together; until then the route fails after the mutation.
+ *    LABEL-19 puts the audit verbs that have a mutating route behind one
+ *    Postgres function each (lib/labelos/audit-rpc.ts, migration 146), so the
+ *    mutation and its event commit or roll back together. recordEvent stays
+ *    the writer for everything else, and for audit verbs whose mutation does
+ *    not exist yet (downloads of restricted files, which only read).
  *
- * `visibility` defaults to `internal` (business-internal: only members with
- * `business.read.internal` read it under 136's RLS). That is the least
- * visible choice, not the right one for most verbs — pass `'artist'` for
- * events the creative side and the song's artist should see (D5).
+ * `visibility` defaults per verb (`defaultVisibility`, LABEL-19): `internal`
+ * rows are read only by members with `business.read.internal` under 136's
+ * RLS, `artist` rows by everyone who can read the catalogue (and then only
+ * inside their artist scope). A route passes `visibility` only when the
+ * verb's default is wrong for THIS event (a restricted file's upload).
  *
  * The verb list is closed: a new kind of event is an edit here, and the
  * activity_events CHECK (`^[a-z_]+\.[a-z_]+$`) is held by a test.
@@ -63,6 +67,8 @@ export const VERBS = [
   'recording.copied',
   // Files
   'file.uploaded',
+  'file.updated',
+  'file.deleted',
   'file.restricted_downloaded',
   // Rights
   'credit.proposed',
@@ -73,6 +79,8 @@ export const VERBS = [
   'approval.requested',
   'approval.decided',
   'release.created',
+  'release.updated',
+  'release.deleted',
   'release.delivered',
   // Label ↔ artist connections (LABEL-41)
   'connection.requested',
@@ -108,6 +116,87 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'connection.accepted',
   'connection.ended',
 ];
+
+export type EventVisibility = 'internal' | 'artist';
+
+/**
+ * Who reads an event when the route does not say (LABEL-19, D4 + D5 + 08 §B4).
+ *
+ *  - `artist`: the creative record of a song, a project or a release — what
+ *    was made, moved on, reviewed, credited. Visible to every member who can
+ *    read the catalogue, inside their artist scope, and to the song's artist
+ *    (D5: an artist sees everything about their own songs except business-
+ *    internal notes). A&R, producers and engineers hold `catalog.read` but
+ *    not `business.read.internal`, so they see only these.
+ *  - `internal`: the business side — who the members are and what they may
+ *    do, invitations, the contact directory, sharing, who downloaded what,
+ *    split sheets and approvals (contracts and release gates), the org's own
+ *    settings, label ↔ artist connections. Also files: a file's sensitivity
+ *    decides, and the file routes override to `artist` for anything that is
+ *    not restricted (D4: contracts never reach the creative side).
+ *
+ * Total over `Verb` (a test holds it), so a new verb forces a decision.
+ */
+export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
+  'org.created': 'internal',
+  'org.settings_changed': 'internal',
+  'member.joined': 'internal',
+  'member.removed': 'internal',
+  'member.role_changed': 'internal',
+  'member.scope_changed': 'internal',
+  'member.capabilities_changed': 'internal',
+  'member.artists_changed': 'internal',
+  'invitation.created': 'internal',
+  'invitation.revoked': 'internal',
+  'contact.created': 'internal',
+  'contact.updated': 'internal',
+  'contact.deleted': 'internal',
+  'project.created': 'artist',
+  'project.member_added': 'internal',
+  'project.member_removed': 'internal',
+  'share.created': 'internal',
+  'share.revoked': 'internal',
+  'song.created': 'artist',
+  'song.stage_changed': 'artist',
+  'song.reviewed': 'artist',
+  'recording.uploaded': 'artist',
+  'recording.downloaded': 'internal',
+  'recording.copied': 'internal',
+  'file.uploaded': 'internal',
+  'file.updated': 'internal',
+  'file.deleted': 'internal',
+  'file.restricted_downloaded': 'internal',
+  'credit.proposed': 'artist',
+  'credit.confirmed': 'artist',
+  'credit.disputed': 'artist',
+  'split_sheet.circulated': 'internal',
+  'approval.requested': 'internal',
+  'approval.decided': 'internal',
+  'release.created': 'artist',
+  'release.updated': 'artist',
+  'release.deleted': 'artist',
+  'release.delivered': 'artist',
+  'connection.requested': 'internal',
+  'connection.accepted': 'internal',
+  'connection.ended': 'internal',
+};
+
+export function defaultVisibility(verb: Verb): EventVisibility {
+  return DEFAULT_VISIBILITY[verb];
+}
+
+/**
+ * A file event's visibility, from the sensitivity of the file before and
+ * after the change (pass each one that applies). A restricted file — a
+ * contract, 06 §2.4 — keeps its history business-internal, and so does one
+ * that WAS restricted when it changed: the one rule behind file.uploaded,
+ * file.updated and file.deleted. Everything else is creative-side work the
+ * project's artist may see (D5). Unknown sensitivity reads as restricted:
+ * fail closed.
+ */
+export function fileEventVisibility(...sensitivities: (string | null | undefined)[]): EventVisibility {
+  return sensitivities.every((s) => s === 'normal') ? 'artist' : 'internal';
+}
 
 export function isAuditVerb(verb: string): boolean {
   return (AUDIT_VERBS as readonly string[]).includes(verb);
@@ -152,7 +241,8 @@ export type EventPayload = { [key: string]: Json };
 export type EventOptions = {
   /** Force an everyday verb into the audit class. An audit verb cannot be downgraded. */
   audit?: boolean;
-  visibility?: 'internal' | 'artist';
+  /** Overrides `defaultVisibility(verb)`; only for an event the default misjudges. */
+  visibility?: EventVisibility;
 };
 
 /** Who is acting in which org. `userId` null = the system (cron). */
@@ -258,7 +348,7 @@ export async function recordEvent(
     release_id: subject.releaseId ?? null,
     payload,
     audit,
-    visibility: opts.visibility ?? 'internal',
+    visibility: opts.visibility ?? defaultVisibility(verb),
   };
 
   let error: string | null = null;
