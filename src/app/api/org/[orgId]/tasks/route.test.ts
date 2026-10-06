@@ -144,6 +144,13 @@ describe('POST: create and assign', () => {
     expect(notes().filter((n) => [OWN, AR, AR2, ART, AR_C2].includes(n.user_id as string))).toEqual([]);
   });
 
+  it('an asker with no name is "Someone", never an email or a placeholder member', async () => {
+    // AR2 has no user_profiles row (and no creator profile): there is nothing to call them.
+    expect((await create(AR2, { title: 'Nameless', assignee_id: MKT })).status).toBe(201);
+    expect(notes()[0]).toMatchObject({ user_id: MKT, title: 'Someone assigned you a task' });
+    expect(JSON.stringify(notes()[0])).not.toMatch(/@/);
+  });
+
   it('a task for yourself, or for nobody, asks nobody', async () => {
     expect((await create(AR, { title: 'Mine', assignee_id: AR })).status).toBe(201);
     expect((await create(AR, { title: 'Nobody’s' })).status).toBe(201);
@@ -323,6 +330,10 @@ describe('PATCH / DELETE', () => {
     notes().length = 0;
     expect((await call('item', 'PATCH', AR, { taskId: id, body: { assignee_id: AR2, title: 'Again' } })).status).toBe(200);
     expect(notes()).toEqual([]);
+    // An owner who is neither maker nor assignee reassigning is still named, not "Someone".
+    notes().length = 0;
+    expect((await call('item', 'PATCH', OWN, { taskId: id, body: { assignee_id: MKT } })).status).toBe(200);
+    expect(notes()[0]).toMatchObject({ user_id: MKT, title: 'Owner assigned you a task' });
   });
 
   it('reassigning needs tasks.write and a member who can reach the object', async () => {

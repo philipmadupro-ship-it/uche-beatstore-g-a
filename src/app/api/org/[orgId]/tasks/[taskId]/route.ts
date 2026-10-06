@@ -23,7 +23,7 @@ import { createLogger } from '@/lib/log';
 import { recordEvent, type Verb } from '@/lib/labelos/activity';
 import { notifyDirectAsk } from '@/lib/labelos/notify';
 import { assigneeToNotify, mayChangeTask, mayDeleteTask, toTaskView } from '@/lib/labelos/tasks';
-import { assigneeMayTake, deleteTask, readTask, taskEventSubject, taskPeople, updateTask, visibleTasks, type TaskColumns } from '@/lib/labelos/tasks-store';
+import { askerName, assigneeMayTake, deleteTask, readTask, taskEventSubject, taskPeople, updateTask, visibleTasks, type TaskColumns } from '@/lib/labelos/tasks-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -99,7 +99,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           orgId: access.orgId,
           recipientId: ask,
           actorId: access.userId,
-          actorName: names.get(access.userId) ?? null,
+          actorName: await askerName(access.admin, access.orgId, access.userId),
           subject: updated.title,
           data: { taskId: updated.id, target: updated.target ? { kind: updated.target.kind, id: updated.target.id } : null },
         });

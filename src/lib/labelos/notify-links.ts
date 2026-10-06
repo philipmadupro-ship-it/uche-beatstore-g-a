@@ -4,8 +4,8 @@
  * without the writer's server-side imports. A notification whose `data` names
  * no page of its own opens "My work" on the org Overview, where a task lives.
  */
+import { isUUID } from '@/lib/uuid';
 import { isTaskObjectKind, targetHref } from './tasks';
-import { isUUID } from '@/lib/validate';
 import { isDirectAskKind } from './notify-kinds';
 
 /** The in-app path a notification opens, or null for a producer-bell notification (not an org one). */

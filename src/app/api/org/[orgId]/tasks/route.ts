@@ -26,7 +26,7 @@ import { recordEvent } from '@/lib/labelos/activity';
 import { notifyDirectAsk } from '@/lib/labelos/notify';
 import { memberMayReadSongRow, readStageSong } from '@/lib/labelos/song-stage-store';
 import { assigneeToNotify, isTaskObjectKind, parseTarget, toTaskView, type TaskTarget } from '@/lib/labelos/tasks';
-import { TARGET_OBJECT_TABLE, assigneeMayTake, insertTask, listTasks, taskEventSubject, taskPeople, type TaskListView } from '@/lib/labelos/tasks-store';
+import { TARGET_OBJECT_TABLE, askerName, assigneeMayTake, insertTask, listTasks, taskEventSubject, taskPeople, type TaskListView } from '@/lib/labelos/tasks-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         orgId: access.orgId,
         recipientId: ask,
         actorId: access.userId,
-        actorName: names.get(access.userId) ?? null,
+        actorName: await askerName(access.admin, access.orgId, access.userId),
         subject: task.title,
         data: { taskId: task.id, target: target ? { kind: target.kind, id: target.id } : null },
       });

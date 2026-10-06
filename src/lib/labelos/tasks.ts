@@ -13,7 +13,7 @@
  * Reaching the OBJECT is a separate test (artist scope, D4 for a song's row)
  * made by the store and the routes.
  */
-import { isUUID } from '@/lib/validate';
+import { isUUID } from '@/lib/uuid';
 import { categorizeDue, type DueBucket } from '@/lib/contacts/tasks';
 import type { Capability, Role } from './capabilities';
 
@@ -66,7 +66,7 @@ export function targetOfRow(row: Partial<Record<keyof TaskObjectColumns, string 
 /** A target from loose input (a body, a query string), or `undefined` when it is malformed. null = none given. */
 export function parseTarget(input: { kind?: unknown; id?: unknown } | null | undefined): TaskTarget | undefined {
   if (!input || (input.kind == null && input.id == null)) return null;
-  if (!isTaskObjectKind(input.kind) || typeof input.id !== 'string' || !isUUID(input.id)) return undefined;
+  if (!isTaskObjectKind(input.kind) || !isUUID(input.id)) return undefined;
   return { kind: input.kind, id: input.id.toLowerCase() };
 }
 

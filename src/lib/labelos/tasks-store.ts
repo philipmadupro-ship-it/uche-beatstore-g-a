@@ -8,6 +8,7 @@
  * twin of migration 151's `tasks_member_read`.
  */
 import type { AdminClient } from '@/lib/auth/ownership';
+import { isUUID } from '@/lib/validate';
 import { objectAccessFor, liveMembership, orgProjectIdsInScope, type OrgContext } from '@/lib/auth/org-access';
 import { scopeAllowsContact } from './artist-scope';
 import type { Role } from './capabilities';
@@ -146,8 +147,12 @@ export async function listTasks(admin: AdminClient, ctx: OrgContext & { role: Ro
     const col = Object.entries(targetColumns(view.target)).find(([, v]) => v !== null)![0];
     q = q.eq(col, view.target.id);
     if (!view.includeDone) q = q.is('done_at', null);
-    // Everyone but an owner/admin sees only their own side of the object's tasks (D1).
-    if (!holdsEverything(ctx.role)) q = q.or(`assignee_id.eq.${me},created_by.eq.${me}`);
+    // Everyone but an owner/admin sees only their own side of the object's tasks (D1). The id is
+    // interpolated into a PostgREST `or=` string, where a value with commas or dots would rewrite the filter.
+    if (!holdsEverything(ctx.role)) {
+      if (!isUUID(me)) throw new Error('task list: the caller is not a uuid');
+      q = q.or(`assignee_id.eq.${me},created_by.eq.${me}`);
+    }
   }
   const res = await q.order('created_at', { ascending: false }).limit(LIST_LIMIT);
   if (res.error) fail('task list', res.error);
@@ -230,7 +235,7 @@ export async function assigneeMayTake(admin: AdminClient, orgId: string, userId:
   return true;
 }
 
-/** The org's members (id + display name) who may be handed a task on `target`, name order. */
+/** The org's members (id + display name) who may be handed a task on `target`, name order. Bounded to the first 200 members: it runs only when the add-task form opens. */
 export async function assignableMembers(admin: AdminClient, orgId: string, target: TaskTarget): Promise<{ id: string; name: string }[]> {
   const res = await admin.from('org_members').select('user_id').eq('org_id', orgId).limit(200);
   if (res.error) fail('member read', res.error);
@@ -245,6 +250,17 @@ export async function taskPeople(admin: AdminClient, orgId: string, tasks: reado
   const ids = [...new Set(tasks.flatMap((t) => [t.assigneeId, t.createdBy]).filter((x): x is string => !!x))];
   const names = await memberIdentities(admin as unknown as IdentityAdmin, orgId, ids, { withEmail: false });
   return new Map(ids.map((id) => [id, memberLabel(names.get(id))]));
+}
+
+/**
+ * The name a notification gives the asker ("Sam assigned you a task"), or null
+ * when they have none (the title then says "Someone"). Looked up only when an
+ * ask is actually sent: the actor of a change is not always its maker or its
+ * assignee (an owner reassigning), and most changes ask nobody.
+ */
+export async function askerName(admin: AdminClient, orgId: string, userId: string): Promise<string | null> {
+  const names = await memberIdentities(admin as unknown as IdentityAdmin, orgId, [userId], { withEmail: false });
+  return names.get(userId)?.name ?? null;
 }
 
 // ── Events ──────────────────────────────────────────────────────────────
