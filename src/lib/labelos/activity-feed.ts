@@ -33,6 +33,7 @@
 import type { ArtistScope } from './artist-scope';
 import { scopeAllowsContact } from './artist-scope';
 import type { DigestEvent, EventSummary, ReleaseItemsChange } from './digest';
+import { isSongStage } from './song-stage';
 
 /** The columns a feed reads from `activity_events`. */
 export const ACTIVITY_COLUMNS =
@@ -70,7 +71,7 @@ function str(v: unknown): string | undefined {
  * (field lists, relation names, ids of other rows, anything a future verb adds)
  * stays in the table: a feed is built field by field and never spreads a row.
  */
-function summarize(payload: unknown): EventSummary {
+function summarize(payload: unknown, verb: string): EventSummary {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return {};
   const p = payload as Record<string, unknown>;
   const out: EventSummary = {};
@@ -83,6 +84,9 @@ function summarize(payload: unknown): EventSummary {
     const to = str(s.to);
     if (from || to) out.state = { ...(from ? { from } : {}), ...(to ? { to } : {}) };
   }
+  const from = str(p.from);
+  const to = str(p.to);
+  if (verb === 'song.stage_changed' && isSongStage(from) && isSongStage(to)) out.move = { from, to };
   const stage = str(p.song_stage);
   if (stage) out.stage = stage;
   return out;
@@ -103,7 +107,7 @@ export function toFeedEvent(row: ActivityRow): FeedEvent {
     subjectType: row.subject_type,
     subjectId: row.subject_id,
     visibility: row.visibility === 'artist' ? 'artist' : 'internal',
-    summary: summarize(row.payload),
+    summary: summarize(row.payload, row.verb),
   };
 }
 

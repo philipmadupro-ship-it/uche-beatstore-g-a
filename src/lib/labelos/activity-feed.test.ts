@@ -71,6 +71,14 @@ describe('toFeedEvent', () => {
     expect(e.summary).toEqual({});
   });
 
+  it('reads a stage move from { from, to } when both are real stages', () => {
+    expect(toFeedEvent(row({ verb: 'song.stage_changed', payload: { from: 'inbox', to: 'in_review', note: 'x' } })).summary).toEqual({ move: { from: 'inbox', to: 'in_review' } });
+    expect(toFeedEvent(row({ verb: 'song.stage_changed', payload: { from: 'inbox', to: 'released' } })).summary).toEqual({});
+    expect(toFeedEvent(row({ verb: 'song.stage_changed', payload: { from: 'inbox' } })).summary).toEqual({});
+    // Only that verb: another verb's payload with from/to is not a stage move.
+    expect(toFeedEvent(row({ verb: 'release.updated', payload: { from: 'inbox', to: 'in_review' } })).summary).toEqual({});
+  });
+
   it('trims long titles', () => {
     const e = toFeedEvent(row({ payload: { title: 'x'.repeat(500) } }));
     expect(e.summary.title).toHaveLength(120);

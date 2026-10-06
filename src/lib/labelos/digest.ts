@@ -31,6 +31,7 @@
  */
 // Types only: this module runs in the browser, and activity.ts is the server's writer.
 import type { Verb } from './activity';
+import { SONG_STAGE_LABEL, isSongStage } from './song-stage';
 
 // ── Input ───────────────────────────────────────────────────────────────
 
@@ -45,6 +46,8 @@ export type EventSummary = {
   state?: { from?: string; to?: string };
   /** `song.created`: the stage the song arrived in. */
   stage?: string;
+  /** `song.stage_changed`: where it moved from and to (LABEL-24). */
+  move?: { from: string; to: string };
 };
 
 export type DigestEvent = {
@@ -80,6 +83,8 @@ export type DigestOptions = {
 
 export type DigestPart =
   | { kind: 'verb'; verb: string; count: number; /** `song.created` only: how many arrived as demos. */ demos?: number }
+  /** One song's moves in one line: the first `from` and the last `to`. `moves` is how many events it took. */
+  | { kind: 'stage'; songId: string | null; from: string; to: string; moves: number }
   | {
       kind: 'release';
       releaseId: string | null;
@@ -119,6 +124,8 @@ export type DigestNames = {
   actors: Readonly<Record<string, string>>;
   artists: Readonly<Record<string, string>>;
   releases: Readonly<Record<string, string>>;
+  /** song id → title, for the songs the events name (optional: a feed from before LABEL-24 has none). */
+  songs?: Readonly<Record<string, string>>;
 };
 
 // ── Days ────────────────────────────────────────────────────────────────
@@ -161,12 +168,16 @@ export function sinceWindow(lastSeenAt: string | null | undefined, now: Date): s
 
 // ── Collapse ────────────────────────────────────────────────────────────
 
+/** More stage-moved songs than this in one line read as a count ("moved 5 songs…"), not a list of titles. */
+const STAGE_PARTS_MAX = 2;
+
 const RELEASE_VERBS = new Set(['release.created', 'release.updated', 'release.deleted', 'release.delivered']);
 
 /** Verbs in the order a line mentions them; a project is mentioned before the release made in it. Unlisted verbs follow in `VERBS` order. */
 const PART_ORDER: readonly string[] = [
   'song.created',
   'recording.uploaded',
+  'stage',
   'song.stage_changed',
   'song.reviewed',
   'project.created',
@@ -175,7 +186,7 @@ const PART_ORDER: readonly string[] = [
 ];
 
 function partRank(part: DigestPart): number {
-  const name = part.kind === 'release' ? 'release' : part.verb;
+  const name = part.kind === 'release' ? 'release' : part.kind === 'stage' ? 'stage' : part.verb;
   const i = PART_ORDER.indexOf(name);
   if (i >= 0) return i;
   // Everything else follows in the order VERB_PHRASES lists the verbs (which is `VERBS` order; a test holds it total).
@@ -218,8 +229,13 @@ function collapse(events: readonly DigestEvent[]): DigestPart[] {
   const parts: DigestPart[] = [];
   const releases = new Map<string, DigestEvent[]>();
   const verbs = new Map<string, DigestEvent[]>();
+  const stageMoves = new Map<string, DigestEvent[]>();
   for (const e of events) {
-    if (RELEASE_VERBS.has(e.verb)) {
+    const move = e.verb === 'song.stage_changed' ? e.summary.move : undefined;
+    if (move && isSongStage(move.from) && isSongStage(move.to)) {
+      const key = (e.songId ?? e.subjectId ?? e.id).toLowerCase();
+      stageMoves.set(key, [...(stageMoves.get(key) ?? []), e]);
+    } else if (RELEASE_VERBS.has(e.verb)) {
       const key = e.releaseId ?? e.subjectId ?? e.id;
       releases.set(key, [...(releases.get(key) ?? []), e]);
     } else {
@@ -227,6 +243,19 @@ function collapse(events: readonly DigestEvent[]): DigestPart[] {
     }
   }
   for (const group of releases.values()) parts.push(releasePart(group));
+  if (stageMoves.size > STAGE_PARTS_MAX) {
+    // A bulk move: a list of titles would crowd the line. Count the songs, and let any unreadable move join the same count.
+    const subjects = new Set([...stageMoves.keys(), ...(verbs.get('song.stage_changed') ?? []).map((e) => (e.songId ?? e.subjectId ?? e.id).toLowerCase())]);
+    verbs.delete('song.stage_changed');
+    parts.push({ kind: 'verb', verb: 'song.stage_changed', count: subjects.size });
+  } else {
+    for (const [songKey, group] of stageMoves) {
+      // `events` arrive sorted by time, so the first is where the song started the day and the last where it ended.
+      const first = group[0].summary.move!;
+      const last = group[group.length - 1].summary.move!;
+      parts.push({ kind: 'stage', songId: songKey, from: first.from, to: last.to, moves: group.length });
+    }
+  }
   for (const [verb, group] of verbs) {
     const subjects = new Set(group.map((e) => e.subjectId ?? e.id));
     const part: DigestPart = { kind: 'verb', verb, count: subjects.size };
@@ -374,8 +403,15 @@ function describeRelease(part: Extract<DigestPart, { kind: 'release' }>, names: 
   return `updated ${title ?? 'a release'}`;
 }
 
+function describeStage(part: Extract<DigestPart, { kind: 'stage' }>, names: DigestNames): string {
+  const title = part.songId ? names.songs?.[part.songId] : undefined;
+  const to = (SONG_STAGE_LABEL as Record<string, string>)[part.to] ?? part.to;
+  return `moved ${title ?? 'a song'} to ${to}`;
+}
+
 export function describePart(part: DigestPart, names: DigestNames): string {
   if (part.kind === 'release') return describeRelease(part, names);
+  if (part.kind === 'stage') return describeStage(part, names);
   if (part.verb === 'song.created' && part.demos !== undefined && part.demos > 0 && part.demos === part.count) {
     return part.count === 1 ? 'added a demo' : `added ${part.count} demos`;
   }

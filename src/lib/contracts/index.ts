@@ -22,6 +22,7 @@ import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
 import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers';
 import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
 import { CURSOR_RE } from '@/lib/labelos/activity-feed';
+import { SONG_STAGES } from '@/lib/labelos/song-stage';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -1169,6 +1170,18 @@ export const OrgReleasePatchBodySchema = z.object({
   state: z.enum(['draft', 'cancelled']).optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type OrgReleasePatchBody = z.infer<typeof OrgReleasePatchBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/tracks/[id]/stage (LABEL-24). `to` is a stored stage
+ * (`released` is derived and is not accepted). `from` is the stage the caller
+ * was looking at: when it is no longer the song's stage the move is a 409,
+ * so a stale screen never overwrites someone else's decision.
+ */
+export const OrgSongStageBodySchema = z.object({
+  to: z.enum(SONG_STAGES),
+  from: z.enum(SONG_STAGES).optional(),
+}).strict();
+export type OrgSongStageBody = z.infer<typeof OrgSongStageBodySchema>;
 
 /** POST /api/org/[orgId]/releases/[releaseId]/items — appended at the end. No master = the song itself. */
 export const OrgReleaseItemCreateBodySchema = z.object({

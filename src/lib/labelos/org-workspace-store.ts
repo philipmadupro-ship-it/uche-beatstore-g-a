@@ -149,7 +149,7 @@ async function songsOnRelease(admin: AdminClient, org: string, songIds: readonly
 }
 
 /** The roster contacts of some projects of the org (inbox artist + project_contacts), as names. */
-async function projectArtists(
+export async function projectArtists(
   admin: AdminClient,
   projects: ReadonlyArray<{ id: string; inbox_for_contact_id: string | null }>,
 ): Promise<Map<string, string[]>> {

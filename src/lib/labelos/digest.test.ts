@@ -17,6 +17,9 @@ const NOVA = '00000000-0000-4000-8000-0000000000c1';
 const KILO = '00000000-0000-4000-8000-0000000000c2';
 const P1 = '00000000-0000-4000-8000-0000000000d1';
 const P2 = '00000000-0000-4000-8000-0000000000d2';
+const S1 = '00000000-0000-4000-8000-0000000000b1';
+const S2 = '00000000-0000-4000-8000-0000000000b2';
+const S3 = '00000000-0000-4000-8000-0000000000b3';
 const R1 = '00000000-0000-4000-8000-0000000000e1';
 const R2 = '00000000-0000-4000-8000-0000000000e2';
 
@@ -40,6 +43,7 @@ const NAMES: DigestNames = {
   actors: { [SAM]: 'Sam', [PRIYA]: 'Priya' },
   artists: { [NOVA]: 'Nova', [KILO]: 'Kilo' },
   releases: { [R1]: 'EP 2027', [R2]: 'Singles' },
+  songs: { [S1]: 'Midnight', [S2]: 'Dawn' },
 };
 
 describe('dayKey', () => {
@@ -304,5 +308,110 @@ describe('phrases', () => {
       ],
     };
     expect(describeLine(line, NAMES).text).toBe('added a song and added 2 files');
+  });
+});
+
+describe('song.stage_changed (LABEL-24)', () => {
+  const move = (songId: string, from: string, to: string, at: string, over: Partial<DigestEvent> = {}) =>
+    ev({ verb: 'song.stage_changed', at, artistId: NOVA, songId, subjectId: songId, summary: { move: { from, to } }, ...over });
+  const lineOf = (events: DigestEvent[], names: DigestNames = NAMES) => describeLine(buildDigest(events, { view: 'overview' }).sections[0].days[0].lines[0], names);
+
+  it('reads "Sam moved Midnight to Selected"', () => {
+    const l = lineOf([move(S1, 'in_development', 'selected', '2026-10-05T10:00:00Z')]);
+    expect(l).toEqual({ actor: 'Sam', text: 'moved Midnight to Selected' });
+  });
+
+  it('collapses several moves of one song by one actor in one day into the first from and the last to', () => {
+    const d = buildDigest([
+      move(S1, 'inbox', 'in_review', '2026-10-05T09:00:00Z'),
+      move(S1, 'in_review', 'shortlisted', '2026-10-05T10:00:00Z'),
+      move(S1, 'shortlisted', 'in_development', '2026-10-05T11:00:00Z'),
+    ], { view: 'overview' });
+    const [line] = d.sections[0].days[0].lines;
+    expect(line.parts).toEqual([{ kind: 'stage', songId: S1, from: 'inbox', to: 'in_development', moves: 3 }]);
+    expect(line.events).toBe(3);
+    expect(describeLine(line, NAMES).text).toBe('moved Midnight to In development');
+  });
+
+  it('takes the first and last by time, not by arrival order', () => {
+    const events = [
+      move(S1, 'shortlisted', 'in_development', '2026-10-05T11:00:00Z'),
+      move(S1, 'inbox', 'in_review', '2026-10-05T09:00:00Z'),
+      move(S1, 'in_review', 'shortlisted', '2026-10-05T10:00:00Z'),
+    ];
+    const [part] = buildDigest(events, { view: 'overview' }).sections[0].days[0].lines[0].parts;
+    expect(part).toMatchObject({ from: 'inbox', to: 'in_development' });
+  });
+
+  it('treats an upper-case id and a lower-case one as one song', () => {
+    const events = [
+      move(S1, 'inbox', 'in_review', '2026-10-05T09:00:00Z'),
+      move(S1, 'in_review', 'shortlisted', '2026-10-05T10:00:00Z', { songId: null, subjectId: S1.toUpperCase() }),
+    ];
+    const [line] = buildDigest(events, { view: 'overview' }).sections[0].days[0].lines;
+    expect(line.parts).toEqual([{ kind: 'stage', songId: S1, from: 'inbox', to: 'shortlisted', moves: 2 }]);
+    expect(describeLine(line, NAMES).text).toBe('moved Midnight to Shortlisted');
+  });
+
+  it('keeps two songs apart, and two actors apart', () => {
+    const [line] = buildDigest([
+      move(S1, 'inbox', 'in_review', '2026-10-05T09:00:00Z'),
+      move(S2, 'in_review', 'passed', '2026-10-05T10:00:00Z'),
+    ], { view: 'overview' }).sections[0].days[0].lines;
+    expect(describeLine(line, NAMES).text).toBe('moved Midnight to In review and moved Dawn to Passed');
+    const lines = buildDigest([
+      move(S1, 'inbox', 'in_review', '2026-10-05T09:00:00Z', { actorId: SAM }),
+      move(S1, 'in_review', 'passed', '2026-10-05T10:00:00Z', { actorId: PRIYA }),
+    ], { view: 'overview' }).sections[0].days[0].lines;
+    expect(lines).toHaveLength(2);
+  });
+
+  it('does not merge moves on different days', () => {
+    const days = buildDigest([
+      move(S1, 'inbox', 'in_review', '2026-10-04T09:00:00Z'),
+      move(S1, 'in_review', 'shortlisted', '2026-10-05T09:00:00Z'),
+    ], { view: 'overview' }).sections[0].days;
+    expect(days.map((x) => x.lines[0].parts)).toEqual([
+      [{ kind: 'stage', songId: S1, from: 'in_review', to: 'shortlisted', moves: 1 }],
+      [{ kind: 'stage', songId: S1, from: 'inbox', to: 'in_review', moves: 1 }],
+    ]);
+  });
+
+  it('folds a bulk move of many songs into one count, not a list of titles', () => {
+    const events = [S1, S2, S3].map((s, i) => move(s, 'inbox', 'passed', `2026-10-05T09:0${i}:00Z`));
+    const [line] = buildDigest(events, { view: 'overview' }).sections[0].days[0].lines;
+    expect(line.parts).toEqual([{ kind: 'verb', verb: 'song.stage_changed', count: 3 }]);
+    expect(describeLine(line, NAMES).text).toBe('moved 3 songs to new stages');
+  });
+
+  it('says "a song" when the title is unknown, never an id', () => {
+    const l = lineOf([move(S3, 'inbox', 'in_review', '2026-10-05T09:00:00Z')]);
+    expect(l.text).toBe('moved a song to In review');
+    const none = lineOf([move(S1, 'inbox', 'in_review', '2026-10-05T09:00:00Z')], { actors: { [SAM]: 'Sam' }, artists: {}, releases: {} });
+    expect(none.text).toBe('moved a song to In review');
+  });
+
+  it('keeps reading an event without a usable { from, to } generically', () => {
+    const l = lineOf([ev({ verb: 'song.stage_changed', at: '2026-10-05T09:00:00Z', artistId: NOVA, summary: {} })]);
+    expect(l.text).toBe('moved a song to a new stage');
+    const bad = lineOf([ev({ verb: 'song.stage_changed', at: '2026-10-05T09:00:00Z', artistId: NOVA, summary: { move: { from: 'inbox', to: 'released' } } })]);
+    expect(bad.text).toBe('moved a song to a new stage');
+  });
+
+  it('sits after the song was added and before it was reviewed', () => {
+    const [line] = buildDigest([
+      ev({ verb: 'song.reviewed', at: '2026-10-05T09:03:00Z', artistId: NOVA }),
+      move(S1, 'inbox', 'in_review', '2026-10-05T09:02:00Z'),
+      ev({ verb: 'song.created', at: '2026-10-05T09:01:00Z', artistId: NOVA, summary: { stage: 'inbox' } }),
+    ], { view: 'overview' }).sections[0].days[0].lines;
+    expect(line.parts.map((p) => (p.kind === 'verb' ? p.verb : p.kind))).toEqual(['song.created', 'stage', 'song.reviewed']);
+  });
+
+  it('song view: every move stays its own line, with its own from and to', () => {
+    const lines = buildDigest([
+      move(S1, 'inbox', 'in_review', '2026-10-05T09:00:00Z'),
+      move(S1, 'in_review', 'shortlisted', '2026-10-05T10:00:00Z'),
+    ], { view: 'song' }).sections[0].days[0].lines;
+    expect(lines.map((l) => describeLine(l, NAMES).text)).toEqual(['moved Midnight to Shortlisted', 'moved Midnight to In review']);
   });
 });

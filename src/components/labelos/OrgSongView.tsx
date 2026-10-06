@@ -24,7 +24,8 @@ import { Music, Pause, Play } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { RestrictedNote } from '@/components/artists/OrgArtistWorkspaceTabs';
-import { abSeekFraction, songStageLabel, toPlayerTrack, type RecordingView } from '@/lib/labelos/org-workspace';
+import { SongStageControl } from '@/components/labelos/SongStageControl';
+import { abSeekFraction, toPlayerTrack, type RecordingView } from '@/lib/labelos/org-workspace';
 import type { OrgSongDetail } from '@/lib/labelos/org-workspace-store';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
@@ -105,7 +106,7 @@ export function OrgSongView({ orgId, orgSlug, detail }: { orgId: string; orgSlug
                 <Link href={`${base}/artists/${ar.id}`} className="hover:text-white">{ar.name}</Link>
               </span>
             ))}
-            <span className="rounded-lg border border-white/20 px-2 py-0.5 text-white/70" data-testid="org-song-stage">{songStageLabel(song.stage)}</span>
+            <SongStageControl orgId={orgId} songId={song.id} stage={song.stage} testId="org-song-stage" />
             {song.bpm ? <span className="font-mono text-[10px] text-white/40">{Math.round(song.bpm)} BPM</span> : null}
             {song.key ? <span className="font-mono text-[10px] text-[#c8a47a]">{song.key}</span> : null}
           </p>
