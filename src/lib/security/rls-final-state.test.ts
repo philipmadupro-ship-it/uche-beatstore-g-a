@@ -96,6 +96,10 @@ function labelOsTables(): string[] {
     'release_items',
     // 148_labelos_project_members.sql (LABEL-21)
     'project_members',
+    // 149_labelos_song_reviews.sql (LABEL-25)
+    'song_reviews',
+    // 151_labelos_tasks_notifications.sql (LABEL-23)
+    'tasks',
   ];
 }
 
@@ -115,6 +119,10 @@ const ORG_HELPERS = [
   'can_see_project',
   // 147 (LABEL-20): the projects an artists-scoped member's scope reaches, for activity_events.
   'labelos_scoped_projects',
+  // 149 (LABEL-25): the songs of the scoped projects, for song_reviews.
+  'labelos_scoped_tracks',
+  // 151 (LABEL-23): the releases of the scoped projects, for tasks.
+  'labelos_scoped_releases',
 ];
 const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 
@@ -430,6 +438,8 @@ describe('final RLS policy state', () => {
       // The material an external member works on is read through the service
       // role routes (externalCan); no policy on any other table mentions
       // project_members or can_see_project, so their own JWT reads none of it.
+      // Through 148 only: later migrations (149 song_reviews, 150 comments, 151 tasks + the notifications guard)
+      // add their own policies, and the mentions check below holds each of them to give an external member no path either.
       const through148 = replay(realMigrations().filter((m) => m.name < '149')).policies;
       for (const [key, body] of before148) expect(through148.get(key), key).toBe(body);
       const added = [...through148.keys()].filter((k) => !before148.has(k) && !k.startsWith('project_members.'));
@@ -443,13 +453,14 @@ describe('final RLS policy state', () => {
   });
 
   describe('Label OS org comments (mig 150, LABEL-22)', () => {
-    const through148 = replay(realMigrations().filter((m) => m.name < '149')).policies;
-    const comments = (name: string) => policies.get(`project_comments.${name}`) ?? '';
+    const through149 = replay(realMigrations().filter((m) => m.name < '150')).policies;
+    const through150 = replay(realMigrations().filter((m) => m.name < '151')).policies;
+    const comments = (name: string) => through150.get(`project_comments.${name}`) ?? '';
 
     it('150 changes exactly the two org policies on project_comments and nothing anywhere else', () => {
-      const changed = [...policies.keys()].filter((k) => !through148.has(k) || through148.get(k) !== policies.get(k)).sort();
+      const changed = [...through150.keys()].filter((k) => !through149.has(k) || through149.get(k) !== through150.get(k)).sort();
       expect(changed).toEqual(['project_comments.org_member_guard', 'project_comments.org_member_read']);
-      for (const key of through148.keys()) expect(policies.has(key), `${key} was dropped`).toBe(true);
+      for (const key of through149.keys()) expect(through150.has(key), `${key} was dropped`).toBe(true);
     });
 
     it('both keep every 141 condition and add the visibility rule: internal comments need the team helper', () => {
@@ -467,9 +478,9 @@ describe('final RLS policy state', () => {
     });
 
     it('no write policy is added; the producer-era owner policy is untouched', () => {
-      const onComments = [...policies.keys()].filter((k) => k.startsWith('project_comments.')).sort();
-      expect(onComments.filter((k) => !through148.has(k))).toEqual([]);
-      expect(policies.get('project_comments.owner_via_project')).toBe(through148.get('project_comments.owner_via_project'));
+      const onComments = [...through150.keys()].filter((k) => k.startsWith('project_comments.')).sort();
+      expect(onComments.filter((k) => !through149.has(k))).toEqual([]);
+      expect(through150.get('project_comments.owner_via_project')).toBe(through149.get('project_comments.owner_via_project'));
     });
   });
 

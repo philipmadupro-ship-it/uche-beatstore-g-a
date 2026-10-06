@@ -6,6 +6,8 @@ import crypto from 'node:crypto';
 export const SECRET = 'local-db-jwt-secret-for-verification-only-000';
 export const PRODUCER_ID = '0b0e1a57-0000-4000-8000-000000000001';
 export const BUYER_ID = '0b0e1a57-0000-4000-8000-0000000000b1';
+export const ARTIST_A_ID = '0b0e1a57-0000-4000-8000-0000000000b2';
+export const ARTIST_B_ID = '0b0e1a57-0000-4000-8000-0000000000b3';
 
 const b64 = (o) => Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url');
 

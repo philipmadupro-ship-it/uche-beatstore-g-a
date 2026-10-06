@@ -87,4 +87,6 @@ export const NO_EVENT_HANDLERS: Readonly<Record<string, string>> = {
     'Moves the signed-in member’s own “last looked at the Overview” mark (user_profiles.last_seen_overview_at). A personal read marker, not something the org did; recording it would put every visit in the feed it is meant to summarise.',
   '[orgId]/upload/abort/route.ts:POST':
     'Abandons a multipart session before anything was created; there is no object to record history on.',
+  '[orgId]/notifications/route.ts:PATCH':
+    'Marks the signed-in member’s OWN direct-ask notifications read (LABEL-23): a personal read marker like the Overview’s, not something the org did. The asks themselves are recorded where they arise (task.created, …).',
 };

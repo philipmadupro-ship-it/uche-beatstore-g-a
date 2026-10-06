@@ -1320,7 +1320,15 @@ Flag off.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-14, LABEL-19, D3
-**Status:** In Progress (branch label-os/LABEL-21; runs in parallel with LABEL-20, migration 148 reserved)
+**Status:** Done (PR #84, squash 72d0c0c, 2026-10-06; migration 148, not applied — apply at final merge, after 146)
+
+**Orchestrator decisions on #84 (accepted as implemented):**
+- Gate: CI green on the latest commit (build-and-test, e2e, secret-scan); first CI run failed `type-scale.test.ts` (`text-[12px]` in `ProjectMembersPanel.tsx`), fixed by the orchestrator (11px) because the session had hit its usage limit. Diff is Label OS only (no producer route, no `pending.sql`).
+- Acceptance verified by: route matrix `external-matrix.test.ts` (every org handler × 4 roles + stranger + signed-out), two-account real-DB e2e (4/4), RLS policy-state test, `db:local:check` (148 check + rollback).
+- Streaming `variant=full` counts as "listen" (a viewer without downloads can capture a stream, as on token shares). Accepted; capture-proof listening needs a lossy full-length derivative (later).
+- D4 audio classes do not apply to external members: the shared project is what is shared.
+- Carries: comments → LABEL-22; propose-own-credit → LABEL-27; expiry control in the Members panel and an entry point for project-only users beyond the emailed link / switcher are not built.
+- Still open before the final merge (unchanged): producer routes treating `user_id IS NULL` as own; R-08 guard cost.
 
 ## Objective
 Invite a person with their own account into one org project as viewer, commenter, contributor or editor.
@@ -1401,7 +1409,7 @@ Drop the table; flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-21
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-22; runs in parallel with LABEL-25, migration 150 reserved)
 
 ## Objective
 Threaded, region-pinned comments for org members, by extending `project_comments` (`17` R5). **No new `comments` table.**
@@ -1476,7 +1484,7 @@ Drop the columns.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-19
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-23; runs in parallel with LABEL-22, migration 151 reserved)
 
 ## Objective
 Assignable tasks on artist/project/song/release, and notifications only for direct asks.
@@ -1514,6 +1522,23 @@ Migrating `contact_tasks`.
 
 ## Rollback
 Drop the table and column.
+
+### Built (LABEL-23 implementer's note — the Status line above is the orchestrator's)
+- **Migration 151** (not applied): `tasks` (typed nullable FKs `artist_id` / `project_id` / `song_id` / `release_id`, CHECK at most one; integrity trigger; service-role writes only; ONE read policy: creator, assignee or owner/admin, inside the member's artist scope, uncorrelated hashed subplans — `EXPLAIN` asserted in the local check) and `notifications.org_id` (nullable; RESTRICTIVE member-only SELECT policy; the 141 service-only trigger, so no member forges or edits an org notification through PostgREST). New helper `labelos_scoped_releases()`.
+- **Who sees a task (D1 "each side its own"):** its maker, its assignee and an owner/admin — never "everyone who can read the song". Assignment needs `tasks.write`, and the assignee must be a live member who can reach the task's object exactly as opening it would (artist scope; D4 for a song's row), so a task never names something its assignee cannot see. A task is 404 (not 403) to anyone it is not visible to; the assignee may tick it off, only its maker or an owner/admin deletes it.
+- **Routes:** `GET|POST /api/org/[orgId]/tasks` (`?view=mine|asked`, or `?kind=&id=` for one object), `PATCH|DELETE …/tasks/[taskId]`, `GET …/tasks/assignees`, `GET|PATCH …/notifications` (the bell under an org; recipient AND org in every query, `lib/labelos/notification-store.ts`). New activity verbs `task.created|updated|completed|deleted` (internal visibility, digest phrases, subject type `task`).
+- **`lib/labelos/notify.ts`:** closed union `task_assigned | approval_requested | mention | credit_named_you | invitation`; `notifyDirectAsk` takes ONE recipient, never notifies the asker, never throws; `notify.test.ts` fails a broadcast-sounding kind, and a source scan fails any `notifications` insert under `lib/labelos` / `api/org` outside it and any caller outside the task routes. Only `task_assigned` has a caller today — the others are written by their tasks (approvals LABEL-32, credits LABEL-26/27, invitations, mentions).
+- **Producer bell untouched:** `/api/notifications` now reads `org_id IS NULL` (it falls back to the old query if migration 151 is not applied), so a Label OS ask never reaches it or its badge; its tests assert the filter and the fallback.
+- **UI:** "My work" (+ "Waiting on others") on the org Overview, tasks inline on the song view and on each release in the artist workspace's Releases tab, and the TopBar bell is the org's own under `/o/<slug>` (the producer's store-attention and activity log stay producer-only).
+
+### Verification
+`npm run db:local:check` (151's check as `authenticated` / `anon` + rollbacks), the route tests against the real `org-access` and an evaluating in-memory database, the extended external-member matrix (no external role reads or changes a task or notification even when rows name them), `e2e/label-org-tasks.spec.ts` against the real database (added to `e2e:real-db`).
+
+### Not done
+- Releases have no page of their own, so a `task_assigned` ask about a release opens the Overview ("My work").
+- `invitation`, `approval_requested`, `mention` and `credit_named_you` are in the union and the bell's icon/link vocabulary but nothing writes them yet.
+- No due-date reminders, recurrence or email for tasks (direct ask = the bell and, with the existing opt-in, an OS notification while a tab is open).
+- `CLAUDE.md`'s Label OS paragraph is not extended here (LABEL-22 edits the same line in parallel); this note and the PR carry the conventions until the orchestrator folds them in.
 
 ---
 
@@ -1599,7 +1624,14 @@ Revert.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-24
-**Status:** In Progress (branch label-os/LABEL-25; migration 149 reserved)
+**Status:** Done (PR #88, squash 436b2c7, 2026-10-06; migration 149, not applied — apply at final merge, after 148)
+
+**Orchestrator decisions on #88 (accepted as implemented):**
+- Gate: CI green on the latest commit (build-and-test, e2e, secret-scan). The orchestrator removed two stray `data/upload-staging/*/_meta.json` test artefacts that the base merge had committed (not on the base branch). Diff otherwise Label OS only.
+- Acceptance verified by: route tests, real-DB e2e `label-org-song-reviews.spec.ts` (route AND PostgREST with each artist's own JWT), `db:local:check` as `authenticated` with each member's claims; EXPLAIN at 6,000 reviews shows no per-row SECURITY DEFINER (R-08).
+- Read policy gates on `review.comment` + artist scope (narrower than the task's `catalog.read`): accepted — with `catalog.read` alone a whole-org marketing/legal member could read ratings and notes on working demos with their own JWT. Write needs `review.write`; a roster artist reads every review of their song and cannot rate.
+- Extra `R` key (start review: inbox → in review) accepted: the stage table has no Inbox → Shortlisted move.
+- Carries: tags / assign bulk actions of 07 §2.4 and a review panel on the song page are not built; a song in projects of two artists is readable by both artists' reviews (same rule as `can_see_org_track`).
 
 ## Objective
 Per-reviewer ratings and verdicts, and a fast keyboard review queue.
@@ -1633,6 +1665,25 @@ Route tests; keyboard e2e.
 
 ## Out of Scope
 Discovery analytics.
+
+**Built (for the orchestrator's merge gate):**
+- **Migration 149 (`song_reviews`, one table; not applied).** PK (`track_id`, `reviewer_id`); rating 1–5, verdict, note, any one required. The READ policy is the security core: `review.comment` (implied by `review.write`, implies `catalog.read`) in the row's org AND (whole-org member OR the song in the caller's artist scope) via the new `labelos_scoped_tracks()` (the songs of 147's `labelos_scoped_projects()`), so the song's artist reads every review of their song (D5) and another artist of the same label none; keyed on org membership only, so an external project member (LABEL-21) has no path to it. No per-row SECURITY DEFINER call (R-08): at 6,000 reviews the scoped member's newest 100 read in 7.9 ms against 3,186 ms for a per-row `can_see_org_track` policy, whole-org 2.0 ms against 1,273 ms (a first version with `has_org_cap(org_id, …)` on the row was correlated and cost 564 ms; the capability is now asked of the caller's memberships, a hashed subplan). Writes service role only (141's trigger) plus an integrity trigger (the song is a song of the row's org; identity never changes). Added to `labelOsTables()`, 141's service-only trigger list, `supabase/local/checks/149_*.sql` (as `authenticated` with each member's own claims: owner, whole-org and scoped A&R, the song's artist, another artist, other org, non-member, producer, anon) and `supabase/rollback/149_*.down.sql`.
+- **Pure rules, tests first (`lib/labelos/song-review.ts`).** `mergeReview` (omitted keeps, null clears), `validReview`, `mayReview` (= `review.write`), `summarizeReviews`, `sortInbox` (inbox + in_review, oldest first), `inboxKeyAction` (what a key does; nothing while typing or with a modifier), `offeredStageKeys` (LABEL-24's `allowedTransitions` filtered to the keyed stages: nothing re-implemented), `cursorAfterRemoval`.
+- **Routes.** `GET` / `PUT /api/org/[orgId]/tracks/[id]/reviews`: GET lists every review (reviewer names, never emails) for anyone who reads the song, PUT upserts MY review. **Capability: PUT needs `review.write`** (06 §2.6: owner/admin, A&R, project manager, artist manager); **a roster artist holds only `review.comment` and so READS every review of their song but cannot rate (403)**; marketing and legal have neither. Both 404 outside scope or for working material D4 hides. PUT records `song.reviewed` `{ rating, verdict, noted }` through `recordEvent` (visibility `artist`, D5): **never the note text**. `GET /api/org/[orgId]/ar` is the inbox read (`catalog.read`, scope, D4 `restricted` count).
+- **Digest.** `song.reviewed` with a usable summary reads "Sam reviewed Midnight: 4 of 5, Shortlist"; one actor's re-reviews of a song in a day are one part; more than two songs fold into "reviewed 5 songs"; one without a rating or verdict keeps the generic words. `activity-feed.ts` whitelists `rating` and `verdict` only; `activity-store.ts` names the songs.
+- **UI.** `/o/[orgSlug]/ar` (`ArInboxView`): J/K, Space (usePlayer + the org audio route), 1–5, S/H/P, C (note: Ctrl or Cmd + Enter saves, Escape cancels), plus **R** (start review: the transition table has no Inbox → Shortlisted move, so a review has to begin before S is allowed) and **X** (select), `BatchActionBar` bulk stage moves (songs the table refuses are reported, not sent), the focused song's reviews listed under the list (what its artist reads too). Stage moves run through LABEL-24's route one after another, each judged against the stage the one before left, update the row at once, drop it from the queue and call `router.refresh()` (so the workspace's stage counts follow). Nav: an "A&R inbox" entry in the Artists hub for members with `review.write` only (the page itself is open to `catalog.read`, so an artist reads by link). Keyboard hints spell out "Space".
+
+**Review fixes (code review):** the PUT writes only the columns the request named (PostgREST merge), so a rating and a note saved together cannot undo each other; the inbox's saves and stage moves share one queue and a sequence guard drops an older reload; Escape does not save the note it abandons (blur guard); a cleared rating shows in the digest (the summary keeps explicit nulls); the loader chunks its `in` lists.
+
+**Verification:** `tsc`, `eslint`, `vitest` (full: 408 files, 6,449 tests), `next build` (CI stub env), `npm run db:local:check`; `e2e/label-org-song-reviews.spec.ts` (registered in `e2e:real-db`; 6 tests against the real stack): two reviewers' rows coexist and each rewrites only their own; the song's artist reads both reviews (route and straight from PostgREST with their own JWT), cannot add one (403, and a forged POST through PostgREST fails); another artist of the same label gets 404 and zero rows by both paths, anon zero; `song.reviewed` rows carry no note text; the keyboard flow J/K/1–5/R/S/H/P at 1440 and 390 px; C and typing. `label-org-song-stage`, `-workspace`, `-activity`, `-overview`, `-roster`, `-members` re-run green beside it.
+
+**Not done / found, not fixed:**
+- **Decision for the owner: the policy gates reads on `review.comment` (+ scope), narrower than the task's `catalog.read`.** With `catalog.read` alone, a whole-org marketing or legal member could read every rating and note of a working demo straight from PostgREST with their own JWT (the routes' D4 row rule 404s them; the policy would not). `review.comment` is held by owner/admin, A&R, project manager, artist manager and the roster artist, so everyone D5 and 06 name still reads; marketing, legal and engineers read no review (GET answers 403 too). Loosening it to `catalog.read` is one word in the policy and the check.
+- A song in projects of two artists (a project linking both) is readable by both artists' reviews, the same rule as `can_see_org_track`.
+- The external-project-member check is in `149_*.sql` (LABEL-21 merged meanwhile): an editor on Nova's project with no org membership reads no review, even of the song in their project. The inbox / reviews ROUTES are org-member routes (`requireObjectAccess` needs an `org_members` row), so they give such a member nothing either.
+- Tags and "assign" bulk actions from 07 §2.4 are not built (the task names move stage); the song page still has no review panel (the inbox lists them).
+- `scripts/local-db/seed.sql` and `jwt.mjs` gain two signed-in accounts (artist-a / artist-b) for specs that need two roster artists of one label.
+- `src/lib/labelos/mocks/memory-db.ts`: `upsert` now honours `onConflict` (merges into the row it names); before, it only inserted.
 
 ## Rollback
 Drop the table.

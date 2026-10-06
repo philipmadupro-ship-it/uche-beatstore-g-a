@@ -32,6 +32,7 @@
 // Types only: this module runs in the browser, and activity.ts is the server's writer.
 import type { Verb } from './activity';
 import { SONG_STAGE_LABEL, isSongStage } from './song-stage';
+import { REVIEW_VERDICT_LABEL, isReviewVerdict } from './song-review';
 
 // ── Input ───────────────────────────────────────────────────────────────
 
@@ -48,6 +49,8 @@ export type EventSummary = {
   stage?: string;
   /** `song.stage_changed`: where it moved from and to (LABEL-24). */
   move?: { from: string; to: string };
+  /** `song.reviewed`: the rating and verdict given, never the note (LABEL-25). */
+  review?: { rating?: number | null; verdict?: string | null };
 };
 
 export type DigestEvent = {
@@ -85,6 +88,8 @@ export type DigestPart =
   | { kind: 'verb'; verb: string; count: number; /** `song.created` only: how many arrived as demos. */ demos?: number }
   /** One song's moves in one line: the first `from` and the last `to`. `moves` is how many events it took. */
   | { kind: 'stage'; songId: string | null; from: string; to: string; moves: number }
+  /** One song's review by one actor in one line: the last rating and verdict they gave it that day. */
+  | { kind: 'review'; songId: string | null; rating: number | null; verdict: string | null }
   | {
       kind: 'release';
       releaseId: string | null;
@@ -186,7 +191,7 @@ const PART_ORDER: readonly string[] = [
 ];
 
 function partRank(part: DigestPart): number {
-  const name = part.kind === 'release' ? 'release' : part.kind === 'stage' ? 'stage' : part.verb;
+  const name = part.kind === 'release' ? 'release' : part.kind === 'stage' ? 'stage' : part.kind === 'review' ? 'song.reviewed' : part.verb;
   const i = PART_ORDER.indexOf(name);
   if (i >= 0) return i;
   // Everything else follows in the order VERB_PHRASES lists the verbs (which is `VERBS` order; a test holds it total).
@@ -230,11 +235,15 @@ function collapse(events: readonly DigestEvent[]): DigestPart[] {
   const releases = new Map<string, DigestEvent[]>();
   const verbs = new Map<string, DigestEvent[]>();
   const stageMoves = new Map<string, DigestEvent[]>();
+  const reviews = new Map<string, DigestEvent[]>();
   for (const e of events) {
     const move = e.verb === 'song.stage_changed' ? e.summary.move : undefined;
     if (move && isSongStage(move.from) && isSongStage(move.to)) {
       const key = (e.songId ?? e.subjectId ?? e.id).toLowerCase();
       stageMoves.set(key, [...(stageMoves.get(key) ?? []), e]);
+    } else if (e.verb === 'song.reviewed' && e.summary.review && (e.summary.review.rating !== undefined || e.summary.review.verdict !== undefined)) {
+      const key = (e.songId ?? e.subjectId ?? e.id).toLowerCase();
+      reviews.set(key, [...(reviews.get(key) ?? []), e]);
     } else if (RELEASE_VERBS.has(e.verb)) {
       const key = e.releaseId ?? e.subjectId ?? e.id;
       releases.set(key, [...(releases.get(key) ?? []), e]);
@@ -254,6 +263,24 @@ function collapse(events: readonly DigestEvent[]): DigestPart[] {
       const first = group[0].summary.move!;
       const last = group[group.length - 1].summary.move!;
       parts.push({ kind: 'stage', songId: songKey, from: first.from, to: last.to, moves: group.length });
+    }
+  }
+  if (reviews.size > STAGE_PARTS_MAX) {
+    // A review spree: count the songs, and let any unreadable review join the same count.
+    const subjects = new Set([...reviews.keys(), ...(verbs.get('song.reviewed') ?? []).map((e) => (e.songId ?? e.subjectId ?? e.id).toLowerCase())]);
+    verbs.delete('song.reviewed');
+    parts.push({ kind: 'verb', verb: 'song.reviewed', count: subjects.size });
+  } else {
+    for (const [songKey, group] of reviews) {
+      // Sorted by time: what the reviewer ended the day saying. A later review that left a field out keeps the earlier one's.
+      let rating: number | null = null;
+      let verdict: string | null = null;
+      for (const e of group) {
+        // Absent = that save did not touch the field; null = the reviewer cleared it.
+        if (e.summary.review?.rating !== undefined) rating = e.summary.review.rating;
+        if (e.summary.review?.verdict !== undefined) verdict = e.summary.review.verdict;
+      }
+      parts.push({ kind: 'review', songId: songKey, rating, verdict });
     }
   }
   for (const [verb, group] of verbs) {
@@ -373,6 +400,10 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'comment.updated': { one: 'edited a comment', many: 'edited {n} comments' },
   'comment.resolved': { one: 'resolved a comment thread', many: 'resolved {n} comment threads' },
   'comment.deleted': { one: 'deleted a comment', many: 'deleted {n} comments' },
+  'task.created': { one: 'added a task', many: 'added {n} tasks' },
+  'task.updated': { one: 'updated a task', many: 'updated {n} tasks' },
+  'task.completed': { one: 'completed a task', many: 'completed {n} tasks' },
+  'task.deleted': { one: 'removed a task', many: 'removed {n} tasks' },
   'file.uploaded': { one: 'added a file', many: 'added {n} files' },
   'file.updated': { one: 'edited a file', many: 'edited {n} files' },
   'file.deleted': { one: 'removed a file', many: 'removed {n} files' },
@@ -414,8 +445,18 @@ function describeStage(part: Extract<DigestPart, { kind: 'stage' }>, names: Dige
   return `moved ${title ?? 'a song'} to ${to}`;
 }
 
+function describeReview(part: Extract<DigestPart, { kind: 'review' }>, names: DigestNames): string {
+  const title = part.songId ? names.songs?.[part.songId] : undefined;
+  const given = [
+    part.rating !== null ? `${part.rating} of 5` : null,
+    part.verdict && isReviewVerdict(part.verdict) ? REVIEW_VERDICT_LABEL[part.verdict] : null,
+  ].filter((w): w is string => w !== null);
+  return `reviewed ${title ?? 'a song'}${given.length > 0 ? `: ${given.join(', ')}` : ''}`;
+}
+
 export function describePart(part: DigestPart, names: DigestNames): string {
   if (part.kind === 'release') return describeRelease(part, names);
+  if (part.kind === 'review') return describeReview(part, names);
   if (part.kind === 'stage') return describeStage(part, names);
   if (part.verb === 'song.created' && part.demos !== undefined && part.demos > 0 && part.demos === part.count) {
     return part.count === 1 ? 'added a demo' : `added ${part.count} demos`;

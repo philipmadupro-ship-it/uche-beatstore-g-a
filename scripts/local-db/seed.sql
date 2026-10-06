@@ -2,7 +2,10 @@
 -- creator profile) and a signed-in buyer (does not). Specs seed their own data.
 INSERT INTO auth.users (id, email) VALUES
   ('0b0e1a57-0000-4000-8000-000000000001', 'producer@local.test'),
-  ('0b0e1a57-0000-4000-8000-0000000000b1', 'buyer@local.test')
+  ('0b0e1a57-0000-4000-8000-0000000000b1', 'buyer@local.test'),
+  -- Two more signed-in people, for specs that need roster artists of one label (label-org-song-reviews).
+  ('0b0e1a57-0000-4000-8000-0000000000b2', 'artist-a@local.test'),
+  ('0b0e1a57-0000-4000-8000-0000000000b3', 'artist-b@local.test')
 ON CONFLICT DO NOTHING;
 INSERT INTO public.creator_profiles (user_id, display_name, slug)
 VALUES ('0b0e1a57-0000-4000-8000-000000000001', 'UCHE', 'uche')

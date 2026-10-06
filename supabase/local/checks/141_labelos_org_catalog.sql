@@ -240,7 +240,8 @@ SELECT public.check_eq('the only other new policies are the RESTRICTIVE SELECT g
   (SELECT string_agg(tablename || '=' || permissive || '/' || cmd, ' ' ORDER BY tablename)
    FROM pg_policies WHERE schemaname = 'public' AND (permissive <> 'PERMISSIVE' OR policyname = 'org_member_guard')),
   'artist_messages=RESTRICTIVE/SELECT artist_portals=RESTRICTIVE/SELECT contact_track_states=RESTRICTIVE/SELECT '
-  'play_head_pings=RESTRICTIVE/SELECT project_access_links=RESTRICTIVE/SELECT project_assets=RESTRICTIVE/SELECT '
+  -- notifications: 151's guard (LABEL-23) — an org notification is read only by a live member of its org
+  'notifications=RESTRICTIVE/SELECT play_head_pings=RESTRICTIVE/SELECT project_access_links=RESTRICTIVE/SELECT project_assets=RESTRICTIVE/SELECT '
   'project_comments=RESTRICTIVE/SELECT project_contacts=RESTRICTIVE/SELECT project_folder_items=RESTRICTIVE/SELECT '
   'project_shares=RESTRICTIVE/SELECT project_tags=RESTRICTIVE/SELECT project_tracks=RESTRICTIVE/SELECT '
   'projects=RESTRICTIVE/SELECT song_beats=RESTRICTIVE/SELECT store_free_downloads=RESTRICTIVE/SELECT '
@@ -249,10 +250,12 @@ SELECT public.check_eq('the only other new policies are the RESTRICTIVE SELECT g
 SELECT public.check_eq('the service-only write trigger sits on every table the producer can write an org row through',
   (SELECT string_agg(c.relname, ',' ORDER BY c.relname) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
    WHERE t.tgname = 'labelos_org_rows_service_only' AND NOT t.tgisinternal),
-  'artist_messages,artist_portals,contact_track_states,project_assets,project_comments,project_contacts,'
+  'artist_messages,artist_portals,contact_track_states,notifications,project_assets,project_comments,project_contacts,'
   'project_folder_items,project_shares,project_tags,project_tracks,projects,'
   -- release_items, releases: 144's own org tables (LABEL-16)
-  'release_items,releases,song_beats,track_collaborators,'
+  'release_items,releases,song_beats,song_reviews,'
+  -- tasks: 151's org table (LABEL-23)
+  'tasks,track_collaborators,'
   'track_licenses,track_links,track_stem_files,track_versions,tracks');
 SELECT public.check_eq('every permissive policy on these tables is the producer''s from before 141, or org_member_read',
   (SELECT string_agg(DISTINCT policyname, ',' ORDER BY policyname)

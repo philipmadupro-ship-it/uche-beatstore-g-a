@@ -23,6 +23,8 @@ import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers'
 import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
 import { CURSOR_RE } from '@/lib/labelos/activity-feed';
 import { SONG_STAGES } from '@/lib/labelos/song-stage';
+import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
+import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -1237,6 +1239,45 @@ export const OrgSongStageBodySchema = z.object({
   from: z.enum(SONG_STAGES).optional(),
 }).strict();
 export type OrgSongStageBody = z.infer<typeof OrgSongStageBodySchema>;
+
+/**
+ * PUT /api/org/[orgId]/tracks/[id]/reviews (LABEL-25): MY review of a song.
+ * Each field is optional: omitted keeps what is there, `null` clears it. The
+ * merged review must still hold a rating, a verdict or a note.
+ */
+export const OrgSongReviewBodySchema = z.object({
+  rating: z.number().int().min(1).max(5).nullable().optional(),
+  verdict: z.enum(REVIEW_VERDICTS).nullable().optional(),
+  note: z.string().max(NOTE_MAX).nullable().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Send a rating, a verdict or a note' });
+export type OrgSongReviewBody = z.infer<typeof OrgSongReviewBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/tasks (LABEL-23): a task on at most ONE artist,
+ * project, song or release (`target`), or on none (an org-level task), with an
+ * optional assignee and due date. The target is fixed at creation: a task is
+ * not moved between objects (make a new one).
+ */
+const TASK_TITLE = z.string().trim().min(1).max(TASK_TITLE_MAX);
+const TASK_NOTES = z.string().max(TASK_NOTES_MAX);
+export const OrgTaskCreateBodySchema = z.object({
+  title: TASK_TITLE,
+  notes: TASK_NOTES.nullable().optional(),
+  due_at: z.string().datetime({ offset: true }).nullable().optional(),
+  assignee_id: z.string().uuid().nullable().optional(),
+  target: z.object({ kind: z.enum(TASK_OBJECT_KINDS), id: z.string().uuid() }).strict().nullable().optional(),
+}).strict();
+export type OrgTaskCreateBody = z.infer<typeof OrgTaskCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/tasks/[taskId]: omitted keeps, `null` clears; `done` ticks it off or reopens it. */
+export const OrgTaskPatchBodySchema = z.object({
+  title: TASK_TITLE.optional(),
+  notes: TASK_NOTES.nullable().optional(),
+  due_at: z.string().datetime({ offset: true }).nullable().optional(),
+  assignee_id: z.string().uuid().nullable().optional(),
+  done: z.boolean().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgTaskPatchBody = z.infer<typeof OrgTaskPatchBodySchema>;
 
 /** POST /api/org/[orgId]/releases/[releaseId]/items — appended at the end. No master = the song itself. */
 export const OrgReleaseItemCreateBodySchema = z.object({

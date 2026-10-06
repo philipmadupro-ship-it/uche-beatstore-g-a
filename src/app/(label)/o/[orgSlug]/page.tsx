@@ -5,10 +5,11 @@
  * look at, so the org's front door stays its members page (as before).
  * "Since your last visit" (LABEL-20) is the activity digest, read here for
  * THIS member (their scope, their visibility); "Needs attention" (LABEL-35)
- * is not here yet.
+ * is not here yet. "My work" (LABEL-23) is the member's own open tasks, above the roster.
  */
 import { redirect } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
+import { MyWorkPanel } from '@/components/labelos/MyWorkPanel';
 import { OrgOverviewView } from '@/components/labelos/OrgOverviewView';
 import { OverviewDigest } from '@/components/labelos/OverviewDigest';
 import { orgShellFor, requireOrgCapability } from '@/lib/auth/org-access';
@@ -52,6 +53,7 @@ export default async function OrgHome({ params }: { params: Promise<{ orgSlug: s
           {limited ? 'Where the artists you work on stand.' : 'Where every artist on the roster stands.'}
         </p>
       </header>
+      <MyWorkPanel orgId={shell.org.id} orgSlug={shell.org.slug} />
       <OrgOverviewView orgSlug={shell.org.slug} overview={overview} limited={limited} />
       {digest && <OverviewDigest orgId={shell.org.id} orgSlug={shell.org.slug} viewerId={access.userId} feed={digest.feed} since={digest.since} lastSeenAt={digest.lastSeenAt} />}
     </PageContainer>
