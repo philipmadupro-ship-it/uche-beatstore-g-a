@@ -34,7 +34,7 @@ export default async function OrgArtistPage({ params }: { params: Promise<{ orgS
         </h1>
         <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-white/70">Their projects, songs, releases and files in this organization.</p>
       </header>
-      <OrgArtistWorkspaceTabs orgId={shell.org.id} orgSlug={shell.org.slug} workspace={workspace} />
+      <OrgArtistWorkspaceTabs orgId={shell.org.id} orgSlug={shell.org.slug} workspace={workspace} viewerId={access.userId} />
     </PageContainer>
   );
 }

@@ -111,6 +111,8 @@ const ORG_HELPERS = [
   'can_see_org_track',
   'can_read_org_track',
   'can_see_project',
+  // 147 (LABEL-20): the projects an artists-scoped member's scope reaches, for activity_events.
+  'labelos_scoped_projects',
 ];
 const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 
@@ -211,6 +213,26 @@ describe('final RLS policy state', () => {
         .filter(([, body]) => /FOR\s+(UPDATE|DELETE|ALL)\b/i.test(body))
         .map(([k]) => k);
       expect(writes).toEqual([]);
+    });
+
+    it('activity_events has ONE policy, a SELECT, and it carries catalog.read, the internal class AND the artist scope (147, LABEL-20)', () => {
+      expect(onTable('activity_events').map(([k]) => k)).toEqual(['activity_events.activity_events_member_read']);
+      const body = policies.get('activity_events.activity_events_member_read') ?? '';
+      expect(body).toMatch(/^\s*FOR SELECT\b/i);
+      expect(body).toMatch(/has_org_cap\(org_id, 'catalog\.read'\)/);
+      expect(body).toMatch(/visibility = 'artist' OR[\s\S]*has_org_cap\(org_id, 'business\.read\.internal'\)/);
+      // Without these a member limited to some artists (or a roster artist) reads every artist's events with their own JWT.
+      expect(body).toMatch(/\(org_id, artist_id\) IN \(\s*SELECT s\.org_id, s\.contact_id FROM public\.member_artist_scopes s WHERE s\.user_id = \(SELECT auth\.uid\(\)\)/);
+      expect(body).toMatch(/artist_id IS NULL AND project_id IS NOT NULL AND \(org_id, project_id\) IN \(SELECT sp\.org_id, sp\.project_id FROM public\.labelos_scoped_projects\(\) sp\)/);
+      expect(body).not.toMatch(/WITH CHECK/i);
+    });
+
+    it('activity_events scope makes no per-row SECURITY DEFINER call: every scope disjunct is an uncorrelated subquery (R-08)', () => {
+      const body = policies.get('activity_events.activity_events_member_read') ?? '';
+      expect(body).toMatch(/org_id IN \(\s*SELECT om\.org_id FROM public\.org_members om WHERE om\.user_id = \(SELECT auth\.uid\(\)\)/);
+      // The only has_org_cap calls are 136's two capability tests; scope adds no helper call keyed on the row.
+      expect([...body.matchAll(/has_org_cap\(/g)]).toHaveLength(2);
+      expect(body).not.toMatch(/can_see_artist\(|can_see_org_project\(|can_see_org_track\(/);
     });
 
     it('org_members has no insert policy: joining is the service-role accept route only', () => {
