@@ -12,7 +12,7 @@
  * else `<table singular>_id`), eq, in,
  * is, gt / gte / lt / lte (string order, which is ISO-timestamp order), `or` (the
  * PostgREST string: eq, in, is, not.is and and(…) groups), not(col, 'in', '(…)'), order, limit, range, maybeSingle, single, insert,
- * update, delete, upsert (ignoreDuplicates; `onConflict` merges into the row it names), rpc (functions the test
+ * update, delete, `select(cols, { count: 'exact', head: true })`, upsert (ignoreDuplicates; `onConflict` merges into the row it names), rpc (functions the test
  * declares in `rpc`, run against the same tables). Unique keys per table are
  * declared by the test and answered with Postgres' 23505. `order` compares
  * numbers as numbers.
@@ -128,6 +128,8 @@ export function memoryAdmin(db: MemoryDb) {
     let limit: number | null = null;
     let offset = 0;
     let returning = false;
+    let wantCount = false;
+    let headOnly = false;
 
     const rowsOf = () => (db.tables[table] ??= []);
 
@@ -151,7 +153,7 @@ export function memoryAdmin(db: MemoryDb) {
       return out;
     }
 
-    function run(): { data: unknown; error: Err | null } {
+    function run(): { data: unknown; error: Err | null; count?: number } {
       const matching = rowsOf().filter((r) => filters.every((f) => f(r)));
       if (mode === 'select') {
         let rows = [...matching];
@@ -169,7 +171,8 @@ export function memoryAdmin(db: MemoryDb) {
         }
         if (limit !== null || offset > 0) rows = rows.slice(offset, limit === null ? undefined : offset + limit);
         if (db.maxRows) rows = rows.slice(0, db.maxRows);
-        return { data: project(rows), error: null };
+        // `{ count: 'exact', head: true }`: the number of rows the filters match (not the page), and no rows.
+        return { data: headOnly ? null : project(rows), error: null, ...(wantCount ? { count: matching.length } : {}) };
       }
       if (mode === 'insert' || mode === 'upsert') {
         const added: Row[] = [];
@@ -214,8 +217,10 @@ export function memoryAdmin(db: MemoryDb) {
 
     const lower = (v: unknown) => (typeof v === 'string' ? v.toLowerCase() : v);
     const b = {
-      select(cols = '*') {
+      select(cols = '*', opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) {
         columns = cols;
+        if (opts?.count) wantCount = true;
+        if (opts?.head) headOnly = true;
         if (mode !== 'select') returning = true;
         return b;
       },
@@ -309,7 +314,7 @@ export function memoryAdmin(db: MemoryDb) {
         if (!rows || rows.length !== 1) return { data: null, error: { message: 'expected one row' } };
         return { data: rows[0], error: null };
       },
-      then(resolve: (r: { data: unknown; error: Err | null }) => unknown, reject?: (e: unknown) => unknown) {
+      then(resolve: (r: { data: unknown; error: Err | null; count?: number }) => unknown, reject?: (e: unknown) => unknown) {
         return Promise.resolve().then(run).then(resolve, reject);
       },
     };

@@ -66,6 +66,11 @@ export const VERBS = [
   'recording.uploaded',
   'recording.downloaded',
   'recording.copied',
+  // Tasks (LABEL-23)
+  'task.created',
+  'task.updated',
+  'task.completed',
+  'task.deleted',
   // Files
   'file.uploaded',
   'file.updated',
@@ -165,6 +170,12 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'recording.uploaded': 'artist',
   'recording.downloaded': 'internal',
   'recording.copied': 'internal',
+  // Tasks are the business side: each function keeps its own (D1), so A&R / producers / engineers
+  // (catalog.read, no business.read.internal) do not read another side's task history.
+  'task.created': 'internal',
+  'task.updated': 'internal',
+  'task.completed': 'internal',
+  'task.deleted': 'internal',
   'file.uploaded': 'internal',
   'file.updated': 'internal',
   'file.deleted': 'internal',
@@ -220,6 +231,7 @@ export const SUBJECT_TYPES = [
   'approval',
   'release',
   'connection',
+  'task',
 ] as const;
 export type SubjectType = (typeof SUBJECT_TYPES)[number];
 

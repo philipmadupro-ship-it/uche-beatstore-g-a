@@ -373,9 +373,24 @@ export async function requireObjectAccess(opts: {
   cap: Capability;
   orgId?: string;
 }): Promise<ObjectAccessResult> {
-  const { table, id, cap, orgId } = opts;
   const userId = await sessionUserId();
   if (!userId) return NOT_AUTHENTICATED();
+  return objectAccessFor(userId, opts);
+}
+
+/**
+ * `requireObjectAccess` for a user other than the session's: the same
+ * membership, artist-scope and capability rules, answered for `userId`.
+ * For a route that must know whether ANOTHER member may reach an object
+ * before it hands them something about it (an assigned task, LABEL-23); the
+ * caller never reveals the answer's reason, only "no".
+ */
+export async function objectAccessFor(
+  userId: string,
+  opts: { table: OrgObjectTable; id: string; cap: Capability; orgId?: string },
+): Promise<ObjectAccessResult> {
+  const { table, id, cap, orgId } = opts;
+  if (!isUUID(userId)) return NOT_AUTHENTICATED();
   if (!isUUID(id)) return NOT_FOUND();
 
   const cols = ORG_OBJECT_TABLES[table];

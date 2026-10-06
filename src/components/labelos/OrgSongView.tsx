@@ -15,7 +15,8 @@
  * hear (D4: marketing never gets demos, loops or toplines) are absent from
  * the payload and the section says "restricted" (07 §3.4).
  *
- * Reviews, credits, splits, comments and tasks are later tasks (LABEL-22–28).
+ * Tasks on this song (LABEL-23) sit at the foot, the member's own side of them.
+ * Reviews, credits, splits and comments are later tasks (LABEL-22–28).
  */
 
 import { useState } from 'react';
@@ -25,6 +26,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { RestrictedNote } from '@/components/artists/OrgArtistWorkspaceTabs';
 import { SongStageControl } from '@/components/labelos/SongStageControl';
+import { TasksPanel } from '@/components/labelos/TasksPanel';
 import { abSeekFraction, toPlayerTrack, type RecordingView } from '@/lib/labelos/org-workspace';
 import type { OrgSongDetail } from '@/lib/labelos/org-workspace-store';
 
@@ -191,6 +193,8 @@ export function OrgSongView({ orgId, orgSlug, detail }: { orgId: string; orgSlug
           )}
         </div>
       </section>
+
+      <TasksPanel orgId={orgId} object={{ kind: 'song', id: song.id }} testId="org-song-tasks" />
     </div>
   );
 }

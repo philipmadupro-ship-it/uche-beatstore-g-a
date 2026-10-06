@@ -7,6 +7,11 @@ import { NotificationReadBodySchema } from '@/lib/contracts';
 
 export const dynamic = 'force-dynamic';
 
+/** PostgREST / Postgres: the column does not exist (migration 151 not applied yet). */
+function isMissingOrgColumn(error: { message?: string; code?: string } | null): boolean {
+  return !!error && (error.code === '42703' || /org_id/i.test(error.message ?? ''));
+}
+
 interface NotificationRow {
   read: boolean | null;
 }
@@ -33,19 +38,28 @@ export async function GET() {
     // "9+" while the real number was far higher, and "Mark all read", which is
     // unbounded server-side, then cleared rows the producer was never shown.
     // A head count costs no rows over the wire.
-    const [page, count] = await Promise.all([
-      admin
+    //
+    // Producer notifications only (`org_id IS NULL`): a Label OS direct ask
+    // (migration 151) belongs to the bell under its org, never here.
+    const read = (orgScoped: boolean) => {
+      const rows = admin
         .from('notifications')
         .select('id, kind, title, body, data, read, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(NOTIFICATION_PAGE_SIZE),
-      admin
+        .eq('user_id', userId);
+      const unreadCount = admin
         .from('notifications')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .eq('read', false),
-    ]);
+        .eq('read', false);
+      return Promise.all([
+        (orgScoped ? rows.is('org_id', null) : rows).order('created_at', { ascending: false }).limit(NOTIFICATION_PAGE_SIZE),
+        orgScoped ? unreadCount.is('org_id', null) : unreadCount,
+      ]);
+    };
+    let [page, count] = await read(true);
+    // Before migration 151 there is no org_id column to filter on, and no org
+    // notification to exclude: read exactly as before.
+    if (isMissingOrgColumn(page.error) || isMissingOrgColumn(count.error)) [page, count] = await read(false);
 
     if (page.error) throw page.error;
     const notifications = page.data ?? [];
@@ -109,14 +123,19 @@ export async function PATCH(req: NextRequest) {
     if (!isSupabaseConfigured()) return NextResponse.json({ ok: true });
 
     const admin = createServiceClient();
-    let q = admin
-      .from('notifications')
-      .update({ read: true })
-      .eq('user_id', userId)
-      .eq('read', false);
-    if (action === 'read') q = q.in('id', ids);
-
-    const { error } = await q;
+    const mark = (orgScoped: boolean) => {
+      let q = admin
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', userId)
+        .eq('read', false);
+      // Producer rows only: "Mark all read" here must not clear the asks waiting under an org.
+      if (orgScoped) q = q.is('org_id', null);
+      if (action === 'read') q = q.in('id', ids);
+      return q;
+    };
+    let { error } = await mark(true);
+    if (isMissingOrgColumn(error)) ({ error } = await mark(false));
 
     if (error) throw error;
     return NextResponse.json({ ok: true });
