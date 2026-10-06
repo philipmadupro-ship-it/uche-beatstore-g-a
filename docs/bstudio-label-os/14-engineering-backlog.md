@@ -1320,7 +1320,15 @@ Flag off.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-14, LABEL-19, D3
-**Status:** In Progress (branch label-os/LABEL-21; runs in parallel with LABEL-20, migration 148 reserved)
+**Status:** Done (PR #84, squash 72d0c0c, 2026-10-06; migration 148, not applied — apply at final merge, after 146)
+
+**Orchestrator decisions on #84 (accepted as implemented):**
+- Gate: CI green on the latest commit (build-and-test, e2e, secret-scan); first CI run failed `type-scale.test.ts` (`text-[12px]` in `ProjectMembersPanel.tsx`), fixed by the orchestrator (11px) because the session had hit its usage limit. Diff is Label OS only (no producer route, no `pending.sql`).
+- Acceptance verified by: route matrix `external-matrix.test.ts` (every org handler × 4 roles + stranger + signed-out), two-account real-DB e2e (4/4), RLS policy-state test, `db:local:check` (148 check + rollback).
+- Streaming `variant=full` counts as "listen" (a viewer without downloads can capture a stream, as on token shares). Accepted; capture-proof listening needs a lossy full-length derivative (later).
+- D4 audio classes do not apply to external members: the shared project is what is shared.
+- Carries: comments → LABEL-22; propose-own-credit → LABEL-27; expiry control in the Members panel and an entry point for project-only users beyond the emailed link / switcher are not built.
+- Still open before the final merge (unchanged): producer routes treating `user_id IS NULL` as own; R-08 guard cost.
 
 ## Objective
 Invite a person with their own account into one org project as viewer, commenter, contributor or editor.
