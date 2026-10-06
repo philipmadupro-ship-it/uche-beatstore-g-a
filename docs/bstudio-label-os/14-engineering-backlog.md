@@ -1157,7 +1157,15 @@ Flag off.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-18
-**Status:** In Progress (branch label-os/LABEL-19)
+**Status:** Done (2026-10-06) — PR #78. Migration 146, not applied: audit-class mutations (member update/remove, artist scope, invitation create/revoke) are functions that write the change and its `activity_events` row in one transaction (`SECURITY DEFINER`, `service_role` only); every mutating `/api/org/**` handler records an event, held by a source coverage test; `org.created` is backfilled.
+
+**Orchestrator decisions on #78 (accepted as implemented):**
+- Default visibility per verb: creative record (songs, recordings, projects, credits, releases) = `artist`; business side (members, invitations, contacts, sharing, access, split sheets, approvals, settings) = `internal`; files default `internal` and are `artist` only for a file that never was restricted.
+- `org.created` backfill is in 146, idempotent, one event per org lacking one (`source: 'backfill'`).
+- Six reasoned coverage exemptions (presign, upload init/part/abort — storage plumbing). A stale exemption fails the test.
+- The members routes read, plan, then call the function; two admins at once can record a stale `from` value (the DB still keeps one owner). Accepted for now.
+
+**Found, not fixed — carried to LABEL-20 as a requirement:** `activity_events` RLS (136's policy) has no artist-scope predicate, so a scoped member or roster artist reading the table with their own JWT can see `artist` events of artists outside their scope (`song.created` carries the title). The app never exposes that read, but LABEL-20 must close it before any feed ships (see "Carried from LABEL-19" under LABEL-20).
 
 ## Objective
 Every Label OS mutation records an event, and audit-class mutations are atomic with their event.
@@ -1226,7 +1234,7 @@ Revert the functions; routes fall back to `recordEvent`.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-19
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-20)
 
 ## Objective
 Grouped, scope-safe feeds for the org overview, artist, project and song.
@@ -1301,7 +1309,7 @@ Flag off.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-14, LABEL-19, D3
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-21; runs in parallel with LABEL-20, migration 148 reserved)
 
 ## Objective
 Invite a person with their own account into one org project as viewer, commenter, contributor or editor.
