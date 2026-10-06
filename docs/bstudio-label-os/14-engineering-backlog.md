@@ -1499,7 +1499,18 @@ Drop the table and column.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-20
-**Status:** In Progress (branch label-os/LABEL-24; no migration)
+**Status:** Done (2026-10-06) — PR #83. No migration. `POST /api/org/[orgId]/tracks/[id]/stage` (song tracks only, `catalog.write`, compare-and-set, illegal move → 409, records `song.stage_changed` `{ from, to }`), the pure transition table in `lib/labelos/song-stage.ts`, `isReleased` derived from `countsAsOnRelease`, a digest line ("Sam moved Midnight to Selected", collapsed per actor per day) and `SongStageControl` on the org song view and the artist workspace.
+
+**Orchestrator decisions on #83 (accepted as implemented):**
+- **Exits from `on_hold`, `passed` and `archived`:** 04 W3's diagram has none, but says passed demos "are regularly revisited". `on_hold | passed | archived → in_review` is allowed (one line in `STAGE_TRANSITIONS` plus its test), so a song is never stranded. `selected` leaves only by archiving, as in the diagram.
+- A roster artist may move their own songs only `inbox → in_review`.
+- `isReleased` is `countsAsOnRelease`, so a song on a draft release counts. Nothing renders a "Released" badge yet.
+
+**Open (not blocking, for later tasks):**
+- The table does not consult release state: a song on a delivered release can still be passed, held or archived.
+- A stage move refreshes its own control only; the workspace Overview stage counts are stale until reload.
+- An event files under the song's first project (Inbox first) and that project's artist, so a song in several artists' projects is visible in one artist's scoped feed.
+- Bulk move (the A&R Inbox keys and `BatchActionBar`) and the project page's read-only stage chip belong to LABEL-25's inbox screen; each song there goes through this route.
 
 ## Objective
 Validated stage transitions with history.
@@ -1563,7 +1574,7 @@ Revert.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-24
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-25; migration 149 reserved)
 
 ## Objective
 Per-reviewer ratings and verdicts, and a fast keyboard review queue.
