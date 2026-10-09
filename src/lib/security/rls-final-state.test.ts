@@ -100,6 +100,8 @@ function labelOsTables(): string[] {
     'song_reviews',
     // 151_labelos_tasks_notifications.sql (LABEL-23)
     'tasks',
+    // 153_labelos_parties_credits.sql (LABEL-27)
+    'parties',
   ];
 }
 
@@ -123,6 +125,8 @@ const ORG_HELPERS = [
   'labelos_scoped_tracks',
   // 151 (LABEL-23): the releases of the scoped projects, for tasks.
   'labelos_scoped_releases',
+  // 153 (LABEL-27): the parties credited on songs of the scoped projects, for parties.
+  'labelos_scoped_parties',
 ];
 const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 
@@ -317,12 +321,16 @@ describe('final RLS policy state', () => {
     ];
     /** Every table with an org read path is guarded with its predicate. */
     const GUARDED_TABLES = ORG_READ_TABLES;
+    /**
+     * track_collaborators had no org read path in 141 and was hidden like the tables below;
+     * 153 (LABEL-27) gives it one (credits) and REPLACES its guard — see the 153 block.
+     */
+    const GAINED_READ_PATH_IN_153 = ['track_collaborators'];
     /** Keyed through a track's / project's user_id, with no org read path: org rows hidden. */
     const HIDDEN_TABLES = [
       'project_tracks',
       'project_shares',
       'track_versions',
-      'track_collaborators',
       'track_licenses',
       'play_head_pings',
       'store_free_downloads',
@@ -330,11 +338,12 @@ describe('final RLS policy state', () => {
       'project_folder_items',
       'project_access_links',
     ];
-    const ALL_141 = [...ORG_READ_TABLES, ...HIDDEN_TABLES];
+    const ALL_141 = [...ORG_READ_TABLES, ...HIDDEN_TABLES, ...GAINED_READ_PATH_IN_153];
 
     it('every producer policy on these tables is exactly what it was before 141', () => {
       for (const [key, body] of before141) {
         if (!ALL_141.includes(key.split('.')[0])) continue;
+        if (key === 'track_collaborators.org_member_guard') continue; // replaced by 153, asserted below
         expect(policies.get(key), key).toBe(body);
       }
     });
@@ -342,7 +351,12 @@ describe('final RLS policy state', () => {
     it('141 adds exactly org_member_read on each org-readable table and org_member_guard wherever an owner policy could reach an org row', () => {
       const added = [...policies.keys()].filter((k) => ALL_141.includes(k.split('.')[0]) && !before141.has(k)).sort();
       expect(added).toEqual(
-        [...ORG_READ_TABLES.map((t) => `${t}.org_member_read`), ...ALL_141.map((t) => `${t}.org_member_guard`)].sort(),
+        [
+          ...ORG_READ_TABLES.map((t) => `${t}.org_member_read`),
+          ...ALL_141.map((t) => `${t}.org_member_guard`),
+          // 153 (LABEL-27): the credits' org read policy.
+          'track_collaborators.track_collaborators_org_member_read',
+        ].sort(),
       );
     });
 
@@ -390,6 +404,57 @@ describe('final RLS policy state', () => {
     it('no org policy writes: nothing new is FOR INSERT / UPDATE / DELETE / ALL', () => {
       const writes = [...policies]
         .filter(([k, body]) => /\.org_member_(read|guard)$/.test(k) && /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body))
+        .map(([k]) => k);
+      expect(writes).toEqual([]);
+    });
+  });
+
+  describe('Label OS parties + credits (mig 153, LABEL-27)', () => {
+    const before153 = replay(realMigrations().filter((m) => m.name < '153')).policies;
+
+    it('the producer policy on track_collaborators is exactly what it was', () => {
+      expect(policies.get('track_collaborators.track_collaborators_via_parent')).toBe(before153.get('track_collaborators.track_collaborators_via_parent'));
+    });
+
+    it('153 changes only the guard (replaced, still a RESTRICTIVE SELECT) and adds the org read policy and the parties policy', () => {
+      const added = [...policies.keys()].filter((k) => !before153.has(k) && /^(track_collaborators|parties)\./.test(k)).sort();
+      expect(added).toEqual(['parties.parties_member_read', 'track_collaborators.track_collaborators_org_member_read']);
+      const changed = [...before153.keys()].filter((k) => policies.get(k) !== before153.get(k) && /^(track_collaborators|parties)\./.test(k));
+      expect(changed).toEqual(['track_collaborators.org_member_guard']);
+    });
+
+    it('the guard lets an org credit through to the org policy and still holds every producer row to the old rule', () => {
+      const body = policies.get('track_collaborators.org_member_guard') ?? '';
+      expect(body).toMatch(/^\s*AS RESTRICTIVE\s+FOR SELECT\s+USING \(\s*org_id IS NOT NULL\s+OR\s+NOT public\.labelos_is_org_track\(track_id\)\s*\)\s*$/i);
+      // The predicate that admits a row is the org policy's alone: the guard cannot be what shows a credit.
+      expect(body).not.toMatch(/has_org_cap|auth\.uid/i);
+    });
+
+    it('the credits org read policy is a SELECT keyed on org_id IS NOT NULL, rights.read and a membership — no per-row definer helper (R-08)', () => {
+      const body = policies.get('track_collaborators.track_collaborators_org_member_read') ?? '';
+      expect(body).toMatch(/^\s*FOR SELECT\s+USING \(\s*org_id IS NOT NULL\s+AND/i);
+      expect(body).toMatch(/has_org_cap\(cm\.org_id, 'rights\.read'\)/);
+      expect(body).toMatch(/FROM public\.org_members/);
+      expect(body).toMatch(/labelos_scoped_tracks\(\)/);
+      expect(body).not.toMatch(/WITH CHECK/i);
+      expect(body).not.toMatch(/can_see_org_|can_read_org_track|labelos_is_org_/);
+      // Not the row's own org_id: the capability is asked of the caller's few memberships (an uncorrelated subplan).
+      expect(body).not.toMatch(/has_org_cap\(\s*org_id/);
+    });
+
+    it('the parties policy: rights.read in a whole-org / scoped reach, or the party is the caller’s own — never open', () => {
+      const body = policies.get('parties.parties_member_read') ?? '';
+      expect(body).toMatch(/^\s*FOR SELECT\s+USING\b/i);
+      expect(body).toMatch(/has_org_cap\(cm\.org_id, 'rights\.read'\)/);
+      expect(body).toMatch(/labelos_scoped_parties\(\)/);
+      expect(body).toMatch(/user_id = \(SELECT auth\.uid\(\)\)/);
+      expect(body).not.toMatch(/has_org_cap\(\s*org_id/);
+      expect(body).not.toMatch(/WITH CHECK/i);
+    });
+
+    it('no policy on either table writes', () => {
+      const writes = [...policies]
+        .filter(([k, body]) => /^(parties|track_collaborators)\./.test(k) && /FOR\s+(INSERT|UPDATE|DELETE)\b/i.test(body))
         .map(([k]) => k);
       expect(writes).toEqual([]);
     });

@@ -63,7 +63,9 @@ WHERE p.pronamespace = 'public'::regnamespace
 SELECT public.check_eq('all five functions exist',
   (SELECT count(*)::int FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname LIKE 'labelos\_audit\_%' AND proname <> 'labelos_audit_insert'
      -- 148 (LABEL-21) adds the project-member family; it is checked in 148's own file.
-     AND proname NOT LIKE 'labelos\_audit\_project\_%' AND proname <> 'labelos_audit_insert_project'), 5);
+     AND proname NOT LIKE 'labelos\_audit\_project\_%' AND proname <> 'labelos_audit_insert_project'
+     -- 153 (LABEL-27) adds credit decisions; checked in 153's own file.
+     AND proname NOT LIKE 'labelos\_audit\_credit\_%'), 5);
 SELECT public.check_eq('the private event helper has no caller but its owner',
   (SELECT (has_function_privilege('service_role', p.oid, 'EXECUTE'), has_function_privilege('authenticated', p.oid, 'EXECUTE'))::text
    FROM pg_proc p WHERE p.proname = 'labelos_audit_insert'),

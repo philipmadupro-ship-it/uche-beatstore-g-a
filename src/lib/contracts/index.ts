@@ -1253,6 +1253,56 @@ export const OrgSongReviewBodySchema = z.object({
 export type OrgSongReviewBody = z.infer<typeof OrgSongReviewBodySchema>;
 
 /**
+ * /api/org/[orgId]/parties (LABEL-27): a rights identity. Free text is
+ * trimmed and length-bounded here; the legal identifiers are normalised and
+ * checked by `partyColumns` (lib/labelos/parties), which is what the database
+ * CHECKs accept. `user_id` links an account (an org member, or an external
+ * member of one of the org's projects — the route checks which).
+ */
+const PARTY_TEXT = (max: number) => z.string().trim().max(max).nullable().optional();
+const PartyFields = {
+  kind: z.enum(['person', 'company']).optional(),
+  display_name: z.string().trim().min(1).max(200).optional(),
+  legal_name: PARTY_TEXT(200),
+  email: PARTY_TEXT(320),
+  ipi: PARTY_TEXT(32),
+  isni: PARTY_TEXT(32),
+  pro: PARTY_TEXT(80),
+  pro_affiliation: z.enum(['affiliated', 'not_affiliated', 'unknown']).optional(),
+  publisher_name: PARTY_TEXT(200),
+  publisher_ipi: PARTY_TEXT(32),
+  contact_id: z.string().uuid().nullable().optional(),
+  user_id: z.string().uuid().nullable().optional(),
+};
+export const OrgPartyCreateBodySchema = z.object({ ...PartyFields, display_name: z.string().trim().min(1).max(200) }).strict();
+export type OrgPartyCreateBody = z.infer<typeof OrgPartyCreateBodySchema>;
+export const OrgPartyPatchBodySchema = z.object(PartyFields).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgPartyPatchBody = z.infer<typeof OrgPartyPatchBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/tracks/[id]/credits (LABEL-27): propose a credit.
+ * `party_id` / `name` / `contact_id` name WHO — a member without
+ * `rights.write` (and every external member) may only omit them or name
+ * themselves; the route refuses anything else (lib/labelos/credits#planPropose).
+ */
+export const OrgCreditProposeBodySchema = z.object({
+  role: z.string().trim().min(1).max(60),
+  scope: z.enum(['composition', 'recording']).nullable().optional(),
+  role_detail: z.string().trim().max(200).nullable().optional(),
+  party_id: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(200).optional(),
+  contact_id: z.string().uuid().nullable().optional(),
+}).strict();
+export type OrgCreditProposeBody = z.infer<typeof OrgCreditProposeBodySchema>;
+
+/** PATCH /api/org/[orgId]/tracks/[id]/credits/[creditId]: confirm or dispute (a dispute may say why). */
+export const OrgCreditDecisionBodySchema = z.object({
+  action: z.enum(['confirm', 'dispute']),
+  note: z.string().trim().min(1).max(1000).nullable().optional(),
+}).strict();
+export type OrgCreditDecisionBody = z.infer<typeof OrgCreditDecisionBodySchema>;
+
+/**
  * POST /api/org/[orgId]/tasks (LABEL-23): a task on at most ONE artist,
  * project, song or release (`target`), or on none (an org-level task), with an
  * optional assignee and due date. The target is fixed at creation: a task is
