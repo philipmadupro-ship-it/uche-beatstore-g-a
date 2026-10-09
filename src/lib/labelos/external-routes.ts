@@ -49,6 +49,16 @@ export const EXTERNAL_ROUTES: Readonly<Record<string, { methods: readonly string
     kind: 'project',
     why: 'Edit, resolve or delete a comment of THIS project: their own words, or resolving a thread (commenter and above). Never visibility, never an internal note.',
   },
+  '[orgId]/tracks/[id]/credits/route.ts': {
+    methods: ['GET', 'POST'],
+    kind: 'project',
+    why: 'D2: see their OWN credit lines on a song of their project, and (contributor / editor) propose a credit that names THEMSELVES. Never another person’s credit, party or legal data.',
+  },
+  '[orgId]/tracks/[id]/credits/[creditId]/route.ts': {
+    methods: ['PATCH'],
+    kind: 'project',
+    why: 'D2: confirm or dispute their OWN credit (not one they proposed themselves). A credit that is not theirs is 404.',
+  },
   '[orgId]/audio/[trackId]/route.ts': {
     methods: ['GET', 'HEAD'],
     kind: 'project',

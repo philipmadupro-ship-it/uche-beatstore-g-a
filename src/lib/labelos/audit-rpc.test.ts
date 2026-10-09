@@ -7,7 +7,9 @@ import { AUDIT_RPCS, auditRpc, isMissingAuditRpc, type AuditRpcAdmin } from './a
 const SQL_146 = readFileSync(join(process.cwd(), 'supabase/migrations/146_labelos_audit_rpc.sql'), 'utf8');
 // LABEL-21 adds the project-member family (and replaces labelos_audit_invitation_create, same signature).
 const SQL_148 = readFileSync(join(process.cwd(), 'supabase/migrations/148_labelos_project_members.sql'), 'utf8');
-const SQL = SQL_146 + SQL_148;
+// LABEL-27 adds the credit decision (confirm / dispute).
+const SQL_153 = readFileSync(join(process.cwd(), 'supabase/migrations/153_labelos_parties_credits.sql'), 'utf8');
+const SQL = SQL_146 + SQL_148 + SQL_153;
 
 describe('auditRpc', () => {
   it('calls the named function with the arguments untouched', async () => {
@@ -44,7 +46,7 @@ describe('auditRpc', () => {
   });
 });
 
-describe('migrations 146 + 148 hold exactly these functions, service_role only', () => {
+describe('migrations 146 + 148 + 153 hold exactly these functions, service_role only', () => {
   for (const [key, name] of Object.entries(AUDIT_RPCS)) {
     it(`${key} → ${name}`, () => {
       expect(SQL).toMatch(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\(`));

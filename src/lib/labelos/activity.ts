@@ -85,6 +85,10 @@ export const VERBS = [
   'credit.proposed',
   'credit.confirmed',
   'credit.disputed',
+  // Rights identities (LABEL-27; the subject is the party)
+  'party.created',
+  'party.updated',
+  'party.deleted',
   'split_sheet.circulated',
   // Releases
   'approval.requested',
@@ -194,6 +198,10 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'credit.proposed': 'artist',
   'credit.confirmed': 'artist',
   'credit.disputed': 'artist',
+  // A party carries legal names and IPIs: the business side, like contacts.
+  'party.created': 'internal',
+  'party.updated': 'internal',
+  'party.deleted': 'internal',
   'split_sheet.circulated': 'internal',
   'approval.requested': 'internal',
   'approval.decided': 'internal',
@@ -238,6 +246,7 @@ export const SUBJECT_TYPES = [
   'asset',
   'comment',
   'credit',
+  'party',
   'split_sheet',
   'approval',
   'release',
