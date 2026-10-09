@@ -10,7 +10,7 @@
  * which orders ISO timestamps correctly): select (column lists, one
  * `table!inner(cols)` embed resolved through `org_id` for organizations,
  * else `<table singular>_id`), eq, in,
- * is, gt / gte / lt / lte (string order, which is ISO-timestamp order), `or` (the
+ * is, ilike (% and _), gt / gte / lt / lte (string order, which is ISO-timestamp order), `or` (the
  * PostgREST string: eq, in, is, not.is and and(…) groups), not(col, 'in', '(…)'), order, limit, range, maybeSingle, single, insert,
  * update, delete, `select(cols, { count: 'exact', head: true })`, upsert (ignoreDuplicates; `onConflict` merges into the row it names), rpc (functions the test
  * declares in `rpc`, run against the same tables). Unique keys per table are
@@ -256,6 +256,11 @@ export function memoryAdmin(db: MemoryDb) {
       },
       is(col: string, v: null) {
         filters.push((r) => (r[col] ?? null) === v);
+        return b;
+      },
+      ilike(col: string, pattern: string) {
+        const re = new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.')}$`, 'i');
+        filters.push((r) => re.test(String(r[col] ?? '')));
         return b;
       },
       gt(col: string, v: unknown) {

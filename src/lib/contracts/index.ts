@@ -25,6 +25,17 @@ import { CURSOR_RE } from '@/lib/labelos/activity-feed';
 import { SONG_STAGES } from '@/lib/labelos/song-stage';
 import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
 import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
+import {
+  DIRECTION_KEYWORDS_MAX,
+  DIRECTION_KEYWORD_MAX,
+  DIRECTION_TEXT_MAX,
+  REFERENCE_KINDS,
+  REFERENCE_NOTE_MAX,
+  REFERENCE_TITLE_MAX,
+  REFERENCE_URL_MAX,
+  REFERENCE_VISIBILITIES,
+  safeReferenceUrl,
+} from '@/lib/labelos/direction';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -1268,6 +1279,54 @@ export const OrgTaskCreateBodySchema = z.object({
   target: z.object({ kind: z.enum(TASK_OBJECT_KINDS), id: z.string().uuid() }).strict().nullable().optional(),
 }).strict();
 export type OrgTaskCreateBody = z.infer<typeof OrgTaskCreateBodySchema>;
+
+/** PUT /api/org/[orgId]/artists/[contactId]/direction (LABEL-26): the whole document; an empty string clears a field. */
+const DIRECTION_TEXT = z.string().max(DIRECTION_TEXT_MAX);
+export const OrgDirectionPutBodySchema = z.object({
+  direction: z.object({
+    sound: DIRECTION_TEXT.optional(),
+    lyrics: DIRECTION_TEXT.optional(),
+    visual: DIRECTION_TEXT.optional(),
+    influences: DIRECTION_TEXT.optional(),
+    avoid: DIRECTION_TEXT.optional(),
+    next: DIRECTION_TEXT.optional(),
+    keywords: z.array(z.string().max(DIRECTION_KEYWORD_MAX)).max(DIRECTION_KEYWORDS_MAX).optional(),
+  }).strict(),
+}).strict();
+export type OrgDirectionPutBody = z.infer<typeof OrgDirectionPutBodySchema>;
+
+/** POST /api/org/[orgId]/artists/[contactId]/references: exactly the pointer the kind needs. */
+const REFERENCE_TITLE = z.string().trim().min(1).max(REFERENCE_TITLE_MAX);
+const REFERENCE_NOTE = z.string().trim().min(1).max(REFERENCE_NOTE_MAX);
+export const OrgReferenceCreateBodySchema = z.object({
+  kind: z.enum(REFERENCE_KINDS),
+  title: REFERENCE_TITLE.optional(),
+  note: REFERENCE_NOTE.nullable().optional(),
+  url: z.string().max(REFERENCE_URL_MAX).optional(),
+  track_id: z.string().uuid().optional(),
+  asset_id: z.string().uuid().optional(),
+  visibility: z.enum(REFERENCE_VISIBILITIES).optional(),
+}).strict().superRefine((b, ctx) => {
+  const need = (ok: boolean, path: string, message: string) => { if (!ok) ctx.addIssue({ code: 'custom', path: [path], message }); };
+  const only = (...names: Array<'url' | 'track_id' | 'asset_id'>) => {
+    for (const n of ['url', 'track_id', 'asset_id'] as const) if (!names.includes(n)) need(b[n] === undefined, n, `Not used by a ${b.kind} reference`);
+  };
+  if (b.kind === 'track') { need(!!b.track_id, 'track_id', 'Pick a track'); only('track_id'); }
+  if (b.kind === 'file') { need(!!b.asset_id, 'asset_id', 'Pick a file'); only('asset_id'); }
+  if (b.kind === 'link') { need(safeReferenceUrl(b.url) !== null, 'url', 'A link must be an https address'); need(!!b.title, 'title', 'Name the link'); only('url'); }
+  if (b.kind === 'note') { need(!!b.note, 'note', 'Write the note'); need(!!b.title, 'title', 'Give the note a title'); only(); }
+});
+export type OrgReferenceCreateBody = z.infer<typeof OrgReferenceCreateBodySchema>;
+
+/** PATCH …/references/[referenceId]: omitted keeps; the pointer of a reference never changes. */
+export const OrgReferencePatchBodySchema = z.object({
+  title: REFERENCE_TITLE.optional(),
+  note: REFERENCE_NOTE.nullable().optional(),
+  url: z.string().max(REFERENCE_URL_MAX).optional(),
+  visibility: z.enum(REFERENCE_VISIBILITIES).optional(),
+  position: z.number().int().min(0).max(100000).optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgReferencePatchBody = z.infer<typeof OrgReferencePatchBodySchema>;
 
 /** PATCH /api/org/[orgId]/tasks/[taskId]: omitted keeps, `null` clears; `done` ticks it off or reopens it. */
 export const OrgTaskPatchBodySchema = z.object({

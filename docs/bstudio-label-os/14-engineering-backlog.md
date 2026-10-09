@@ -1740,6 +1740,19 @@ Recommendations.
 ## Rollback
 Drop.
 
+## Built (LABEL-26)
+- **Migration 152** (not applied): `artist_direction` (PK `contact_id`) and `artist_references` (kind `track|link|file|note`, `visibility artist|internal`), both org-only with service-role writes; integrity trigger (same-org artist / track / file; files only visual + not restricted); one SELECT policy each, no per-row SECURITY DEFINER call.
+- **Routes** under `/api/org/[orgId]/artists/[contactId]/`: `direction` (GET, PUT), `references` (POST), `references/[referenceId]` (PATCH, DELETE), `references/choices` (track + file pickers). All mutations record an event (`direction.updated`, `reference.added|updated|removed`); `DEFAULT_VISIBILITY` and the digest phrases cover the new verbs.
+- **UI**: the Direction tab on the org artist workspace (`ArtistDirectionTab`): six structured fields saved on blur (Escape restores), keywords, a references list, an inline add form with a track search and a file picker, a one-click Team-only toggle. No modal.
+
+## Verification (LABEL-26)
+- Artist cannot read internal references: `direction/route.test.ts` (route, in-memory DB), `supabase/local/checks/152_*.sql` (as an `authenticated` role with the artist's own claims, plus an `EXPLAIN` for R-08), `e2e/label-org-direction.spec.ts` (route, PostgREST with her JWT, and the page's HTML).
+- `external-matrix.test.ts`: every direction / reference handler is refused (403/404) for all four external project roles and writes nothing.
+- Full `npm test`, `tsc`, eslint, `npm run build` (CI stub env), `npm run db:local:check`, and the real-DB e2e (direction + workspace, activity, tasks, comments, external members).
+
+## Not done
+- Recommendations (Out of Scope). Reordering references (the `position` column and PATCH exist; no drag UI). Uploading a visual file straight from the Direction tab (files are picked from the artist's project files, added in the Files tab via LABEL-15).
+
 ---
 
 # LABEL-27 — Parties + credits on `track_collaborators`
