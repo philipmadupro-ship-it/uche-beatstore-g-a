@@ -11,6 +11,7 @@ import { loadPortalAssets } from '@/lib/artist-portal/files';
 import { pulseVersions } from '@/lib/artist-portal/pulse';
 import { isSchemaNotReady } from '@/lib/artists/http';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
+import { PUBLIC_COMMENT_VISIBILITY, readWithoutInternal } from '@/lib/labelos/comment-visibility';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -56,7 +57,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       loadPortalAssets(admin, portal.user_id, projectIds),
       tolerant<{ track_id: string; decision: string | null }>(admin.from('contact_track_states').select('track_id, decision').eq('contact_id', portal.contact_id).eq('user_id', portal.user_id)),
       projectIds.length
-        ? tolerant<{ id: string }>(admin.from('project_comments').select('id').in('project_id', projectIds).eq('contact_id', portal.contact_id).is('deleted_at', null).limit(1000))
+        ? tolerant<{ id: string }>(
+            readWithoutInternal((filter) => {
+              const q = admin.from('project_comments').select('id').in('project_id', projectIds).eq('contact_id', portal.contact_id).is('deleted_at', null);
+              return (filter ? q.eq('visibility', PUBLIC_COMMENT_VISIBILITY) : q).limit(1000);
+            }),
+          )
         : Promise.resolve([]),
       tolerant<{ id: string; request_status: string | null }>(admin.from('artist_messages').select('id, request_status').eq('contact_id', portal.contact_id).eq('user_id', portal.user_id).limit(1000)),
     ]);

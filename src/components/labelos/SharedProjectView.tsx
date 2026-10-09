@@ -15,8 +15,9 @@
  * download is audited by the file's own route (`recording.downloaded`).
  */
 import { useMemo, useRef, useState } from 'react';
-import { Download, Music, Pause, Play, Upload } from 'lucide-react';
+import { Download, MessageSquare, Music, Pause, Play, Upload } from 'lucide-react';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { OrgComments } from '@/components/labelos/OrgComments';
 import { usePlayer } from '@/hooks/usePlayer';
 import { PROJECT_ROLE_LABELS, projectRoleSummary } from '@/lib/labelos/project-members';
 import { sharedRecordingPlayerTrack, type SharedProjectView as View, type SharedRecording } from '@/lib/labelos/shared-project';
@@ -40,6 +41,8 @@ export function SharedProjectView({ view }: { view: View }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [songId, setSongId] = useState<string>(uploadTargets.length === 1 ? uploadTargets[0].id : '');
   const [queued, setQueued] = useState<number | null>(null);
+  // One recording's comments open inline under its row (no modal).
+  const [commentsFor, setCommentsFor] = useState<string | null>(null);
 
   const songOptions = useMemo(() => uploadTargets.map((t) => ({ value: t.id, label: t.title })), [uploadTargets]);
 
@@ -89,33 +92,49 @@ export function SharedProjectView({ view }: { view: View }) {
               const playing = active && isPlaying;
               const len = duration(r.durationSeconds);
               return (
-                <li key={r.id} className="flex items-center gap-3 px-3 py-2.5" data-testid={`shared-rec-${r.id}`}>
-                  <button
-                    type="button"
-                    onClick={() => toggle(r)}
-                    aria-label={`${playing ? 'Pause' : 'Play'} ${r.title}`}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/[0.10] hover:text-white"
-                  >
-                    {playing ? <Pause size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
-                  </button>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2 text-[13px] text-white/80">
-                      <Music size={13} className="shrink-0 text-white/40" aria-hidden="true" />
-                      <span className="truncate">{r.title}</span>
+                <li key={r.id} data-testid={`shared-rec-${r.id}`}>
+                  <div className="flex items-center gap-3 px-3 py-2.5">
+                    <button
+                      type="button"
+                      onClick={() => toggle(r)}
+                      aria-label={`${playing ? 'Pause' : 'Play'} ${r.title}`}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/[0.10] hover:text-white"
+                    >
+                      {playing ? <Pause size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
+                    </button>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2 text-[13px] text-white/80">
+                        <Music size={13} className="shrink-0 text-white/40" aria-hidden="true" />
+                        <span className="truncate">{r.title}</span>
+                      </span>
+                      <span className="mt-0.5 block truncate font-mono text-[10px] uppercase tracking-[0.12em] text-white/40">
+                        {[r.type, r.bpm ? `${Math.round(r.bpm)} BPM` : null, r.key, len, r.addedBy ? `added by ${r.addedBy}` : null].filter(Boolean).join(' · ')}
+                      </span>
                     </span>
-                    <span className="mt-0.5 block truncate font-mono text-[10px] uppercase tracking-[0.12em] text-white/40">
-                      {[r.type, r.bpm ? `${Math.round(r.bpm)} BPM` : null, r.key, len, r.addedBy ? `added by ${r.addedBy}` : null].filter(Boolean).join(' · ')}
-                    </span>
-                  </span>
-                  {r.downloadUrl && (
-                    <a
-                      href={r.downloadUrl}
-                      download
-                      aria-label={`Download ${r.title}`}
+                    <button
+                      type="button"
+                      onClick={() => setCommentsFor(commentsFor === r.id ? null : r.id)}
+                      aria-expanded={commentsFor === r.id}
+                      aria-label={`Comments on ${r.title}`}
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.10] hover:text-white"
                     >
-                      <Download size={15} aria-hidden="true" />
-                    </a>
+                      <MessageSquare size={15} aria-hidden="true" />
+                    </button>
+                    {r.downloadUrl && (
+                      <a
+                        href={r.downloadUrl}
+                        download
+                        aria-label={`Download ${r.title}`}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.10] hover:text-white"
+                      >
+                        <Download size={15} aria-hidden="true" />
+                      </a>
+                    )}
+                  </div>
+                  {commentsFor === r.id && (
+                    <div className="border-t border-white/[0.06] px-3 py-3">
+                      <OrgComments orgId={project.orgId} projectId={project.id} trackId={r.id} durationSeconds={r.durationSeconds} />
+                    </div>
                   )}
                 </li>
               );
@@ -124,10 +143,16 @@ export function SharedProjectView({ view }: { view: View }) {
         )}
       </section>
 
-      {(me.can.comment || me.can.editMetadata) && (
+      <section aria-labelledby="shared-comments" className="space-y-3">
+        <h2 id="shared-comments" className="sr-only">Project comments</h2>
+        <div className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+          <OrgComments orgId={project.orgId} projectId={project.id} />
+        </div>
+      </section>
+
+      {me.can.editMetadata && (
         <p className="text-[11px] text-white/40" data-testid="shared-soon">
-          {[me.can.comment ? 'comments' : null, me.can.editMetadata ? 'editing details' : null].filter(Boolean).join(' and ')} on this project open here in a
-          later update. For now: listen, add versions and download, as your role allows.
+          Editing details on this project opens here in a later update. For now: listen, comment, add versions and download, as your role allows.
         </p>
       )}
 

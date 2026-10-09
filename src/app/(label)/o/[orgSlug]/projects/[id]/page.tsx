@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { Music } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ProjectFilesSection } from '@/components/projects/ProjectFilesSection';
+import { OrgProjectComments } from '@/components/labelos/OrgProjectComments';
 import { ProjectMembersPanel } from '@/components/labelos/ProjectMembersPanel';
 import { RestrictedNote } from '@/components/artists/OrgArtistWorkspaceTabs';
 import { orgShellFor, requireObjectAccess } from '@/lib/auth/org-access';
@@ -67,6 +68,9 @@ export default async function OrgProjectPage({ params }: { params: Promise<{ org
           <RestrictedNote>{`${detail.restrictedSongs} song${detail.restrictedSongs === 1 ? '' : 's'} still in development: restricted. Your role hears finished music only.`}</RestrictedNote>
         )}
       </section>
+
+      {/* LABEL-22: threaded, region-pinned comments; internal notes are team-only. */}
+      <OrgProjectComments orgId={shell.org.id} projectId={detail.project.id} />
 
       {/* LABEL-21: people from outside the org, for members who may share externally. */}
       {shell.capabilities.includes('share.external') && (

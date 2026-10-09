@@ -1450,6 +1450,31 @@ Release-level comments outside the release's project.
 ## Rollback
 Drop the columns.
 
+**Built (for the orchestrator's merge gate):**
+- **Migration 150** (`org_id` set by a trigger from the project, `visibility` `artist` | `internal`, `resolved_at` / `resolved_by`; no new table). CHECK: an internal comment is an org comment with no share token and no contact, so a share-link or portal thread can never hold one. Trigger: a reply under an internal comment is internal, and a reply stays in its parent's project. `labelos_can_read_internal_comments(org)` = owner / admin / member of the org — never role `artist`, whatever override they hold. 141's `org_member_read` / `org_member_guard` on `project_comments` re-created with that one extra line.
+- **Routes** `/api/org/[orgId]/projects/[id]/comments` (GET list / POST) and `…/[commentId]` (PATCH words, visibility, resolve / reopen; DELETE soft). Served to org members AND external project members through `requireProjectActor`. `?trackId=` returns that recording's comments plus carry-forward. The list query itself excludes `internal` for anyone who may not read it, and `visibleToActor` checks again; the response is built field by field (`toOrgComment`: no user id, org id, share token, contact id).
+- **Pure rules** `lib/labelos/org-comments.ts` (who may read / comment / edit / delete / resolve / change visibility; `versionChain`, `carryForward`, `commentsForView`) with 31 tests; reads in `org-comments-store.ts`.
+- **Carry-forward:** a song's own recording is `mix v1`; each `version` link FROM it appends the next, oldest first; the newest is the current mix. Only the current one carries, and only UNRESOLVED ROOT threads on its earlier versions (with their replies), labelled "from mix vN". A resolved thread, a native comment, a project-level one and another song's are not carried.
+- **Portal / share / producer views** keep their filters and add `visibility = 'artist'` (`lib/labelos/comment-visibility`: the read steps down to the old filters on a database before 150). The pulse fingerprint ignores internal rows.
+- **Activity:** `comment.created` / `.updated` / `.resolved` / `.deleted` in `VERBS`, `DEFAULT_VISIBILITY` and the digest phrases; the events name the comment and never its words, and the event of an internal comment is `internal`.
+- **UI** (`OrgComments`, `OrgProjectComments`; inline, no modal): threads, replies, Resolve / Reopen, Edit / Delete, a pin at the playhead that seeks, "from mix v1" and "Team only" chips; the Team-only control exists only for someone who may write one. Mounted on the org project page (recording picker) and on the external member's project page (per recording + whole project; the "comments arrive later" note is gone).
+- **A security hole closed on the way:** `GET /api/activity` (producer feed) still treated `user_id IS NULL` as the producer's own, and org rows are ownerless — any producer could read an org's project comments (internal notes included) and song titles. Org rows are now excluded (falls back before 141).
+
+**Verification:** `tsc`, `eslint`, full `vitest`, `next build`, `npm run db:local:check` (150's check as `anon` / `authenticated` / `service_role`: roster artist with a `business.read.internal` override, external member, another org, anon, a stranger read no internal row; CHECK and trigger refusals; org_id from the project; rollback and replay), route tests on an in-memory database (access matrix per role, D4, carry-forward, events, revocation), external-route matrix, redaction tests for the portal list / pulse and the share list, `activity` leak test (fails without the fix), jsdom tests for the panel and the shared page, and `e2e/label-org-comments.spec.ts` (real database: the same bar by route, by PostgREST with each person's own JWT, and by the public share endpoint; carry-forward; revocation). Portal comment e2e (`artist-workspace-phase2` test 2) green.
+
+**Not done:**
+- Comments on an org SONG page (`/o/<slug>/songs/<id>`): a song can sit in several projects, so which project's thread to show there is a product choice; the project page and the external member's page carry the panel.
+- A guest's share-link comment on an ORG project is not part of the org list (`share_token` rows are another conversation); org share links themselves are a later task.
+- No realtime: the panel polls every 30 s while the tab is visible and refetches after each action.
+- No notification or @-mention on a comment (LABEL-23 owns direct asks).
+- **Decisions a reviewer may want to revisit:**
+  - **Who may comment (org):** `review.comment` OR `catalog.write` — so producers and engineers (who give notes on mixes) can, marketing and finance cannot. No new capability, so no SQL parity change.
+  - **Team-only = owner / admin / member of the org** (a role rule, not a capability): A&R and producers read and write them; a roster artist and an external member never. The event of a team-only note is `internal`, which `eventVisibleTo` reads through `business.read.internal`.
+  - **A thread flipped to team-only takes its replies with it;** a reply cannot be made visible under a team-only root (409).
+  - **"Current version" = the newest `version` link from the song.** There is no explicit current pointer in the model yet; swap `versionChain` if one arrives.
+  - **Comments on a recording the member may not hear (D4) are hidden from them** (same rule as the audio route); an external member hears every recording of their project, so sees all its comments.
+  - `api/activity` is fixed for projects and tracks only; the other carried producer routes listed under LABEL-21 are untouched.
+
 ---
 
 # LABEL-23 — Org tasks + direct-ask notifications

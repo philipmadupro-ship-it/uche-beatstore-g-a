@@ -8,7 +8,7 @@
  * per-object audio route.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toSharedProjectView, type SharedProjectView as View } from '@/lib/labelos/shared-project';
 import type { ExternalProjectRole } from '@/lib/labelos/capabilities';
@@ -103,15 +103,28 @@ describe('SharedProjectView', () => {
     expect(screen.getByText('1 file added to the uploads tray.')).toBeTruthy();
   });
 
-  it('does not promise what is not built: comments and detail edits are said to come later', () => {
+  it('does not promise what is not built: only detail edits are said to come later (comments are built)', () => {
     render(<SharedProjectView view={view('viewer')} />);
     expect(screen.queryByTestId('shared-soon')).toBeNull();
     cleanup();
     render(<SharedProjectView view={view('commenter')} />);
-    expect(screen.getByTestId('shared-soon').textContent).toContain('comments on this project open here in a later update');
+    expect(screen.queryByTestId('shared-soon')).toBeNull();
     cleanup();
     render(<SharedProjectView view={view('editor')} />);
-    expect(screen.getByTestId('shared-soon').textContent).toContain('comments and editing details');
+    expect(screen.getByTestId('shared-soon').textContent).toContain('Editing details');
+    expect(screen.getByTestId('shared-soon').textContent).not.toContain('omments on this project open');
+  });
+
+  it('every role has a comments entry per recording that opens inline, and a project discussion', async () => {
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () => new Response(JSON.stringify({ schemaReady: true, comments: [], me: { canComment: false, canPostInternal: false }, version: null }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<SharedProjectView view={view('viewer')} />);
+    expect(await screen.findByTestId('org-comments')).toBeTruthy(); // the project-level one
+    fireEvent.click(screen.getByRole('button', { name: 'Comments on Midnight' }));
+    await waitFor(() => expect(screen.getAllByTestId('org-comments')).toHaveLength(2));
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.endsWith(`/api/org/${ORG}/projects/p1/comments?trackId=${SONG}`))).toBe(true);
+    vi.unstubAllGlobals();
   });
 
   it('says so when nothing is in the project yet', () => {

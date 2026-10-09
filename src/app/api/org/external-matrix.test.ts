@@ -48,6 +48,8 @@ const ITEM = '70000000-0000-4000-8000-000000000002';
 const INV = '80000000-0000-4000-8000-000000000001';
 const TASK = '90000000-0000-4000-8000-000000000001';
 const NOTE = '90000000-0000-4000-8000-000000000002';
+const COMMENT = '90000000-0000-4000-8000-0000000000c1'; // artist-visible
+const INTERNAL = '90000000-0000-4000-8000-0000000000c2'; // team-only
 
 const ROLES = { viewer: VIEWER, commenter: COMMENTER, contributor: CONTRIBUTOR, editor: EDITOR } as const;
 
@@ -98,7 +100,10 @@ function seed(): MemoryDb {
         { id: XS, org_id: L2, user_id: null, created_by: OTHER, title: 'Elsewhere', type: 'song', song_stage: 'in_review', audio_url: 'r2://priv/xs.mp3', wav_url: null, preview_url: null, peaks_url: null },
       ],
       project_assets: [{ id: ASSET, org_id: L, project_id: P1, user_id: null, kind: 'artwork', sensitivity: 'normal', label: 'Cover', url: 'r2://priv/cover.png', file_name: 'cover.png' }],
-      project_comments: [],
+      project_comments: [
+        { id: COMMENT, org_id: L, project_id: P1, track_id: S1, user_id: OWNER, author_name: 'Owen', body: 'Open note', parent_id: null, region_start: null, region_end: null, visibility: 'artist', resolved_at: null, deleted_at: null, share_token: null, contact_id: null, created_at: '2026-10-01T10:00:00Z' },
+        { id: INTERNAL, org_id: L, project_id: P1, track_id: S1, user_id: OWNER, author_name: 'Owen', body: 'Team-only note', parent_id: null, region_start: null, region_end: null, visibility: 'internal', resolved_at: null, deleted_at: null, share_token: null, contact_id: null, created_at: '2026-10-01T11:00:00Z' },
+      ],
       org_invitations: [
         { id: INV, org_id: L, email: 'x@local.test', role: 'member', functions: [], artist_ids: [], project_id: P1, project_role: 'viewer', token_hash: 'h', expires_at: '2099-01-01', accepted_at: null, revoked_at: null, created_at: '2026-10-01' },
       ],
@@ -159,6 +164,7 @@ function paramsFor(path: string): Record<string, string> {
     releaseId: RELEASE,
     itemId: ITEM,
     invitationId: INV,
+    commentId: COMMENT,
     userId: EDITOR,
     taskId: TASK,
   };
@@ -344,6 +350,62 @@ describe('the allowlisted routes', () => {
     // A song in the same org but another project; a song in another org.
     expect((await init(EDITOR, { kind: 'link', songId: S2, relation: 'version' })).status).toBe(404);
     expect((await init(EDITOR, { kind: 'link', songId: XS, relation: 'version' })).status).toBe(404);
+  });
+});
+
+describe('comments (LABEL-22): an external member of the project, per role', () => {
+  const route = '[orgId]/projects/[id]/comments/route.ts';
+
+  it('every role reads the artist-visible comments of THEIR project and never the internal one', async () => {
+    for (const user of Object.values(ROLES)) {
+      const res = await call(route, 'GET', user);
+      expect(res.status, user).toBe(200);
+      const text = JSON.stringify(await res.json());
+      expect(text).toContain('Open note');
+      expect(text).not.toContain('Team-only note');
+      expect(text).not.toContain('"internal"');
+    }
+  });
+
+  it('who may comment is the §2.6 column: a viewer cannot, a commenter / contributor / editor can — never internal', async () => {
+    expect((await call(route, 'POST', VIEWER, { body: { body: 'hi' } })).status).toBe(403);
+    for (const user of [COMMENTER, CONTRIBUTOR, EDITOR]) {
+      expect((await call(route, 'POST', user, { body: { body: 'hi', track_id: S1 } })).status, user).toBe(201);
+      expect((await call(route, 'POST', user, { body: { body: 'hi', visibility: 'internal' } })).status, user).toBe(403);
+    }
+  });
+
+  it('they cannot reach an internal comment by id (404), nor change another’s, nor reach a comment of another project', async () => {
+    // The internal one, and the artist-visible one of another project:
+    const mod = await loaders['./[orgId]/projects/[id]/comments/[commentId]/route.ts']();
+    const ask = (method: 'PATCH' | 'DELETE', user: string, commentId: string, project = P1, body: unknown = { resolved: true }) => {
+      current = user;
+      const handler = mod[method] as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+      return handler(
+        new NextRequest(`https://app.test/api/org/${L}/projects/${project}/comments/${commentId}`, {
+          method,
+          ...(method === 'PATCH' ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
+        }),
+        { params: Promise.resolve({ orgId: L, id: project, commentId }) },
+      );
+    };
+    for (const user of Object.values(ROLES)) {
+      expect((await ask('PATCH', user, INTERNAL)).status, user).toBe(404);
+      expect((await ask('DELETE', user, INTERNAL)).status, user).toBe(404);
+    }
+    // A member of another project of the same org: 404 on the project itself.
+    expect((await ask('PATCH', OTHER, COMMENT)).status).toBe(404);
+    expect((await call(route, 'GET', OTHER)).status).toBe(404); // OTHER is a member of XP in another org, P1 is not theirs
+    expect(db.tables.project_comments.find((r) => r.id === INTERNAL)).toMatchObject({ body: 'Team-only note', deleted_at: null, resolved_at: null });
+  });
+
+  it('a stranger, and a removed or expired member, get nothing', async () => {
+    expect((await call(route, 'GET', STRANGER)).status).toBe(404);
+    db.tables.project_members = db.tables.project_members.filter((m) => m.user_id !== COMMENTER);
+    expect((await call(route, 'GET', COMMENTER)).status).toBe(404);
+    expect((await call(route, 'POST', COMMENTER, { body: { body: 'hi' } })).status).toBe(404);
+    db.tables.project_members.find((m) => m.user_id === EDITOR)!.expires_at = new Date(Date.now() - 1000).toISOString();
+    expect((await call(route, 'GET', EDITOR)).status).toBe(404);
   });
 });
 

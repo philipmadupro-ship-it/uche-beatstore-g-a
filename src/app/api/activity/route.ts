@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createServiceClient, isSupabaseConfigured, getAll, query } from '@/lib/db';
 import { safeSellerId } from '@/lib/auth/ownership';
+import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -123,6 +124,7 @@ export async function GET(req: NextRequest) {
     const items: ActivityItem[] = [];
 
     for (const t of (tracks.data ?? [])) {
+      if (!trackOwnerIds.has(t.id)) continue; // an org song is not the producer's activity
       items.push({
         id: `upload-${t.id}`,
         kind: 'upload',
@@ -197,21 +199,30 @@ export async function GET(req: NextRequest) {
 // These three helpers run once per request and let us filter every
 // activity stream against a small Set instead of N joined queries.
 
-async function resolveOwnedTrackIds(admin: ReturnType<typeof createServiceClient>, userId: string): Promise<Set<string>> {
-  const { data } = await admin
-    .from('tracks')
-    .select('id')
-    .or(`user_id.eq.${userId},user_id.is.null`);
-  return new Set((data ?? []).map((r: { id: string }) => r.id));
+/**
+ * The producer's own tracks / projects: `user_id` is theirs, or NULL for the
+ * legacy producer rows that predate ownership. An ORGANIZATION row is also
+ * ownerless (Label OS: org rows never carry a user_id, mig 142), so the NULL
+ * arm would hand every producer the titles — and, for projects, the comments,
+ * internal notes included — of every org. Org rows are excluded explicitly.
+ * Before migration 141 there is no `org_id` column and nothing to exclude, so
+ * the read steps down to the plain filter.
+ */
+async function resolveOwnedIds(admin: ReturnType<typeof createServiceClient>, table: 'tracks' | 'projects', userId: string): Promise<Set<string>> {
+  const read = (excludeOrg: boolean) => {
+    const q = admin.from(table).select('id').or(`user_id.eq.${userId},user_id.is.null`);
+    return excludeOrg ? q.is('org_id', null) : q;
+  };
+  let res = await read(true);
+  // Only a MISSING column steps down to the plain filter. Any other failure
+  // must not: the plain filter is the one that lets org rows in.
+  if (res.error && isMissingSchema(res.error)) res = await read(false);
+  if (res.error) throw new Error(`activity ownership read failed: ${res.error.message}`);
+  return new Set(((res.data ?? []) as { id: string }[]).map((r) => r.id));
 }
 
-async function resolveOwnedProjectIds(admin: ReturnType<typeof createServiceClient>, userId: string): Promise<Set<string>> {
-  const { data } = await admin
-    .from('projects')
-    .select('id')
-    .or(`user_id.eq.${userId},user_id.is.null`);
-  return new Set((data ?? []).map((r: { id: string }) => r.id));
-}
+const resolveOwnedTrackIds = (admin: ReturnType<typeof createServiceClient>, userId: string) => resolveOwnedIds(admin, 'tracks', userId);
+const resolveOwnedProjectIds = (admin: ReturnType<typeof createServiceClient>, userId: string) => resolveOwnedIds(admin, 'projects', userId);
 
 async function resolveOwnedContactIds(admin: ReturnType<typeof createServiceClient>, userId: string): Promise<Set<string>> {
   // Strictly the producer's own. A NULL-owner contact is no longer a legacy
