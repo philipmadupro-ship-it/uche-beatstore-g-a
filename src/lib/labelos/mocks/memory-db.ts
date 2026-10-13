@@ -12,7 +12,7 @@
  * else `<table singular>_id`), eq, in,
  * is, ilike (% and _), gt / gte / lt / lte (string order, which is ISO-timestamp order), `or` (the
  * PostgREST string: eq, in, is, not.is and and(…) groups), not(col, 'in', '(…)') / not(col, 'is', null), order, limit, range, maybeSingle, single, insert,
- * update, delete, `select(cols, { count: 'exact', head: true })`, upsert (ignoreDuplicates; `onConflict` merges into the row it names), rpc (functions the test
+ * textSearch on `search_tsv` (the generated column of migration 159, computed from the row: see SEARCH_FIELDS), update, delete, `select(cols, { count: 'exact', head: true })`, upsert (ignoreDuplicates; `onConflict` merges into the row it names), rpc (functions the test
  * declares in `rpc`, run against the same tables). Unique keys per table are
  * declared by the test and answered with Postgres' 23505. `order` compares
  * numbers as numbers.
@@ -34,6 +34,33 @@ export type MemoryDb = {
 };
 
 const EMBED = /^(\w+)!inner\(([^)]*)\)$/;
+
+/**
+ * Migration 159's generated `search_tsv` columns: the row fields each table
+ * indexes, and whether a producer row (org_id NULL) has a NULL vector.
+ */
+const SEARCH_FIELDS: Record<string, { fields: string[]; orgOnly: boolean }> = {
+  tracks: { fields: ['title'], orgOnly: true },
+  contacts: { fields: ['name', 'email', 'label'], orgOnly: true },
+  projects: { fields: ['name', 'description'], orgOnly: true },
+  project_assets: { fields: ['label', 'file_name'], orgOnly: true },
+  releases: { fields: ['title', 'label_name'], orgOnly: false },
+  parties: { fields: ['display_name', 'legal_name'], orgOnly: false },
+};
+
+/** `a:* & b` against the row's words: every term must match a word (prefix when `:*`), like to_tsquery('simple', …). */
+function matchesTsquery(table: string, row: Record<string, unknown>, tsquery: string): boolean {
+  const spec = SEARCH_FIELDS[table];
+  if (!spec) throw new Error(`memory-db: no search_tsv on ${table}`);
+  if (spec.orgOnly && (row.org_id ?? null) === null) return false;
+  const words = spec.fields.map((f) => String(row[f] ?? '')).join(' ').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  return tsquery.split('&').every((term) => {
+    const t = term.trim();
+    const prefix = t.endsWith(':*');
+    const w = (prefix ? t.slice(0, -2) : t).toLowerCase();
+    return words.some((x) => (prefix ? x.startsWith(w) : x === w));
+  });
+}
 
 function splitColumns(columns: string): string[] {
   const out: string[] = [];
@@ -261,6 +288,12 @@ export function memoryAdmin(db: MemoryDb) {
       ilike(col: string, pattern: string) {
         const re = new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.')}$`, 'i');
         filters.push((r) => re.test(String(r[col] ?? '')));
+        return b;
+      },
+      textSearch(col: string, query: string, opts?: { config?: string; type?: string }) {
+        if (col !== 'search_tsv') throw new Error(`memory-db: textSearch on ${col} unsupported`);
+        if (opts?.type) throw new Error('memory-db: only the raw tsquery form is supported');
+        filters.push((r) => matchesTsquery(table, r, query));
         return b;
       },
       gt(col: string, v: unknown) {

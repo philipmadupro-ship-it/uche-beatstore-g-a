@@ -21,6 +21,7 @@ import { WidgetErrorBoundary } from '@/components/system/WidgetErrorBoundary';
 import { UploadsTray } from '@/components/upload/UploadsTray';
 import { LabelOsFlagProvider } from '@/components/labelos/LabelOsFlag';
 import { OrgShellProvider } from '@/components/labelos/OrgShellContext';
+import { OrgCommandPalette } from '@/components/labelos/OrgCommandPalette';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import { orgShellFor, ownedDeletedOrgFor } from '@/lib/auth/org-access';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
@@ -54,6 +55,8 @@ export default async function OrgShellLayout({
       {/* LABEL-14: org uploads run in the same tray as the producer's. */}
       <WidgetErrorBoundary name="UploadsTray"><UploadsTray /></WidgetErrorBoundary>
       <WidgetErrorBoundary name="MediaSessionBridge"><MediaSessionBridge /></WidgetErrorBoundary>
+      {/* LABEL-36: the org's own ⌘K search; the dashboard palette steps aside under /o/*. */}
+      <WidgetErrorBoundary name="OrgCommandPalette"><OrgCommandPalette /></WidgetErrorBoundary>
     </div>
   );
 
