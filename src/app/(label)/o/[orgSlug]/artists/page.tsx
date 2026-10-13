@@ -45,6 +45,10 @@ export default function OrgArtistsPage() {
   }, [orgId]);
 
   const artists = useMemo(() => (load.state === 'ready' ? load.contacts.map(rosterSummary) : null), [load]);
+  const connected = useMemo(
+    () => new Map(load.state === 'ready' ? load.contacts.filter((c) => c.connected).map((c) => [c.id, c.connected!.orgName] as const) : []),
+    [load],
+  );
   const uploadArtists = useMemo(() => (load.state === 'ready' ? load.contacts.map((c) => ({ id: c.id, name: c.name })) : []), [load]);
 
   if (!shell) return null;
@@ -76,6 +80,7 @@ export default function OrgArtistsPage() {
         failed={load.state === 'failed'}
         linkFor={(id) => `/o/${shell.org.slug}/artists/${id}`}
         emptyText={empty}
+        connected={connected}
       />
     </PageContainer>
   );

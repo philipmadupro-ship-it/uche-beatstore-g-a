@@ -40,6 +40,10 @@ export const VERBS = [
   // Organization + membership
   'org.created',
   'org.settings_changed',
+  // Owner-only lifecycle acts (LABEL-39): an export, the start of the grace period, a restore.
+  'org.exported',
+  'org.deletion_scheduled',
+  'org.restored',
   'member.joined',
   'member.removed',
   'member.role_changed',
@@ -117,6 +121,9 @@ export type Verb = (typeof VERBS)[number];
 
 /** 06 §6 + 14 (LABEL-13, LABEL-41): kept for the life of the org, never best effort. */
 export const AUDIT_VERBS: readonly Verb[] = [
+  'org.exported',
+  'org.deletion_scheduled',
+  'org.restored',
   'member.joined',
   'member.removed',
   'member.role_changed',
@@ -169,6 +176,9 @@ export type EventVisibility = 'internal' | 'artist';
 export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'org.created': 'internal',
   'org.settings_changed': 'internal',
+  'org.exported': 'internal',
+  'org.deletion_scheduled': 'internal',
+  'org.restored': 'internal',
   'member.joined': 'internal',
   'member.removed': 'internal',
   'member.role_changed': 'internal',

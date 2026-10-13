@@ -103,12 +103,14 @@ export interface OrgNavContext {
  * The pages every org has, under its slug. Every member can see who is in
  * their org (136's RLS lets them read co-members), so Members is not gated.
  */
-function orgGroup(slug: string): NavGroup {
+function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | string> | null): NavGroup {
   const base = `/o/${slug}`;
-  return {
-    key: 'org', label: 'Organization', icon: Building2,
-    items: [{ label: 'Members', href: `${base}/settings/members`, icon: UsersRound }],
-  };
+  const items: NavGroup['items'] = [{ label: 'Members', href: `${base}/settings/members`, icon: UsersRound }];
+  // LABEL-41: label and artist orgs connect to each other; the people who run the org manage it.
+  if ((orgKind === 'label' || orgKind === 'artist') && caps?.has('org.manage')) {
+    items.push({ label: 'Connections', href: `${base}/settings/connections`, icon: Link2 });
+  }
+  return { key: 'org', label: 'Organization', icon: Building2, items };
 }
 
 /**
@@ -149,5 +151,5 @@ export function navGroupsFor(
   if (!org) return orgKind === 'producer' ? NAV_GROUPS : [];
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
   const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps)] : [];
-  return [...producerHubs, ...roster, orgGroup(org.slug)];
+  return [...producerHubs, ...roster, orgGroup(org.slug, orgKind, caps)];
 }

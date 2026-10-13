@@ -11,7 +11,7 @@
  * `table!inner(cols)` embed resolved through `org_id` for organizations,
  * else `<table singular>_id`), eq, in,
  * is, ilike (% and _), gt / gte / lt / lte (string order, which is ISO-timestamp order), `or` (the
- * PostgREST string: eq, in, is, not.is and and(…) groups), not(col, 'in', '(…)'), order, limit, range, maybeSingle, single, insert,
+ * PostgREST string: eq, in, is, not.is and and(…) groups), not(col, 'in', '(…)') / not(col, 'is', null), order, limit, range, maybeSingle, single, insert,
  * update, delete, `select(cols, { count: 'exact', head: true })`, upsert (ignoreDuplicates; `onConflict` merges into the row it names), rpc (functions the test
  * declares in `rpc`, run against the same tables). Unique keys per table are
  * declared by the test and answered with Postgres' 23505. `order` compares
@@ -287,9 +287,15 @@ export function memoryAdmin(db: MemoryDb) {
         filters.push((r) => f(r, lower));
         return b;
       },
-      not(col: string, op: string, list: string) {
+      not(col: string, op: string, list: string | null) {
+        if (op === 'is') {
+          // `.not('col', 'is', null)`: the column holds a value.
+          filters.push((r) => (r[col] ?? null) !== (list ?? null));
+          return b;
+        }
         if (op !== 'in') throw new Error(`memory-db: not.${op} unsupported`);
-        const set = new Set(list.replace(/^\(|\)$/g, '').split(',').map((v) => v.trim().toLowerCase()));
+        // Values may be double-quoted (PostgREST needs it for dots and commas).
+        const set = new Set(String(list).replace(/^\(|\)$/g, '').split(',').map((v) => v.trim().replace(/^"|"$/g, '').toLowerCase()));
         filters.push((r) => !set.has(String(lower(r[col]))));
         return b;
       },

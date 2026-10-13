@@ -1710,7 +1710,7 @@ Drop the table.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-17
-**Status:** In Progress (branch label-os/LABEL-26; runs in parallel with LABEL-27, migration 152 reserved)
+**Status:** Done (PR #93, squash 3fbbafd; migration 152 not applied — apply at final merge). Open decision for the owner: role `artist` holds `catalog.write`, so a roster artist can edit their own direction and artist-visible references (never internal ones); say if it should be team-only.
 
 ## Objective
 A per-artist memory of references and direction.
@@ -1769,7 +1769,7 @@ Drop.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-21 (D7: 115 applied on prod)
-**Status:** In Progress (branch label-os/LABEL-27; runs in parallel with LABEL-26, migration 153 reserved; D7 satisfied — 115 applied on production 2026-09-30)
+**Status:** Done (PR #94, squash eff3f1e; migration 153 not applied — apply at final merge). Not done, by design: UI for an external member's own credit (routes tested), credit withdraw (needs a `credit.removed` verb), a parties management page, importing producer-era credits into parties.
 
 ## Objective
 Legal-grade credits by extending `track_collaborators` (`17` R8), and rights-holder parties. **No new `credits` table.**
@@ -1838,7 +1838,7 @@ Drop `parties` and the new columns.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-27
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-28, PR #96; migration 155 reserved)
 
 ## Objective
 Versioned composition and master split sheets that validate to exactly 100%.
@@ -1904,7 +1904,7 @@ Drop the tables.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-28
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-29, stacked on label-os/LABEL-28; no migration)
 
 ## Objective
 Derived legal readiness per song, rolled up per release.
@@ -2367,7 +2367,7 @@ Disable the cron.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-19, LABEL-15
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-39)
 
 ## Objective
 Owners can export and delete an org. Non-audit events are pruned per D9.
@@ -2399,6 +2399,27 @@ A danger zone in settings, with `confirmToast` plus typing the org name.
 ## Tests
 Cron tests; route tests.
 
+**Built (for the orchestrator's merge gate):**
+- **No migration.** `organizations.deleted_at` (136) already starts the grace period, and every org table references `organizations` `ON DELETE CASCADE`, so the purge is one statement. `supabase/local/checks/labelos_org_hard_delete.sql` proves that on Postgres: after the delete nothing of the org is left in any table with an `org_id` nor in anything hanging from its projects, songs or contacts (releases and their NO ACTION keys included); a second org's rows, the producer's catalogue and org, and `auth.users` are unchanged; a soft-deleted org is invisible to its owner, members and external members under RLS while its rows and audit events stay, and restoring brings it back; only the service role can delete events (members get `permission denied`). Mutating one FK to NO ACTION makes it fail.
+- **Owner + fresh sign-in** (`requireOrgOwner`, `lib/auth/org-access`; `lib/labelos/org-lifecycle.ts` is the pure rules): role `owner` (06 §2.1: "org deletion" is a role, not a capability) and a sign-in from the last 10 minutes (`last_sign_in_at`); a stale session is 403 `{ requiresReauth: true }` and the page sends a fresh magic link (`signInWithOtp`, `shouldCreateUser: false`, back to the page). Restore asks for no fresh sign-in.
+- **Export** `GET /api/org/[orgId]/export?format=json|csv`: `EXPORT_TABLES` (`lib/labelos/org-export.ts`) — 21 tables, parents before children, children reached through the org's own parents so a shared id cannot pull in another tenant's row; `token_hash` never; notifications and `user_profiles` never. CSV is a zip (one file per table + `manifest.json`), cells that start `= + - @` are defused. The manifest lists every `r2://` / `local:` reference found in the rows and what the object store holds under `orgs/<org_id>/`. `org.exported` is written BEFORE any data is returned. Rate limited (6/hour/org).
+- **Soft delete / restore** `DELETE /api/org/[orgId] { confirmName }` stamps `deleted_at` (name must match; the producer's own `producer`-kind org is 409); `POST|GET …/restore`. `org.deletion_scheduled` / `org.restored` are audit verbs; a failed audit write puts the org back. Every org route, policy, the shell and the switcher already treated `deleted_at` as gone (136); the new tests assert it for the owner too. Restore + its page are proxy gate `session` / flag-only, because a sole-org owner has no live membership; `/o/<slug>` redirects an owner there, `GET /api/org` returns `pendingDeletion` (only when non-empty), and the settings card lists it.
+- **Crons** (`vercel.json`, daily, `CRON_SECRET`, idempotent, skip quietly without the Label OS tables, ignore `LABEL_OS_ENABLED`): `purge-deleted-orgs` (04:30; at most 5 orgs a run; objects first — `lib/storage/org-objects.ts`, R2 prefix in the private and public buckets or `data/orgs/<id>/` — then the org row; an org whose objects cannot be deleted is kept and retried) and `prune-org-events` (04:45; non-audit events older than 24 months in batches of 500, never an `audit` row nor an audit verb).
+- **UI**: `/o/<slug>/settings/data` ("Export & deletion", linked from the members page for owners): export buttons, the danger zone with the typed name, then `confirmToast`, then `/restore/<id>`.
+- **Gateway**: the local stack now reports `last_sign_in_at` from the token's `iat` (`scripts/local-db/gateway.mjs`, `jwt.mjs` takes an optional `iat`), so the e2e can mint an hour-old session.
+
+**Verification:** `tsc`, `eslint`, full `vitest` (incl. `external-matrix.test.ts`, which walks the new routes: external members, strangers and signed-out callers get 403/404/401 and nothing is written), `next build`, `npm run db:local:check`, and **`e2e/label-org-lifecycle.spec.ts` on the real-database stack** (registered in `e2e:real-db`): stale session and non-owner refused; export holds only the org's rows and is audited; the page (1440 and 390) — Delete waits for the name and the confirmation, declining changes nothing, accepting lands on the restore page; the org is gone for its routes and shell; a member gets 404; restore works; after the grace period the real purge cron removes the rows (real cascade) and the files on disk while the other label, the producer's track and the people stay; a second run finds nothing; the retention cron prunes old everyday events and keeps an ancient audit event.
+
+**Not done / decisions a reviewer may want to revisit:**
+- **Per-person erasure inside an org** (out of scope).
+- **No email** is sent when an org is deleted (neither to the owner nor to the other members); the owner is shown the restore page, `/o/<slug>` redirects them to it, and the settings card lists it. A deleted org's other members just see it disappear.
+- **A sole-org owner has no way back except the link** (the page they land on after deleting, or `/restore/<id>`): the dashboard and `/api/org` are gated on a live membership. A producer always keeps their personal org (137), so for them the settings card works.
+- **The producer's own `producer`-kind org cannot be deleted** from here (409) — a guess about D10's intent, since deleting it would only hide the producer's tenant shadow, not their data; say if it should be allowed.
+- **A hard delete leaves no audit trail in the database** (the events go with the org, by design: "audit events survive until hard delete"); it is logged (`org purged`).
+- **Notifications are not in the export** (a person's inbox) but are deleted with the org (cascade).
+- **Objects are not in the export** — only their keys. A bulk download of `orgs/<id>/` is a follow-up.
+- Local upload staging (`data/upload-staging/<session>`) is keyed by session, not org, and is left to its own cleanup.
+
 ## Out of Scope
 Per-person erasure inside an org (follow-up).
 
@@ -2414,7 +2435,7 @@ Disable the crons; soft-deleted orgs can be restored within the grace period.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-08
-**Status:** Not Started
+**Status:** Done (PR #95, squash aaa1556; no migration)
 
 ## Objective
 Remove the non-functional `invites` / `team_members` surfaces, so no one builds on them.
@@ -2466,7 +2487,7 @@ Revert.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-10, LABEL-21
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-41; migration 154 reserved)
 
 ## Objective
 An artist org can connect to a label org and share its whole catalogue or selected projects. The label sees that music through its roster, under its own staff permissions (D1).
@@ -2519,6 +2540,12 @@ Deal terms and contracts between artist and label; multi-label conflicts beyond 
 
 ## Rollback
 Drop the connection tables; flag off.
+
+## Built / Verification / Not done (LABEL-41)
+**Built.** Migration 154 (`org_connections`, `connection_projects`, `contacts.artist_org_id`, `tracks.provenance`, `can_see_via_connection`, four audit functions); `/api/org/[orgId]/connections` (GET, POST), `…/[connectionId]` (PATCH artist side only, DELETE either side), `…/accept`, `…/projects`; `tracks/copy` (D6); the connected path in the org audio route; `requireConnectedTrack` / `requireConnectedProject` / `requireConnectionOfLabel`; Connections settings page, Sharing popover, roster "Connected" mark, shared-music page with "Use in a label song".
+**Verification.** `npm run db:local:check` (154 behaviour as anon/authenticated, EXPLAIN hashed subplans, rollback); route matrix `src/app/api/org/connections.test.ts` (2 labels x 2 artist orgs x 2 connections); `org-access.connection.test.ts`; external-member matrix extended; real-DB e2e `e2e/label-org-connections.spec.ts` (5 flows incl. a label member's own JWT reading nothing of the artist org).
+**Not done.** A label A&R cannot write a review on an artist-org demo (it would write to the artist org); reviews happen on label copies. Songs are not copied (beats / instrumentals / loops / toplines only). The artist org's feed has no `recording.copied` row (the event is in the label org only). No TS-vs-SQL parity test for `connectionReachesProject` / `can_see_via_connection` beyond the local check. A track in no project is never reached, even with share mode `all`. Deal terms / multi-label conflicts out of scope as specified.
+
 
 ---
 

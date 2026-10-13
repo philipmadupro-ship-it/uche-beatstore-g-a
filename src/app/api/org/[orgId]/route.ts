@@ -7,12 +7,24 @@
  *
  * `org.settings_changed` is recorded as an audit event; if it cannot be
  * written the old name is put back and the request fails.
+ *
+ * DELETE /api/org/[orgId] { confirmName } — start deleting the organization
+ * (LABEL-39, D10). Owner only, and only within a few minutes of a fresh
+ * sign-in (a magic link; 403 `requiresReauth` otherwise). It does NOT delete
+ * anything: it stamps `deleted_at`, from which every org route and policy
+ * treats the org as gone, and the purge cron removes rows and objects after
+ * the grace period. `POST …/restore` undoes it until then. The producer's own
+ * `producer`-kind org cannot be deleted here. `org.deletion_scheduled` is an
+ * audit event; if it cannot be written the org is put back and the request
+ * fails.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireOrgCapability } from '@/lib/auth/org-access';
-import { OrgPatchBodySchema } from '@/lib/contracts';
+import { requireOrgCapability, requireOrgOwner } from '@/lib/auth/org-access';
+import { OrgDeleteBodySchema, OrgPatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { recordEvent } from '@/lib/labelos/activity';
+import { GRACE_DAYS, canDeleteOrgKind, confirmationMatches, purgeAfter } from '@/lib/labelos/org-lifecycle';
+import { restoreOrg, softDeleteOrg } from '@/lib/labelos/org-lifecycle-store';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
 
@@ -71,4 +83,52 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ or
     log.error('rename org failed', { orgId: access.orgId, error: errorMessage(err) });
     return NextResponse.json({ error: 'Could not rename the organization' }, { status: 500 });
   }
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
+  const { orgId } = await params;
+  const owner = await requireOrgOwner(orgId, { state: 'live', freshSignIn: true });
+  if (!owner.ok) return owner.res;
+
+  const parsed = await readBody(req, OrgDeleteBodySchema);
+  if (!parsed.ok) return parsed.res;
+  const { admin, org } = owner;
+
+  if (!canDeleteOrgKind(org.kind)) {
+    return NextResponse.json({ error: 'The producer workspace cannot be deleted from here' }, { status: 409 });
+  }
+  if (!confirmationMatches(parsed.data.confirmName, org.name)) {
+    return NextResponse.json({ error: 'Type the organization name exactly to confirm' }, { status: 400 });
+  }
+
+  let deletedAt: string | null;
+  try {
+    deletedAt = await softDeleteOrg(admin, org.id);
+  } catch (err) {
+    log.error('delete org failed', { orgId: org.id, error: errorMessage(err) });
+    return NextResponse.json({ error: 'Could not delete the organization' }, { status: 500 });
+  }
+  if (!deletedAt) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const due = purgeAfter(deletedAt)!.toISOString();
+  try {
+    await recordEvent(
+      admin,
+      { orgId: org.id, userId: owner.userId },
+      'org.deletion_scheduled',
+      { type: 'org', id: org.id },
+      { graceDays: GRACE_DAYS, purgeAfter: due },
+      { audit: true },
+    );
+  } catch (err) {
+    try {
+      await restoreOrg(admin, org.id, deletedAt);
+    } catch (revertErr) {
+      log.error('could not put the organization back after a failed audit write', { orgId: org.id, error: errorMessage(revertErr) });
+    }
+    log.error('delete org audit failed', { orgId: org.id, error: errorMessage(err) });
+    return NextResponse.json({ error: 'Could not delete the organization' }, { status: 500 });
+  }
+  log.info('org scheduled for deletion', { orgId: org.id, purgeAfter: due });
+  return NextResponse.json({ deletedAt, purgeAfter: due, graceDays: GRACE_DAYS, restoreUrl: `/restore/${org.id}` });
 }

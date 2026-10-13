@@ -911,6 +911,16 @@ export const OrgPatchBodySchema = z.object({
 export type OrgPatchBody = z.infer<typeof OrgPatchBodySchema>;
 
 /**
+ * DELETE /api/org/[orgId] (LABEL-39). The owner types the organization's
+ * name; whether it matches is `confirmationMatches` (lib/labelos/org-lifecycle),
+ * checked by the route against the stored name, not here.
+ */
+export const OrgDeleteBodySchema = z.object({
+  confirmName: z.string().max(200),
+}).strict();
+export type OrgDeleteBody = z.infer<typeof OrgDeleteBodySchema>;
+
+/**
  * PATCH /api/org/[orgId]/members. Which roles, functions, scopes and
  * switches are allowed is decided per org kind and per actor by
  * `planMemberChange` (lib/labelos/members), so here they are only bounded
@@ -1437,3 +1447,49 @@ export const OrgReleaseItemPatchBodySchema = z.object({
   explicit: z.boolean().optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type OrgReleaseItemPatchBody = z.infer<typeof OrgReleaseItemPatchBodySchema>;
+
+// ── Artist ↔ label connection (LABEL-41) ──────────────────────────────
+
+/**
+ * POST /api/org/[orgId]/connections — ask the other side to connect: a label
+ * names an ARTIST org by `slug` or by the `email` of one of its owners /
+ * admins; an artist org names a LABEL the same way. Exactly one of the two.
+ * A label may name one of its own roster contacts (`contact_id`) to stand for
+ * the artist; without it one is created when the request is accepted.
+ */
+export const OrgConnectionCreateBodySchema = z.object({
+  slug: z.string().trim().toLowerCase().min(1).max(80).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Not a valid organization slug').optional(),
+  email: z.string().trim().toLowerCase().email().max(254).optional(),
+  contact_id: z.string().uuid().optional(),
+}).strict().refine((b) => (b.slug !== undefined) !== (b.email !== undefined), { message: 'Give either a slug or an email' });
+export type OrgConnectionCreateBody = z.infer<typeof OrgConnectionCreateBodySchema>;
+
+/**
+ * PATCH /api/org/[orgId]/connections/[connectionId] — ARTIST SIDE ONLY: what
+ * is shared. `project_ids` replaces the selected list (they must be projects
+ * of the artist org); `share_mode` `all` shares the whole catalogue;
+ * `allow_copies` lets the label copy a recording into its own org (D6).
+ */
+export const OrgConnectionShareBodySchema = z.object({
+  share_mode: z.enum(['selected', 'all']).optional(),
+  project_ids: z.array(z.string().uuid()).max(500).optional(),
+  allow_copies: z.boolean().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgConnectionShareBody = z.infer<typeof OrgConnectionShareBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/tracks/copy — "Use in a label song" (D6): copy a
+ * recording into THIS (label) org. `source` is a recording in a project a
+ * connected artist org shared (`connection`), or the caller's own producer
+ * recording (`producer`). The copy keeps its provenance and has no live link
+ * to the source.
+ */
+export const OrgTrackCopyBodySchema = z.object({
+  source: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('connection'), track_id: z.string().uuid() }).strict(),
+    z.object({ kind: z.literal('producer'), track_id: z.string().uuid() }).strict(),
+  ]),
+  /** Put the copy in one of the label's own projects (optional). */
+  project_id: z.string().uuid().optional(),
+}).strict();
+export type OrgTrackCopyBody = z.infer<typeof OrgTrackCopyBodySchema>;

@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildCsp, cspHeaderName as cspHeaderNameFor } from '@/lib/security/csp';
-import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath } from '@/lib/security/api-gate';
+import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath, isLabelOsRestorePagePath } from '@/lib/security/api-gate';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
 import { isSupabaseConfigured } from '@/lib/local-store';
@@ -64,7 +64,8 @@ export async function proxy(request: NextRequest) {
   // invitee is not a member until the page has accepted for them.
   const labelOsApi = isLabelOsApiPath(request.nextUrl.pathname);
   const labelOsPage = isLabelOsPagePath(request.nextUrl.pathname);
-  const labelOsJoinPage = isLabelOsJoinPagePath(request.nextUrl.pathname);
+  // `/restore/<org id>` (LABEL-39) likewise: the org it brings back is not live, so no live membership is required.
+  const labelOsJoinPage = isLabelOsJoinPagePath(request.nextUrl.pathname) || isLabelOsRestorePagePath(request.nextUrl.pathname);
   if (labelOsApi || labelOsPage || labelOsJoinPage) {
     if (!isLabelOsEnabled()) {
       return labelOsApi
