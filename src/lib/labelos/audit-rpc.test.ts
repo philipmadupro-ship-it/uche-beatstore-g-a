@@ -9,7 +9,9 @@ const SQL_146 = readFileSync(join(process.cwd(), 'supabase/migrations/146_labelo
 const SQL_148 = readFileSync(join(process.cwd(), 'supabase/migrations/148_labelos_project_members.sql'), 'utf8');
 // LABEL-27 adds the credit decision (confirm / dispute).
 const SQL_153 = readFileSync(join(process.cwd(), 'supabase/migrations/153_labelos_parties_credits.sql'), 'utf8');
-const SQL = SQL_146 + SQL_148 + SQL_153;
+// LABEL-41 adds the connection family.
+const SQL_154 = readFileSync(join(process.cwd(), 'supabase/migrations/154_labelos_artist_label_connection.sql'), 'utf8');
+const SQL = SQL_146 + SQL_148 + SQL_153 + SQL_154;
 
 describe('auditRpc', () => {
   it('calls the named function with the arguments untouched', async () => {
@@ -46,7 +48,7 @@ describe('auditRpc', () => {
   });
 });
 
-describe('migrations 146 + 148 + 153 hold exactly these functions, service_role only', () => {
+describe('migrations 146 + 148 + 153 + 154 hold exactly these functions, service_role only', () => {
   for (const [key, name] of Object.entries(AUDIT_RPCS)) {
     it(`${key} → ${name}`, () => {
       expect(SQL).toMatch(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\(`));
@@ -65,7 +67,7 @@ describe('migrations 146 + 148 + 153 hold exactly these functions, service_role 
   });
 
   it('writes only verbs whose default visibility is internal (the helper hardcodes it)', () => {
-    const written = [...SQL.matchAll(/'((?:member|invitation|project)\.[a-z_]+)'/g)].map((m) => m[1]);
+    const written = [...SQL.matchAll(/'((?:member|invitation|project|connection)\.[a-z_]+)'/g)].map((m) => m[1]);
     expect(written.length).toBeGreaterThan(5);
     for (const verb of new Set(written)) expect(defaultVisibility(verb as Verb), verb).toBe('internal');
     for (const verb of new Set(written)) expect(isAuditVerb(verb), verb).toBe(true);

@@ -35,12 +35,26 @@
  *   - stream (preview, peaks, the master in the player)  → `listen`
  *   - `download=1`, the WAV, a stem                       → `download_masters`
  *     (viewer / commenter only when the membership allows downloads)
+ * Connected label members (LABEL-41, D1): a member of a LABEL org whose
+ * artist-org connection is active may STREAM (preview, peaks, full) a
+ * recording of the artist org that sits in a project the artist shared. The
+ * route's org is the label's; the row's is the artist's. D4 runs with the
+ * member's OWN capabilities against the artist org's link rows, so marketing
+ * hears finished recordings only, and a member outside the connection's
+ * roster artist's scope hears nothing. They hear the private PREVIEW clip, not
+ * the stored master (a Range stream of the master is a download): `variant=full`
+ * resolves to the preview unless the artist allowed copies
+ * (`connectedAudioSource`), and `download=1`, the WAV and stems are 403 — copying
+ * a recording into the label (D6) is its own, artist-permitted route. Every refusal is 404, so an id in
+ * the artist org tells a stranger nothing; ending the connection ends it on
+ * the next request. This path is tried only when the ordinary one answered 404.
+ *
  * Handing the file over is AUDITED: `recording.downloaded` is recorded BEFORE
  * the first byte (audit-class — if the event cannot be written the file is
  * not served, 500). Only GET records; HEAD streams nothing.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireTrackActor } from '@/lib/auth/org-access';
+import { requireConnectedTrack, requireTrackActor, type ConnectedAccessOk } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { streamAudioPreviewSource, streamAudioSource } from '@/lib/audio/stream-source';
 import { OrgAudioQuerySchema } from '@/lib/contracts';
@@ -56,6 +70,7 @@ import {
   type OrgAudioStemRow,
 } from '@/lib/labelos/org-audio';
 import { AuditEventError, recordEvent } from '@/lib/labelos/activity';
+import { connectedAudioSource } from '@/lib/labelos/connections';
 import { externalAudioAction, externalAudioIsAudited, externalMayAny, membershipsGranting } from '@/lib/labelos/project-members';
 import { countsAsOnRelease } from '@/lib/labelos/releases';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
@@ -89,8 +104,16 @@ export async function GET(req: NextRequest, ctx: Params) {
 
 async function serve(req: NextRequest, { params }: Params, opts: { head: boolean }) {
   const { orgId, trackId } = await params;
-  const actor = await requireTrackActor({ trackId, orgId, cap: 'catalog.read' });
-  if (!actor.ok) return actor.res;
+  const ordinary = await requireTrackActor({ trackId, orgId, cap: 'catalog.read' });
+  let connected: ConnectedAccessOk | null = null;
+  if (!ordinary.ok) {
+    // Only a 404 ("not in your org") can be a connected label member's request.
+    if (ordinary.res.status !== 404) return ordinary.res;
+    const viaConnection = await requireConnectedTrack({ trackId, orgId, cap: 'catalog.read' });
+    if (!viaConnection.ok) return viaConnection.res.status === 404 ? ordinary.res : viaConnection.res;
+    connected = viaConnection;
+  }
+  const actor = connected ? ({ ok: true, kind: 'connected', access: connected } as const) : (ordinary as Exclude<typeof ordinary, { ok: false }>);
 
   const query = OrgAudioQuerySchema.safeParse(Object.fromEntries(new URL(req.url).searchParams));
   if (!query.success) return json(400, query.error.issues[0]?.message ?? 'Invalid query');
@@ -98,7 +121,12 @@ async function serve(req: NextRequest, { params }: Params, opts: { head: boolean
   if (!variant) return json(400, 'Unknown audio variant');
 
   const { admin } = actor.access;
-  const org = actor.kind === 'org' ? actor.access.object.orgId : actor.access.orgId;
+  // The org whose rows are read: the member's own, the external member's, or the connected ARTIST org's.
+  const org = actor.kind === 'org' ? actor.access.object.orgId : actor.kind === 'connected' ? actor.access.sourceOrgId : actor.access.orgId;
+  // A connected label member streams; copying out is a separate, artist-permitted route (D6).
+  if (actor.kind === 'connected' && (query.data.download === '1' || variant.kind === 'wav' || variant.kind === 'stem')) {
+    return json(403, 'Forbidden');
+  }
   try {
     // Independent reads in one round trip. Only links INTO this track
     // classify it (lib/labelos/org-audio); the stems row only for a stem. An
@@ -127,7 +155,7 @@ async function serve(req: NextRequest, { params }: Params, opts: { head: boolean
     // release lookup; an external member's is the §2.6 table.
     const track = {
       ...row,
-      on_release: actor.kind === 'org' && row.type === 'song' ? await songIsOnRelease(admin, org, trackId) : false,
+      on_release: actor.kind !== 'external' && row.type === 'song' ? await songIsOnRelease(admin, org, trackId) : false,
     };
 
     const raw = {
@@ -158,7 +186,11 @@ async function serve(req: NextRequest, { params }: Params, opts: { head: boolean
     }
 
     const stems = (stemsRes.data ?? []) as OrgAudioStemRow[];
-    const source = orgAudioSource(track, variant, stems);
+    // A connected label member hears the preview clip, never the master — unless the artist allowed copies.
+    const source =
+      actor.kind === 'connected' && (variant.kind === 'full' || variant.kind === 'preview' || variant.kind === 'peaks')
+        ? connectedAudioSource(variant.kind, track, actor.access.connection.allow_copies)
+        : orgAudioSource(track, variant, stems);
     if (!source) return json(404, 'No audio for this variant');
     // Private until released (D8): never stream an org file from the public bucket.
     // "No private bucket" means what storage means by it: R2 not configured.

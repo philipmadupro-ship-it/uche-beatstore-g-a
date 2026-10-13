@@ -10,6 +10,7 @@ import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { OrgArtistWorkspaceTabs } from '@/components/artists/OrgArtistWorkspaceTabs';
 import { orgShellFor, requireObjectAccess } from '@/lib/auth/org-access';
+import { connectedRoster } from '@/lib/labelos/connections-store';
 import { loadOrgArtistWorkspace } from '@/lib/labelos/org-workspace-store';
 
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,8 @@ export default async function OrgArtistPage({ params }: { params: Promise<{ orgS
   if (!access.ok) notFound();
   const workspace = await loadOrgArtistWorkspace(access);
   if (!workspace) notFound();
+  // LABEL-41: a roster artist that stands for a connected artist org links to the music it shares.
+  const connected = shell.org.kind === 'label' ? (await connectedRoster(access.admin, shell.org.id, [contactId])).get(contactId) : undefined;
 
   return (
     <PageContainer>
@@ -33,6 +36,15 @@ export default async function OrgArtistPage({ params }: { params: Promise<{ orgS
           {workspace.contact.name}
         </h1>
         <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-white/70">Their projects, songs, releases and files in this organization.</p>
+        {connected && (
+          <p className="mt-3 text-[11px] text-white/70" data-testid="artist-connected">
+            <span className="mr-2 rounded-lg border border-[#6DC6A4]/40 px-2 py-0.5 text-[10px] text-[#6DC6A4]">Connected</span>
+            with {connected.orgName} ·{' '}
+            <Link href={`/o/${shell.org.slug}/connections/${connected.connectionId}`} className="underline underline-offset-2 hover:text-white">
+              Open shared music
+            </Link>
+          </p>
+        )}
       </header>
       <OrgArtistWorkspaceTabs orgId={shell.org.id} orgSlug={shell.org.slug} workspace={workspace} viewerId={access.userId} />
     </PageContainer>

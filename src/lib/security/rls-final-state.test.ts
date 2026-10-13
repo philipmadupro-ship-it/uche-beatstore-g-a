@@ -105,6 +105,9 @@ function labelOsTables(): string[] {
     'artist_references',
     // 153_labelos_parties_credits.sql (LABEL-27)
     'parties',
+    // 154_labelos_artist_label_connection.sql (LABEL-41)
+    'org_connections',
+    'connection_projects',
   ];
 }
 

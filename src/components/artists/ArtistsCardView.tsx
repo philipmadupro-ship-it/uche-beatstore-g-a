@@ -30,7 +30,7 @@ const NOUNS = {
   },
 } as const;
 
-export function ArtistsCardView({ artists, ready, failed, kind = 'artist', linkFor, emptyText }: {
+export function ArtistsCardView({ artists, ready, failed, kind = 'artist', linkFor, emptyText, connected }: {
   /** From /api/contacts/artists, loaded by the page (it also splits the table by them). Null while loading. */
   artists: ArtistSummary[] | null;
   ready: boolean;
@@ -46,6 +46,8 @@ export function ArtistsCardView({ artists, ready, failed, kind = 'artist', linkF
   linkFor?: (contactId: string) => string | null;
   /** Overrides the empty-state copy (the producer's mentions Start workspace). */
   emptyText?: string;
+  /** Label OS (LABEL-41): contact id → the connected artist org's name, shown as a "Connected" mark. */
+  connected?: ReadonlyMap<string, string>;
 }) {
   const noun = NOUNS[kind];
   const hrefOf = linkFor ?? ((id: string) => `/contacts/${id}`);
@@ -103,6 +105,15 @@ export function ArtistsCardView({ artists, ready, failed, kind = 'artist', linkF
                   {a.relationship.parked && <span className="text-white/30"> · parked</span>}
                 </span>
               </span>
+              {connected?.has(a.contact.id) && (
+                <span
+                  className="shrink-0 rounded-lg border border-[#6DC6A4]/40 px-2 py-0.5 text-[10px] text-[#6DC6A4]"
+                  title={`Connected with ${connected.get(a.contact.id)}`}
+                  data-testid={`connected-${a.contact.id}`}
+                >
+                  Connected
+                </span>
+              )}
               {a.notifyCount > 0 && (
                 <span className="shrink-0 rounded-lg border border-[#6DC6A4]/40 px-2 py-0.5 text-[10px] text-[#6DC6A4]" title="New in their portal since the last notify">
                   {a.notifyCount} to notify

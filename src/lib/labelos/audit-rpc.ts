@@ -14,6 +14,10 @@
  *   projectInvitationCreate  invitation.created for ONE project (148, LABEL-21)
  *   projectMemberUpdate      project.member_changed
  *   projectMemberRemove      project.member_removed
+ *   connectionRequest        connection.requested (154, LABEL-41; recorded in BOTH orgs)
+ *   connectionAccept         connection.accepted  (both orgs)
+ *   connectionEnd            connection.ended     (both orgs)
+ *   connectionShare          share.created | share.revoked (the artist org)
  *   creditDecide             credit.confirmed | credit.disputed (153, LABEL-27)
  *
  * Accepting an invitation (`member.joined`) is 138's
@@ -43,6 +47,11 @@ export const AUDIT_RPCS = {
   projectInvitationCreate: 'labelos_audit_project_invitation_create',
   projectMemberUpdate: 'labelos_audit_project_member_update',
   projectMemberRemove: 'labelos_audit_project_member_remove',
+  // Migration 154 (LABEL-41): the artist ↔ label connection.
+  connectionRequest: 'labelos_audit_connection_request',
+  connectionAccept: 'labelos_audit_connection_accept',
+  connectionEnd: 'labelos_audit_connection_end',
+  connectionShare: 'labelos_audit_connection_share',
   // Migration 153 (LABEL-27): a credit is confirmed or disputed, with its event.
   creditDecide: 'labelos_audit_credit_decide',
 } as const;
@@ -93,6 +102,29 @@ export type AuditRpcArgs = {
     p_payload: EventPayload;
   };
   projectMemberRemove: { p_org: string; p_actor: string; p_project: string; p_user: string; p_payload: EventPayload };
+  connectionRequest: {
+    /** The REQUESTING org, of kind `p_side`. */
+    p_org: string;
+    p_actor: string;
+    p_side: 'label' | 'artist';
+    p_target_slug: string | null;
+    p_target_email: string | null;
+    p_contact: string | null;
+    p_payload: EventPayload;
+  };
+  /** `p_org` is the ACCEPTING org, the side that did not ask. */
+  connectionAccept: { p_org: string; p_actor: string; p_connection: string; p_payload: EventPayload };
+  /** `p_org` is a party; either side may end. */
+  connectionEnd: { p_org: string; p_actor: string; p_connection: string; p_payload: EventPayload };
+  /** `p_org` is the ARTIST org. `p_patch`: share_mode, allow_copies; `p_project_ids` null = leave the list. */
+  connectionShare: {
+    p_org: string;
+    p_actor: string;
+    p_connection: string;
+    p_patch: Record<string, unknown>;
+    p_project_ids: string[] | null;
+    p_payload: EventPayload;
+  };
   creditDecide: {
     p_org: string;
     p_actor: string;
@@ -147,5 +179,19 @@ export function isMissingProjectMembers(error: { message: string; code?: string 
   if (!error) return false;
   if (error.code === 'PGRST205' || error.code === '42P01') return /project_members/.test(error.message);
   if (!/labelos_audit_project_|project_members|labelos_user_has_cap/.test(error.message)) return false;
+  return error.code === 'PGRST202' || error.code === '42883' || /could not find the (function|table)|does not exist/i.test(error.message);
+}
+
+export const CONNECTIONS_NOT_READY = 'Artist ↔ label connections are not set up yet (migration 154 has not been applied).';
+
+/**
+ * Migration 154 is not applied: PostgREST cannot find a connection function or
+ * the `org_connections` / `connection_projects` tables. "Not ready", never a
+ * raw 500.
+ */
+export function isMissingConnections(error: { message: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code === 'PGRST205' || error.code === '42P01') return /org_connections|connection_projects/.test(error.message);
+  if (!/labelos_audit_connection_|org_connections|connection_projects/.test(error.message)) return false;
   return error.code === 'PGRST202' || error.code === '42883' || /could not find the (function|table)|does not exist/i.test(error.message);
 }

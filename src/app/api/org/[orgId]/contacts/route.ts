@@ -29,6 +29,7 @@ import {
   type OrgContactRow,
 } from '@/lib/labelos/org-contacts';
 import { artistOrgRosterError } from '@/lib/labelos/roster';
+import { connectedRoster } from '@/lib/labelos/connections-store';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
 
@@ -45,6 +46,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ orgI
       .limit(2000);
     if (error) throw new Error(error.message);
     const contacts = ((data ?? []) as unknown as OrgContactRow[]).map(toOrgContactView);
+    // LABEL-41: a roster contact that stands for a connected artist org says so.
+    if (access.orgKind === 'label') {
+      const marks = await connectedRoster(access.admin, access.orgId, contacts.map((c) => c.id));
+      for (const c of contacts) {
+        const mark = marks.get(c.id);
+        if (mark) c.connected = mark;
+      }
+    }
     return NextResponse.json(
       { contacts: rosterOnly ? contacts.filter((c) => c.in_roster) : contacts },
       { headers: { 'Cache-Control': 'no-store' } },
