@@ -16,6 +16,13 @@ beforeEach(() => {
 });
 
 describe('GET /api/org', () => {
+  it('lists orgs pending deletion only when there are some (LABEL-39)', async () => {
+    mine = { ok: true, userId: 'u', isProducer: true, orgs: [], pendingDeletion: [{ id: 'o9', name: 'Old Label', purgeAfter: '2026-11-01T00:00:00.000Z' }] };
+    expect((await (await GET()).json()).pendingDeletion).toEqual([{ id: 'o9', name: 'Old Label', purgeAfter: '2026-11-01T00:00:00.000Z' }]);
+    mine = { ok: true, userId: 'u', isProducer: true, orgs: [], pendingDeletion: [] };
+    expect(Object.keys(await (await GET()).json())).toEqual(['orgs', 'shared']);
+  });
+
   it('each org carries its home; the producer’s own org is the dashboard', async () => {
     mine = {
       ok: true,

@@ -31,13 +31,14 @@ export function verify(token) {
 export const ANON_KEY = sign({ role: 'anon', iss: 'supabase' });
 export const SERVICE_KEY = sign({ role: 'service_role', iss: 'supabase' });
 
-export function userToken(id, email) {
-  return sign({ sub: id, role: 'authenticated', aud: 'authenticated', email });
+/** `iat` (seconds) is when the person signed in: the gateway reports it as `last_sign_in_at`, which re-authentication (LABEL-39) reads. */
+export function userToken(id, email, iat) {
+  return sign({ sub: id, role: 'authenticated', aud: 'authenticated', email, ...(iat ? { iat } : {}) });
 }
 
 /** The @supabase/ssr session cookie for a user (project ref "127" = 127.0.0.1). */
-export function sessionCookie(id, email) {
-  const token = userToken(id, email);
+export function sessionCookie(id, email, iat) {
+  const token = userToken(id, email, iat);
   const now = Math.floor(Date.now() / 1000);
   const session = {
     access_token: token, refresh_token: token, token_type: 'bearer', expires_in: 60 * 60 * 24 * 30, expires_at: now + 60 * 60 * 24 * 30,

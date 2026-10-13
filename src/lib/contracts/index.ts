@@ -910,6 +910,16 @@ export const OrgPatchBodySchema = z.object({
 export type OrgPatchBody = z.infer<typeof OrgPatchBodySchema>;
 
 /**
+ * DELETE /api/org/[orgId] (LABEL-39). The owner types the organization's
+ * name; whether it matches is `confirmationMatches` (lib/labelos/org-lifecycle),
+ * checked by the route against the stored name, not here.
+ */
+export const OrgDeleteBodySchema = z.object({
+  confirmName: z.string().max(200),
+}).strict();
+export type OrgDeleteBody = z.infer<typeof OrgDeleteBodySchema>;
+
+/**
  * PATCH /api/org/[orgId]/members. Which roles, functions, scopes and
  * switches are allowed is decided per org kind and per actor by
  * `planMemberChange` (lib/labelos/members), so here they are only bounded

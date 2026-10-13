@@ -84,6 +84,7 @@ import {
 } from '@/lib/labelos/connections';
 import { isMissingConnections } from '@/lib/labelos/audit-rpc';
 import { externalMayAny, sortSharedProjects, sharedProjectHref, toMembership, type ExternalMembership, type ProjectMemberRow, type SharedProjectRef } from '@/lib/labelos/project-members';
+import { REAUTH_WINDOW_MINUTES, canRestore, isFreshSignIn, purgeAfter } from '@/lib/labelos/org-lifecycle';
 import { createLogger } from '@/lib/log';
 import { isUUID } from '@/lib/validate';
 
@@ -123,10 +124,21 @@ export type SessionIdentity = { userId: string; email: string | null };
  * than membership. Every other route uses the require* helpers below.
  */
 export async function sessionIdentity(): Promise<SessionIdentity | null> {
+  const session = await readSession();
+  return session ? { userId: session.userId, email: session.email } : null;
+}
+
+type SessionDetail = SessionIdentity & { lastSignInAt: string | null };
+
+async function readSession(): Promise<SessionDetail | null> {
   const cookieClient = await createServerClient();
   const { data: { user } } = await cookieClient.auth.getUser();
   if (!user?.id) return null;
-  return { userId: user.id, email: typeof user.email === 'string' ? user.email : null };
+  return {
+    userId: user.id,
+    email: typeof user.email === 'string' ? user.email : null,
+    lastSignInAt: typeof user.last_sign_in_at === 'string' ? user.last_sign_in_at : null,
+  };
 }
 
 async function sessionUserId(): Promise<string | null> {
@@ -271,6 +283,99 @@ export async function requireOrgCapability(orgId: string, cap: Capability): Prom
   if (!access.ok) return access;
   if (!access.capabilities.has(cap)) return FORBIDDEN();
   return access;
+}
+
+// ── Owner-only lifecycle acts (LABEL-39) ────────────────────────────────
+
+export type OrgOwnerOk = {
+  ok: true;
+  userId: string;
+  email: string | null;
+  admin: AdminClient;
+  org: { id: string; name: string; slug: string; kind: string; deleted_at: string | null };
+};
+export type OrgOwnerResult = OrgOwnerOk | OwnershipFail;
+
+/**
+ * The caller as an OWNER of this org, for the acts only an owner may do:
+ * export, delete, restore (06 §2.1 — "org deletion" is a role, not a
+ * capability). Unlike requireOrgMember it can see a soft-deleted org, because
+ * restoring one is the whole point of the grace period.
+ *
+ *  - `state: 'live'`    the org must not be soft-deleted (export, delete);
+ *    `state: 'deleted'` it must be (restore). Anything else is 404, like an
+ *    org that does not exist: these routes never confirm an org to someone
+ *    who is not its owner.
+ *  - `freshSignIn`: also require a sign-in within REAUTH_WINDOW_MINUTES (a
+ *    fresh magic link). Failing it answers 403 `{ requiresReauth: true }`,
+ *    which the settings page turns into "send me a link".
+ *  - Not an owner (a member, an external project member, a stranger) is 403
+ *    for a live org and 404 for a deleted one.
+ */
+export async function requireOrgOwner(
+  orgId: string,
+  opts: { state: 'live' | 'deleted'; freshSignIn: boolean },
+): Promise<OrgOwnerResult> {
+  if (!isUUID(orgId)) return opts.state === 'deleted' ? NOT_FOUND() : FORBIDDEN();
+  const session = await readSession();
+  if (!session) return NOT_AUTHENTICATED();
+  const refused = () => (opts.state === 'deleted' ? NOT_FOUND() : FORBIDDEN());
+  const admin = createServiceClient();
+  try {
+    const [{ data: member, error: memberErr }, { data: orgRow, error: orgErr }] = await Promise.all([
+      admin.from('org_members').select('role').eq('org_id', orgId).eq('user_id', session.userId).maybeSingle(),
+      admin.from('organizations').select('id, name, slug, kind, deleted_at').eq('id', orgId).maybeSingle(),
+    ]);
+    if (memberErr) throw new Error(memberErr.message);
+    if (orgErr) throw new Error(orgErr.message);
+    const org = orgRow as OrgOwnerOk['org'] | null;
+    if (!org || (member as { role?: string } | null)?.role !== 'owner') return refused();
+    // A live org asked for a deleted-only act (or the reverse) does not exist for this purpose.
+    if ((opts.state === 'live') === (org.deleted_at !== null)) return NOT_FOUND();
+    if (opts.freshSignIn && !isFreshSignIn(session.lastSignInAt)) {
+      return {
+        ok: false,
+        res: NextResponse.json(
+          { error: 'Sign in again to continue', requiresReauth: true, reauthWindowMinutes: REAUTH_WINDOW_MINUTES },
+          { status: 403 },
+        ),
+      };
+    }
+    return { ok: true, userId: session.userId, email: session.email, admin, org };
+  } catch (err) {
+    log.error('owner check failed', { orgId, error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check organization access');
+  }
+}
+
+/**
+ * The soft-deleted org at `/o/<slug>` that the caller OWNS, for the layout to
+ * send them to the restore page instead of a bare 404 (LABEL-39). Null for
+ * everyone else — a member who is not an owner, a stranger, a live org, no
+ * session — so a slug still never reveals that a deleted org exists.
+ */
+export async function ownedDeletedOrgFor(slug: string): Promise<{ id: string } | null> {
+  if (!SLUG_RE.test(slug) || slug.length > 80) return null;
+  const userId = await sessionUserId();
+  if (!userId) return null;
+  const admin = createServiceClient();
+  try {
+    const { data: org, error } = await admin.from('organizations').select('id, deleted_at').eq('slug', slug).maybeSingle();
+    if (error) throw new Error(error.message);
+    const row = org as { id: string; deleted_at: string | null } | null;
+    if (!row || !row.deleted_at) return null;
+    const { data: member, error: memberErr } = await admin
+      .from('org_members')
+      .select('role')
+      .eq('org_id', row.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (memberErr) throw new Error(memberErr.message);
+    return (member as { role?: string } | null)?.role === 'owner' ? { id: row.id } : null;
+  } catch (err) {
+    log.error('deleted org lookup failed', { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  }
 }
 
 // ── Objects ─────────────────────────────────────────────────────────────
@@ -596,6 +701,8 @@ export function memberArtistScopeQuery(admin: AdminClient, ctx: OrgAccessOk, use
 // ── The caller's orgs (LABEL-09) ────────────────────────────────────────
 
 export type MyOrg = { id: string; name: string; slug: string; kind: OrgKind; role: Role };
+/** An org the caller OWNS that is inside its 30-day grace period (LABEL-39): restorable at /restore/<id>. */
+export type PendingDeletion = { id: string; name: string; purgeAfter: string };
 
 type MyOrgRow = {
   role: string;
@@ -616,11 +723,12 @@ async function isProducerUser(admin: AdminClient, userId: string): Promise<boole
  * Every live org the signed-in caller belongs to, for the org switcher
  * (`GET /api/org`). The caller's own memberships — identity, not tenancy —
  * which is why this read lives here and not in the route. A soft-deleted
- * org, an unknown kind or a role the kind does not offer is left out, the
+ * org is not listed (it is `pendingDeletion` for its owner, who can restore
+ * it); an unknown kind or a role the kind does not offer is left out, the
  * same memberships `readMembership` refuses.
  */
 export async function myOrganizations(): Promise<
-  { ok: true; userId: string; isProducer: boolean; orgs: MyOrg[] } | OwnershipFail
+  { ok: true; userId: string; isProducer: boolean; orgs: MyOrg[]; pendingDeletion: PendingDeletion[] } | OwnershipFail
 > {
   const userId = await sessionUserId();
   if (!userId) return NOT_AUTHENTICATED();
@@ -632,16 +740,24 @@ export async function myOrganizations(): Promise<
     ]);
     if (error) throw new Error(error.message);
     const orgs: MyOrg[] = [];
+    const pendingDeletion: PendingDeletion[] = [];
     for (const row of (data ?? []) as MyOrgRow[]) {
       const org = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
-      if (!org || org.deleted_at) continue;
+      if (org?.deleted_at) {
+        // Only an owner can bring it back, and only while the grace period lasts.
+        const due = purgeAfter(org.deleted_at);
+        if (row.role === 'owner' && canRestore(org.deleted_at) && due) pendingDeletion.push({ id: org.id, name: org.name, purgeAfter: due.toISOString() });
+        continue;
+      }
+      if (!org) continue;
       const kind = ORG_KINDS.find((k) => k === org.kind);
       const role = ROLES.find((r) => r === row.role);
       if (!kind || !role || !ROLES_BY_ORG_KIND[kind].includes(role)) continue;
       orgs.push({ id: org.id, name: org.name, slug: org.slug, kind, role });
     }
     orgs.sort((a, b) => a.name.localeCompare(b.name) || a.slug.localeCompare(b.slug));
-    return { ok: true, userId, isProducer, orgs };
+    pendingDeletion.sort((a, b) => a.purgeAfter.localeCompare(b.purgeAfter));
+    return { ok: true, userId, isProducer, orgs, pendingDeletion };
   } catch (err) {
     log.error('org list failed', { error: err instanceof Error ? err.message : String(err) });
     return fail(500, 'Could not list organizations');

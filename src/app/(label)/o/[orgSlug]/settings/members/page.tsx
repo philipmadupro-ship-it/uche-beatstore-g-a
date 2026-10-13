@@ -19,6 +19,7 @@
  * (PUT /members/artists). Role `artist` is always limited.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { UserPlus } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ListContainer } from '@/components/ui/ListRow';
@@ -324,12 +325,22 @@ export default function OrgMembersPage() {
             {manage ? 'Who is in this organization and what each person can do.' : 'Who is in this organization.'}
           </p>
         </div>
-        {manage && (
-          <Button variant="secondary" size="sm" onClick={() => setInviteOpen(true)}>
-            <UserPlus size={14} aria-hidden="true" />
-            Invite
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {shell?.role === 'owner' && (
+            <Link
+              href={`/o/${org.slug}/settings/data`}
+              className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 underline-offset-4 hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            >
+              Export &amp; deletion
+            </Link>
+          )}
+          {manage && (
+            <Button variant="secondary" size="sm" onClick={() => setInviteOpen(true)}>
+              <UserPlus size={14} aria-hidden="true" />
+              Invite
+            </Button>
+          )}
+        </div>
       </header>
 
       {loadError && (
