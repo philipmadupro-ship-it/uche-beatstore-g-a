@@ -10,7 +10,7 @@
  * which orders ISO timestamps correctly): select (column lists, one
  * `table!inner(cols)` embed resolved through `org_id` for organizations,
  * else `<table singular>_id`), eq, in,
- * is, ilike (% and _), gt / gte / lt / lte (string order, which is ISO-timestamp order), `or` (the
+ * neq (a NULL never matches), is, ilike (% and _), gt / gte / lt / lte (string order, which is ISO-timestamp order), `or` (the
  * PostgREST string: eq, in, is, not.is and and(…) groups), not(col, 'in', '(…)') / not(col, 'is', null), order, limit, range, maybeSingle, single, insert,
  * update, delete, `select(cols, { count: 'exact', head: true })`, upsert (ignoreDuplicates; `onConflict` merges into the row it names), rpc (functions the test
  * declares in `rpc`, run against the same tables). Unique keys per table are
@@ -247,6 +247,11 @@ export function memoryAdmin(db: MemoryDb) {
       },
       eq(col: string, v: unknown) {
         filters.push((r) => lower(r[col]) === lower(v));
+        return b;
+      },
+      neq(col: string, v: unknown) {
+        // SQL: NULL <> 'x' is not true, so a missing value never matches.
+        filters.push((r) => r[col] !== null && r[col] !== undefined && lower(r[col]) !== lower(v));
         return b;
       },
       in(col: string, values: unknown[]) {
