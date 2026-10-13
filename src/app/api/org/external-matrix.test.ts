@@ -283,12 +283,16 @@ describe('LABEL-23: tasks and notifications are not an external member\'s (route
   }
 });
 
-describe('LABEL-29: legal readiness is not an external member\'s', () => {
+describe('LABEL-29: legal readiness and sample declarations are not an external member\'s', () => {
   const route = '[orgId]/tracks/[id]/legal-readiness/route.ts';
+  const samples = '[orgId]/tracks/[id]/samples/route.ts';
 
-  it('the route exists and is not on the external allowlist', () => {
+  it('the routes exist and are not on the external allowlist', () => {
     expect(files).toContain(route);
+    expect(files).toContain(samples);
     expect(externalRouteKeys()).not.toContain(`${route}:GET`);
+    expect(externalRouteKeys()).not.toContain(`${samples}:GET`);
+    expect(externalRouteKeys()).not.toContain(`${samples}:PUT`);
   });
 
   for (const [role, user] of Object.entries(ROLES)) {
@@ -296,6 +300,13 @@ describe('LABEL-29: legal readiness is not an external member\'s', () => {
       const res = await call(route, 'GET', user);
       expect([403, 404], `answered ${res.status}`).toContain(res.status);
       expect(JSON.stringify(await res.json())).not.toMatch(/percent|blockerCount|readiness/);
+    });
+    it(`${role}: the sample declaration can be neither read nor written`, async () => {
+      for (const method of ['GET', 'PUT'] as const) {
+        const res = await call(samples, method, user, { body: { samples: 'none' } });
+        expect([403, 404], `${method} answered ${res.status}`).toContain(res.status);
+      }
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
     });
   }
 });

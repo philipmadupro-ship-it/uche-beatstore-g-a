@@ -393,6 +393,7 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'song.created': { one: 'added a song', many: 'added {n} songs' },
   'song.stage_changed': { one: 'moved a song to a new stage', many: 'moved {n} songs to new stages' },
   'song.reviewed': { one: 'reviewed a song', many: 'reviewed {n} songs' },
+  'song.samples_declared': { one: 'declared the samples on a song', many: 'declared the samples on {n} songs' },
   'recording.uploaded': { one: 'uploaded a recording', many: 'uploaded {n} recordings' },
   'recording.downloaded': { one: 'downloaded a recording', many: 'downloaded {n} recordings' },
   'recording.copied': { one: 'copied a recording', many: 'copied {n} recordings' },

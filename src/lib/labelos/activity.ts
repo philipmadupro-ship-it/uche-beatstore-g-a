@@ -63,6 +63,7 @@ export const VERBS = [
   'song.created',
   'song.stage_changed',
   'song.reviewed',
+  'song.samples_declared',
   'recording.uploaded',
   'recording.downloaded',
   'recording.copied',
@@ -184,6 +185,8 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'song.created': 'artist',
   'song.stage_changed': 'artist',
   'song.reviewed': 'artist',
+  // Samples and their clearance are rights business (LABEL-29): the payload carries the declaration, never the note.
+  'song.samples_declared': 'internal',
   'recording.uploaded': 'artist',
   'recording.downloaded': 'internal',
   'recording.copied': 'internal',

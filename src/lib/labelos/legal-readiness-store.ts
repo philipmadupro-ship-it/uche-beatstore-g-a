@@ -9,14 +9,14 @@
  * applied: either missing is `LegalReadinessNotReadyError`, which the route
  * answers as `schemaReady: false`.
  *
- * No column holds "samples declared" yet (05 §3 names `samples_declared`;
- * migration 140 did not add it). It is read when it exists and is `unknown`
- * otherwise, which is a blocker by the spec — see the PR.
+ * The sample declaration is migration 156's `tracks.samples_declared` (+ a
+ * clearance note / file). Without 156 it reads `unknown`, a blocker by the spec.
  */
 import type { AdminClient } from '@/lib/auth/ownership';
 import { CreditsNotReadyError, listCredits, partiesByIds } from './credits-store';
 import { isCreditScope } from './credit-roles';
 import type { LegalFacts, ReadinessCredit, ReadinessParty, ReadinessSheet, SamplesDeclared } from './legal-readiness';
+import { isSamplesDeclared, isCleared } from './samples';
 import { isSplitKind } from './splits';
 import { linesOfSheets, listSheets, SplitsNotReadyError } from './splits-store';
 
@@ -39,18 +39,33 @@ export async function readReadinessSong(
   admin: AdminClient,
   org: string,
   trackId: string,
-): Promise<{ id: string; title: string | null; type: string | null; isrc: string | null; samples: SamplesDeclared } | null> {
-  let res = await admin.from('tracks').select('id, title, type, isrc, samples_declared').eq('id', trackId).eq('org_id', org).maybeSingle();
+): Promise<{ id: string; title: string | null; type: string | null; isrc: string | null; samples: SamplesDeclared; cleared: boolean } | null> {
+  let res = await admin
+    .from('tracks')
+    .select('id, title, type, isrc, samples_declared, samples_clearance_note, samples_clearance_asset_id')
+    .eq('id', trackId)
+    .eq('org_id', org)
+    .maybeSingle();
   let withSamples = true;
   if ((res.error as DbError)?.code && MISSING.includes((res.error as DbError)!.code!)) {
+    // Migration 156 not applied: nothing is declared, nothing is cleared.
     withSamples = false;
     res = await admin.from('tracks').select('id, title, type, isrc').eq('id', trackId).eq('org_id', org).maybeSingle();
   }
   if (res.error) fail('song read', res.error);
-  const row = res.data as { id: string; title: string | null; type: string | null; isrc: string | null; samples_declared?: string | null } | null;
+  const row = res.data as {
+    id: string;
+    title: string | null;
+    type: string | null;
+    isrc: string | null;
+    samples_declared?: string | null;
+    samples_clearance_note?: string | null;
+    samples_clearance_asset_id?: string | null;
+  } | null;
   if (!row) return null;
-  const samples: SamplesDeclared = withSamples && (row.samples_declared === 'none' || row.samples_declared === 'yes') ? row.samples_declared : 'unknown';
-  return { id: row.id, title: row.title, type: row.type, isrc: row.isrc, samples };
+  const samples: SamplesDeclared = withSamples && isSamplesDeclared(row.samples_declared) ? row.samples_declared : 'unknown';
+  const cleared = withSamples && isCleared({ note: row.samples_clearance_note ?? null, assetId: row.samples_clearance_asset_id ?? null });
+  return { id: row.id, title: row.title, type: row.type, isrc: row.isrc, samples, cleared };
 }
 
 /** The org's switch (09 §3.1 L11). Off unless the setting is exactly true. */
@@ -99,7 +114,7 @@ async function masterIsrc(admin: AdminClient, org: string, song: { id: string; i
 export async function loadLegalFacts(
   admin: AdminClient,
   org: string,
-  song: { id: string; title: string | null; isrc: string | null; samples: SamplesDeclared },
+  song: { id: string; title: string | null; isrc: string | null; samples: SamplesDeclared; cleared: boolean },
 ): Promise<LegalFacts> {
   let creditRows;
   let sheetRows;
@@ -152,8 +167,7 @@ export async function loadLegalFacts(
     sheets,
     onRelease: release.onRelease,
     samples: song.samples,
-    // No clearance note / document is stored anywhere yet; a declared sample is uncleared until one is.
-    sampleClearance: false,
+    sampleClearance: song.cleared,
     requireSignedMasterSplit: requireSigned,
     isrc,
   };

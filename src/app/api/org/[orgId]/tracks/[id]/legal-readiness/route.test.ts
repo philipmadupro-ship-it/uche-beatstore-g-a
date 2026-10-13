@@ -167,6 +167,29 @@ describe('rights.read sees the named gaps', () => {
   });
 });
 
+describe('L8 reads migration 156’s columns', () => {
+  const l8 = async (code: string) => {
+    const { readiness } = await (await read(OWN, L, S1)).json();
+    return readiness.requirements.find((q: { code: string }) => q.code === code);
+  };
+  it('samples yes with no note or file leaves the clearance open; a note closes it', async () => {
+    const song = db.tables.tracks.find((r) => r.id === S1)!;
+    song.samples_declared = 'yes';
+    expect(await l8('L8')).toMatchObject({ satisfied: true });
+    expect(await l8('L8.clearance')).toMatchObject({ applicable: true, satisfied: false });
+    song.samples_clearance_note = 'Cleared with the publisher';
+    expect(await l8('L8.clearance')).toMatchObject({ applicable: true, satisfied: true });
+    song.samples_clearance_note = null;
+    song.samples_clearance_asset_id = '90000000-0000-4000-8000-000000000001';
+    expect(await l8('L8.clearance')).toMatchObject({ satisfied: true });
+  });
+  it('samples none needs no clearance', async () => {
+    db.tables.tracks.find((r) => r.id === S1)!.samples_declared = 'none';
+    expect(await l8('L8')).toMatchObject({ satisfied: true });
+    expect(await l8('L8.clearance')).toMatchObject({ applicable: false });
+  });
+});
+
 describe('without rights.read: counts only', () => {
   it('marketing (catalog.read) gets the counts and the percentage, no names, no reasons', async () => {
     const full = (await (await read(OWN, L, S1)).json()).readiness;
