@@ -2504,6 +2504,12 @@ Deal terms and contracts between artist and label; multi-label conflicts beyond 
 ## Rollback
 Drop the connection tables; flag off.
 
+## Built / Verification / Not done (LABEL-41)
+**Built.** Migration 154 (`org_connections`, `connection_projects`, `contacts.artist_org_id`, `tracks.provenance`, `can_see_via_connection`, four audit functions); `/api/org/[orgId]/connections` (GET, POST), `…/[connectionId]` (PATCH artist side only, DELETE either side), `…/accept`, `…/projects`; `tracks/copy` (D6); the connected path in the org audio route; `requireConnectedTrack` / `requireConnectedProject` / `requireConnectionOfLabel`; Connections settings page, Sharing popover, roster "Connected" mark, shared-music page with "Use in a label song".
+**Verification.** `npm run db:local:check` (154 behaviour as anon/authenticated, EXPLAIN hashed subplans, rollback); route matrix `src/app/api/org/connections.test.ts` (2 labels x 2 artist orgs x 2 connections); `org-access.connection.test.ts`; external-member matrix extended; real-DB e2e `e2e/label-org-connections.spec.ts` (5 flows incl. a label member's own JWT reading nothing of the artist org).
+**Not done.** A label A&R cannot write a review on an artist-org demo (it would write to the artist org); reviews happen on label copies. Songs are not copied (beats / instrumentals / loops / toplines only). The artist org's feed has no `recording.copied` row (the event is in the label org only). No TS-vs-SQL parity test for `connectionReachesProject` / `can_see_via_connection` beyond the local check. A track in no project is never reached, even with share mode `all`. Deal terms / multi-label conflicts out of scope as specified.
+
+
 ---
 
 # LABEL-42 — Released → store bridge

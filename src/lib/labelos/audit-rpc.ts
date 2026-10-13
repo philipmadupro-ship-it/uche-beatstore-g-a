@@ -123,6 +123,8 @@ export type AuditRpcArgs = {
     p_connection: string;
     p_patch: Record<string, unknown>;
     p_project_ids: string[] | null;
+    p_payload: EventPayload;
+  };
   creditDecide: {
     p_org: string;
     p_actor: string;

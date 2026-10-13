@@ -274,6 +274,7 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
         allow_copies: conn.allow_copies,
       });
       return ok({ connection: { ...conn }, project_ids: after.sort() });
+    },
     // Migration 153 (LABEL-27): confirm / dispute a credit, with its event in the same step.
     labelos_audit_credit_decide: (args, tables) => {
       if (opts.failAudit?.()) return failed();
