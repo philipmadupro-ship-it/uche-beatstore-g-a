@@ -101,6 +101,20 @@ describe('navGroupsFor', () => {
     expect(producer.map((g) => g.key)).not.toContain('roster');
   });
 
+  it('the Rights hub (legal queue, LABEL-31) is for members who work the queue, in label and artist orgs only', () => {
+    const keys = (kind: string, caps: string[]) => navGroupsFor(kind, new Set(caps), { slug: 'ns', viewerIsProducer: false }).map((g) => g.key);
+    expect(keys('label', ['catalog.read', 'release.approve.legal'])).toEqual(['roster', 'rights', 'org']);
+    expect(keys('label', ['catalog.read', 'release.write', 'contracts.read'])).toEqual(['roster', 'rights', 'org']);
+    expect(keys('artist', ['catalog.read', 'release.approve.legal'])).toContain('rights');
+    // The catalogue ability alone, a reviewer, a producer function: no entry.
+    expect(keys('label', ['catalog.read'])).not.toContain('rights');
+    expect(keys('label', ['catalog.read', 'review.write'])).not.toContain('rights');
+    expect(keys('label', ['catalog.read', 'rights.write'])).not.toContain('rights');
+    expect(keys('producer', ['catalog.read', 'release.approve.legal', 'contracts.read'])).not.toContain('rights');
+    const hub = navGroupsFor('label', new Set(['catalog.read', 'release.approve.legal']), { slug: 'ns', viewerIsProducer: false }).find((g) => g.key === 'rights');
+    expect(hub?.items.map((i) => i.href)).toEqual(['/o/ns/rights/legal']);
+  });
+
   it('Connections (LABEL-41) is for label and artist orgs, for whoever holds org.manage', () => {
     const items = (kind: string, caps: string[]) => navGroupsFor(kind, new Set(caps), { slug: 's', viewerIsProducer: false }).find((g) => g.key === 'org')?.items.map((i) => i.href);
     expect(items('label', ['org.manage', 'catalog.read'])).toEqual(['/o/s/settings/members', '/o/s/settings/connections']);

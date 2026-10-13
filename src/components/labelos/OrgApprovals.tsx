@@ -81,6 +81,7 @@ function GateRow({ orgId, trackId, gate, onChange }: { orgId: string; trackId: s
   const [deciding, setDeciding] = useState<null | 'changes_requested'>(null);
   const [approver, setApprover] = useState('');
   const [note, setNote] = useState('');
+  const [withTask, setWithTask] = useState(true);
   const subject = { kind: 'song' as const, id: trackId };
 
   const done = useCallback(
@@ -97,10 +98,10 @@ function GateRow({ orgId, trackId, gate, onChange }: { orgId: string; trackId: s
 
   const ask = async () => {
     setBusy(true);
-    const res = await requestApproval(orgId, { subject, gate: gate.gate, approverId: approver, note });
+    const res = await requestApproval(orgId, { subject, gate: gate.gate, approverId: approver, note, withTask: legal && gate.canTask === true && withTask });
     setBusy(false);
     if (!res.ok) return void toast.error(res.error);
-    done(res, 'Approval requested');
+    done(res, legal ? 'Sent to legal' : 'Approval requested');
   };
   const decide = async (decision: 'approved' | 'changes_requested') => {
     setBusy(true);
@@ -111,6 +112,7 @@ function GateRow({ orgId, trackId, gate, onChange }: { orgId: string; trackId: s
   };
 
   const options: DropdownOption<string>[] = gate.approvers.map((a) => ({ value: a.userId, label: a.name }));
+  const legal = gate.gate === 'legal';
   const open = gate.status === 'requested';
   const showAsk = gate.canRequest && !open && options.length > 0;
 
@@ -195,14 +197,20 @@ function GateRow({ orgId, trackId, gate, onChange }: { orgId: string; trackId: s
             <div className="space-y-2" data-testid="org-approval-ask-form">
               <Dropdown<string> value={approver} onChange={setApprover} options={options} aria-label="Who should approve" placeholder="Choose who to ask" />
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={2000} placeholder="A note for them (optional)" aria-label="A note for the approver" className={FIELD} />
+              {legal && gate.canTask && (
+                <label className="flex items-center gap-2 text-[11px] text-white/60">
+                  <input type="checkbox" checked={withTask} onChange={(e) => setWithTask(e.target.checked)} data-testid="org-approval-with-task" />
+                  Also give them a task
+                </label>
+              )}
               <div className="flex gap-2">
-                <button type="button" className={BTN} disabled={busy || !approver} onClick={() => void ask()} data-testid="org-approval-send-request">Send request</button>
+                <button type="button" className={BTN} disabled={busy || !approver} onClick={() => void ask()} data-testid="org-approval-send-request">{legal ? 'Send to legal' : 'Send request'}</button>
                 <button type="button" className={BTN} disabled={busy} onClick={() => { setAsking(false); setNote(''); }}>Cancel</button>
               </div>
             </div>
           ) : (
             <button type="button" className={BTN} onClick={() => setAsking(true)} data-testid="org-approval-ask">
-              {gate.status === 'none' ? 'Ask for approval' : 'Ask again'}
+              {legal ? 'Send to legal' : gate.status === 'none' ? 'Ask for approval' : 'Ask again'}
             </button>
           )}
         </div>

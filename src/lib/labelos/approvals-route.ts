@@ -95,6 +95,8 @@ export type GateState = {
   /** The viewer asked for the open request themselves and is not owner/admin: they cannot approve it. */
   selfApprovalBlocked: boolean;
   canRequest: boolean;
+  /** The viewer may also hand the person asked a task ("Send to legal", LABEL-31): `tasks.write`. */
+  canTask: boolean;
   /** Members who could be asked (only for a viewer who may ask). */
   approvers: { userId: string; name: string }[];
 };
@@ -134,6 +136,7 @@ export async function gateStates(admin: AdminClient, access: OrgAccessOk, resolv
       canDecide: access.capabilities.has(gateCapability(gate)),
       selfApprovalBlocked: !!current.pending && current.pending.actor_id === access.userId && !isOwnerOrAdmin(access.role),
       canRequest,
+      canTask: access.capabilities.has('tasks.write'),
       approvers: canRequest ? await approverCandidates(admin, org, subject, gate, { table, id: subject.id }) : [],
     });
   }
