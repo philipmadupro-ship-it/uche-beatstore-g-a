@@ -91,6 +91,18 @@ describe('listPrefix / deletePrefix', () => {
   });
 });
 
+describe('orgBuckets', () => {
+  it('refuses to run without the private bucket', async () => {
+    const { orgBuckets } = await import('./org-objects');
+    const keep = process.env.R2_PRIVATE_BUCKET_NAME;
+    delete process.env.R2_PRIVATE_BUCKET_NAME;
+    expect(() => orgBuckets()).toThrow(/R2_PRIVATE_BUCKET_NAME/);
+    process.env.R2_PRIVATE_BUCKET_NAME = 'priv';
+    expect(orgBuckets()).toContain('priv');
+    if (keep === undefined) delete process.env.R2_PRIVATE_BUCKET_NAME; else process.env.R2_PRIVATE_BUCKET_NAME = keep;
+  });
+});
+
 describe('local fallback', () => {
   const roots: string[] = [];
   afterEach(() => {

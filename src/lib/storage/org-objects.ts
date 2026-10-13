@@ -30,8 +30,12 @@ export function orgPrefix(orgId: string): string {
   return `orgs/${orgId.toLowerCase()}/`;
 }
 
-/** Buckets an org's objects may be in: the private bucket, plus the public one if configured (nothing should be there; D8). */
+/**
+ * Buckets an org's objects may be in: the private bucket, plus the public one if configured (nothing should be there; D8).
+ * Throws without the private bucket: skipping it would let a purge "succeed" while the masters stay behind.
+ */
 export function orgBuckets(): string[] {
+  if (!process.env.R2_PRIVATE_BUCKET_NAME) throw new Error('R2_PRIVATE_BUCKET_NAME is not configured');
   return [process.env.R2_PRIVATE_BUCKET_NAME, process.env.R2_BUCKET_NAME].filter(
     (b, i, all): b is string => !!b && all.indexOf(b) === i,
   );

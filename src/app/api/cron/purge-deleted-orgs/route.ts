@@ -16,6 +16,8 @@ export const maxDuration = 300;
 
 /** A run purges at most this many orgs; the rest wait for tomorrow (a purge lists and deletes every object). */
 const ORGS_PER_RUN = 5;
+/** Orgs looked at per run: a few stuck ones (objects that will not delete) must not starve the rest. */
+const ORGS_CONSIDERED = 25;
 
 /**
  * Permanently delete the organizations whose 30-day grace period (D10) is
@@ -40,15 +42,16 @@ export async function GET(req: NextRequest) {
 
   const admin = createServiceClient();
   try {
-    const due = await dueOrgs(admin, new Date(), ORGS_PER_RUN);
+    const due = await dueOrgs(admin, new Date(), ORGS_CONSIDERED);
     const outcomes = [];
     for (const org of due) {
+      if (outcomes.filter((o) => o.status === 'purged').length >= ORGS_PER_RUN) break;
       const outcome = await purgeOrg(admin, org, deleteOrgObjects);
       if (outcome.status === 'purged') log.info('org purged', { orgId: org.id, objects: outcome.objects });
       outcomes.push(outcome);
     }
     return NextResponse.json({
-      due: due.length,
+      due: outcomes.length,
       purged: outcomes.filter((o) => o.status === 'purged').length,
       kept: outcomes.filter((o) => o.status === 'kept').map((o) => ({ orgId: o.orgId, reason: (o as { reason: string }).reason })),
     });

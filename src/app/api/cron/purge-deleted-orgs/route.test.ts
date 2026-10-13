@@ -107,6 +107,17 @@ describe('GET /api/cron/purge-deleted-orgs', () => {
     expect(ids().filter((id) => String(id).startsWith('x'))).toHaveLength(3);
   });
 
+  it('a stuck org does not starve the ones behind it', async () => {
+    for (let i = 0; i < 8; i += 1) db.tables.organizations.push({ id: `y${i}`, name: 'y', slug: `y${i}`, kind: 'label', deleted_at: daysAgo(200 + i) });
+    deleteOrgObjects.mockImplementation(async (id: string) => {
+      if (String(id).startsWith('y')) throw new Error('AccessDenied');
+      return 1;
+    });
+    const body = await (await GET(request('cron-secret'))).json();
+    expect(body.purged).toBe(2); // A and D, behind eight stuck orgs
+    expect(body.kept).toHaveLength(8);
+  });
+
   it('is a no-op where the Label OS tables do not exist yet', async () => {
     mem = { ...mem, client: { from: () => { throw new Error('relation "public.organizations" does not exist'); }, rpc: mem.client.rpc } } as typeof mem;
     expect(await (await GET(request('cron-secret'))).json()).toEqual({ skipped: 'Label OS migrations are not applied' });
