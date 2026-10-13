@@ -22,6 +22,8 @@ export type SharedProject = { id: string; name: string; href: string };
 export type MyOrgsResponse = {
   orgs: (SwitcherOrg & { home: string })[];
   shared: SharedProject[];
+  /** Orgs the caller owns that are inside their 30-day grace period (LABEL-39). Absent when there are none. */
+  pendingDeletion?: { id: string; name: string; purgeAfter: string }[];
 };
 
 export const DASHBOARD_HOME = '/library';

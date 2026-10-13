@@ -373,6 +373,9 @@ export function buildDigest(events: readonly DigestEvent[], opts: DigestOptions)
 export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>> = {
   'org.created': { one: 'created the organization', many: 'created the organization' },
   'org.settings_changed': { one: 'changed the organization settings', many: 'changed the organization settings' },
+  'org.exported': { one: 'exported the organization’s data', many: 'exported the organization’s data {n} times' },
+  'org.deletion_scheduled': { one: 'scheduled the organization for deletion', many: 'scheduled the organization for deletion' },
+  'org.restored': { one: 'restored the organization', many: 'restored the organization' },
   'member.joined': { one: 'joined the organization', many: 'joined the organization' },
   'member.removed': { one: 'removed a member', many: 'removed {n} members' },
   'member.role_changed': { one: 'changed a member’s role', many: 'changed {n} members’ roles' },

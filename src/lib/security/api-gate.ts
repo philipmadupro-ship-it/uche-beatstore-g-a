@@ -66,6 +66,27 @@ export function isLabelOsJoinApiPath(pathname: string): boolean {
 }
 
 /**
+ * `/api/org/<uuid>/restore` (LABEL-39): bringing back an org inside its grace
+ * period. Gate `session`, for the same reason as join: a soft-deleted org's
+ * owner may have no other membership left, so the membership gate (which
+ * reads through RLS, where a deleted org is gone) would refuse the very
+ * request that undoes it. The route answers 404 to anyone who is not an owner
+ * of a soft-deleted org with that id. Exact shape, nothing below or beside it.
+ */
+export function isLabelOsRestoreApiPath(pathname: string): boolean {
+  return /^\/api\/org\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/restore$/.test(pathname);
+}
+
+/**
+ * The restore page, `/restore/<uuid>`: where an owner lands to undo a
+ * deletion. Behind the flag like `/o/*`, but reachable without any live
+ * membership (the org it restores is, by definition, not live).
+ */
+export function isLabelOsRestorePagePath(pathname: string): boolean {
+  return /^\/restore\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/.test(pathname);
+}
+
+/**
  * The invitation page, `/join/<token>`: behind the flag like `/o/*`, but
  * open to signed-out visitors (it signs them in itself) and to non-members.
  */
@@ -89,7 +110,7 @@ export function isLabelOsPagePath(pathname: string): boolean {
  *  - `member`   a Label OS path: the caller must belong to some org or (LABEL-21)
  *               some project. This is coarse admission only; the
  *               routes check org and capability (lib/auth/org-access.ts);
- *  - `session`  `/api/org/join` only: being signed in is enough to reach the
+ *  - `session`  `/api/org/join` and `/api/org/<id>/restore` only: being signed in is enough to reach the
  *               route, which does all of the authorisation itself;
  *  - `producer` everything else: the caller must be the producer.
  *
@@ -101,6 +122,7 @@ export type ApiGate = 'none' | 'session' | 'member' | 'producer';
 export function apiGateFor(pathname: string, signedIn: boolean): ApiGate {
   if (!signedIn || !pathname.startsWith('/api/')) return 'none';
   if (isLabelOsJoinApiPath(pathname)) return 'session';
+  if (isLabelOsRestoreApiPath(pathname)) return 'session';
   if (isLabelOsApiPath(pathname)) return 'member';
   if (isPublicApiPath(pathname)) return 'none';
   return 'producer';
