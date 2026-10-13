@@ -67,7 +67,9 @@ SELECT public.check_eq('all five functions exist',
      -- 153 (LABEL-27) adds credit decisions; checked in 153's own file.
      AND proname NOT LIKE 'labelos\_audit\_credit\_%'
      -- 155 (LABEL-28) adds split sheet transitions; checked in 155's own file.
-     AND proname NOT LIKE 'labelos\_audit\_split\_%'), 5);
+     AND proname NOT LIKE 'labelos\_audit\_split\_%'
+     -- 157 (LABEL-30) adds approval request / decision; checked in 157's own file.
+     AND proname NOT LIKE 'labelos\_audit\_approval\_%'), 5);
 SELECT public.check_eq('the private event helper has no caller but its owner',
   (SELECT (has_function_privilege('service_role', p.oid, 'EXECUTE'), has_function_privilege('authenticated', p.oid, 'EXECUTE'))::text
    FROM pg_proc p WHERE p.proname = 'labelos_audit_insert'),

@@ -300,6 +300,33 @@ describe('LABEL-29: legal readiness is not an external member\'s', () => {
   }
 });
 
+describe('LABEL-30: approvals are not an external member\'s', () => {
+  const routes = [
+    ['[orgId]/approvals/route.ts', 'GET', `?song=${S1}`, undefined],
+    ['[orgId]/approvals/route.ts', 'POST', '', { subject: { kind: 'song', id: S1 }, gate: 'legal', approver_id: OWNER }],
+    ['[orgId]/approvals/decide/route.ts', 'POST', '', { subject: { kind: 'song', id: S1 }, gate: 'legal', decision: 'approved' }],
+  ] as const;
+
+  it('the routes exist and none is on the external allowlist', () => {
+    for (const [route, method] of routes) {
+      expect(files).toContain(route);
+      expect(externalRouteKeys()).not.toContain(`${route}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: neither reading, asking nor deciding on a song of their own project reaches anything (403/404), and nothing is written`, async () => {
+      for (const [path, method, query, body] of routes) {
+        const res = await call(path, method, user, { query, body });
+        expect([403, 404], `${method} ${path} answered ${res.status}`).toContain(res.status);
+        expect(JSON.stringify(await res.json())).not.toMatch(/gates|approval/i);
+      }
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+      expect(mem.writes.filter((w) => w.op === 'rpc')).toEqual([]);
+    });
+  }
+});
+
 describe('LABEL-27: credits and parties (route by route)', () => {
   const credits = '[orgId]/tracks/[id]/credits/route.ts';
   const decide = '[orgId]/tracks/[id]/credits/[creditId]/route.ts';

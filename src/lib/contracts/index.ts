@@ -22,6 +22,7 @@ import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
 import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers';
 import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
 import { CURSOR_RE } from '@/lib/labelos/activity-feed';
+import { DECISIONS as APPROVAL_DECISIONS, GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
 import { SONG_STAGES } from '@/lib/labelos/song-stage';
 import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
 import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
@@ -1366,6 +1367,27 @@ export const OrgTaskPatchBodySchema = z.object({
   done: z.boolean().optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type OrgTaskPatchBody = z.infer<typeof OrgTaskPatchBodySchema>;
+
+/** The song or release an approval is about. */
+const ApprovalSubjectSchema = z.object({ kind: z.enum(APPROVAL_SUBJECT_KINDS), id: z.string().uuid() }).strict();
+
+/** POST /api/org/[orgId]/approvals: ask ONE member to decide a gate (LABEL-30). */
+export const OrgApprovalRequestBodySchema = z.object({
+  subject: ApprovalSubjectSchema,
+  gate: z.enum(APPROVAL_GATES),
+  approver_id: z.string().uuid(),
+  note: z.string().max(APPROVAL_NOTE_MAX).nullable().optional(),
+}).strict();
+export type OrgApprovalRequestBody = z.infer<typeof OrgApprovalRequestBodySchema>;
+
+/** POST /api/org/[orgId]/approvals/decide: Approved, or Changes requested with a note. */
+export const OrgApprovalDecideBodySchema = z.object({
+  subject: ApprovalSubjectSchema,
+  gate: z.enum(APPROVAL_GATES),
+  decision: z.enum(APPROVAL_DECISIONS),
+  note: z.string().max(APPROVAL_NOTE_MAX).nullable().optional(),
+}).strict();
+export type OrgApprovalDecideBody = z.infer<typeof OrgApprovalDecideBodySchema>;
 
 /** POST /api/org/[orgId]/releases/[releaseId]/items — appended at the end. No master = the song itself. */
 export const OrgReleaseItemCreateBodySchema = z.object({
