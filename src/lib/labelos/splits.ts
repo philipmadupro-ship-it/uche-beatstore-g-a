@@ -293,6 +293,8 @@ export type SplitLineRow = {
   role: string;
   /** numeric(7,4): PostgREST answers a JSON number (or a string, for some clients). */
   share: number | string;
+  /** The order the sheet was written in. */
+  position?: number;
   signed_at: string | null;
   signature_method: string | null;
   signature_asset_id: string | null;

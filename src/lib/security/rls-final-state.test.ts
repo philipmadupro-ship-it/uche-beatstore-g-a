@@ -100,8 +100,14 @@ function labelOsTables(): string[] {
     'song_reviews',
     // 151_labelos_tasks_notifications.sql (LABEL-23)
     'tasks',
+    // 152_labelos_creative_direction.sql (LABEL-26)
+    'artist_direction',
+    'artist_references',
     // 153_labelos_parties_credits.sql (LABEL-27)
     'parties',
+    // 154_labelos_artist_label_connection.sql (LABEL-41)
+    'org_connections',
+    'connection_projects',
     // 155_labelos_split_sheets.sql (LABEL-28)
     'split_sheets',
     'split_lines',

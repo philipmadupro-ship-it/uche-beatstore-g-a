@@ -26,6 +26,17 @@ import { SONG_STAGES } from '@/lib/labelos/song-stage';
 import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
 import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
 import { SPLIT_KINDS, SPLIT_ROLES } from '@/lib/labelos/splits';
+import {
+  DIRECTION_KEYWORDS_MAX,
+  DIRECTION_KEYWORD_MAX,
+  DIRECTION_TEXT_MAX,
+  REFERENCE_KINDS,
+  REFERENCE_NOTE_MAX,
+  REFERENCE_TITLE_MAX,
+  REFERENCE_URL_MAX,
+  REFERENCE_VISIBILITIES,
+  safeReferenceUrl,
+} from '@/lib/labelos/direction';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -510,17 +521,6 @@ export const StemStartBodySchema = z.object({
 });
 export type StemStartBody = z.infer<typeof StemStartBodySchema>;
 
-// ── Invites ──────────────────────────────────────────────────────────────
-// POST /api/invite — team invite. Role mirrors the settings UI's options.
-export const INVITE_ROLES = ['admin', 'collaborator'] as const;
-export type InviteRole = (typeof INVITE_ROLES)[number];
-
-export const InviteCreateBodySchema = z.object({
-  email: z.string().email().max(200),
-  role: z.enum(INVITE_ROLES),
-}).strict();
-export type InviteCreateBody = z.infer<typeof InviteCreateBodySchema>;
-
 // ── Share links ──────────────────────────────────────────────────────────
 // POST /api/share — legacy track/project share-link creation.
 export const ShareCreateBodySchema = z.object({
@@ -909,6 +909,16 @@ export const OrgPatchBodySchema = z.object({
   name: z.string().trim().min(1, 'Name the organization').max(80),
 }).strict();
 export type OrgPatchBody = z.infer<typeof OrgPatchBodySchema>;
+
+/**
+ * DELETE /api/org/[orgId] (LABEL-39). The owner types the organization's
+ * name; whether it matches is `confirmationMatches` (lib/labelos/org-lifecycle),
+ * checked by the route against the stored name, not here.
+ */
+export const OrgDeleteBodySchema = z.object({
+  confirmName: z.string().max(200),
+}).strict();
+export type OrgDeleteBody = z.infer<typeof OrgDeleteBodySchema>;
 
 /**
  * PATCH /api/org/[orgId]/members. Which roles, functions, scopes and
@@ -1370,6 +1380,54 @@ export const OrgTaskCreateBodySchema = z.object({
 }).strict();
 export type OrgTaskCreateBody = z.infer<typeof OrgTaskCreateBodySchema>;
 
+/** PUT /api/org/[orgId]/artists/[contactId]/direction (LABEL-26): the whole document; an empty string clears a field. */
+const DIRECTION_TEXT = z.string().max(DIRECTION_TEXT_MAX);
+export const OrgDirectionPutBodySchema = z.object({
+  direction: z.object({
+    sound: DIRECTION_TEXT.optional(),
+    lyrics: DIRECTION_TEXT.optional(),
+    visual: DIRECTION_TEXT.optional(),
+    influences: DIRECTION_TEXT.optional(),
+    avoid: DIRECTION_TEXT.optional(),
+    next: DIRECTION_TEXT.optional(),
+    keywords: z.array(z.string().max(DIRECTION_KEYWORD_MAX)).max(DIRECTION_KEYWORDS_MAX).optional(),
+  }).strict(),
+}).strict();
+export type OrgDirectionPutBody = z.infer<typeof OrgDirectionPutBodySchema>;
+
+/** POST /api/org/[orgId]/artists/[contactId]/references: exactly the pointer the kind needs. */
+const REFERENCE_TITLE = z.string().trim().min(1).max(REFERENCE_TITLE_MAX);
+const REFERENCE_NOTE = z.string().trim().min(1).max(REFERENCE_NOTE_MAX);
+export const OrgReferenceCreateBodySchema = z.object({
+  kind: z.enum(REFERENCE_KINDS),
+  title: REFERENCE_TITLE.optional(),
+  note: REFERENCE_NOTE.nullable().optional(),
+  url: z.string().max(REFERENCE_URL_MAX).optional(),
+  track_id: z.string().uuid().optional(),
+  asset_id: z.string().uuid().optional(),
+  visibility: z.enum(REFERENCE_VISIBILITIES).optional(),
+}).strict().superRefine((b, ctx) => {
+  const need = (ok: boolean, path: string, message: string) => { if (!ok) ctx.addIssue({ code: 'custom', path: [path], message }); };
+  const only = (...names: Array<'url' | 'track_id' | 'asset_id'>) => {
+    for (const n of ['url', 'track_id', 'asset_id'] as const) if (!names.includes(n)) need(b[n] === undefined, n, `Not used by a ${b.kind} reference`);
+  };
+  if (b.kind === 'track') { need(!!b.track_id, 'track_id', 'Pick a track'); only('track_id'); }
+  if (b.kind === 'file') { need(!!b.asset_id, 'asset_id', 'Pick a file'); only('asset_id'); }
+  if (b.kind === 'link') { need(safeReferenceUrl(b.url) !== null, 'url', 'A link must be an https address'); need(!!b.title, 'title', 'Name the link'); only('url'); }
+  if (b.kind === 'note') { need(!!b.note, 'note', 'Write the note'); need(!!b.title, 'title', 'Give the note a title'); only(); }
+});
+export type OrgReferenceCreateBody = z.infer<typeof OrgReferenceCreateBodySchema>;
+
+/** PATCH …/references/[referenceId]: omitted keeps; the pointer of a reference never changes. */
+export const OrgReferencePatchBodySchema = z.object({
+  title: REFERENCE_TITLE.optional(),
+  note: REFERENCE_NOTE.nullable().optional(),
+  url: z.string().max(REFERENCE_URL_MAX).optional(),
+  visibility: z.enum(REFERENCE_VISIBILITIES).optional(),
+  position: z.number().int().min(0).max(100000).optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgReferencePatchBody = z.infer<typeof OrgReferencePatchBodySchema>;
+
 /** PATCH /api/org/[orgId]/tasks/[taskId]: omitted keeps, `null` clears; `done` ticks it off or reopens it. */
 export const OrgTaskPatchBodySchema = z.object({
   title: TASK_TITLE.optional(),
@@ -1402,3 +1460,49 @@ export const OrgReleaseItemPatchBodySchema = z.object({
   explicit: z.boolean().optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type OrgReleaseItemPatchBody = z.infer<typeof OrgReleaseItemPatchBodySchema>;
+
+// ── Artist ↔ label connection (LABEL-41) ──────────────────────────────
+
+/**
+ * POST /api/org/[orgId]/connections — ask the other side to connect: a label
+ * names an ARTIST org by `slug` or by the `email` of one of its owners /
+ * admins; an artist org names a LABEL the same way. Exactly one of the two.
+ * A label may name one of its own roster contacts (`contact_id`) to stand for
+ * the artist; without it one is created when the request is accepted.
+ */
+export const OrgConnectionCreateBodySchema = z.object({
+  slug: z.string().trim().toLowerCase().min(1).max(80).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Not a valid organization slug').optional(),
+  email: z.string().trim().toLowerCase().email().max(254).optional(),
+  contact_id: z.string().uuid().optional(),
+}).strict().refine((b) => (b.slug !== undefined) !== (b.email !== undefined), { message: 'Give either a slug or an email' });
+export type OrgConnectionCreateBody = z.infer<typeof OrgConnectionCreateBodySchema>;
+
+/**
+ * PATCH /api/org/[orgId]/connections/[connectionId] — ARTIST SIDE ONLY: what
+ * is shared. `project_ids` replaces the selected list (they must be projects
+ * of the artist org); `share_mode` `all` shares the whole catalogue;
+ * `allow_copies` lets the label copy a recording into its own org (D6).
+ */
+export const OrgConnectionShareBodySchema = z.object({
+  share_mode: z.enum(['selected', 'all']).optional(),
+  project_ids: z.array(z.string().uuid()).max(500).optional(),
+  allow_copies: z.boolean().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgConnectionShareBody = z.infer<typeof OrgConnectionShareBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/tracks/copy — "Use in a label song" (D6): copy a
+ * recording into THIS (label) org. `source` is a recording in a project a
+ * connected artist org shared (`connection`), or the caller's own producer
+ * recording (`producer`). The copy keeps its provenance and has no live link
+ * to the source.
+ */
+export const OrgTrackCopyBodySchema = z.object({
+  source: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('connection'), track_id: z.string().uuid() }).strict(),
+    z.object({ kind: z.literal('producer'), track_id: z.string().uuid() }).strict(),
+  ]),
+  /** Put the copy in one of the label's own projects (optional). */
+  project_id: z.string().uuid().optional(),
+}).strict();
+export type OrgTrackCopyBody = z.infer<typeof OrgTrackCopyBodySchema>;

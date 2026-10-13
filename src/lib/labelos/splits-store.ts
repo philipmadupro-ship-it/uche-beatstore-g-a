@@ -34,7 +34,7 @@ import {
 
 export const SPLIT_SHEET_COLUMNS =
   'id, track_id, kind, version, status, note, document_asset_id, created_by, created_at, circulated_at, signed_at, superseded_at, superseded_by';
-export const SPLIT_LINE_COLUMNS = 'id, split_sheet_id, party_id, role, share, signed_at, signature_method, signature_asset_id';
+export const SPLIT_LINE_COLUMNS = 'id, split_sheet_id, party_id, role, share, position, signed_at, signature_method, signature_asset_id';
 
 export class SplitsNotReadyError extends Error {
   constructor() {
@@ -71,14 +71,14 @@ export async function readSheet(admin: AdminClient, org: string, trackId: string
   return (res.data as unknown as SplitSheetRow | null) ?? null;
 }
 
-/** The lines of some sheets, grouped by sheet, oldest first (a stable order for the form). */
+/** The lines of some sheets, grouped by sheet, in the order they were written (a stable order for the form). */
 export async function linesOfSheets(admin: AdminClient, org: string, sheetIds: readonly string[]): Promise<Map<string, SplitLineRow[]>> {
   const out = new Map<string, SplitLineRow[]>();
   if (sheetIds.length === 0) return out;
   const res = await admin.from('split_lines').select(`${SPLIT_LINE_COLUMNS}, created_at`).eq('org_id', org).in('split_sheet_id', [...sheetIds]);
   check('split line list', res.error);
   const rows = ((res.data ?? []) as unknown as (SplitLineRow & { created_at?: string })[]).sort(
-    (a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')) || a.id.localeCompare(b.id),
+    (a, b) => (a.position ?? 0) - (b.position ?? 0) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')) || a.id.localeCompare(b.id),
   );
   for (const row of rows) {
     const list = out.get(row.split_sheet_id) ?? [];

@@ -156,6 +156,127 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       event(tables, args, 'project.member_removed', 'member', args.p_user, args.p_payload);
       return ok({ removed: true });
     },
+    // ── 154 (LABEL-41): the artist ↔ label connection, as the SQL does it ──
+    labelos_audit_connection_request: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const orgs = (tables.organizations ??= []);
+      const side = String(args.p_side);
+      const otherKind = side === 'label' ? 'artist' : 'label';
+      const self = orgs.find((o) => o.id === args.p_org && o.kind === side && !o.deleted_at);
+      if (!self) return ok({ error: 'not_found' });
+      // Judged on the asking org alone, before the target is looked up (no existence oracle).
+      if (args.p_contact && (side !== 'label' || !(tables.contacts ?? []).some((c) => c.id === args.p_contact && c.org_id === args.p_org))) {
+        return ok({ error: 'bad_contact' });
+      }
+      const slug = typeof args.p_target_slug === 'string' ? args.p_target_slug.trim().toLowerCase() : '';
+      const email = typeof args.p_target_email === 'string' ? args.p_target_email.trim().toLowerCase() : '';
+      let target: Row | undefined;
+      if (slug) target = orgs.find((o) => o.slug === slug && o.kind === otherKind && !o.deleted_at);
+      else if (email) {
+        const users = (tables.auth_users ??= []);
+        target = orgs.find(
+          (o) =>
+            o.kind === otherKind &&
+            !o.deleted_at &&
+            (tables.org_members ?? []).some(
+              (m) => m.org_id === o.id && ['owner', 'admin'].includes(String(m.role)) && users.some((u) => u.id === m.user_id && String(u.email).toLowerCase() === email),
+            ),
+        );
+      }
+      if (!target) return ok({ error: 'not_found' });
+      const label = side === 'label' ? args.p_org : target.id;
+      const artist = side === 'label' ? target.id : args.p_org;
+      const conns = (tables.org_connections ??= []);
+      const open = conns.find((c) => c.label_org_id === label && c.artist_org_id === artist && ['requested', 'active'].includes(String(c.status)));
+      if (open) return ok({ error: 'pending', id: open.id });
+      const row: Row = {
+        id: randomUUID(),
+        label_org_id: label,
+        artist_org_id: artist,
+        status: 'requested',
+        initiated_by: side,
+        requested_by: args.p_actor,
+        label_contact_id: args.p_contact ?? null,
+        share_mode: 'selected',
+        allow_copies: false,
+        accepted_at: null,
+        ended_at: null,
+        created_at: new Date().toISOString(),
+      };
+      conns.push(row);
+      const payload = { ...(args.p_payload as Row), side, connection_id: row.id };
+      for (const org of [label, artist]) event(tables, { ...args, p_org: org }, 'connection.requested', 'connection', row.id, payload);
+      return ok({ connection: { ...row } });
+    },
+    labelos_audit_connection_accept: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const conn = (tables.org_connections ?? []).find((c) => c.id === args.p_connection);
+      if (!conn || conn.status !== 'requested') return ok({ error: 'not_found' });
+      const accepting = conn.initiated_by === 'label' ? conn.artist_org_id : conn.label_org_id;
+      if (args.p_org !== accepting) return ok({ error: 'not_found' });
+      const contacts = (tables.contacts ??= []);
+      let contactId = conn.label_contact_id as string | null;
+      if (!contactId) {
+        const artistOrg = (tables.organizations ?? []).find((o) => o.id === conn.artist_org_id);
+        contactId = randomUUID();
+        contacts.push({ id: contactId, org_id: conn.label_org_id, user_id: null, name: artistOrg?.name ?? 'Artist', category: 'artist', artist_org_id: null });
+      }
+      const taken = contacts.some((c) => c.org_id === conn.label_org_id && c.artist_org_id === conn.artist_org_id && c.id !== contactId);
+      if (taken) return ok({ error: 'contact_taken' });
+      conn.status = 'active';
+      conn.accepted_at = new Date().toISOString();
+      conn.label_contact_id = contactId;
+      const contact = contacts.find((c) => c.id === contactId);
+      if (contact) contact.artist_org_id = conn.artist_org_id;
+      const payload = { ...(args.p_payload as Row), connection_id: conn.id };
+      for (const org of [conn.label_org_id, conn.artist_org_id]) event(tables, { ...args, p_org: org }, 'connection.accepted', 'connection', conn.id, payload);
+      return ok({ connection: { ...conn } });
+    },
+    labelos_audit_connection_end: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const conn = (tables.org_connections ?? []).find((c) => c.id === args.p_connection);
+      if (!conn || !['requested', 'active'].includes(String(conn.status))) return ok({ error: 'not_found' });
+      const side = args.p_org === conn.label_org_id ? 'label' : args.p_org === conn.artist_org_id ? 'artist' : null;
+      if (!side) return ok({ error: 'not_found' });
+      const was = conn.status;
+      conn.status = was === 'requested' && side !== conn.initiated_by ? 'declined' : 'ended';
+      conn.ended_at = new Date().toISOString();
+      conn.label_contact_id = null;
+      tables.connection_projects = (tables.connection_projects ?? []).filter((r) => r.connection_id !== conn.id);
+      for (const c of tables.contacts ?? []) {
+        if (c.org_id === conn.label_org_id && c.artist_org_id === conn.artist_org_id) c.artist_org_id = null;
+      }
+      const payload = { ...(args.p_payload as Row), connection_id: conn.id, was, outcome: conn.status, by_side: side };
+      for (const org of [conn.label_org_id, conn.artist_org_id]) event(tables, { ...args, p_org: org }, 'connection.ended', 'connection', conn.id, payload);
+      return ok({ connection: { ...conn } });
+    },
+    labelos_audit_connection_share: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const conn = (tables.org_connections ?? []).find((c) => c.id === args.p_connection);
+      if (!conn || !['requested', 'active'].includes(String(conn.status)) || conn.artist_org_id !== args.p_org) return ok({ error: 'not_found' });
+      const ids = args.p_project_ids as string[] | null;
+      if (ids && ids.some((id) => !(tables.projects ?? []).some((p) => p.id === id && p.org_id === args.p_org))) return ok({ error: 'bad_project' });
+      const patch = args.p_patch as Row;
+      const before = (tables.connection_projects ?? []).filter((r) => r.connection_id === conn.id).map((r) => String(r.project_id));
+      const beforeAll = conn.share_mode === 'all';
+      const beforeCopies = conn.allow_copies === true;
+      if (ids) {
+        tables.connection_projects = (tables.connection_projects ?? []).filter((r) => r.connection_id !== conn.id);
+        for (const id of new Set(ids)) tables.connection_projects.push({ connection_id: conn.id, project_id: id, org_id: args.p_org });
+      } else if (beforeAll && patch.share_mode === 'selected') {
+        tables.connection_projects = (tables.connection_projects ?? []).filter((r) => r.connection_id !== conn.id);
+      }
+      if (typeof patch.share_mode === 'string') conn.share_mode = patch.share_mode;
+      if (typeof patch.allow_copies === 'boolean') conn.allow_copies = patch.allow_copies;
+      const after = (tables.connection_projects ?? []).filter((r) => r.connection_id === conn.id).map((r) => String(r.project_id));
+      const afterAll = conn.share_mode === 'all';
+      const widened = (!beforeAll && afterAll) || (!beforeAll && !afterAll && after.some((a) => !before.includes(a))) || (!beforeCopies && conn.allow_copies === true);
+      const narrowed = (beforeAll && !afterAll) || (!beforeAll && !afterAll && before.some((b) => !after.includes(b))) || (beforeCopies && conn.allow_copies !== true);
+      const payload = { ...(args.p_payload as Row), via: 'connection', share_mode: conn.share_mode, projects: after.length, allow_copies: conn.allow_copies };
+      if (narrowed) event(tables, args, 'share.revoked', 'connection', conn.id, payload);
+      if (widened) event(tables, args, 'share.created', 'connection', conn.id, payload);
+      return ok({ connection: { ...conn }, project_ids: after.sort() });
+    },
     // Migration 153 (LABEL-27): confirm / dispute a credit, with its event in the same step.
     labelos_audit_credit_decide: (args, tables) => {
       if (opts.failAudit?.()) return failed();
@@ -205,10 +326,10 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       };
       sheets.push(sheet);
       const lines = (tables.split_lines ??= []);
-      const add = (party_id: unknown, role: unknown, share: unknown) =>
-        lines.push({ id: randomUUID(), split_sheet_id: sheet.id, org_id: args.p_org, track_id: args.p_track, party_id, role, share, signed_at: null, signature_method: null, signature_asset_id: null, signed_by: null, created_at: new Date().toISOString() });
-      if (source) for (const l of lines.filter((x) => x.split_sheet_id === source!.id).map((x) => ({ ...x }))) add(l.party_id, l.role, l.share);
-      else for (const e of (args.p_lines as Row[] | null) ?? []) add(e.party_id, e.role, Number(e.share));
+      const add = (party_id: unknown, role: unknown, share: unknown, position: number) =>
+        lines.push({ id: randomUUID(), split_sheet_id: sheet.id, org_id: args.p_org, track_id: args.p_track, party_id, role, share, position, signed_at: null, signature_method: null, signature_asset_id: null, signed_by: null, created_at: new Date().toISOString() });
+      if (source) for (const l of lines.filter((x) => x.split_sheet_id === source!.id).map((x) => ({ ...x }))) add(l.party_id, l.role, l.share, Number(l.position ?? 0));
+      else ((args.p_lines as Row[] | null) ?? []).forEach((e, i) => add(e.party_id, e.role, Number(e.share), i));
       return ok({ sheet: { ...sheet } });
     },
     labelos_split_save_draft: (args, tables) => {
@@ -217,8 +338,8 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       if (sheet.status !== 'draft') return ok({ error: 'not_draft' });
       if (args.p_set_lines) {
         tables.split_lines = (tables.split_lines ?? []).filter((l) => l.split_sheet_id !== sheet.id);
-        for (const e of (args.p_lines as Row[]) ?? []) {
-          tables.split_lines.push({ id: randomUUID(), split_sheet_id: sheet.id, org_id: sheet.org_id, track_id: sheet.track_id, party_id: e.party_id, role: e.role, share: Number(e.share), signed_at: null, signature_method: null, signature_asset_id: null, signed_by: null, created_at: new Date().toISOString() });
+        for (const [i, e] of ((args.p_lines as Row[]) ?? []).entries()) {
+          tables.split_lines.push({ id: randomUUID(), split_sheet_id: sheet.id, org_id: sheet.org_id, track_id: sheet.track_id, party_id: e.party_id, role: e.role, share: Number(e.share), position: i, signed_at: null, signature_method: null, signature_asset_id: null, signed_by: null, created_at: new Date().toISOString() });
         }
       }
       if (args.p_set_note) sheet.note = args.p_note ?? null;

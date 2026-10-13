@@ -38,6 +38,20 @@
  * request. Never an `org_members` lookup for an external member, never a
  * widening of an org capability: what a role may do is `externalCan`.
  *
+ * Artist ↔ label connection (LABEL-41, D1): a LABEL member may read, and only
+ * read, the music an ARTIST org shared with their label. The helpers at the
+ * bottom (`requireConnectedTrack` / `requireConnectedProject` /
+ * `requireConnectionOfLabel`) are an explicit opt-in per route, never folded
+ * into requireObjectAccess: every other route keeps answering 404 for a row
+ * of another org, so a write route can never be reached through a
+ * connection by accident. They answer for the LABEL org the route names:
+ * live label membership, an ACTIVE connection to the row's org, the row in a
+ * shared project, the member's OWN artist scope on the connection's roster
+ * contact, and `catalog.read` — then the route applies D4 with the member's
+ * own capabilities. Any refusal is 404 (never 403): what the artist org holds
+ * is not theirs to learn. Ending the connection, narrowing the share or
+ * soft-deleting either org takes effect on the next request (read live).
+ *
  * Artist scope (06 §2.5, LABEL-10): a member with `scope = 'artists'` (role
  * `artist` always) sees only the roster contacts in `member_artist_scopes`,
  * read live with the membership. requireObjectAccess answers 404 for an
@@ -59,7 +73,18 @@ import {
 } from '@/lib/labelos/capabilities';
 import { artistScopeFilter, scopeAllowsAnyContact, scopeAllowsContact, toArtistScope, type ArtistScope } from '@/lib/labelos/artist-scope';
 import { orgProjectScopeContacts } from '@/lib/labelos/org-read';
+import {
+  CONNECTED_CAPABILITY,
+  CONNECTION_COLUMNS,
+  connectionReachesAnyProject,
+  connectionReachesProject,
+  labelScopeReaches,
+  toSharedSet,
+  type ConnectionRow,
+} from '@/lib/labelos/connections';
+import { isMissingConnections } from '@/lib/labelos/audit-rpc';
 import { externalMayAny, sortSharedProjects, sharedProjectHref, toMembership, type ExternalMembership, type ProjectMemberRow, type SharedProjectRef } from '@/lib/labelos/project-members';
+import { REAUTH_WINDOW_MINUTES, canRestore, isFreshSignIn, purgeAfter } from '@/lib/labelos/org-lifecycle';
 import { createLogger } from '@/lib/log';
 import { isUUID } from '@/lib/validate';
 
@@ -99,10 +124,21 @@ export type SessionIdentity = { userId: string; email: string | null };
  * than membership. Every other route uses the require* helpers below.
  */
 export async function sessionIdentity(): Promise<SessionIdentity | null> {
+  const session = await readSession();
+  return session ? { userId: session.userId, email: session.email } : null;
+}
+
+type SessionDetail = SessionIdentity & { lastSignInAt: string | null };
+
+async function readSession(): Promise<SessionDetail | null> {
   const cookieClient = await createServerClient();
   const { data: { user } } = await cookieClient.auth.getUser();
   if (!user?.id) return null;
-  return { userId: user.id, email: typeof user.email === 'string' ? user.email : null };
+  return {
+    userId: user.id,
+    email: typeof user.email === 'string' ? user.email : null,
+    lastSignInAt: typeof user.last_sign_in_at === 'string' ? user.last_sign_in_at : null,
+  };
 }
 
 async function sessionUserId(): Promise<string | null> {
@@ -247,6 +283,99 @@ export async function requireOrgCapability(orgId: string, cap: Capability): Prom
   if (!access.ok) return access;
   if (!access.capabilities.has(cap)) return FORBIDDEN();
   return access;
+}
+
+// ── Owner-only lifecycle acts (LABEL-39) ────────────────────────────────
+
+export type OrgOwnerOk = {
+  ok: true;
+  userId: string;
+  email: string | null;
+  admin: AdminClient;
+  org: { id: string; name: string; slug: string; kind: string; deleted_at: string | null };
+};
+export type OrgOwnerResult = OrgOwnerOk | OwnershipFail;
+
+/**
+ * The caller as an OWNER of this org, for the acts only an owner may do:
+ * export, delete, restore (06 §2.1 — "org deletion" is a role, not a
+ * capability). Unlike requireOrgMember it can see a soft-deleted org, because
+ * restoring one is the whole point of the grace period.
+ *
+ *  - `state: 'live'`    the org must not be soft-deleted (export, delete);
+ *    `state: 'deleted'` it must be (restore). Anything else is 404, like an
+ *    org that does not exist: these routes never confirm an org to someone
+ *    who is not its owner.
+ *  - `freshSignIn`: also require a sign-in within REAUTH_WINDOW_MINUTES (a
+ *    fresh magic link). Failing it answers 403 `{ requiresReauth: true }`,
+ *    which the settings page turns into "send me a link".
+ *  - Not an owner (a member, an external project member, a stranger) is 403
+ *    for a live org and 404 for a deleted one.
+ */
+export async function requireOrgOwner(
+  orgId: string,
+  opts: { state: 'live' | 'deleted'; freshSignIn: boolean },
+): Promise<OrgOwnerResult> {
+  if (!isUUID(orgId)) return opts.state === 'deleted' ? NOT_FOUND() : FORBIDDEN();
+  const session = await readSession();
+  if (!session) return NOT_AUTHENTICATED();
+  const refused = () => (opts.state === 'deleted' ? NOT_FOUND() : FORBIDDEN());
+  const admin = createServiceClient();
+  try {
+    const [{ data: member, error: memberErr }, { data: orgRow, error: orgErr }] = await Promise.all([
+      admin.from('org_members').select('role').eq('org_id', orgId).eq('user_id', session.userId).maybeSingle(),
+      admin.from('organizations').select('id, name, slug, kind, deleted_at').eq('id', orgId).maybeSingle(),
+    ]);
+    if (memberErr) throw new Error(memberErr.message);
+    if (orgErr) throw new Error(orgErr.message);
+    const org = orgRow as OrgOwnerOk['org'] | null;
+    if (!org || (member as { role?: string } | null)?.role !== 'owner') return refused();
+    // A live org asked for a deleted-only act (or the reverse) does not exist for this purpose.
+    if ((opts.state === 'live') === (org.deleted_at !== null)) return NOT_FOUND();
+    if (opts.freshSignIn && !isFreshSignIn(session.lastSignInAt)) {
+      return {
+        ok: false,
+        res: NextResponse.json(
+          { error: 'Sign in again to continue', requiresReauth: true, reauthWindowMinutes: REAUTH_WINDOW_MINUTES },
+          { status: 403 },
+        ),
+      };
+    }
+    return { ok: true, userId: session.userId, email: session.email, admin, org };
+  } catch (err) {
+    log.error('owner check failed', { orgId, error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check organization access');
+  }
+}
+
+/**
+ * The soft-deleted org at `/o/<slug>` that the caller OWNS, for the layout to
+ * send them to the restore page instead of a bare 404 (LABEL-39). Null for
+ * everyone else — a member who is not an owner, a stranger, a live org, no
+ * session — so a slug still never reveals that a deleted org exists.
+ */
+export async function ownedDeletedOrgFor(slug: string): Promise<{ id: string } | null> {
+  if (!SLUG_RE.test(slug) || slug.length > 80) return null;
+  const userId = await sessionUserId();
+  if (!userId) return null;
+  const admin = createServiceClient();
+  try {
+    const { data: org, error } = await admin.from('organizations').select('id, deleted_at').eq('slug', slug).maybeSingle();
+    if (error) throw new Error(error.message);
+    const row = org as { id: string; deleted_at: string | null } | null;
+    if (!row || !row.deleted_at) return null;
+    const { data: member, error: memberErr } = await admin
+      .from('org_members')
+      .select('role')
+      .eq('org_id', row.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (memberErr) throw new Error(memberErr.message);
+    return (member as { role?: string } | null)?.role === 'owner' ? { id: row.id } : null;
+  } catch (err) {
+    log.error('deleted org lookup failed', { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  }
 }
 
 // ── Objects ─────────────────────────────────────────────────────────────
@@ -572,6 +701,8 @@ export function memberArtistScopeQuery(admin: AdminClient, ctx: OrgAccessOk, use
 // ── The caller's orgs (LABEL-09) ────────────────────────────────────────
 
 export type MyOrg = { id: string; name: string; slug: string; kind: OrgKind; role: Role };
+/** An org the caller OWNS that is inside its 30-day grace period (LABEL-39): restorable at /restore/<id>. */
+export type PendingDeletion = { id: string; name: string; purgeAfter: string };
 
 type MyOrgRow = {
   role: string;
@@ -592,11 +723,12 @@ async function isProducerUser(admin: AdminClient, userId: string): Promise<boole
  * Every live org the signed-in caller belongs to, for the org switcher
  * (`GET /api/org`). The caller's own memberships — identity, not tenancy —
  * which is why this read lives here and not in the route. A soft-deleted
- * org, an unknown kind or a role the kind does not offer is left out, the
+ * org is not listed (it is `pendingDeletion` for its owner, who can restore
+ * it); an unknown kind or a role the kind does not offer is left out, the
  * same memberships `readMembership` refuses.
  */
 export async function myOrganizations(): Promise<
-  { ok: true; userId: string; isProducer: boolean; orgs: MyOrg[] } | OwnershipFail
+  { ok: true; userId: string; isProducer: boolean; orgs: MyOrg[]; pendingDeletion: PendingDeletion[] } | OwnershipFail
 > {
   const userId = await sessionUserId();
   if (!userId) return NOT_AUTHENTICATED();
@@ -608,16 +740,24 @@ export async function myOrganizations(): Promise<
     ]);
     if (error) throw new Error(error.message);
     const orgs: MyOrg[] = [];
+    const pendingDeletion: PendingDeletion[] = [];
     for (const row of (data ?? []) as MyOrgRow[]) {
       const org = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
-      if (!org || org.deleted_at) continue;
+      if (org?.deleted_at) {
+        // Only an owner can bring it back, and only while the grace period lasts.
+        const due = purgeAfter(org.deleted_at);
+        if (row.role === 'owner' && canRestore(org.deleted_at) && due) pendingDeletion.push({ id: org.id, name: org.name, purgeAfter: due.toISOString() });
+        continue;
+      }
+      if (!org) continue;
       const kind = ORG_KINDS.find((k) => k === org.kind);
       const role = ROLES.find((r) => r === row.role);
       if (!kind || !role || !ROLES_BY_ORG_KIND[kind].includes(role)) continue;
       orgs.push({ id: org.id, name: org.name, slug: org.slug, kind, role });
     }
     orgs.sort((a, b) => a.name.localeCompare(b.name) || a.slug.localeCompare(b.slug));
-    return { ok: true, userId, isProducer, orgs };
+    pendingDeletion.sort((a, b) => a.purgeAfter.localeCompare(b.purgeAfter));
+    return { ok: true, userId, isProducer, orgs, pendingDeletion };
   } catch (err) {
     log.error('org list failed', { error: err instanceof Error ? err.message : String(err) });
     return fail(500, 'Could not list organizations');
@@ -961,3 +1101,176 @@ export async function myExternalProjects(): Promise<
     return fail(500, 'Could not list shared projects');
   }
 }
+
+
+// ── Artist ↔ label connection (LABEL-41) ────────────────────────────────
+
+/**
+ * A LABEL member admitted to music of a connected ARTIST org. `orgId` and the
+ * capabilities are the LABEL's (the route's org, the member's own); `sourceOrgId`
+ * is the artist org whose rows are read. Read access only: callers that write
+ * anything write to the label org (`orgId`) and never to `sourceOrgId`.
+ */
+export type ConnectedAccessOk = OrgAccessOk & { connection: ConnectionRow; sourceOrgId: string };
+export type ConnectedAccessResult = ConnectedAccessOk | OwnershipFail;
+
+async function activeConnection(admin: AdminClient, labelOrgId: string, artistOrgId: string): Promise<{ row: ConnectionRow | null; error: boolean }> {
+  const { data, error } = await admin
+    .from('org_connections')
+    .select(CONNECTION_COLUMNS)
+    .eq('label_org_id', labelOrgId)
+    .eq('artist_org_id', artistOrgId)
+    .eq('status', 'active')
+    .maybeSingle();
+  // Migration 154 not applied: there is no connection, which reads as 404.
+  if (error) return isMissingConnections(error) ? { row: null, error: false } : { row: null, error: true };
+  return { row: (data as ConnectionRow | null) ?? null, error: false };
+}
+
+/** The shared project ids of a connection (only read when share_mode is `selected`). */
+async function sharedProjects(admin: AdminClient, conn: ConnectionRow): Promise<Set<string> | null> {
+  if (conn.share_mode === 'all') return new Set();
+  const { data, error } = await admin.from('connection_projects').select('project_id').eq('connection_id', conn.id);
+  if (error) return null;
+  return toSharedSet(((data ?? []) as { project_id: string }[]).map((r) => r.project_id));
+}
+
+/** Is the artist org live and of kind artist? */
+async function liveArtistOrg(admin: AdminClient, orgId: string): Promise<boolean | null> {
+  const { data, error } = await admin.from('organizations').select('id, kind').eq('id', orgId).is('deleted_at', null).maybeSingle();
+  if (error) return null;
+  return (data as { kind?: string } | null)?.kind === 'artist';
+}
+
+/**
+ * The rule shared by the helpers below. `labelOrgId` is the route's org; the
+ * rows read belong to `sourceOrgId`; `projectIds` are the projects the object
+ * sits in (a project: itself). Null = refuse (404); a thrown Error = 500.
+ */
+async function connectedContext(
+  userId: string,
+  labelOrgId: string,
+  sourceOrgId: string,
+  projectIds: readonly string[],
+  cap: typeof CONNECTED_CAPABILITY,
+): Promise<ConnectedAccessResult> {
+  const access = await memberContext(userId, labelOrgId, NOT_FOUND);
+  if (!access.ok) return access;
+  if (access.orgKind !== 'label' || labelOrgId.toLowerCase() === sourceOrgId.toLowerCase()) return NOT_FOUND();
+  const { admin } = access;
+  const found = await activeConnection(admin, labelOrgId, sourceOrgId);
+  if (found.error) {
+    log.error('connection read failed', { labelOrgId });
+    return fail(500, 'Could not check organization access');
+  }
+  const conn = found.row;
+  if (!conn) return NOT_FOUND();
+  const live = await liveArtistOrg(admin, sourceOrgId);
+  if (live === null) return fail(500, 'Could not check organization access');
+  if (!live) return NOT_FOUND();
+  const shared = await sharedProjects(admin, conn);
+  if (!shared) return fail(500, 'Could not check organization access');
+  // Only projects of the ARTIST org count; the caller names them by id.
+  let inSource: string[] = [];
+  if (projectIds.length > 0) {
+    const { data, error } = await admin.from('projects').select('id').in('id', [...projectIds]).eq('org_id', sourceOrgId);
+    if (error) return fail(500, 'Could not check organization access');
+    inSource = ((data ?? []) as { id: string }[]).map((p) => p.id);
+  }
+  if (!connectionReachesAnyProject(conn, shared, inSource)) return NOT_FOUND();
+  // The member's own artist scope, on the roster contact that stands for this artist.
+  if (!labelScopeReaches(access.artistScope, conn)) return NOT_FOUND();
+  if (!access.capabilities.has(cap)) return NOT_FOUND();
+  return { ...access, connection: conn, sourceOrgId };
+}
+
+/**
+ * A recording of a connected artist org, reached by a member of the route's
+ * LABEL org. 401 without a session; 404 for everything else (a producer
+ * track, another org's, a recording outside the shared projects, an ended or
+ * pending connection, a member out of scope or without `catalog.read`).
+ */
+export async function requireConnectedTrack(opts: { trackId: string; orgId: string; cap: typeof CONNECTED_CAPABILITY }): Promise<ConnectedAccessResult> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  if (!isUUID(opts.trackId) || !isUUID(opts.orgId)) return NOT_FOUND();
+  const admin = createServiceClient();
+  try {
+    const { data, error } = await admin.from('tracks').select('org_id').eq('id', opts.trackId).maybeSingle();
+    if (error) {
+      log.error('track read failed', { trackId: opts.trackId, error: error.message });
+      return fail(500, 'Could not check organization access');
+    }
+    const source = (data as { org_id?: unknown } | null)?.org_id;
+    if (typeof source !== 'string' || !isUUID(source)) return NOT_FOUND();
+    const links = await admin.from('project_tracks').select('project_id').eq('track_id', opts.trackId);
+    if (links.error) return fail(500, 'Could not check organization access');
+    const projectIds = [...new Set(((links.data ?? []) as { project_id: string }[]).map((l) => l.project_id))];
+    return await connectedContext(userId, opts.orgId, source, projectIds, opts.cap);
+  } catch (err) {
+    log.error('connected track access failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check organization access');
+  }
+}
+
+/** A project of a connected artist org, reached by a member of the route's LABEL org. Same refusals as the track. */
+export async function requireConnectedProject(opts: { projectId: string; orgId: string; cap: typeof CONNECTED_CAPABILITY }): Promise<ConnectedAccessResult> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  if (!isUUID(opts.projectId) || !isUUID(opts.orgId)) return NOT_FOUND();
+  const admin = createServiceClient();
+  try {
+    const { data, error } = await admin.from('projects').select('org_id').eq('id', opts.projectId).maybeSingle();
+    if (error) {
+      log.error('project read failed', { projectId: opts.projectId, error: error.message });
+      return fail(500, 'Could not check organization access');
+    }
+    const source = (data as { org_id?: unknown } | null)?.org_id;
+    if (typeof source !== 'string' || !isUUID(source)) return NOT_FOUND();
+    return await connectedContext(userId, opts.orgId, source, [opts.projectId], opts.cap);
+  } catch (err) {
+    log.error('connected project access failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check organization access');
+  }
+}
+
+/**
+ * The route's LABEL org and ONE connection of it, for the routes that list the
+ * shared music (`…/connections/[connectionId]/projects`) or copy from it. The
+ * connection must be active, belong to this label, have a live artist org and
+ * be within the member's own artist scope. Reaches the connection, not a
+ * particular project: the route then lists only what the connection shares.
+ */
+export async function requireConnectionOfLabel(opts: { orgId: string; connectionId: string; cap: typeof CONNECTED_CAPABILITY }): Promise<ConnectedAccessResult> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  if (!isUUID(opts.orgId)) return FORBIDDEN();
+  const access = await memberContext(userId, opts.orgId, FORBIDDEN);
+  if (!access.ok) return access;
+  if (!isUUID(opts.connectionId) || access.orgKind !== 'label') return NOT_FOUND();
+  const { admin } = access;
+  try {
+    const { data, error } = await admin
+      .from('org_connections')
+      .select(CONNECTION_COLUMNS)
+      .eq('id', opts.connectionId)
+      .eq('label_org_id', opts.orgId)
+      .eq('status', 'active')
+      .maybeSingle();
+    if (error) return isMissingConnections(error) ? NOT_FOUND() : fail(500, 'Could not check organization access');
+    const conn = data as ConnectionRow | null;
+    if (!conn) return NOT_FOUND();
+    const live = await liveArtistOrg(admin, conn.artist_org_id);
+    if (live === null) return fail(500, 'Could not check organization access');
+    if (!live) return NOT_FOUND();
+    if (!labelScopeReaches(access.artistScope, conn)) return NOT_FOUND();
+    if (!access.capabilities.has(opts.cap)) return NOT_FOUND();
+    return { ...access, connection: conn, sourceOrgId: conn.artist_org_id };
+  } catch (err) {
+    log.error('connection access failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check organization access');
+  }
+}
+
+// Re-exported so a route that lists a connection's shared projects asks the one rule.
+export { connectionReachesProject };
