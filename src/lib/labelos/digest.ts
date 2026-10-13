@@ -434,6 +434,7 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'release.updated': { one: 'updated a release', many: 'updated {n} releases' },
   'release.deleted': { one: 'deleted a release', many: 'deleted {n} releases' },
   'release.delivered': { one: 'delivered a release', many: 'delivered {n} releases' },
+  'release.legal_pack_exported': { one: 'exported a legal pack', many: 'exported {n} legal packs' },
   'connection.requested': { one: 'asked to connect', many: 'asked to connect {n} times' },
   'connection.accepted': { one: 'accepted a connection', many: 'accepted {n} connections' },
   'connection.ended': { one: 'ended a connection', many: 'ended {n} connections' },

@@ -21,6 +21,14 @@
  * that inserts the row AND its `approval.requested` event in one transaction.
  * The person asked gets a direct-ask notification (lib/labelos/notify), best
  * effort, after the row exists.
+ *
+ * "Send to legal" (LABEL-31, 09 §3.3): `with_task: true` also gives the person
+ * asked a task on the subject ("Legal review: <title>"), in the same request.
+ * It needs `tasks.write` (403 before anything is written). The task is made
+ * after the request exists, best effort like every event: if it fails the
+ * request stands and `task` comes back null. It sends NO second notification
+ * — the approval request already told that one person — so nobody else hears
+ * of it and nobody hears twice.
  */
 import { NextRequest } from 'next/server';
 import { objectAccessFor, requireOrgMember } from '@/lib/auth/org-access';
@@ -29,7 +37,7 @@ import { readBody } from '@/lib/validate';
 import { OrgApprovalRequestBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { gateCapability, currentDecision, planRequest } from '@/lib/labelos/approvals';
+import { GATE_LABEL, gateCapability, currentDecision, planRequest } from '@/lib/labelos/approvals';
 import { ApprovalsNotReadyError, approvalContext, currentSnapshot, isMissingApprovalsSchema, legalGateReadiness, listApprovals, readReleaseFacts } from '@/lib/labelos/approvals-store';
 import { actorOf, gateStates, json, resolveSubject, subjectOfQuery } from '@/lib/labelos/approvals-route';
 import { APPROVALS_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
@@ -37,7 +45,9 @@ import { CreditsNotReadyError } from '@/lib/labelos/credits-store';
 import { LegalReadinessNotReadyError } from '@/lib/labelos/legal-readiness-store';
 import { notifyDirectAsk } from '@/lib/labelos/notify';
 import { SplitsNotReadyError } from '@/lib/labelos/splits-store';
-import { askerName } from '@/lib/labelos/tasks-store';
+import { TASK_TITLE_MAX } from '@/lib/labelos/tasks';
+import { askerName, insertTask, taskEventSubject } from '@/lib/labelos/tasks-store';
+import { recordEvent } from '@/lib/labelos/activity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -86,6 +96,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { access } = resolved;
     const { admin } = access;
     const org = access.orgId;
+    if (body.with_task && !access.capabilities.has('tasks.write')) return json(403, { error: 'Forbidden' });
 
     const rows = await listApprovals(admin, org, subject);
     const current = currentDecision(rows.filter((r) => r.gate === body.gate));
@@ -143,7 +154,28 @@ export async function POST(req: NextRequest, { params }: Params) {
       data: { approvalId: approval?.id ?? null, gate: body.gate, target: { kind: subject.kind, id: subject.id } },
     });
 
-    return json(201, { schemaReady: true, subject, gates: await gateStates(admin, access, resolved) });
+    // "Send to legal": the task goes to the same person, on the same subject. Best effort.
+    let task: { id: string } | null = null;
+    if (body.with_task) {
+      try {
+        const label = `${GATE_LABEL[body.gate]} review: ${resolved.title ?? (subject.kind === 'song' ? 'a song' : 'a release')}`;
+        const made = await insertTask(admin, {
+          orgId: org,
+          createdBy: access.userId,
+          title: label.slice(0, TASK_TITLE_MAX),
+          notes: body.note?.trim() || null,
+          dueAt: null,
+          assigneeId: approverId,
+          target: { kind: subject.kind, id: subject.id },
+        });
+        task = { id: made.id };
+        await recordEvent(admin, { orgId: org, userId: access.userId }, 'task.created', await taskEventSubject(admin, org, made), { assigned: true, due: false, object: subject.kind });
+      } catch (err) {
+        log.warn('approval task failed', { orgId: org, error: errorMessage(err) });
+      }
+    }
+
+    return json(201, { schemaReady: true, subject, task, gates: await gateStates(admin, access, resolved) });
   } catch (err) {
     if (isNotReady(err)) return json(503, { error: APPROVALS_NOT_READY });
     log.error('approval request failed', { orgId, error: errorMessage(err) });
