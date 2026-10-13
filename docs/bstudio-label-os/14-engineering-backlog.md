@@ -1409,7 +1409,14 @@ Drop the table; flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-21
-**Status:** In Progress (branch label-os/LABEL-22; runs in parallel with LABEL-25, migration 150 reserved)
+**Status:** Done (PR #87, squash 1e32a3d, 2026-10-09; migration 150, not applied — apply at final merge, after 149)
+
+**Orchestrator decisions on #87 (accepted as implemented):**
+- Gate: CI green on the latest commit (build-and-test, e2e, secret-scan); merges cleanly with LABEL-23. Two stray `data/upload-staging/*/_meta.json` artefacts from the base merge were removed and `data/upload-staging/` is now gitignored (it recurred on #88 and #87).
+- Acceptance verified by: portal/share redaction tests and an e2e on the public share endpoint, DB CHECK refusing `internal` on share/portal rows, `db:local:check` 150 (RLS with each person's own JWT), carry-forward pure/route/jsdom/e2e tests, external-members matrix.
+- Fixes a leak: `GET /api/activity` treated `user_id IS NULL` as the producer's own and exposed org project comments/titles to any producer (closes one of the open carried items). Other producer routes with the same pattern (`api/tracks/[id]/similar`, `api/tracks/tags/bulk`, `api/tracks/tags`) remain open.
+- Decisions accepted: commenting = `review.comment` OR `catalog.write`; team-only is a role rule (never role `artist`, never external members); current version = newest `version` link; owner/admin moderate comments on any project recording.
+- Carries: no comments panel on the org song page; guest share-link comments on org projects are not in the org list; no realtime (30 s poll).
 
 ## Objective
 Threaded, region-pinned comments for org members, by extending `project_comments` (`17` R5). **No new `comments` table.**
@@ -1703,7 +1710,7 @@ Drop the table.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-17
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-26; runs in parallel with LABEL-27, migration 152 reserved)
 
 ## Objective
 A per-artist memory of references and direction.
@@ -1749,7 +1756,7 @@ Drop.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-21 (D7: 115 applied on prod)
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-27; runs in parallel with LABEL-26, migration 153 reserved; D7 satisfied — 115 applied on production 2026-09-30)
 
 ## Objective
 Legal-grade credits by extending `track_collaborators` (`17` R8), and rights-holder parties. **No new `credits` table.**
