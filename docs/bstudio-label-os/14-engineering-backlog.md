@@ -2405,6 +2405,11 @@ Existing tests updated; `invite/route.test.ts` removed with the route.
 ## Out of Scope
 Dropping the tables.
 
+## Built / Verification / Not done
+**Built:** `/api/invite` and `/api/team` (with `invite/route.test.ts`) deleted; the Team members and Invite collaborator cards removed from `/settings`; `team_members` / `invites` removed from `local-store.ts` and the e2e store fixture; `TeamRole` / `TeamMember` / `Invite` types and `InviteCreateBodySchema` deleted. `/invite/[token]` is now a static page saying "This invite has expired, ask for a new one" (no token read, no table touched). Tables and `is_team_member()` stay.
+**Verification:** `grep -rnE "api/invite|api/team" src e2e scripts CLAUDE.md AGENTS.md .github` returns nothing; `tsc`, eslint, full `npm test` (430 files, 7059 tests) and `npm run build` with the CI stub env pass. `/api/email` and `/api/share` are untouched.
+**Not done:** dropping the tables (out of scope).
+
 ## Rollback
 Revert.
 

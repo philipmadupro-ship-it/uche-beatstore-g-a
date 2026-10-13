@@ -234,8 +234,8 @@ export function describeGrant(role: Role, functions: readonly OrgFunction[]): st
 }
 
 /**
- * The invitation email. Dark text on the white button: the dormant
- * `/api/invite` email put white on white (R-22), which this replaces.
+ * The invitation email. Dark text on the white button (R-22: the retired
+ * team-invite email put white on white).
  */
 export function buildInvitationEmail(opts: {
   orgName: string;
