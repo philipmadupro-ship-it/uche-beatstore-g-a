@@ -1,7 +1,7 @@
 import {
   Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
   CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
-  Building2, UsersRound, Mic2, Inbox, Scale,
+  Building2, UsersRound, Mic2, Inbox, Disc3, Scale,
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
@@ -128,6 +128,15 @@ function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null
 }
 
 /**
+ * The release hub (LABEL-33, 07 §2.5): the board of every release with its
+ * gates. Label and artist orgs, for a member who can see the catalogue — the
+ * board's own capability — so the entry never points at a page that 404s.
+ */
+function releasesGroup(slug: string): NavGroup {
+  return { key: 'releases', label: 'Releases', icon: Disc3, items: [{ label: 'Releases', href: `/o/${slug}/releases`, icon: Disc3 }] };
+}
+
+/**
  * The rights hub (LABEL-31): the legal queue, for the members who work it —
  * the legal gate or the contracts, plus the catalogue (`canSeeLegalQueue`, the
  * page's own check). Label and artist orgs only. The IA's wider Rights hub
@@ -150,7 +159,7 @@ function rightsGroup(slug: string): NavGroup {
  *   that exist for it: Artists (LABEL-10, catalog.read), then the org's own
  *   pages. The IA's other label hubs (Overview, Releases, A&R, Rights) are
  *   added here by the tasks that build those pages (LABEL-17, 18, 24, 29,
- *   31), each gated on its capability in `caps`; a hub that pointed at a
+ *   31; Releases is LABEL-33's), each gated on its capability in `caps`; a hub that pointed at a
  *   page not yet built would be a dead link.
  * - Anything unknown: no hubs.
  */
@@ -163,6 +172,7 @@ export function navGroupsFor(
   if (!org) return orgKind === 'producer' ? NAV_GROUPS : [];
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
   const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps)] : [];
+  const releases = orgKind !== 'producer' && caps?.has('catalog.read') ? [releasesGroup(org.slug)] : [];
   const rights = orgKind !== 'producer' && caps && canSeeLegalQueue(caps) ? [rightsGroup(org.slug)] : [];
-  return [...producerHubs, ...roster, ...rights, orgGroup(org.slug, orgKind, caps)];
+  return [...producerHubs, ...roster, ...releases, ...rights, orgGroup(org.slug, orgKind, caps)];
 }
