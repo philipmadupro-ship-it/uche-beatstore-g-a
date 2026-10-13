@@ -117,6 +117,8 @@ export const VERBS = [
   'release.metadata_exported',
   'calendar_feed.issued',
   'calendar_feed.revoked',
+  // The legal pack left the building (LABEL-31): who took the contracts and rights data of a release
+  'release.legal_pack_exported',
   // Label ↔ artist connections (LABEL-41)
   'connection.requested',
   'connection.accepted',
@@ -157,6 +159,7 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'release.metadata_exported',
   'calendar_feed.issued',
   'calendar_feed.revoked',
+  'release.legal_pack_exported',
   'connection.requested',
   'connection.accepted',
   'connection.ended',
@@ -257,6 +260,8 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'release.metadata_exported': 'internal',
   'calendar_feed.issued': 'internal',
   'calendar_feed.revoked': 'internal',
+  // Contracts and legal names: the business side only.
+  'release.legal_pack_exported': 'internal',
   'connection.requested': 'internal',
   'connection.accepted': 'internal',
   'connection.ended': 'internal',

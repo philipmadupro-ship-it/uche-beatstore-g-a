@@ -76,6 +76,7 @@ describe('verb vocabulary', () => {
       'release.metadata_exported',
       'calendar_feed.issued',
       'calendar_feed.revoked',
+      'release.legal_pack_exported',
     ] as const) {
       expect(isAuditVerb(v)).toBe(true);
     }
@@ -145,6 +146,7 @@ describe('default visibility (D4, D5, 08 §B4)', () => {
       'split_sheet.circulated',
       'approval.requested',
       'approval.decided',
+      'release.legal_pack_exported',
       'connection.requested',
       'connection.accepted',
       'connection.ended',

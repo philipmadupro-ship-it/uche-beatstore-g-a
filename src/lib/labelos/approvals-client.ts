@@ -19,6 +19,8 @@ export type GateStateView = {
   canDecide: boolean;
   selfApprovalBlocked: boolean;
   canRequest: boolean;
+  /** `tasks.write`: "Send to legal" may also create a task for the person asked. */
+  canTask?: boolean;
   approvers: { userId: string; name: string }[];
 };
 
@@ -44,12 +46,13 @@ async function send<T extends object>(url: string, method: string, body?: unknow
 export const fetchApprovals = (orgId: string, subject: ApprovalSubject) =>
   send<ApprovalsPayload>(`/api/org/${orgId}/approvals?${subject.kind}=${subject.id}`, 'GET');
 
-export const requestApproval = (orgId: string, input: { subject: ApprovalSubject; gate: string; approverId: string; note?: string }) =>
+export const requestApproval = (orgId: string, input: { subject: ApprovalSubject; gate: string; approverId: string; note?: string; withTask?: boolean }) =>
   send<ApprovalsPayload>(`/api/org/${orgId}/approvals`, 'POST', {
     subject: input.subject,
     gate: input.gate,
     approver_id: input.approverId,
     ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+    ...(input.withTask ? { with_task: true } : {}),
   });
 
 export const decideApproval = (orgId: string, input: { subject: ApprovalSubject; gate: string; decision: 'approved' | 'changes_requested'; note?: string }) =>

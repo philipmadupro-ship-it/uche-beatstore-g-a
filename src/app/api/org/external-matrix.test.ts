@@ -359,6 +359,34 @@ describe('LABEL-30: approvals are not an external member\'s', () => {
   }
 });
 
+describe('LABEL-31: the legal queue and the legal pack are not an external member\'s', () => {
+  const routes = [
+    ['[orgId]/legal/queue/route.ts', 'GET', '', undefined],
+    ['[orgId]/releases/[releaseId]/legal-pack/route.ts', 'GET', '', undefined],
+    ['[orgId]/releases/[releaseId]/legal-pack/route.ts', 'GET', '?format=csv', undefined],
+  ] as const;
+
+  it('the routes exist and none is on the external allowlist', () => {
+    for (const [route, method] of routes) {
+      expect(files).toContain(route);
+      expect(externalRouteKeys()).not.toContain(`${route}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: neither the queue nor a pack of a release in their own project reaches anything (403/404), and nothing is written or audited`, async () => {
+      for (const [path, method, query, body] of routes) {
+        const res = await call(path, method, user, { query, body });
+        expect([403, 404], `${method} ${path}${query} answered ${res.status}`).toContain(res.status);
+        expect(res.headers.get('content-type') ?? '').toMatch(/json/);
+        expect(JSON.stringify(await res.json())).not.toMatch(/items|legal-pack|Legal name/);
+      }
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+      expect(db.tables.activity_events.filter((e) => e.verb === 'release.legal_pack_exported')).toEqual([]);
+    });
+  }
+});
+
 describe('LABEL-32: release readiness is not an external member\'s', () => {
   const route = '[orgId]/releases/[releaseId]/readiness/route.ts';
 

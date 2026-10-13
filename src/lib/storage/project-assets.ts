@@ -120,3 +120,20 @@ export async function streamProjectAsset(
   if (object.ContentRange) headers.set('content-range', object.ContentRange);
   return new Response(object.Body.transformToWebStream(), { status: range ? 206 : 200, headers });
 }
+
+/**
+ * A stored project file as bytes to put into an archive (the legal pack,
+ * LABEL-31): the whole object, not a Range response, and never a URL. Null
+ * when the object is gone or the reference is outside the allowed buckets.
+ */
+export async function openProjectAsset(ref: string): Promise<ReadableStream<Uint8Array> | Uint8Array | null> {
+  if (ref.startsWith('local://')) {
+    let file: string;
+    try { file = localPath(ref.slice(8)); } catch { return null; }
+    return fs.existsSync(file) ? new Uint8Array(fs.readFileSync(file)) : null;
+  }
+  const r = parseR2ObjectRef(ref);
+  if (!r || !projectAssetBuckets().includes(r.bucket)) return null;
+  const object = await getStoredObject(ref, null);
+  return object?.Body ? (object.Body.transformToWebStream() as ReadableStream<Uint8Array>) : null;
+}

@@ -1468,6 +1468,8 @@ export const OrgApprovalRequestBodySchema = z.object({
   gate: z.enum(APPROVAL_GATES),
   approver_id: z.string().uuid(),
   note: z.string().max(APPROVAL_NOTE_MAX).nullable().optional(),
+  /** "Send to legal" (LABEL-31): also hand the person asked a task on the subject, in the same action. */
+  with_task: z.boolean().optional(),
 }).strict();
 export type OrgApprovalRequestBody = z.infer<typeof OrgApprovalRequestBodySchema>;
 
