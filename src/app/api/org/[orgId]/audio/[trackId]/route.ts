@@ -41,9 +41,11 @@
  * route's org is the label's; the row's is the artist's. D4 runs with the
  * member's OWN capabilities against the artist org's link rows, so marketing
  * hears finished recordings only, and a member outside the connection's
- * roster artist's scope hears nothing. They never download (`download=1`),
- * never get the WAV or stems through here — copying a recording into the label
- * (D6) is its own, artist-permitted route. Every refusal is 404, so an id in
+ * roster artist's scope hears nothing. They hear the private PREVIEW clip, not
+ * the stored master (a Range stream of the master is a download): `variant=full`
+ * resolves to the preview unless the artist allowed copies
+ * (`connectedAudioSource`), and `download=1`, the WAV and stems are 403 — copying
+ * a recording into the label (D6) is its own, artist-permitted route. Every refusal is 404, so an id in
  * the artist org tells a stranger nothing; ending the connection ends it on
  * the next request. This path is tried only when the ordinary one answered 404.
  *
@@ -68,6 +70,7 @@ import {
   type OrgAudioStemRow,
 } from '@/lib/labelos/org-audio';
 import { AuditEventError, recordEvent } from '@/lib/labelos/activity';
+import { connectedAudioSource } from '@/lib/labelos/connections';
 import { externalAudioAction, externalAudioIsAudited, externalMayAny, membershipsGranting } from '@/lib/labelos/project-members';
 import { countsAsOnRelease } from '@/lib/labelos/releases';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
@@ -183,7 +186,11 @@ async function serve(req: NextRequest, { params }: Params, opts: { head: boolean
     }
 
     const stems = (stemsRes.data ?? []) as OrgAudioStemRow[];
-    const source = orgAudioSource(track, variant, stems);
+    // A connected label member hears the preview clip, never the master — unless the artist allowed copies.
+    const source =
+      actor.kind === 'connected' && (variant.kind === 'full' || variant.kind === 'preview' || variant.kind === 'peaks')
+        ? connectedAudioSource(variant.kind, track, actor.access.connection.allow_copies)
+        : orgAudioSource(track, variant, stems);
     if (!source) return json(404, 'No audio for this variant');
     // Private until released (D8): never stream an org file from the public bucket.
     // "No private bucket" means what storage means by it: R2 not configured.

@@ -340,7 +340,9 @@ ALTER TABLE public.org_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.connection_projects ENABLE ROW LEVEL SECURITY;
 
 -- The connection row is read by the owners / admins (the people who manage
--- it) of EITHER side. Membership is hashed once per statement.
+-- it) of EITHER side, and only one who sees the WHOLE org (scope = 'org'): an
+-- admin limited to some artists must not read connections of artists outside
+-- their scope. Membership is hashed once per statement.
 DROP POLICY IF EXISTS org_connections_manage_read ON public.org_connections;
 CREATE POLICY org_connections_manage_read ON public.org_connections
   FOR SELECT
@@ -348,11 +350,11 @@ CREATE POLICY org_connections_manage_read ON public.org_connections
   USING (
     label_org_id IN (
       SELECT m.org_id FROM public.org_members m
-      WHERE m.user_id = (SELECT auth.uid()) AND m.role IN ('owner', 'admin')
+      WHERE m.user_id = (SELECT auth.uid()) AND m.role IN ('owner', 'admin') AND m.scope = 'org'
     )
     OR artist_org_id IN (
       SELECT m.org_id FROM public.org_members m
-      WHERE m.user_id = (SELECT auth.uid()) AND m.role IN ('owner', 'admin')
+      WHERE m.user_id = (SELECT auth.uid()) AND m.role IN ('owner', 'admin') AND m.scope = 'org'
     )
   );
 
@@ -365,13 +367,17 @@ CREATE POLICY connection_projects_artist_read ON public.connection_projects
   USING (
     org_id IN (
       SELECT m.org_id FROM public.org_members m
-      WHERE m.user_id = (SELECT auth.uid()) AND m.role IN ('owner', 'admin')
+      WHERE m.user_id = (SELECT auth.uid()) AND m.role IN ('owner', 'admin') AND m.scope = 'org'
     )
   );
 
 REVOKE ALL ON public.org_connections FROM anon, authenticated;
 REVOKE ALL ON public.connection_projects FROM anon, authenticated;
-GRANT SELECT ON public.org_connections TO authenticated;
+-- Column-level: each side reads the connection, never the OTHER side's people
+-- (requested_by / accepted_by / ended_by are user ids of whoever acted).
+GRANT SELECT (id, label_org_id, artist_org_id, status, initiated_by, label_contact_id, share_mode,
+              allow_copies, accepted_at, ended_at, ended_side, created_at, updated_at)
+  ON public.org_connections TO authenticated;
 GRANT SELECT ON public.connection_projects TO authenticated;
 
 -- ── 7. Audit functions ──────────────────────────────────────────────────
@@ -464,6 +470,15 @@ BEGIN
     RETURN jsonb_build_object('error', 'not_found');
   END IF;
 
+  -- Judged on the ASKING org alone and BEFORE the target is looked up, so the
+  -- answer cannot reveal whether the target exists (no existence oracle).
+  IF p_contact IS NOT NULL AND (
+    p_side <> 'label'
+    OR NOT EXISTS (SELECT 1 FROM public.contacts c WHERE c.id = p_contact AND c.org_id = p_org)
+  ) THEN
+    RETURN jsonb_build_object('error', 'bad_contact');
+  END IF;
+
   IF nullif(btrim(p_target_slug), '') IS NOT NULL THEN
     SELECT * INTO v_target FROM public.organizations
     WHERE slug = lower(btrim(p_target_slug)) AND kind = v_other_kind AND deleted_at IS NULL;
@@ -485,13 +500,6 @@ BEGIN
 
   v_label  := CASE WHEN p_side = 'label' THEN p_org ELSE v_target.id END;
   v_artist := CASE WHEN p_side = 'label' THEN v_target.id ELSE p_org END;
-
-  IF p_contact IS NOT NULL AND (
-    p_side <> 'label'
-    OR NOT EXISTS (SELECT 1 FROM public.contacts c WHERE c.id = p_contact AND c.org_id = v_label)
-  ) THEN
-    RETURN jsonb_build_object('error', 'bad_contact');
-  END IF;
 
   PERFORM pg_advisory_xact_lock(hashtextextended(v_label::text || ':' || v_artist::text, 0));
 
@@ -629,7 +637,9 @@ BEGIN
   v_new := CASE WHEN v_conn.status = 'requested' AND v_side <> v_conn.initiated_by THEN 'declined' ELSE 'ended' END;
 
   UPDATE public.org_connections
-  SET status = v_new, ended_by = p_actor, ended_at = now(), ended_side = v_side
+  SET status = v_new, ended_by = p_actor, ended_at = now(), ended_side = v_side,
+      -- the roster contact is not held by a finished connection (it can be deleted again)
+      label_contact_id = NULL
   WHERE id = v_conn.id;
   DELETE FROM public.connection_projects WHERE connection_id = v_conn.id;
   UPDATE public.contacts SET artist_org_id = NULL
@@ -654,8 +664,9 @@ GRANT EXECUTE ON FUNCTION public.labelos_audit_connection_end(uuid, uuid, uuid, 
 -- (every id a project of the artist org, else {"error": "bad_project"}).
 -- Allowed while the connection is requested or active, so the artist can
 -- decide before accepting. Recorded as share.created when it widens what the
--- label can reach (or only changes copying), share.revoked when it narrows it,
--- in the ARTIST org (the label org learns nothing it does not read through
+-- label can reach or do (more projects, the whole catalogue, copies ON) and as
+-- share.revoked when it narrows it (fewer projects, copies OFF) — both when it
+-- does both, nothing when nothing changed — in the ARTIST org (the label org learns nothing it does not read through
 -- its own routes). Answers {"connection": <row>, "project_ids": [...]},
 -- {"error": "not_found"} or {"error": "bad_project"}.
 CREATE OR REPLACE FUNCTION public.labelos_audit_connection_share(
@@ -714,6 +725,10 @@ BEGIN
     INSERT INTO public.connection_projects (connection_id, project_id, org_id)
     SELECT v_conn.id, pid, p_org FROM (SELECT DISTINCT unnest(p_project_ids) AS pid) ids
     ON CONFLICT DO NOTHING;
+  ELSIF v_before_all AND v_mode = 'selected' THEN
+    -- Leaving "whole catalogue" without naming projects shares NOTHING: rows left
+    -- over from before it must not come back to life.
+    DELETE FROM public.connection_projects cp WHERE cp.connection_id = v_conn.id;
   END IF;
 
   UPDATE public.org_connections SET share_mode = v_mode, allow_copies = v_copies WHERE id = v_conn.id;
@@ -722,19 +737,31 @@ BEGIN
   FROM public.connection_projects cp WHERE cp.connection_id = v_conn.id;
   v_after_all := v_mode = 'all';
 
+  -- What the label can reach (or copy) now versus before. Turning copies off
+  -- narrows; turning them on widens; an unchanged share records nothing.
   v_widened := (NOT v_before_all AND v_after_all)
-    OR (NOT v_before_all AND NOT v_after_all AND EXISTS (SELECT 1 FROM unnest(v_after_set) a WHERE a <> ALL (v_before_set)));
+    OR (NOT v_before_all AND NOT v_after_all AND EXISTS (SELECT 1 FROM unnest(v_after_set) a WHERE a <> ALL (v_before_set)))
+    OR (NOT v_conn.allow_copies AND v_copies);
   v_narrowed := (v_before_all AND NOT v_after_all)
-    OR (NOT v_before_all AND NOT v_after_all AND EXISTS (SELECT 1 FROM unnest(v_before_set) b WHERE b <> ALL (v_after_set)));
+    OR (NOT v_before_all AND NOT v_after_all AND EXISTS (SELECT 1 FROM unnest(v_before_set) b WHERE b <> ALL (v_after_set)))
+    OR (v_conn.allow_copies AND NOT v_copies);
 
-  PERFORM public.labelos_audit_insert(
-    p_org, p_actor,
-    CASE WHEN v_narrowed AND NOT v_widened THEN 'share.revoked' ELSE 'share.created' END,
-    'connection', v_conn.id,
-    public.labelos_connection_payload(v_conn.id, COALESCE(p_payload, '{}'::jsonb) || jsonb_build_object(
-      'via', 'connection', 'share_mode', v_mode, 'projects', cardinality(v_after_set), 'allow_copies', v_copies
-    ))
-  );
+  IF v_narrowed THEN
+    PERFORM public.labelos_audit_insert(
+      p_org, p_actor, 'share.revoked', 'connection', v_conn.id,
+      public.labelos_connection_payload(v_conn.id, COALESCE(p_payload, '{}'::jsonb) || jsonb_build_object(
+        'via', 'connection', 'share_mode', v_mode, 'projects', cardinality(v_after_set), 'allow_copies', v_copies
+      ))
+    );
+  END IF;
+  IF v_widened THEN
+    PERFORM public.labelos_audit_insert(
+      p_org, p_actor, 'share.created', 'connection', v_conn.id,
+      public.labelos_connection_payload(v_conn.id, COALESCE(p_payload, '{}'::jsonb) || jsonb_build_object(
+        'via', 'connection', 'share_mode', v_mode, 'projects', cardinality(v_after_set), 'allow_copies', v_copies
+      ))
+    );
+  END IF;
 
   RETURN jsonb_build_object('connection', public.labelos_connection_json(v_conn.id), 'project_ids', to_jsonb(v_after_set));
 END;

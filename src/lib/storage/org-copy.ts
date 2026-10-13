@@ -22,12 +22,32 @@ import { deleteStoredObject, parseR2ObjectRef, privateAudioBucket, r2, r2ObjectR
 
 export class CopySourceError extends Error {}
 
-/** Can this stored reference be copied? A private-bucket `r2://` object, or a local `/uploads/` file when R2 is off. */
-export function copyableSource(ref: string | null | undefined, privateBucket: string | null | undefined, r2On: boolean): boolean {
+/** Whose master a copy may come from: an org's own prefix, or the producer's (never an org's). */
+export type CopyOwner = { kind: 'org'; orgId: string } | { kind: 'producer' };
+
+/**
+ * Can this stored reference be copied FOR THIS OWNER? A private-bucket `r2://`
+ * object (or a local `/uploads/` file when R2 is off) that lies under the
+ * owner's own prefix: `orgs/<sourceOrg>/` for an org recording, and, for a
+ * producer's, the producer area (`tracks/…`) and never any `orgs/…` key. A key
+ * outside it is refused even in the private bucket, so a row that points at
+ * someone else's object cannot be used to copy it.
+ */
+export function copyableSource(
+  ref: string | null | undefined,
+  privateBucket: string | null | undefined,
+  r2On: boolean,
+  owner: CopyOwner,
+): boolean {
   if (typeof ref !== 'string' || ref === '') return false;
+  const within = (path: string, orgPrefix: string, producerPrefix: string) =>
+    !path.includes('..') &&
+    (owner.kind === 'org'
+      ? path.toLowerCase().startsWith(`${orgPrefix}${owner.orgId.toLowerCase()}/`)
+      : path.startsWith(producerPrefix) && !path.startsWith(orgPrefix));
   const parsed = /^r2:\/\/([^/]+)\/(.+)$/.exec(ref);
-  if (parsed) return r2On && !!privateBucket && parsed[1] === privateBucket && !parsed[2].includes('..');
-  return !r2On && ref.startsWith('/uploads/') && !ref.includes('..');
+  if (parsed) return r2On && !!privateBucket && parsed[1] === privateBucket && within(parsed[2], 'orgs/', 'tracks/');
+  return !r2On && ref.startsWith('/uploads/') && within(ref.slice('/uploads/'.length), 'orgs/', '');
 }
 
 function extOf(ref: string): string {
@@ -36,10 +56,10 @@ function extOf(ref: string): string {
 }
 
 /** Copy one master into `destOrgId`'s private prefix; returns the new stored reference. */
-export async function copyMasterToOrg(sourceRef: string, destOrgId: string): Promise<string> {
+export async function copyMasterToOrg(sourceRef: string, destOrgId: string, owner: CopyOwner): Promise<string> {
   const r2On = isR2Configured();
   const bucket = r2On ? privateAudioBucket() : null;
-  if (!copyableSource(sourceRef, bucket, r2On)) throw new CopySourceError('That recording cannot be copied');
+  if (!copyableSource(sourceRef, bucket, r2On, owner)) throw new CopySourceError('That recording cannot be copied');
   const ext = extOf(sourceRef);
   const prefix = orgUploadKeyPrefix(destOrgId);
 

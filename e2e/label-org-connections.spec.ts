@@ -89,6 +89,13 @@ function wav(freq: number): Buffer {
 
 const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
 const localFile = (id: string) => `labelos-e2e-conn-${run}-${id}.wav`;
+// An org's files live under its own prefix (the copy route refuses anything else); the preview clip is a
+// different file so a test can tell which one was streamed.
+const masterDir = () => path.join(uploadsDir, 'orgs', ART, 'tracks');
+const previewDir = () => path.join(uploadsDir, 'orgs', ART, 'previews');
+const masterUrl = (id: string) => `/uploads/orgs/${ART}/tracks/${localFile(id)}`;
+const previewUrl = (id: string) => `/uploads/orgs/${ART}/previews/${localFile(id)}`;
+const FREQ: Record<string, number> = {};
 
 type Event = { org_id: string; verb: string; audit: boolean };
 const events = async (request: APIRequestContext, verb: string) =>
@@ -100,7 +107,13 @@ let rosterContactId = '';
 test.beforeAll(async ({ request }) => {
   fs.mkdirSync(uploadsDir, { recursive: true });
   const files = [T_FIN, T_DEMO, T_BEAT, T_HID];
-  files.forEach((t, i) => fs.writeFileSync(path.join(uploadsDir, localFile(t)), wav(220 + i * 55)));
+  fs.mkdirSync(masterDir(), { recursive: true });
+  fs.mkdirSync(previewDir(), { recursive: true });
+  files.forEach((t, i) => {
+    FREQ[t] = 220 + i * 55;
+    fs.writeFileSync(path.join(masterDir(), localFile(t)), wav(FREQ[t]));
+    fs.writeFileSync(path.join(previewDir(), localFile(t)), wav(FREQ[t] + 7));
+  });
 
   await rest(request, 'POST', 'organizations', [
     { id: LAB, name: `Night Shift ${run}`, slug: LAB_SLUG, kind: 'label', created_by: PRODUCER_ID },
@@ -121,7 +134,7 @@ test.beforeAll(async ({ request }) => {
     { id: AP2, org_id: ART, user_id: null, name: `Nova private ${run}` },
   ]);
   const track = (id: string, title: string, extra: Record<string, unknown>) => ({
-    id, org_id: ART, user_id: null, created_by: ARTIST_A_ID, title, bpm: 140, key: 'F', scale: 'minor', audio_url: `/uploads/${localFile(id)}`, ...extra,
+    id, org_id: ART, user_id: null, created_by: ARTIST_A_ID, title, bpm: 140, key: 'F', scale: 'minor', audio_url: masterUrl(id), preview_url: previewUrl(id), ...extra,
   });
   await rest(request, 'POST', 'tracks', [
     track(T_FIN, FIN_TITLE, { type: 'song', song_stage: 'selected' }),
@@ -138,7 +151,7 @@ test.beforeAll(async ({ request }) => {
 });
 
 test.afterAll(async ({ request }) => {
-  for (const t of [T_FIN, T_DEMO, T_BEAT, T_HID]) fs.rmSync(path.join(uploadsDir, localFile(t)), { force: true });
+  fs.rmSync(path.join(uploadsDir, 'orgs', ART), { recursive: true, force: true });
   fs.rmSync(path.join(uploadsDir, 'orgs', LAB), { recursive: true, force: true });
   // Org projects, tracks, members, connections and events go with the orgs (FK cascade).
   await rest(request, 'DELETE', `organizations?id=in.(${LAB},${LAB2},${ART})`);
@@ -214,6 +227,10 @@ test('2 · the artist shares one project; the label A&R hears it, marketing only
     expect(res.status(), `owner ${t}`).toBe(200);
     expect(res.headers()['content-type']).toMatch(/audio/);
   }
+  // Copies are off: what streams is the PREVIEW clip, never the stored master.
+  const heard = await (await audio(lp, LAB, T_FIN)).body();
+  expect(heard.equals(fs.readFileSync(path.join(previewDir(), localFile(T_FIN))))).toBe(true);
+  expect(heard.equals(fs.readFileSync(path.join(masterDir(), localFile(T_FIN))))).toBe(false);
   expect((await audio(lp, LAB, T_HID)).status()).toBe(404); // outside the shared project
   expect((await audio(lp, LAB, T_FIN, '?download=1')).status()).toBe(403); // streams only
   expect((await audio(lp, LAB, T_FIN, '?variant=wav')).status()).toBe(403);
@@ -305,6 +322,9 @@ test('4 · copies are the artist’s to allow; "Use in a label song" keeps prove
   await ap.getByRole('switch', { name: 'Let them copy beats into their label' }).click();
   await expect(ap.getByTestId(`connection-${connectionId}`)).toContainText('may copy beats', { timeout: 30_000 });
 
+  // Now that copies are allowed the master itself is what streams.
+  expect((await (await audio(lp, LAB, T_FIN)).body()).equals(fs.readFileSync(path.join(masterDir(), localFile(T_FIN))))).toBe(true);
+
   await lp.goto(`/o/${LAB_SLUG}/connections/${connectionId}`);
   await expect(lp.getByTestId(`connected-recording-${T_BEAT}`)).toBeVisible({ timeout: 60_000 });
   // A song is not copied (only the beat offers it).
@@ -330,7 +350,7 @@ test('4 · copies are the artist’s to allow; "Use in a label song" keeps prove
   const after = (await rest(lp.request, 'GET', `tracks?select=id,audio_url,title,provenance&id=eq.${T_BEAT}`)) as typeof before;
   expect(after).toEqual(before);
   expect(((await rest(lp.request, 'GET', `tracks?select=id&org_id=eq.${ART}`)) as unknown[]).length).toBe(4);
-  expect(fs.existsSync(path.join(uploadsDir, localFile(T_BEAT)))).toBe(true);
+  expect(fs.existsSync(path.join(masterDir(), localFile(T_BEAT)))).toBe(true);
 
   // Provenance never changes, even for the service role.
   const tamper = await lp.request.fetch(`${REST}/tracks?id=eq.${copy.id}`, {
@@ -340,10 +360,11 @@ test('4 · copies are the artist’s to allow; "Use in a label song" keeps prove
   });
   expect(tamper.ok()).toBe(false);
 
-  // Audit: recorded in the label, not the artist org.
+  // Audit: recorded in the label and in the artist org.
   const copied = (await rest(lp.request, 'GET', `activity_events?select=org_id,verb,audit&verb=eq.recording.copied&org_id=in.(${LAB},${ART})`)) as Event[];
-  expect(copied.map((e) => e.org_id)).toEqual([LAB]);
-  expect(copied[0].audit).toBe(true);
+  // The artist sees that their master was copied: the event is in BOTH feeds.
+  expect(copied.map((e) => e.org_id).sort()).toEqual([LAB, ART].sort());
+  expect(copied.every((e) => e.audit)).toBe(true);
 
   // Marketing cannot copy; a limited member cannot; the artist org cannot.
   const marketing = await as(browser, baseURL!, BUYER_ID, 'buyer@local.test');

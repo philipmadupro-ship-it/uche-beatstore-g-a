@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildProvenance,
+  connectedAudioSource,
   connectedAudioUrl,
   connectedRecordingPlayerTrack,
   connectionReachesAnyProject,
@@ -136,6 +137,24 @@ describe('what can be copied (D6)', () => {
   it('material, not songs', () => {
     for (const t of ['beat', 'instrumental', 'loop', 'topline']) expect(isCopyableType(t), t).toBe(true);
     for (const t of ['song', 'remix', '', null, undefined]) expect(isCopyableType(t), String(t)).toBe(false);
+  });
+});
+
+describe('what a connected member hears (the master only with the artist’s say-so)', () => {
+  const row = { audio_url: 'r2://p/orgs/a/tracks/m.mp3', preview_url: 'r2://p/orgs/a/previews/p.mp3', peaks_url: 'r2://p/orgs/a/peaks/k.json' };
+  it('full and preview are the preview clip while copies are off', () => {
+    expect(connectedAudioSource('full', row, false)).toBe(row.preview_url);
+    expect(connectedAudioSource('preview', row, false)).toBe(row.preview_url);
+    expect(connectedAudioSource('peaks', row, false)).toBe(row.peaks_url);
+  });
+  it('no preview and copies off: nothing, never the master', () => {
+    expect(connectedAudioSource('full', { ...row, preview_url: null }, false)).toBeNull();
+    expect(connectedAudioSource('preview', { ...row, preview_url: ' ' }, false)).toBeNull();
+  });
+  it('full is the master once copies are allowed (preview still the clip)', () => {
+    expect(connectedAudioSource('full', row, true)).toBe(row.audio_url);
+    expect(connectedAudioSource('preview', row, true)).toBe(row.preview_url);
+    expect(connectedAudioSource('full', { ...row, audio_url: null }, true)).toBe(row.preview_url);
   });
 });
 

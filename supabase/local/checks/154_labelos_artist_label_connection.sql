@@ -25,11 +25,13 @@
 \set AM1  '''a1540000-0000-4000-8000-000000000012'''
 \set AO2  '''a1540000-0000-4000-8000-000000000013'''
 \set NOBODY '''a1540000-0000-4000-8000-000000000021'''
+\set SADM '''a1540000-0000-4000-8000-000000000022'''
 \set L    '''b1540000-0000-4000-8000-000000000001'''
 \set L2   '''b1540000-0000-4000-8000-000000000002'''
 \set A1   '''b1540000-0000-4000-8000-000000000011'''
 \set A2   '''b1540000-0000-4000-8000-000000000012'''
 \set LC_OTHER '''c1540000-0000-4000-8000-0000000000c9'''
+\set LC_OTHER_X '''c1540000-0000-4000-8000-0000000000d9'''
 \set AP1  '''d1540000-0000-4000-8000-000000000011'''
 \set AP2  '''d1540000-0000-4000-8000-000000000012'''
 \set BP1  '''d1540000-0000-4000-8000-000000000021'''
@@ -41,7 +43,7 @@ INSERT INTO auth.users (id, email, email_confirmed_at) VALUES
   (:OWN, 'own154@local.test', now()), (:AR, 'ar154@local.test', now()), (:SC, 'sc154@local.test', now()),
   (:MKT, 'mkt154@local.test', now()), (:X2, 'x2154@local.test', now()),
   (:AO1, 'ao1154@local.test', now()), (:AM1, 'am1154@local.test', now()), (:AO2, 'ao2154@local.test', now()),
-  (:NOBODY, 'nobody154@local.test', now());
+  (:NOBODY, 'nobody154@local.test', now()), (:SADM, 'sadm154@local.test', now());
 INSERT INTO public.organizations (id, name, slug, kind, created_by) VALUES
   (:L, 'Label L', 'label-l-154', 'label', :OWN),
   (:L2, 'Label L2', 'label-l2-154', 'label', :X2),
@@ -52,6 +54,7 @@ INSERT INTO public.org_members (org_id, user_id, role, functions, scope) VALUES
   (:L, :AR, 'member', '{a_and_r}', 'org'),
   (:L, :SC, 'member', '{a_and_r}', 'artists'),
   (:L, :MKT, 'member', '{marketing}', 'org'),
+  (:L, :SADM, 'admin', '{}', 'artists'),
   (:L2, :X2, 'owner', '{}', 'org'),
   (:A1, :AO1, 'owner', '{}', 'org'),
   (:A1, :AM1, 'member', '{}', 'org'),
@@ -108,7 +111,13 @@ SELECT public.check_eq('the API roles have SELECT and nothing else on both table
   (SELECT string_agg(table_name || ':' || grantee || ':' || privilege_type, ',' ORDER BY table_name, grantee, privilege_type)
    FROM information_schema.role_table_grants
    WHERE table_schema = 'public' AND table_name IN ('org_connections', 'connection_projects') AND grantee IN ('anon', 'authenticated')),
-  'connection_projects:authenticated:SELECT,org_connections:authenticated:SELECT');
+  'connection_projects:authenticated:SELECT');
+SELECT public.check_eq('org_connections: authenticated has SELECT on columns only, never on the actor columns, and no write',
+  (SELECT string_agg(privilege_type || ':' || column_name, ',' ORDER BY column_name)
+   FROM information_schema.column_privileges
+   WHERE table_schema = 'public' AND table_name = 'org_connections' AND grantee = 'authenticated'
+     AND column_name IN ('requested_by', 'accepted_by', 'ended_by', 'status')),
+  'SELECT:status');
 
 SELECT public.check_raises('an artist org cannot be the label side',
   format($$INSERT INTO public.org_connections (label_org_id, artist_org_id, initiated_by) VALUES (%L, %L, 'label')$$, 'b1540000-0000-4000-8000-000000000011', 'b1540000-0000-4000-8000-000000000012'),
@@ -132,6 +141,11 @@ SELECT public.check_eq('an artist org cannot ask AS a label',
   (public.labelos_audit_connection_request(:A1, :AO1, 'label', 'nova-154', NULL, NULL, '{}'))->>'error', 'not_found');
 SELECT public.check_eq('a contact of another org is refused',
   (public.labelos_audit_connection_request(:A1, :AO1, 'artist', 'label-l-154', NULL, :LC_OTHER, '{}'))->>'error', 'bad_contact');
+SELECT public.check_eq('a bad contact answers the same for an existing target and a missing one (no existence oracle)',
+  ((public.labelos_audit_connection_request(:L, :OWN, 'label', 'nova-154', NULL, :LC_OTHER_X, '{}'))->>'error')
+  || ((public.labelos_audit_connection_request(:L, :OWN, 'label', 'no-such-org', NULL, :LC_OTHER_X, '{}'))->>'error')
+  || ((public.labelos_audit_connection_request(:L, :OWN, 'label', NULL, 'nobody154@local.test', :LC_OTHER_X, '{}'))->>'error'),
+  'bad_contactbad_contactbad_contact');
 SELECT public.check_eq('no event, no row for any refusal',
   (SELECT count(*)::int FROM public.org_connections) + (SELECT count(*)::int FROM public.activity_events WHERE verb LIKE 'connection.%'), 0);
 
@@ -260,6 +274,42 @@ SELECT public.as_user(:AR);
 SELECT public.check_eq('selected again: AP2 is out', public.can_see_via_connection(:AP2), false);
 RESET ROLE;
 
+-- Real verbs, no revived rows.
+SELECT public.check_eq('an unchanged share records nothing',
+  (SELECT 1 FROM (SELECT public.labelos_audit_connection_share(:A1, :AO1, (SELECT id FROM conn), '{}', ARRAY[:AP1]::uuid[], '{}')) q)
+  * 0 + (SELECT count(*)::int FROM public.activity_events WHERE verb IN ('share.created', 'share.revoked') AND org_id = :A1),
+  (SELECT count(*)::int FROM public.activity_events WHERE verb IN ('share.created', 'share.revoked') AND org_id = :A1));
+CREATE TEMP TABLE share_events AS SELECT count(*)::int AS n FROM public.activity_events WHERE verb IN ('share.created', 'share.revoked') AND org_id = :A1;
+SELECT public.labelos_audit_connection_share(:A1, :AO1, (SELECT id FROM conn), '{}', ARRAY[:AP1]::uuid[], '{}');
+SELECT public.check_eq('...again: still nothing new',
+  (SELECT count(*)::int FROM public.activity_events WHERE verb IN ('share.created', 'share.revoked') AND org_id = :A1), (SELECT n FROM share_events));
+SELECT public.labelos_audit_connection_share(:A1, :AO1, (SELECT id FROM conn), '{"allow_copies":false}', NULL, '{}');
+SELECT public.check_eq('turning copies OFF is a revocation',
+  (SELECT verb FROM public.activity_events WHERE org_id = :A1 AND verb IN ('share.created', 'share.revoked') ORDER BY created_at DESC, id DESC LIMIT 1), 'share.revoked');
+SELECT public.labelos_audit_connection_share(:A1, :AO1, (SELECT id FROM conn), '{"allow_copies":true}', NULL, '{}');
+SELECT public.check_eq('turning copies ON widens',
+  (SELECT verb FROM public.activity_events WHERE org_id = :A1 AND verb IN ('share.created', 'share.revoked') ORDER BY created_at DESC, id DESC LIMIT 1), 'share.created');
+SELECT public.labelos_audit_connection_share(:A1, :AO1, (SELECT id FROM conn), '{"share_mode":"all"}', NULL, '{}');
+SELECT public.labelos_audit_connection_share(:A1, :AO1, (SELECT id FROM conn), '{"share_mode":"selected"}', NULL, '{}');
+SELECT public.check_eq('all → selected without ids shares NOTHING (old rows do not come back)',
+  (SELECT count(*)::int FROM public.connection_projects), 0);
+SET ROLE authenticated;
+SELECT public.as_user(:AR);
+SELECT public.check_eq('...so AP1 is unreachable again', public.can_see_via_connection(:AP1), false);
+RESET ROLE;
+SELECT public.labelos_audit_connection_share(:A1, :AO1, (SELECT id FROM conn), '{}', ARRAY[:AP1]::uuid[], '{}');
+
+-- A scoped admin reads no connection with their own JWT; columns of the other side's people are not readable.
+SET ROLE authenticated;
+SELECT public.as_user(:SADM);
+SELECT public.check_eq('an admin limited to some artists reads no connection', public.rows_seen('SELECT 1 FROM public.org_connections'), 0);
+SELECT public.as_user(:OWN);
+SELECT public.check_raises('nobody reads requested_by', 'SELECT requested_by FROM public.org_connections', 'permission denied');
+SELECT public.check_raises('...nor accepted_by', 'SELECT accepted_by FROM public.org_connections', 'permission denied');
+SELECT public.check_raises('...nor ended_by', 'SELECT ended_by FROM public.org_connections', 'permission denied');
+SELECT public.check_eq('...but the connection itself reads', public.rows_seen('SELECT id, status, share_mode FROM public.org_connections'), 1);
+RESET ROLE;
+
 -- ── nothing else of the artist org opens through the connection ─────────
 
 SET ROLE authenticated;
@@ -309,9 +359,9 @@ GRANT EXECUTE ON FUNCTION public.plan_filters(text) TO authenticated;
 SET ROLE authenticated;
 SELECT public.as_user(:OWN);
 SELECT public.check_eq('org_connections plans its membership test as a hashed subplan',
-  public.plan_filters('SELECT * FROM public.org_connections') ~ 'hashed SubPlan', true);
+  public.plan_filters('SELECT id, status FROM public.org_connections') ~ 'hashed SubPlan', true);
 SELECT public.check_eq('...with no per-row SECURITY DEFINER call',
-  public.plan_filters('SELECT * FROM public.org_connections') ~ '(?<!hashed )SubPlan|can_see_|has_org_cap|org_role', false);
+  public.plan_filters('SELECT id, status FROM public.org_connections') ~ '(?<!hashed )SubPlan|can_see_|has_org_cap|org_role', false);
 SELECT public.as_user(:AO1);
 SELECT public.check_eq('connection_projects plans as a hashed subplan too',
   public.plan_filters('SELECT * FROM public.connection_projects') ~ 'hashed SubPlan', true);
@@ -346,6 +396,8 @@ SELECT public.check_eq('either side may end it: the label does',
 SELECT public.check_eq('connection.ended is recorded in both orgs',
   (SELECT count(*)::int FROM public.activity_events WHERE verb = 'connection.ended' AND audit AND subject_id = (SELECT id FROM conn)), 2);
 SELECT public.check_eq('the shared list is gone', (SELECT count(*)::int FROM public.connection_projects), 0);
+SELECT public.check_eq('an ended connection holds no roster contact (the contact can be deleted again)',
+  (SELECT label_contact_id IS NULL FROM public.org_connections WHERE id = (SELECT id FROM conn)), true);
 SELECT public.check_eq('the roster contact stays, and stops pointing at the artist org',
   (SELECT (artist_org_id IS NULL)::text FROM public.contacts WHERE name = 'Nova' AND org_id = :L), 'true');
 SET ROLE authenticated;

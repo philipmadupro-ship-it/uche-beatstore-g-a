@@ -19,6 +19,7 @@
  * copied beat keeps provenance and leaves the source untouched.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { memoryAdmin, type MemoryDb } from '@/lib/labelos/mocks/memory-db';
 import { auditRpcMemory } from '@/lib/labelos/mocks/audit-rpc-memory';
@@ -58,7 +59,7 @@ const C2 = id('6', 2);
 let current: string | null = null;
 let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
-const copies: { from: string; to: string }[] = [];
+const copies: { from: string; to: string; owner: unknown }[] = [];
 const discards: string[] = [];
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -66,16 +67,17 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => mem.client }));
 vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
-vi.mock('@/lib/security/rate-limit', () => ({ rateLimitDurable: async () => true, clientIp: () => '127.0.0.1', rateLimit: () => true }));
+const limit = vi.hoisted(() => ({ ok: true }));
+vi.mock('@/lib/security/rate-limit', () => ({ rateLimitDurable: async () => limit.ok, clientIp: () => '127.0.0.1', rateLimit: () => true }));
 vi.mock('@/lib/upload/processing', () => ({ enqueueUploadProcessingJob: async () => null, processUploadProcessingJobById: async () => undefined }));
 vi.mock('@/lib/storage/org-copy', () => {
   class CopySourceError extends Error {}
   return {
     CopySourceError,
-    copyMasterToOrg: async (from: string, to: string) => {
+    copyMasterToOrg: async (from: string, to: string, owner: unknown) => {
       if (!from.startsWith('r2://priv/')) throw new CopySourceError('That recording cannot be copied');
       const ref = `r2://priv/orgs/${to}/tracks/copy-${copies.length + 1}.mp3`;
-      copies.push({ from, to: ref });
+      copies.push({ from, to: ref, owner });
       return ref;
     },
     discardCopy: async (ref: string) => {
@@ -107,7 +109,7 @@ const member = (org: string, user: string, role: string, functions: string[] = [
 const track = (tid: string, org: string | null, extra: Record<string, unknown> = {}) => ({
   id: tid, org_id: org, user_id: org ? null : LO, title: `T-${tid.slice(-2)}`, type: 'song', song_stage: 'inbox',
   bpm: 140, key: 'F', scale: 'minor', duration_seconds: 120, loudness: -9,
-  audio_url: `r2://priv/${tid.slice(-2)}.mp3`, wav_url: `r2://priv/${tid.slice(-2)}.wav`, preview_url: null, peaks_url: null, ...extra,
+  audio_url: `r2://priv/${tid.slice(-2)}.mp3`, wav_url: `r2://priv/${tid.slice(-2)}.wav`, preview_url: `r2://priv/${tid.slice(-2)}.preview.mp3`, peaks_url: null, ...extra,
 });
 
 function seed(): MemoryDb {
@@ -190,6 +192,7 @@ beforeEach(() => {
   current = null;
   copies.length = 0;
   discards.length = 0;
+  limit.ok = true;
   db = seed();
   mem = memoryAdmin(db);
 });
@@ -286,6 +289,18 @@ describe('requesting and accepting', () => {
     expect(db.tables.org_connections).toHaveLength(0);
   });
 
+  it('a bad contact_id answers the same whether or not the target org exists (no existence oracle)', async () => {
+    const ghost = randomUUID();
+    const existing = await call('connections', 'POST', LO, { orgId: LAB }, { body: { slug: 'nova', contact_id: ghost } });
+    const missing = await call('connections', 'POST', LO, { orgId: LAB }, { body: { slug: 'nobody', contact_id: ghost } });
+    const byEmail = await call('connections', 'POST', LO, { orgId: LAB }, { body: { email: 'ghost@local.test', contact_id: ghost } });
+    expect([existing.status, missing.status, byEmail.status]).toEqual([400, 400, 400]);
+    expect(await existing.json()).toEqual(await missing.json());
+    // …and without a contact the two read as 202 for each other too.
+    expect((await call('connections', 'POST', LO, { orgId: LAB }, { body: { slug: 'nobody' } })).status).toBe(202);
+    expect(db.tables.org_connections).toHaveLength(0);
+  });
+
   it('slug XOR email, strictly', async () => {
     expect((await call('connections', 'POST', LO, { orgId: LAB }, { body: {} })).status).toBe(400);
     expect((await call('connections', 'POST', LO, { orgId: LAB }, { body: { slug: 'nova', email: 'a@b.co' } })).status).toBe(400);
@@ -334,6 +349,24 @@ describe('what is shared is the ARTIST side’s', () => {
     expect((await call('connection', 'PATCH', LO, { orgId: LAB, connectionId: C1 }, { body: { share_mode: 'all' } })).status).toBe(404);
     expect((await call('connection', 'PATCH', AR, { orgId: LAB, connectionId: C1 }, { body: { share_mode: 'all' } })).status).toBe(403);
     expect(db.tables.org_connections[0].share_mode).toBe('selected');
+  });
+
+  it('records the REAL verb: copies off is a revocation, copies on a widening, an unchanged share nothing, all → selected shares nothing', async () => {
+    const verbs = () => db.tables.activity_events.filter((e) => e.org_id === ART && ['share.created', 'share.revoked'].includes(String(e.verb))).map((e) => e.verb);
+    const patch = (body: Record<string, unknown>) => call('connection', 'PATCH', AO, { orgId: ART, connectionId: C1 }, { body });
+    await patch({ project_ids: [AP1] }); // unchanged
+    expect(verbs()).toEqual([]);
+    await patch({ allow_copies: true });
+    expect(verbs()).toEqual(['share.created']);
+    await patch({ allow_copies: false });
+    expect(verbs()).toEqual(['share.created', 'share.revoked']);
+    await patch({ allow_copies: false });
+    expect(verbs()).toHaveLength(2); // still unchanged
+    await patch({ share_mode: 'all' });
+    await patch({ share_mode: 'selected' }); // no ids: nothing is shared, old rows do not come back
+    expect(db.tables.connection_projects).toEqual([]);
+    expect((await audio(AR, LAB, T_FIN)).status).toBe(404);
+    expect(verbs().at(-1)).toBe('share.revoked');
   });
 
   it('only projects of the artist org can be shared (another org’s, a label’s)', async () => {
@@ -389,6 +422,30 @@ describe('a connected label member', () => {
     expect(await (await audio(AR, LAB, T_DEMO)).text()).toContain('BYTES:');
   });
 
+  it('streams the PREVIEW clip, never the stored master, while the artist has not allowed copies', async () => {
+    for (const q of ['', '?variant=full', '?variant=preview']) {
+      const body = await (await audio(AR, LAB, T_FIN, q)).text();
+      expect(body, q).toContain('01.preview.mp3');
+      expect(body, q).not.toMatch(/BYTES:01\.mp3/);
+    }
+    // A Range request cannot reach the master either.
+    const ranged = await call('audio', 'GET', AR, { orgId: LAB, trackId: T_FIN }, { query: '?variant=full' });
+    expect(await ranged.text()).not.toMatch(/BYTES:01\.mp3/);
+  });
+
+  it('with no preview to play and copies off, there is nothing to stream (404), not the master', async () => {
+    db.tables.tracks.find((t) => t.id === T_FIN)!.preview_url = null;
+    expect((await audio(AR, LAB, T_FIN)).status).toBe(404);
+    expect((await audio(AR, LAB, T_FIN, '?variant=preview')).status).toBe(404);
+  });
+
+  it('the master streams only once the artist allowed copies', async () => {
+    db.tables.org_connections[0].allow_copies = true;
+    expect(await (await audio(AR, LAB, T_FIN)).text()).toMatch(/BYTES:01\.mp3/);
+    db.tables.org_connections[0].allow_copies = false;
+    expect(await (await audio(AR, LAB, T_FIN)).text()).not.toMatch(/BYTES:01\.mp3/);
+  });
+
   it('marketing hears finished recordings only (D4, their own capabilities)', async () => {
     expect((await audio(MK, LAB, T_FIN)).status).toBe(200);
     expect((await audio(MK, LAB, T_DEMO)).status).toBe(403);
@@ -421,7 +478,7 @@ describe('a connected label member', () => {
     expect((await audio(AR, LAB, T_FIN, '?download=1')).status).toBe(403);
     expect((await audio(AR, LAB, T_FIN, '?variant=wav')).status).toBe(403);
     expect((await audio(AR, LAB, T_FIN, '?variant=stem:vocals')).status).toBe(403);
-    expect((await audio(AR, LAB, T_FIN, '?variant=preview')).status).toBe(404); // none exists, and not a leak of another file
+    expect((await audio(AR, LAB, T_FIN, '?variant=preview')).status).toBe(200); // the preview clip is what they hear
   });
 
   it('the artist org’s own people and external members keep their own paths, and cross nothing', async () => {
@@ -504,6 +561,7 @@ describe('ending a connection', () => {
     expect(db.tables.org_connections[0].status).toBe('ended');
     expect(db.tables.connection_projects).toHaveLength(0);
     expect(db.tables.contacts.find((c) => c.id === LC)!.artist_org_id).toBeNull();
+    expect(db.tables.org_connections[0].label_contact_id).toBeNull(); // a finished connection holds no roster contact
     expect(events('connection.ended').map((e) => e.org_id).sort()).toEqual([LAB, ART].sort());
 
     expect((await audio(AR, LAB, T_FIN)).status).toBe(404);
@@ -586,7 +644,11 @@ describe('"Use in a label song" copies, with provenance', () => {
     expect(JSON.stringify(track)).not.toContain('r2://');
     // Audit: recorded in the LABEL org only.
     expect(events('recording.copied', LAB)).toHaveLength(1);
-    expect(events('recording.copied', ART)).toHaveLength(0);
+    // …and in the ARTIST org's feed: the artist must see that their master was copied.
+    expect(events('recording.copied', ART)).toHaveLength(1);
+    expect(events('recording.copied', ART)[0]).toMatchObject({ visibility: 'internal', audit: true });
+    // The master came from the artist org's own prefix.
+    expect(copies[0].owner).toEqual({ kind: 'org', orgId: ART });
   });
 
   it('only what the member may hear and write: marketing (no catalog.write), a demo they cannot hear, a song, an unshared track', async () => {
@@ -600,6 +662,19 @@ describe('"Use in a label song" copies, with provenance', () => {
     expect((await call('copy', 'POST', AO, { orgId: ART }, { body: copyBody(T_BEAT) })).status).toBe(403); // an artist org copies nothing
     expect((await call('copy', 'POST', null, { orgId: LAB }, { body: copyBody(T_BEAT) })).status).toBe(401);
     expect(copies).toHaveLength(0);
+  });
+
+  it('a person gets a small copy budget (429 once it is spent) and nothing is copied', async () => {
+    connectC1({ allow_copies: true });
+    limit.ok = false;
+    const res = await call('copy', 'POST', LO, { orgId: LAB }, { body: copyBody(T_BEAT) });
+    expect(res.status).toBe(429);
+    expect(copies).toHaveLength(0);
+  });
+
+  it('a producer copy names the producer’s own area as the source owner', async () => {
+    await call('copy', 'POST', LO, { orgId: LAB }, { body: { source: { kind: 'producer', track_id: T_PROD } } });
+    expect(copies[0].owner).toEqual({ kind: 'producer' });
   });
 
   it('a destination project must be a label project the member may write', async () => {

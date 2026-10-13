@@ -141,7 +141,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       if (deleteErr.code === '23503') {
         // LABEL-41: the roster contact of a connection (org_connections.label_contact_id) is not removed from under it.
         if (/org_connections/.test(deleteErr.message ?? '')) {
-          return NextResponse.json({ error: 'This artist is connected to an artist organization. End the connection first.' }, { status: 409 });
+          return NextResponse.json({ error: 'This artist has an open connection with an artist organization (connected or requested). End or withdraw it first.' }, { status: 409 });
         }
         return NextResponse.json({ error: 'This contact is the artist of a release. Delete the release first.' }, { status: 409 });
       }

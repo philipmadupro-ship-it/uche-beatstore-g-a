@@ -22,7 +22,9 @@
  * No live cross-org reference: the source is read, never written, and nothing
  * on the copy follows it afterwards. The source is unchanged (its row, its
  * files, its links). `recording.copied` is an audit event, recorded BEFORE the
- * response; if it cannot be written the copy is removed again.
+ * response in the label org and, for a connection source, in the ARTIST org's
+ * feed too (the artist must see their master was copied); if it cannot be
+ * written the copy is removed again. 30 copies an hour per person.
  * The copy's preview and peaks are made by the normal private processing job.
  */
 import { NextRequest, NextResponse, after } from 'next/server';
@@ -35,7 +37,8 @@ import { orgAudioAllowed } from '@/lib/labelos/org-audio';
 import { addTrackToOrgProjects } from '@/lib/labelos/inbox-project-store';
 import { orgTrackFacts } from '@/lib/labelos/org-workspace-store';
 import { createLogger } from '@/lib/log';
-import { CopySourceError, copyMasterToOrg, discardCopy } from '@/lib/storage/org-copy';
+import { CopySourceError, copyMasterToOrg, discardCopy, type CopyOwner } from '@/lib/storage/org-copy';
+import { rateLimitDurable } from '@/lib/security/rate-limit';
 import { readBody } from '@/lib/validate';
 
 export const runtime = 'nodejs';
@@ -72,6 +75,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!parsed.ok) return parsed.res;
   const { source, project_id: projectId } = parsed.data;
   const { admin } = access;
+  // A copy moves a whole master: a small durable budget per person.
+  if (!(await rateLimitDurable(`org-copy:${access.userId}`, 30, 60 * 60 * 1000))) {
+    return json(429, { error: 'Too many copies. Try again later.' });
+  }
 
   let sourceOrgId: string | null = null;
   let row: SourceRow | null = null;
@@ -116,6 +123,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   if (!row.audio_url) return json(409, { error: 'That recording has no audio to copy' });
 
+  // Whose files these are: the connected artist org's own prefix, or the producer's own area.
+  const owner: CopyOwner = source.kind === 'connection' && sourceOrgId ? { kind: 'org', orgId: sourceOrgId } : { kind: 'producer' };
   const copied: string[] = [];
   let trackId: string | null = null;
   const rollback = async () => {
@@ -131,11 +140,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   };
 
   try {
-    const audioUrl = await copyMasterToOrg(row.audio_url, access.orgId);
+    const audioUrl = await copyMasterToOrg(row.audio_url, access.orgId, owner);
     copied.push(audioUrl);
     let wavUrl: string | null = null;
     if (row.wav_url) {
-      wavUrl = await copyMasterToOrg(row.wav_url, access.orgId).catch((err) => {
+      wavUrl = await copyMasterToOrg(row.wav_url, access.orgId, owner).catch((err) => {
         // A WAV that cannot be copied (public URL, missing) is left out: the copy plays from its master.
         if (err instanceof CopySourceError) return null;
         throw err;
@@ -177,6 +186,18 @@ export async function POST(req: NextRequest, { params }: Params) {
       { type: 'track', id: trackId, projectId: projectId ?? null },
       { source: source.kind, source_org_id: sourceOrgId, source_track_id: row.id, type: row.type },
     );
+    // The artist is the one who must see that their master was copied: the same audit event in THEIR feed
+    // (internal: owners / admins). Audit-class like the first; if it cannot be written the copy is removed.
+    if (source.kind === 'connection' && sourceOrgId) {
+      await recordEvent(
+        admin,
+        { orgId: sourceOrgId, userId: access.userId },
+        'recording.copied',
+        { type: 'track', id: row.id },
+        { source: 'connection', copied_by_org: access.orgId, type: row.type },
+        { visibility: 'internal' },
+      );
+    }
   } catch (err) {
     await rollback();
     if (err instanceof CopySourceError) return json(422, { error: err.message });

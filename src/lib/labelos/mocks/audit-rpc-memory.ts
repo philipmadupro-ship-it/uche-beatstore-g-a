@@ -163,6 +163,10 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       const otherKind = side === 'label' ? 'artist' : 'label';
       const self = orgs.find((o) => o.id === args.p_org && o.kind === side && !o.deleted_at);
       if (!self) return ok({ error: 'not_found' });
+      // Judged on the asking org alone, before the target is looked up (no existence oracle).
+      if (args.p_contact && (side !== 'label' || !(tables.contacts ?? []).some((c) => c.id === args.p_contact && c.org_id === args.p_org))) {
+        return ok({ error: 'bad_contact' });
+      }
       const slug = typeof args.p_target_slug === 'string' ? args.p_target_slug.trim().toLowerCase() : '';
       const email = typeof args.p_target_email === 'string' ? args.p_target_email.trim().toLowerCase() : '';
       let target: Row | undefined;
@@ -181,9 +185,6 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       if (!target) return ok({ error: 'not_found' });
       const label = side === 'label' ? args.p_org : target.id;
       const artist = side === 'label' ? target.id : args.p_org;
-      if (args.p_contact && (side !== 'label' || !(tables.contacts ?? []).some((c) => c.id === args.p_contact && c.org_id === label))) {
-        return ok({ error: 'bad_contact' });
-      }
       const conns = (tables.org_connections ??= []);
       const open = conns.find((c) => c.label_org_id === label && c.artist_org_id === artist && ['requested', 'active'].includes(String(c.status)));
       if (open) return ok({ error: 'pending', id: open.id });
@@ -239,6 +240,7 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       const was = conn.status;
       conn.status = was === 'requested' && side !== conn.initiated_by ? 'declined' : 'ended';
       conn.ended_at = new Date().toISOString();
+      conn.label_contact_id = null;
       tables.connection_projects = (tables.connection_projects ?? []).filter((r) => r.connection_id !== conn.id);
       for (const c of tables.contacts ?? []) {
         if (c.org_id === conn.label_org_id && c.artist_org_id === conn.artist_org_id) c.artist_org_id = null;
@@ -256,23 +258,22 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       const patch = args.p_patch as Row;
       const before = (tables.connection_projects ?? []).filter((r) => r.connection_id === conn.id).map((r) => String(r.project_id));
       const beforeAll = conn.share_mode === 'all';
+      const beforeCopies = conn.allow_copies === true;
       if (ids) {
         tables.connection_projects = (tables.connection_projects ?? []).filter((r) => r.connection_id !== conn.id);
         for (const id of new Set(ids)) tables.connection_projects.push({ connection_id: conn.id, project_id: id, org_id: args.p_org });
+      } else if (beforeAll && patch.share_mode === 'selected') {
+        tables.connection_projects = (tables.connection_projects ?? []).filter((r) => r.connection_id !== conn.id);
       }
       if (typeof patch.share_mode === 'string') conn.share_mode = patch.share_mode;
       if (typeof patch.allow_copies === 'boolean') conn.allow_copies = patch.allow_copies;
       const after = (tables.connection_projects ?? []).filter((r) => r.connection_id === conn.id).map((r) => String(r.project_id));
       const afterAll = conn.share_mode === 'all';
-      const widened = (!beforeAll && afterAll) || (!beforeAll && !afterAll && after.some((a) => !before.includes(a)));
-      const narrowed = (beforeAll && !afterAll) || (!beforeAll && !afterAll && before.some((b) => !after.includes(b)));
-      event(tables, args, narrowed && !widened ? 'share.revoked' : 'share.created', 'connection', conn.id, {
-        ...(args.p_payload as Row),
-        via: 'connection',
-        share_mode: conn.share_mode,
-        projects: after.length,
-        allow_copies: conn.allow_copies,
-      });
+      const widened = (!beforeAll && afterAll) || (!beforeAll && !afterAll && after.some((a) => !before.includes(a))) || (!beforeCopies && conn.allow_copies === true);
+      const narrowed = (beforeAll && !afterAll) || (!beforeAll && !afterAll && before.some((b) => !after.includes(b))) || (beforeCopies && conn.allow_copies !== true);
+      const payload = { ...(args.p_payload as Row), via: 'connection', share_mode: conn.share_mode, projects: after.length, allow_copies: conn.allow_copies };
+      if (narrowed) event(tables, args, 'share.revoked', 'connection', conn.id, payload);
+      if (widened) event(tables, args, 'share.created', 'connection', conn.id, payload);
       return ok({ connection: { ...conn }, project_ids: after.sort() });
     },
     // Migration 153 (LABEL-27): confirm / dispute a credit, with its event in the same step.

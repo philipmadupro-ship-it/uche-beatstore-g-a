@@ -198,6 +198,24 @@ export function buildProvenance(input: { sourceOrgId: string | null; sourceTrack
  * label's processing makes its own private preview and peaks (D8), and a copy
  * is a new recording with no relationship to the source's other material.
  */
+/**
+ * Which stored file a CONNECTED label member hears (never the master unless the
+ * artist allowed copies: a stream of the master with Range is a download, so
+ * `allow_copies = false` would mean nothing). Listening is the private 75 s
+ * preview clip (or the peaks sidecar); the master only when copies are allowed.
+ * Null = nothing to play for this variant.
+ */
+export function connectedAudioSource(
+  variant: 'full' | 'preview' | 'peaks',
+  row: { audio_url: string | null; preview_url: string | null; peaks_url?: string | null },
+  allowCopies: boolean,
+): string | null {
+  const pick = (v: string | null | undefined) => (typeof v === 'string' && v.trim() !== '' ? v : null);
+  if (variant === 'peaks') return pick(row.peaks_url);
+  if (variant === 'preview') return pick(row.preview_url);
+  return allowCopies ? (pick(row.audio_url) ?? pick(row.preview_url)) : pick(row.preview_url);
+}
+
 /** Beat reuse (D6): material is copied, songs are not (a song is made in the label, built on a copied beat). */
 export const COPYABLE_TYPES = ['beat', 'instrumental', 'loop', 'topline'] as const;
 export function isCopyableType(type: string | null | undefined): boolean {
