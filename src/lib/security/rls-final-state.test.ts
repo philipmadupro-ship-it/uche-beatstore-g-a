@@ -111,6 +111,8 @@ function labelOsTables(): string[] {
     // 155_labelos_split_sheets.sql (LABEL-28)
     'split_sheets',
     'split_lines',
+    // 157_labelos_approvals.sql (LABEL-30)
+    'approvals',
   ];
 }
 
@@ -496,6 +498,30 @@ describe('final RLS policy state', () => {
     it('no policy on either table writes', () => {
       const writes = onSplit().filter(([, body]) => /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body)).map(([k]) => k);
       expect(writes).toEqual([]);
+    });
+  });
+
+  describe('Label OS approvals (mig 157, LABEL-30)', () => {
+    const onApprovals = () => [...policies].filter(([k]) => k.startsWith('approvals.'));
+
+    it('has exactly one policy, a SELECT: a release ability in the row’s org, then a whole-org or scoped reach', () => {
+      expect(onApprovals().map(([k]) => k)).toEqual(['approvals.approvals_member_read']);
+      const body = policies.get('approvals.approvals_member_read') ?? '';
+      expect(body).toMatch(/^\s*FOR SELECT\s+TO authenticated\s+USING\b/i);
+      expect(body).toMatch(/has_org_cap\(cm\.org_id, 'release\.write'\)/);
+      for (const gate of ['master', 'artwork', 'legal', 'marketing', 'metadata']) {
+        expect(body, gate).toMatch(new RegExp(`has_org_cap\\(cm\\.org_id, 'release\\.approve\\.${gate}'\\)`));
+      }
+      expect(body).toMatch(/labelos_scoped_tracks\(\)/);
+      expect(body).toMatch(/labelos_scoped_releases\(\)/);
+      // Asked of the caller's few memberships (an uncorrelated subplan), never of the row's own org: R-08.
+      expect(body).not.toMatch(/has_org_cap\(\s*org_id/);
+      expect(body).not.toMatch(/can_see_org_|can_read_org_track|labelos_is_org_/);
+      expect(body).not.toMatch(/WITH CHECK/i);
+    });
+
+    it('no policy writes: approvals are appended by the audit functions only', () => {
+      expect(onApprovals().filter(([, body]) => /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body))).toEqual([]);
     });
   });
 

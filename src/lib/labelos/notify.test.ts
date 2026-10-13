@@ -167,9 +167,10 @@ describe('nothing else writes org notifications', () => {
       .map((f) => relative(SRC, f).split(sep).join('/'))
       .filter((f) => f !== 'lib/labelos/notify.ts')
       .sort();
-    // Direct asks arise where one person asks another for something: assigning a task. A new caller is a
-    // visible edit here, with a reason, not an upload hook.
-    expect(callers).toEqual(['app/api/org/[orgId]/tasks/[taskId]/route.ts', 'app/api/org/[orgId]/tasks/route.ts']);
+    // Direct asks arise where one person asks another for something: assigning a task, or asking one
+    // member to decide an approval gate (LABEL-30; the route that takes the request, not the decision).
+    // A new caller is a visible edit here, with a reason, not an upload hook.
+    expect(callers).toEqual(['app/api/org/[orgId]/approvals/route.ts', 'app/api/org/[orgId]/tasks/[taskId]/route.ts', 'app/api/org/[orgId]/tasks/route.ts']);
     for (const c of callers) expect(c).not.toMatch(/upload|song|stage|review|release/i);
   });
 });

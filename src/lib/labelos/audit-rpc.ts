@@ -25,7 +25,7 @@
  * Accepting an invitation (`member.joined`) is 138's
  * `labelos_accept_invitation` (lib/labelos/invitations.ts), which already
  * did both writes in one transaction. Split transitions landed with
- * LABEL-28; approvals and delivery have no mutating route yet and each lands its
+ * LABEL-28 and approvals with LABEL-30; delivery has no mutating route yet and lands its
  * function with its route.
  *
  * `auditRpc` is the one caller. The route does the authorisation and the
@@ -60,6 +60,9 @@ export const AUDIT_RPCS = {
   // Migration 155 (LABEL-28): a split sheet is circulated (superseding the live one) or signed, with its event.
   splitCirculate: 'labelos_audit_split_circulate',
   splitSign: 'labelos_audit_split_sign',
+  // Migration 157 (LABEL-30): an approval is requested of one member, or decided, with its event.
+  approvalRequest: 'labelos_audit_approval_request',
+  approvalDecide: 'labelos_audit_approval_decide',
 } as const;
 export type AuditRpcKey = keyof typeof AUDIT_RPCS;
 
@@ -162,6 +165,36 @@ export type AuditRpcArgs = {
     p_subject: { artist_id: string | null; project_id: string | null; song_id: string | null };
     p_payload: EventPayload;
   };
+  approvalRequest: {
+    p_org: string;
+    p_actor: string;
+    p_kind: 'song' | 'release';
+    p_subject: string;
+    p_gate: string;
+    /** The one member asked. */
+    p_approver: string;
+    p_note: string | null;
+    /** What the approver is looking at (lib/labelos/approvals.ts `Snapshot`). */
+    p_snapshot: Record<string, unknown>;
+    /** The context keys the event is filed under: { artist_id, project_id, song_id, release_id }. */
+    p_ctx: { artist_id: string | null; project_id: string | null; song_id: string | null; release_id: string | null };
+    p_payload: EventPayload;
+  };
+  approvalDecide: {
+    p_org: string;
+    p_actor: string;
+    p_kind: 'song' | 'release';
+    p_subject: string;
+    p_gate: string;
+    p_decision: 'approved' | 'changes_requested';
+    p_note: string | null;
+    /** What was approved: stored with the row, compared with the facts later (`isStale`). */
+    p_snapshot: Record<string, unknown>;
+    /** Owner or admin, from the live membership: the one exception to "a requester does not approve their own request". */
+    p_may_self_approve: boolean;
+    p_ctx: { artist_id: string | null; project_id: string | null; song_id: string | null; release_id: string | null };
+    p_payload: EventPayload;
+  };
 };
 
 export type AuditRpcError = { message: string; code?: string };
@@ -195,6 +228,7 @@ export function isMissingAuditRpc(error: AuditRpcError | null): boolean {
 export const AUDIT_RPC_NOT_READY = 'Auditing is not set up yet (migration 146 has not been applied).';
 export const CREDITS_NOT_READY = 'Credits and parties are not set up yet (migration 153 has not been applied).';
 export const SPLITS_NOT_READY = 'Split sheets are not set up yet (migration 155 has not been applied).';
+export const APPROVALS_NOT_READY = 'Approvals are not set up yet (migration 157 has not been applied).';
 export const PROJECT_MEMBERS_NOT_READY = 'External project members are not set up yet (migration 148 has not been applied).';
 
 /**

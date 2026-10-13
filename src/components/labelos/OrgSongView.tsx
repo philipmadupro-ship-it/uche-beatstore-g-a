@@ -28,6 +28,7 @@ import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { RestrictedNote } from '@/components/artists/OrgArtistWorkspaceTabs';
 import { OrgCredits } from '@/components/labelos/OrgCredits';
 import { OrgSplits } from '@/components/labelos/OrgSplits';
+import { OrgApprovals } from '@/components/labelos/OrgApprovals';
 import { OrgLegalReadiness } from '@/components/labelos/OrgLegalReadiness';
 import { SongStageControl } from '@/components/labelos/SongStageControl';
 import { TasksPanel } from '@/components/labelos/TasksPanel';
@@ -176,6 +177,8 @@ export function OrgSongView({ orgId, orgSlug, detail }: { orgId: string; orgSlug
       <OrgSplits key={song.id} orgId={orgId} trackId={song.id} />
 
       <OrgLegalReadiness key={song.id} orgId={orgId} trackId={song.id} />
+
+      <OrgApprovals key={song.id} orgId={orgId} trackId={song.id} />
 
       <section aria-labelledby="org-song-where" className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div>

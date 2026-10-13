@@ -33,6 +33,66 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
   const member = (tables: Tables, org: unknown, user: unknown) =>
     (tables.org_members ??= []).find((m) => m.org_id === org && m.user_id === user);
 
+  let approvalClock = 0;
+  const approval = (args: Row, tables: Tables, op: 'request' | 'decide'): Res => {
+    if (opts.failAudit?.()) return failed();
+    const kind = String(args.p_kind);
+    const gate = String(args.p_gate);
+    if (kind !== 'song' && kind !== 'release') throw new Error(`unknown approval subject ${kind}`);
+    if (!['master', 'artwork', 'legal', 'marketing', 'metadata'].includes(gate) || (kind === 'song' && gate !== 'legal')) return ok({ error: 'bad_gate' });
+    const decision = op === 'request' ? 'requested' : String(args.p_decision);
+    const note = String(args.p_note ?? '').trim() || null;
+    if (op === 'decide') {
+      if (decision !== 'approved' && decision !== 'changes_requested') return ok({ error: 'bad_decision' });
+      if (decision === 'changes_requested' && !note) return ok({ error: 'note_required' });
+    }
+    const found = kind === 'song'
+      ? (tables.tracks ?? []).some((t) => t.id === args.p_subject && t.org_id === args.p_org && t.type === 'song')
+      : (tables.releases ?? []).some((r) => r.id === args.p_subject && r.org_id === args.p_org);
+    if (!found) return ok({ error: 'not_found' });
+    if (op === 'request' && !member(tables, args.p_org, args.p_approver)) return ok({ error: 'approver_not_member' });
+    const rows = (tables.approvals ??= []);
+    const mine = rows.filter((a) => a.org_id === args.p_org && a.gate === gate && (kind === 'song' ? a.song_id : a.release_id) === args.p_subject);
+    const last = mine[mine.length - 1];
+    if (op === 'request' && last?.decision === 'requested') return ok({ error: 'already_requested' });
+    if (op === 'decide' && last?.decision === 'requested' && decision === 'approved' && last.actor_id === args.p_actor && !args.p_may_self_approve) {
+      return ok({ error: 'self_approval' });
+    }
+    approvalClock += 1;
+    const row: Row = {
+      id: randomUUID(),
+      org_id: args.p_org,
+      song_id: kind === 'song' ? args.p_subject : null,
+      release_id: kind === 'release' ? args.p_subject : null,
+      gate,
+      decision,
+      note,
+      actor_id: args.p_actor,
+      approver_id: op === 'request' ? args.p_approver : null,
+      request_id: op === 'decide' && last?.decision === 'requested' ? last.id : null,
+      subject_snapshot: args.p_snapshot ?? {},
+      // Strictly increasing, like clock_timestamp() stamped by the guard trigger.
+      created_at: new Date(Date.UTC(2026, 9, 1) + approvalClock * 1000).toISOString(),
+    };
+    rows.push(row);
+    const ctx = (args.p_ctx ?? {}) as Row;
+    (tables.activity_events ??= []).push({
+      org_id: args.p_org,
+      actor_id: args.p_actor,
+      verb: op === 'request' ? 'approval.requested' : 'approval.decided',
+      subject_type: 'approval',
+      subject_id: row.id,
+      artist_id: ctx.artist_id ?? null,
+      project_id: ctx.project_id ?? null,
+      song_id: ctx.song_id ?? null,
+      release_id: ctx.release_id ?? null,
+      payload: { ...(args.p_payload as Row), gate, ...(op === 'decide' ? { decision } : {}) },
+      audit: true,
+      visibility: 'internal',
+    });
+    return ok({ approval: { ...row } });
+  };
+
   return {
     labelos_audit_member_update: (args, tables) => {
       if (opts.failAudit?.()) return failed();
@@ -408,6 +468,9 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       });
       return ok({ sheet: { ...sheet }, complete, signed });
     },
+    // Migration 157 (LABEL-30): approvals. Mimic the SQL: the same refusals in the same order, append-only rows.
+    labelos_audit_approval_request: (args, tables) => approval(args, tables, 'request'),
+    labelos_audit_approval_decide: (args, tables) => approval(args, tables, 'decide'),
     labelos_audit_invitation_revoke: (args, tables) => {
       if (opts.failAudit?.()) return failed();
       const inv = (tables.org_invitations ?? []).find((i) => i.org_id === args.p_org && i.id === args.p_id && !i.accepted_at && !i.revoked_at);

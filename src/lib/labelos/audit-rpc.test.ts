@@ -11,9 +11,11 @@ const SQL_148 = readFileSync(join(process.cwd(), 'supabase/migrations/148_labelo
 const SQL_153 = readFileSync(join(process.cwd(), 'supabase/migrations/153_labelos_parties_credits.sql'), 'utf8');
 // LABEL-28 adds the split sheet transitions (circulate, sign).
 const SQL_155 = readFileSync(join(process.cwd(), 'supabase/migrations/155_labelos_split_sheets.sql'), 'utf8');
+// LABEL-30 adds the approval request and decision.
+const SQL_157 = readFileSync(join(process.cwd(), 'supabase/migrations/157_labelos_approvals.sql'), 'utf8');
 // LABEL-41 adds the connection family.
 const SQL_154 = readFileSync(join(process.cwd(), 'supabase/migrations/154_labelos_artist_label_connection.sql'), 'utf8');
-const SQL = SQL_146 + SQL_148 + SQL_153 + SQL_154 + SQL_155;
+const SQL = SQL_146 + SQL_148 + SQL_153 + SQL_154 + SQL_155 + SQL_157;
 
 describe('auditRpc', () => {
   it('calls the named function with the arguments untouched', async () => {
@@ -50,7 +52,7 @@ describe('auditRpc', () => {
   });
 });
 
-describe('migrations 146 + 148 + 153 + 154 + 155 hold exactly these functions, service_role only', () => {
+describe('migrations 146 + 148 + 153 + 154 + 155 + 157 hold exactly these functions, service_role only', () => {
   for (const [key, name] of Object.entries(AUDIT_RPCS)) {
     it(`${key} → ${name}`, () => {
       expect(SQL).toMatch(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\(`));
