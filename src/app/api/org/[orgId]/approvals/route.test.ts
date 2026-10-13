@@ -107,6 +107,7 @@ beforeEach(() => {
         { id: '90000000-0000-4000-8000-000000000001', track_id: S1, org_id: L, name: 'Nova', role: 'songwriter', status: 'confirmed', party_id: null, scope: 'composition', created_by: OWN, created_at: '2026-10-01' },
       ],
       approvals: [],
+      tasks: [],
       notifications: [],
       activity_events: [],
       user_profiles: [
@@ -258,6 +259,54 @@ describe('POST — asking one member', () => {
     expect((await request(AR, song(), 'legal', LG)).status).toBe(500);
     expect(db.tables.approvals).toHaveLength(0);
     expect(db.tables.notifications).toHaveLength(0);
+  });
+
+  describe('Send to legal (LABEL-31): the request plus a task, in one action', () => {
+    const sendToLegal = (as: string, subject: unknown, approver: string, note?: string) =>
+      call('POST', as, { body: { subject, gate: 'legal', approver_id: approver, with_task: true, ...(note ? { note } : {}) } });
+
+    it('also gives the person asked a task on the song — and still ONE notification, to that person only', async () => {
+      const res = await sendToLegal(AR, song(), LG, 'Splits are in');
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(db.tables.approvals).toHaveLength(1);
+      expect(db.tables.tasks).toHaveLength(1);
+      expect(db.tables.tasks[0]).toMatchObject({ org_id: L, assignee_id: LG, created_by: AR, song_id: S1, release_id: null, title: 'Legal review: Midnight', notes: 'Splits are in' });
+      expect(body.task).toEqual({ id: db.tables.tasks[0].id });
+      // The approval request told them; the task does not tell them again, and nobody else hears.
+      expect(db.tables.notifications).toHaveLength(1);
+      expect(db.tables.notifications[0]).toMatchObject({ user_id: LG, kind: 'approval_requested' });
+      expect(db.tables.activity_events.filter((e) => e.verb === 'approval.requested')).toHaveLength(1);
+      expect(db.tables.activity_events.filter((e) => e.verb === 'task.created')).toHaveLength(1);
+    });
+
+    it('works on a release: the task targets the release', async () => {
+      expect((await sendToLegal(AR, release(), LG)).status).toBe(201);
+      expect(db.tables.tasks[0]).toMatchObject({ assignee_id: LG, release_id: R1, song_id: null, title: 'Legal review: Nova EP' });
+    });
+
+    it('without with_task there is no task (the plain request is unchanged)', async () => {
+      const res = await request(AR, song(), 'legal', LG);
+      expect(db.tables.tasks).toHaveLength(0);
+      expect((await res.json()).task).toBeNull();
+    });
+
+    it('a refused request makes no task: wrong person, open request, failed audit', async () => {
+      expect((await sendToLegal(AR, song(), PRD)).status).toBe(422);
+      failAudit = true;
+      expect((await sendToLegal(AR, song(), LG)).status).toBe(500);
+      failAudit = false;
+      expect((await sendToLegal(AR, song(), LG)).status).toBe(201);
+      expect((await sendToLegal(AR, song(), LG)).status).toBe(409);
+      expect(db.tables.tasks).toHaveLength(1);
+    });
+
+    it('needs tasks.write: without it 403 and nothing is written', async () => {
+      db.tables.org_members.find((m) => m.user_id === AR)!.cap_revokes = ['tasks.write'];
+      expect((await sendToLegal(AR, song(), LG)).status).toBe(403);
+      expect(db.tables.approvals).toHaveLength(0);
+      expect(db.tables.tasks).toHaveLength(0);
+    });
   });
 });
 

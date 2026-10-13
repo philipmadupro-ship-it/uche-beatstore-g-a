@@ -59,7 +59,7 @@ describe('states', () => {
   it('Not requested: the chip, and an Ask button only for someone who may ask and has someone to ask', async () => {
     mount(gate({ canRequest: true, approvers: [{ userId: 'u1', name: 'Lena Legal' }] }));
     expect((await screen.findByTestId('org-approval-chip-legal')).textContent).toContain('Not requested');
-    expect(screen.getByTestId('org-approval-ask').textContent).toContain('Ask for approval');
+    expect(screen.getByTestId('org-approval-ask').textContent).toContain('Send to legal');
     expect(calls[0].url).toBe(`/api/org/org1/approvals?song=${SONG}`);
   });
 
@@ -92,7 +92,7 @@ describe('states', () => {
     expect(screen.getByTestId('org-approval-stale').textContent).toContain('splits or credits changed after Lena Legal approved it');
     // Not the "Approved by …" line: that would read as still good.
     expect(screen.queryByTestId('org-approval-decision')).toBeNull();
-    expect(screen.getByTestId('org-approval-ask').textContent).toContain('Ask again');
+    expect(screen.getByTestId('org-approval-ask').textContent).toContain('Send to legal');
   });
 
   it('awaiting: who was asked and by whom', async () => {
@@ -174,6 +174,48 @@ describe('asking', () => {
     expect(calls[1].url).toBe('/api/org/org1/approvals');
     expect(JSON.parse(String(calls[1].init?.body))).toEqual({ subject: { kind: 'song', id: SONG }, gate: 'legal', approver_id: 'u1', note: 'splits are final' });
     await waitFor(() => expect(screen.getByTestId('org-approval-chip-legal').textContent).toContain('Awaiting approval'));
+  });
+});
+
+describe('Send to legal (LABEL-31)', () => {
+  const approvers = [{ userId: 'u1', name: 'Lena Legal' }];
+  const choose = async () => {
+    fireEvent.click(await screen.findByTestId('org-approval-ask'));
+    const form = screen.getByTestId('org-approval-ask-form');
+    fireEvent.click(within(form).getByLabelText('Who should approve'));
+    fireEvent.click(await screen.findByRole('option', { name: /Lena Legal/ }));
+    return form;
+  };
+
+  it('offers a task alongside the request, on by default, and sends with_task', async () => {
+    mount(gate({ canRequest: true, canTask: true, approvers }));
+    const form = await choose();
+    expect((within(form).getByTestId('org-approval-with-task') as HTMLInputElement).checked).toBe(true);
+    reply = { status: 201, body: { schemaReady: true, gates: [gate({ status: 'requested', chip: { label: 'Awaiting approval', tone: 'waiting' }, pending: row({ decision: 'requested', approver: 'Lena Legal' }) as never })] } };
+    fireEvent.click(within(form).getByTestId('org-approval-send-request'));
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(JSON.parse(String(calls[1].init?.body))).toEqual({ subject: { kind: 'song', id: SONG }, gate: 'legal', approver_id: 'u1', with_task: true });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Sent to legal'));
+  });
+
+  it('unticking the box sends the plain request', async () => {
+    mount(gate({ canRequest: true, canTask: true, approvers }));
+    const form = await choose();
+    fireEvent.click(within(form).getByTestId('org-approval-with-task'));
+    reply = { status: 201, body: { schemaReady: true, gates: [gate({ status: 'requested', chip: { label: 'Awaiting approval', tone: 'waiting' } })] } };
+    fireEvent.click(within(form).getByTestId('org-approval-send-request'));
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(JSON.parse(String(calls[1].init?.body))).not.toHaveProperty('with_task');
+  });
+
+  it('without tasks.write there is no checkbox and no task is asked for', async () => {
+    mount(gate({ canRequest: true, canTask: false, approvers }));
+    const form = await choose();
+    expect(within(form).queryByTestId('org-approval-with-task')).toBeNull();
+    reply = { status: 201, body: { schemaReady: true, gates: [gate({ status: 'requested', chip: { label: 'Awaiting approval', tone: 'waiting' } })] } };
+    fireEvent.click(within(form).getByTestId('org-approval-send-request'));
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(JSON.parse(String(calls[1].init?.body))).not.toHaveProperty('with_task');
   });
 });
 
