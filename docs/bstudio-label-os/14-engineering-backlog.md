@@ -1888,7 +1888,7 @@ Drop the tables.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-28
-**Status:** In Progress (branch label-os/LABEL-29, stacked on label-os/LABEL-28; no migration)
+**Status:** In Progress (branch label-os/LABEL-29, PR #100, stacked on label-os/LABEL-28; migration 156 reserved — orchestrator decision: adds `tracks.samples_declared` + clearance note, because L8 had no storage and every song would carry a permanent blocker)
 
 ## Objective
 Derived legal readiness per song, rolled up per release.
@@ -1935,7 +1935,7 @@ Revert.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-29, LABEL-23
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-30, stacked on label-os/LABEL-29; migration 157 reserved)
 
 ## Objective
 Stored human decisions for the gates, with stale detection.
@@ -2351,7 +2351,7 @@ Disable the cron.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-19, LABEL-15
-**Status:** In Progress (branch label-os/LABEL-39)
+**Status:** Done (PR #98, squash fa994f5; no migration — the hard-delete cascade is proved by `supabase/local/checks/labelos_org_hard_delete.sql`). Two crons added to `vercel.json` (04:30, 04:45); `R2_PRIVATE_BUCKET_NAME` must be set where R2 is. Open question for the owner: a producer-kind org is not deletable from here (409).
 
 ## Objective
 Owners can export and delete an org. Non-audit events are pruned per D9.
@@ -2471,7 +2471,7 @@ Revert.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-10, LABEL-21
-**Status:** In Progress (branch label-os/LABEL-41; migration 154 reserved)
+**Status:** Done (PR #99, squash 4dfdf23; migration 154 not applied — apply at final merge). An independent security review before merge found 7 issues, all fixed in the PR: request-existence oracle, `allow_copies=false` bypass via `variant=full` streaming, scoped-admin RLS, artist-side `recording.copied` audit, copy source ownership + rate limit, share verbs, revived shares.
 
 ## Objective
 An artist org can connect to a label org and share its whole catalogue or selected projects. The label sees that music through its roster, under its own staff permissions (D1).
