@@ -255,6 +255,67 @@ describe('the pack', () => {
   });
 });
 
+describe('what goes into the archive', () => {
+  const entryNames = async (res: Response) => Object.keys(await unzip(res));
+
+  it('builds every entry name from sanitised segments, whatever the member typed as a title', async () => {
+    const song = db.tables.tracks.find((t) => t.id === S1)!;
+    song.title = '../../etc/passwd\r\n.\\..\\evil\u0000/ ..';
+    db.tables.project_assets.find((a) => a.id === A_CLR)!.url = `r2://priv/orgs/${L}/assets/${LP1}/clear111.pdf`;
+    const res = await get(LG);
+    expect(res.status).toBe(200);
+    const files = await unzip(res);
+    for (const name of Object.keys(files)) {
+      expect(name, name).not.toMatch(/(^|\/)\.\.?(\/|$)|^\/|\\|[\u0000-\u001f\u007f-\u009f]/);
+      expect(name === 'README.txt' || name === 'legal-pack.csv' || /^documents\/[^/]+\/[^/]+$/.test(name), name).toBe(true);
+    }
+    expect(Object.keys(files).filter((n) => n.startsWith('documents/')).length).toBeGreaterThan(0);
+    // A title cannot forge a line of the README.
+    expect(files['README.txt'].split('\n').filter((l) => l.startsWith('  documents/') || l === 'Documents:')).toHaveLength(Object.keys(files).filter((n) => n.startsWith('documents/')).length);
+  });
+
+  it('a hostile release title still gives a header-safe file name', async () => {
+    db.tables.releases.find((r) => r.id === R1)!.title = '夜 EP "x"';
+    const res = await get(LG);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-disposition')).toMatch(/^attachment; filename="[\x20-\x7e]+"$/);
+  });
+
+  it('a working-material file the member could not open in the app is named in the README and not shipped', async () => {
+    // Legal holds contracts.read but not audio.working: a clearance filed as "other" is working material.
+    const asset = db.tables.project_assets.find((a) => a.id === A_CLR)!;
+    Object.assign(asset, { kind: 'other', sensitivity: 'normal', url: `r2://priv/orgs/${L}/assets/${LP1}/clear111.pdf` });
+    const legal = await unzip(await get(LG));
+    expect(Object.keys(legal).some((n) => n.includes('Sample clearance'))).toBe(false);
+    expect(legal['README.txt']).toContain('Sample clearance — Midnight');
+    // The owner can open it, so it is shipped: the rule is the member's, not the file's.
+    const owner = await unzip(await get(OWN));
+    expect(Object.keys(owner).some((n) => n.includes('Sample clearance'))).toBe(true);
+  });
+
+  it('a restricted file the member lacks contracts.read for is never reached (the pack itself needs it)', async () => {
+    db.tables.org_members.find((m) => m.user_id === LG)!.cap_revokes = ['contracts.read'];
+    expect((await get(LG)).status).toBe(403);
+    expect(events()).toEqual([]);
+  });
+
+  it('a file whose project is outside the member’s artist scope is named and not shipped', async () => {
+    // LGN is scoped to Nova (LP1); the clearance file sits in Kilo's project, with a valid key for that project.
+    Object.assign(db.tables.project_assets.find((a) => a.id === A_CLR)!, { project_id: LP2, kind: 'contract', sensitivity: 'restricted', url: `r2://priv/orgs/${L}/assets/${LP2}/clear222.pdf` });
+    const scoped = await unzip(await get(LGN));
+    expect(Object.keys(scoped).some((n) => n.includes('Sample clearance'))).toBe(false);
+    expect(scoped['README.txt']).toContain('Sample clearance — Midnight');
+    expect(scoped['README.txt']).not.toContain('clear222');
+    const whole = await unzip(await get(LG));
+    expect(Object.keys(whole).some((n) => n.includes('Sample clearance'))).toBe(true);
+  });
+
+  it('only documents the sheets in force and the song point at', async () => {
+    db.tables.project_assets.push({ id: 'a0000000-0000-4000-8000-0000000000ee', org_id: L, project_id: LP1, kind: 'split_sheet', sensitivity: 'restricted', label: 'Stray', file_name: 'stray.pdf', url: `r2://priv/orgs/${L}/assets/${LP1}/stray111.pdf`, mime: 'application/pdf' });
+    expect((await entryNames(await get(LG))).some((n) => n.includes('Stray') || n.includes('stray'))).toBe(false);
+  });
+});
+
 describe('audit', () => {
   it('records release.legal_pack_exported — internal, audit, in the release’s context — with counts and no names', async () => {
     const res = await get(LG);

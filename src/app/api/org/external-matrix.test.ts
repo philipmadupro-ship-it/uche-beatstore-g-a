@@ -387,6 +387,24 @@ describe('LABEL-31: the legal queue and the legal pack are not an external membe
   }
 });
 
+describe('LABEL-32: release readiness is not an external member\'s', () => {
+  const route = '[orgId]/releases/[releaseId]/readiness/route.ts';
+
+  it('the route exists and is not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(externalRouteKeys()).not.toContain(`${route}:GET`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: the readiness of a release of their own project is 403/404, with no gate in the body, and nothing is written`, async () => {
+      const res = await call(route, 'GET', user);
+      expect([403, 404], `answered ${res.status}`).toContain(res.status);
+      expect(JSON.stringify(await res.json())).not.toMatch(/gates|readyToDeliver|schemaReady/);
+      expect(mem.writes).toEqual([]);
+    });
+  }
+});
+
 describe('LABEL-27: credits and parties (route by route)', () => {
   const credits = '[orgId]/tracks/[id]/credits/route.ts';
   const decide = '[orgId]/tracks/[id]/credits/[creditId]/route.ts';

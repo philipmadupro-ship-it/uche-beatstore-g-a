@@ -21,7 +21,7 @@ import { projectAssetBuckets, projectAssetSize } from '@/lib/storage/project-ass
 import { listCredits, partiesByIds } from './credits-store';
 import { LegalReadinessNotReadyError } from './legal-readiness-store';
 import { canReadOrgAsset, orgProjectAssetKeyOf, type OrgAssetRow } from './org-assets';
-import { documentPath, sheetsInForce, type PackCredit, type PackDocument, type PackParty, type PackSheet, type PackSong } from './legal-pack';
+import { documentPath, isSafeZipPath, oneLine, sheetsInForce, type PackCredit, type PackDocument, type PackParty, type PackSheet, type PackSong } from './legal-pack';
 import { CreditsNotReadyError } from './credits-store';
 import { readReadinessSong } from './legal-readiness-store';
 import { memberMayReadSongRow } from './song-stage-store';
@@ -70,7 +70,8 @@ export async function gatherLegalPack(access: OrgAccessOk, releaseId: string): P
   let songsNotIncluded = 0;
   const want = (assetId: string | null, songTitle: string | null, what: string, describes: string) => {
     if (!assetId) return;
-    wanted.set(assetId, [...(wanted.get(assetId) ?? []), { assetId, songTitle, what, describes }]);
+    // Titles are typed by members: text that lands in the README is one plain line.
+    wanted.set(assetId, [...(wanted.get(assetId) ?? []), { assetId, songTitle, what, describes: oneLine(describes) }]);
   };
 
   for (const songId of songIds) {
@@ -106,10 +107,10 @@ export async function gatherLegalPack(access: OrgAccessOk, releaseId: string): P
     for (const sheet of sheetsInForce(sheets)) {
       const row = sheetRows.find((s) => s.id === sheet.id)!;
       const label = `${SPLIT_KIND_LABEL[sheet.kind as 'composition' | 'master']} split v${sheet.version}`;
-      want(row.document_asset_id, song.title, `${label} (document)`, `${label} of “${song.title ?? 'Untitled'}”, signed document`);
-      for (const l of lines.get(sheet.id) ?? []) want(l.signature_asset_id, song.title, `${label} signature`, `Signed copy of the ${label} of “${song.title ?? 'Untitled'}”`);
+      want(row.document_asset_id, song.title, `${label} (document)`, `${label} of “${oneLine(song.title)}”, signed document`);
+      for (const l of lines.get(sheet.id) ?? []) want(l.signature_asset_id, song.title, `${label} signature`, `Signed copy of the ${label} of “${oneLine(song.title)}”`);
     }
-    want(await clearanceAssetId(admin, org, songId), song.title, 'Sample clearance', `Sample clearance for “${song.title ?? 'Untitled'}”`);
+    want(await clearanceAssetId(admin, org, songId), song.title, 'Sample clearance', `Sample clearance for “${oneLine(song.title)}”`);
   }
 
   const parties = await loadParties(admin, org, songs);
@@ -143,9 +144,12 @@ async function resolveDocuments(
   for (const [assetId, uses] of wanted) {
     const row = rows.get(assetId);
     const first = uses[0];
-    const name = `${first.what} — ${first.songTitle ?? 'Untitled'}`;
-    // Fail closed: a file the member may not open, or whose reference is not this org project's own key, is not added.
-    if (!row || !canReadOrgAsset(access.capabilities, row) || !orgProjectAssetKeyOf(row.url, access.orgId, row.project_id, buckets)) {
+    const name = `${first.what} — ${oneLine(first.songTitle)}`;
+    // Fail closed, exactly as the file download route decides: the file's project in the member's artist scope (404 there),
+    // then working material needs audio.working and a restricted file contracts.read, and the reference must be this
+    // org project's own key. Anything else is named in the README and not added.
+    const scope = row ? await objectAccessFor(access.userId, { table: 'project_assets', id: assetId, cap: 'catalog.read', orgId: access.orgId }) : null;
+    if (!row || !scope?.ok || !canReadOrgAsset(access.capabilities, row) || !orgProjectAssetKeyOf(row.url, access.orgId, row.project_id, buckets)) {
       missingDocuments.push(name);
       continue;
     }
@@ -153,10 +157,15 @@ async function resolveDocuments(
       missingDocuments.push(name);
       continue;
     }
+    const path = documentPath(first.songTitle, first.what, assetId, row.file_name);
+    if (!isSafeZipPath(path)) {
+      missingDocuments.push(name);
+      continue;
+    }
     documents.push({
       assetId,
       ref: row.url,
-      path: documentPath(first.songTitle, first.what, assetId, row.file_name),
+      path,
       describes: uses.map((u) => u.describes).join('; '),
     });
   }

@@ -98,10 +98,32 @@ export type PackDocument = {
   describes: string;
 };
 
-/** A path segment: no separators or control characters, never empty, never `.`/`..`. */
+/**
+ * A path segment: no separators, control characters (C0, DEL, C1), line or
+ * paragraph separators or bidi overrides; no leading or trailing dots or
+ * spaces (so never `.`, `..` or `. .`); never empty. Titles are typed by org
+ * members, so they are hostile until proven otherwise.
+ */
 export function safeSegment(text: string, fallback: string): string {
-  const cleaned = text.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/\s+/g, ' ').trim().replace(/^\.+/, '').slice(0, 80).trim();
+  const cleaned = text
+    .replace(/[\\/:*?"<>|\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '_')
+    .replace(/\s+/g, ' ')
+    .slice(0, 80)
+    .replace(/^[.\s]+|[.\s]+$/g, '');
   return cleaned || fallback;
+}
+
+/** Free text from a member as one plain line (README lines, row labels): no line breaks or control characters to forge a line with. */
+export function oneLine(text: string | null | undefined, fallback = 'Untitled'): string {
+  const t = (text ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+  return t || fallback;
+}
+
+/** The last line of defence before a name enters the archive: `documents/<a>/<b>`, every segment plain. */
+export function isSafeZipPath(path: string): boolean {
+  if (path.startsWith('/') || path.includes('\\') || /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/.test(path)) return false;
+  const parts = path.split('/');
+  return parts.length >= 1 && parts.every((p) => p !== '' && p !== '.' && p !== '..' && !/^[.\s]|[.\s]$/.test(p));
 }
 
 const extensionOf = (fileName: string): string => {
@@ -119,7 +141,9 @@ export function documentPath(songTitle: string | null, what: string, assetId: st
 
 export function legalPackFileName(releaseTitle: string, at: Date, format: 'csv' | 'zip'): string {
   const day = at.toISOString().slice(0, 10).replace(/-/g, '');
-  return `${safeSegment(releaseTitle, 'release').replace(/\s+/g, '-')}-legal-pack-${day}.${format}`;
+  // ASCII only: the name goes into a Content-Disposition header, which throws on anything else.
+  const base = safeSegment(releaseTitle, 'release').replace(/[^\x20-\x7e]/g, '_').replace(/\s+/g, '-');
+  return `${base}-legal-pack-${day}.${format}`;
 }
 
 export function packReadme(input: {
@@ -131,7 +155,7 @@ export function packReadme(input: {
   songsNotIncluded: number;
 }): string {
   const lines = [
-    `Legal pack: ${input.releaseTitle}`,
+    `Legal pack: ${oneLine(input.releaseTitle, 'release')}`,
     `Generated ${input.generatedAt.toISOString()}`,
     '',
     `legal-pack.csv has ${input.rows} row${input.rows === 1 ? '' : 's'}: one per split line of the sheet in force, then credits not yet on a split.`,

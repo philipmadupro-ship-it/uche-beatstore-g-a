@@ -922,6 +922,26 @@ export const OrgDeleteBodySchema = z.object({
 export type OrgDeleteBody = z.infer<typeof OrgDeleteBodySchema>;
 
 /**
+ * `organizations.settings` as release readiness reads it (LABEL-32, 09 §4).
+ * Unknown keys are dropped; every key is total — a missing or malformed
+ * value reads as its default, so a bad row can never switch a gate off
+ * (`legal_gate` / `marketing_gate` leave "on" only for the exact string
+ * "off"). Read-only: nothing here is a request body.
+ */
+export const OrgReadinessSettingsSchema = z.object({
+  legal_gate: z.enum(['on', 'off']).catch('on'),
+  marketing_gate: z.enum(['on', 'off']).catch('on'),
+  require_signed_master_split: z.boolean().catch(false),
+});
+export type OrgReadinessSettings = z.infer<typeof OrgReadinessSettingsSchema>;
+
+/** Total over any stored value: null, a string or an array reads as the defaults. */
+export function parseReadinessSettings(raw: unknown): OrgReadinessSettings {
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  return OrgReadinessSettingsSchema.parse(obj);
+}
+
+/**
  * PATCH /api/org/[orgId]/members. Which roles, functions, scopes and
  * switches are allowed is decided per org kind and per actor by
  * `planMemberChange` (lib/labelos/members), so here they are only bounded

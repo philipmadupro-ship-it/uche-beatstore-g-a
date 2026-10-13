@@ -1838,7 +1838,7 @@ Drop `parties` and the new columns.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-27
-**Status:** In Progress (branch label-os/LABEL-28, PR #96; migration 155 reserved)
+**Status:** Done (PR #96, squash 6eed43c; migration 155 not applied — apply at final merge)
 
 ## Objective
 Versioned composition and master split sheets that validate to exactly 100%.
@@ -1904,7 +1904,7 @@ Drop the tables.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-28
-**Status:** In Progress (branch label-os/LABEL-29, PR #100, stacked on label-os/LABEL-28; migration 156 reserved — orchestrator decision: adds `tracks.samples_declared` + clearance note, because L8 had no storage and every song would carry a permanent blocker)
+**Status:** Done (PR #100, squash 405ce3e; migration 156 not applied — apply at final merge). Orchestrator decision: L8 had no storage, so this task added `tracks.samples_declared` + clearance note/asset (migration 156) rather than leave every song with a permanent blocker. Not built: a clearance-file picker in the UI (the API accepts the asset id).
 
 ## Objective
 Derived legal readiness per song, rolled up per release.
@@ -1951,7 +1951,7 @@ Revert.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-29, LABEL-23
-**Status:** In Progress (branch label-os/LABEL-30, stacked on label-os/LABEL-29; migration 157 reserved)
+**Status:** Done (PR #102, squash dd12b0e; migration 157 not applied — apply at final merge). Only the song view has UI; a release's other four gates have server support but no screen (LABEL-32/33).
 
 ## Objective
 Stored human decisions for the gates, with stale detection.
@@ -1997,7 +1997,7 @@ Drop the table.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-30
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-31; no migration expected)
 
 ## Objective
 Send to legal, a legal queue, and an exportable legal pack.
@@ -2044,7 +2044,7 @@ Revert.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-30, LABEL-16
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-32; no migration expected)
 
 ## Objective
 Derived gate states per release.

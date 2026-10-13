@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   LEGAL_PACK_COLUMNS,
+  isSafeZipPath,
+  oneLine,
   documentPath,
   legalPackCsv,
   legalPackFileName,
@@ -155,5 +157,36 @@ describe('packReadme', () => {
     expect(text).toContain('documents/Midnight/Composition split v1-aaaaaaaa.pdf');
     expect(text).toContain('Sample clearance — Midnight');
     expect(text).toContain('2 songs on this release are not in this pack');
+  });
+});
+
+describe('hostile titles', () => {
+  const hostile = ['../../etc/passwd', '..', '. .', '/abs/path', 'a\\b', 'C:\\Windows', 'x\u0000y', 'line\r\nbreak', '\u202eevil', '   ', '....//....//', 'name\u2028sep', '\u007fdel', '日本語/../..'];
+  it('every document path built from one is a plain documents/<segment>/<segment>', () => {
+    for (const t of hostile) {
+      for (const w of [t, `${t} signature`]) {
+        const p = documentPath(t, w, '11111111-2222-3333-4444-555555555555', `${t}.pdf`);
+        expect(isSafeZipPath(p), JSON.stringify([t, p])).toBe(true);
+        expect(p.startsWith('documents/')).toBe(true);
+        expect(p.split('/')).toHaveLength(3);
+      }
+    }
+  });
+  it('safeSegment never returns a dot segment, a separator or a control character', () => {
+    for (const t of hostile) {
+      const seg = safeSegment(t, 'x');
+      expect(seg).not.toMatch(/^\.*$/);
+      expect(seg).not.toMatch(/[\\/\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e]/);
+    }
+  });
+  it('isSafeZipPath refuses what a zip reader could be tricked by', () => {
+    for (const bad of ['/etc/passwd', '../x', 'documents/../x', 'documents/./x', 'a\\b', 'documents//x', 'documents/x\u0000', 'documents/ x', 'documents/x.', 'documents/.hidden']) expect(isSafeZipPath(bad), bad).toBe(false);
+    expect(isSafeZipPath('documents/Midnight/Split-aaaa1111.pdf')).toBe(true);
+  });
+  it('oneLine cannot forge a README line, and the file name is ASCII for the header', () => {
+    expect(oneLine('Midnight\n\nDocuments:\n  documents/evil')).not.toMatch(/[\r\n]/);
+    expect(oneLine(null)).toBe('Untitled');
+    expect(legalPackFileName('夜 EP "x"\r\n', new Date('2026-10-13T00:00:00Z'), 'zip')).toMatch(/^[\x20-\x7e]+$/);
+    expect(legalPackFileName('夜 EP "x"\r\n', new Date('2026-10-13T00:00:00Z'), 'zip')).not.toMatch(/["\r\n]/);
   });
 });
