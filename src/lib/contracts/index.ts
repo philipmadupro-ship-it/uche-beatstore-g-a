@@ -520,17 +520,6 @@ export const StemStartBodySchema = z.object({
 });
 export type StemStartBody = z.infer<typeof StemStartBodySchema>;
 
-// ── Invites ──────────────────────────────────────────────────────────────
-// POST /api/invite — team invite. Role mirrors the settings UI's options.
-export const INVITE_ROLES = ['admin', 'collaborator'] as const;
-export type InviteRole = (typeof INVITE_ROLES)[number];
-
-export const InviteCreateBodySchema = z.object({
-  email: z.string().email().max(200),
-  role: z.enum(INVITE_ROLES),
-}).strict();
-export type InviteCreateBody = z.infer<typeof InviteCreateBodySchema>;
-
 // ── Share links ──────────────────────────────────────────────────────────
 // POST /api/share — legacy track/project share-link creation.
 export const ShareCreateBodySchema = z.object({
