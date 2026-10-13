@@ -7,7 +7,7 @@
  *
  *  - Lines end CRLF and fold at 75 OCTETS (never inside a UTF-8 character).
  *  - TEXT is escaped (\\, ;, comma, newline) and stripped of control characters.
- *  - UID is stable per release; DTSTAMP is the release's own updated_at, so a
+ *  - UID is stable per release (the feed makes it an opaque keyed hash); DTSTAMP is the release's own updated_at, so a
  *    re-fetch with nothing changed is byte-identical and clients do not churn.
  *  - All-day DATE values; DTEND is the next day (exclusive), as the RFC says.
  */
@@ -57,10 +57,10 @@ export function icsStamp(iso: string | null | undefined): string {
 /** RFC 5545 §3.3.11 TEXT. Control characters (a CR/LF in a title would add a property) are dropped first. */
 export function escapeText(value: string): string {
   return value
-    .replace(/\r\n|\r|\n/g, ' ')
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+    .replace(/\r\n|\r|\n|\u0085|\u2028|\u2029/g, ' ')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u0085\u2028\u2029]/g, '')
     .replace(/\\/g, '\\\\')
-    .replace(/;/g, '\;')
+    .replace(/;/g, '\\;')
     .replace(/,/g, '\\,');
 }
 
@@ -95,7 +95,13 @@ export function calendarDay(r: Pick<CalendarRelease, 'releaseDate' | 'targetDate
   return target ? { day: target, tentative: true } : null;
 }
 
-export function buildIcs(opts: { name: string; orgId: string; releases: readonly CalendarRelease[] }): string {
+export function buildIcs(opts: {
+  name: string;
+  /** UID of an event. Defaults to the release id; the feed passes a keyed hash so no row id leaves the building. */
+  uidFor?: (releaseId: string) => string;
+  releases: readonly CalendarRelease[];
+}): string {
+  const uidFor = opts.uidFor ?? ((id: string) => `release-${id}@label-os`);
   const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -111,7 +117,7 @@ export function buildIcs(opts: { name: string; orgId: string; releases: readonly
   for (const { r, when } of events) {
     lines.push(
       'BEGIN:VEVENT',
-      `UID:release-${r.id}@${opts.orgId}.label-os`,
+      `UID:${uidFor(r.id)}`,
       `DTSTAMP:${icsStamp(r.updatedAt)}`,
       `DTSTART;VALUE=DATE:${icsDate(when.day)}`,
       `DTEND;VALUE=DATE:${icsDate(nextDay(when.day))}`,

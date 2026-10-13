@@ -77,6 +77,16 @@ export function feedSecret(): string {
   throw new Error('LABEL_OS_FEED_TOKEN_SECRET is not configured');
 }
 
+/** An opaque, stable event UID: a keyed hash of the release id, so neither the release nor the org id appears in the calendar. */
+export function feedEventUid(secret: string, releaseId: string): string {
+  return `${createHmac('sha256', secret).update(`${CONTEXT}\0uid\0${releaseId.toLowerCase()}`).digest('hex').slice(0, 32)}@label-os`;
+}
+
+/** From an exact count of the member's feed events and the verb of the latest one. */
+export function feedStateFromLatest(count: number, latestVerb: string | null): FeedState {
+  return { active: count > 0 && latestVerb === 'calendar_feed.issued', version: count };
+}
+
 /** The URL path+query a calendar app subscribes to. */
 export function feedPath(orgId: string, token: string): string {
   return `/api/org/${orgId}/calendar.ics?token=${encodeURIComponent(token)}`;

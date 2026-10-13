@@ -8,22 +8,32 @@
 import { orgProjectIdsInScope, type OrgContext } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
-import { FEED_EVENT_VERBS, feedState, type FeedState } from './feed-token';
+import { FEED_EVENT_VERBS, feedStateFromLatest, type FeedState } from './feed-token';
 import type { CalendarRelease } from './release-calendar';
 
-/** One person's feed state in one org: oldest event first, so the last one decides. */
+/**
+ * One person's feed state in one org. The version is an EXACT COUNT and the
+ * decider is the single latest event: never a capped ascending read, because
+ * PostgREST's max-rows would truncate to the OLDEST events and freeze both
+ * `version` and `active` (a revoke would stop taking effect).
+ */
 export async function readFeedState(admin: AdminClient, orgId: string, userId: string): Promise<FeedState> {
-  const { data, error } = await admin
+  const base = () => admin.from('activity_events').select('verb', { count: 'exact', head: true }).eq('org_id', orgId).eq('actor_id', userId).in('verb', [...FEED_EVENT_VERBS]);
+  const counted = await base();
+  if (counted.error) throw new Error(`feed state read: ${counted.error.message}`);
+  const count = counted.count ?? 0;
+  if (count === 0) return feedStateFromLatest(0, null);
+  const latest = await admin
     .from('activity_events')
     .select('verb')
     .eq('org_id', orgId)
     .eq('actor_id', userId)
     .in('verb', [...FEED_EVENT_VERBS])
-    .order('created_at', { ascending: true })
-    .order('id', { ascending: true })
-    .limit(5000);
-  if (error) throw new Error(`feed state read: ${error.message}`);
-  return feedState(((data ?? []) as { verb: string }[]).map((r) => r.verb));
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1);
+  if (latest.error) throw new Error(`feed state read: ${latest.error.message}`);
+  return feedStateFromLatest(count, ((latest.data ?? []) as { verb: string }[])[0]?.verb ?? null);
 }
 
 const FEED_LIMIT = 2000;

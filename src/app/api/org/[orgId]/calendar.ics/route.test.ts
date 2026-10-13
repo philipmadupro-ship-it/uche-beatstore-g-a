@@ -40,6 +40,9 @@ let current: string | null = null;
 let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
 let limited = false;
+/** Keys the limiter was asked about, and the key prefixes it refuses. */
+let limiterKeys: string[] = [];
+let refuse: string[] = [];
 let clock = Date.parse('2026-10-13T09:00:00.000Z');
 
 vi.mock('server-only', () => ({}));
@@ -48,7 +51,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => mem.client }));
 vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
-vi.mock('@/lib/security/rate-limit', () => ({ rateLimitDurable: async () => !limited, clientIp: () => '127.0.0.1', rateLimit: () => true }));
+vi.mock('@/lib/security/rate-limit', () => ({ rateLimitDurable: async (key: string) => { limiterKeys.push(key); return !limited && !refuse.some((p) => key.startsWith(p)); }, clientIp: () => '127.0.0.1', rateLimit: () => true }));
 
 function member(user: string, role: string, functions: string[] = [], scope = 'org', org = L, extra: Record<string, unknown> = {}) {
   return { org_id: org, user_id: user, role, functions, scope, cap_grants: [], cap_revokes: [], joined_at: '2026-09-01T10:00:00+00:00', ...extra };
@@ -65,6 +68,8 @@ beforeEach(() => {
   vi.setSystemTime(clock);
   current = null;
   limited = false;
+  limiterKeys = [];
+  refuse = [];
   db = {
     tables: {
       organizations: [
@@ -322,7 +327,12 @@ describe('what the feed shows', () => {
     expect(ics).toContain('DTSTART;VALUE=DATE:20261120');
     expect(ics).toContain('STATUS:TENTATIVE');
     expect(ics).not.toMatch(/Cancelled One|No Date|Xen Secret/);
-    expect(ics).toContain('X-WR-CALNAME:Night Shift releases');
+    expect(ics).toContain('X-WR-CALNAME:Releases\r\n');
+    expect(ics).not.toMatch(/Night Shift/);
+    // No row id (release or org) anywhere in the file: UIDs are opaque keyed hashes.
+    expect(ics).not.toContain(L);
+    expect(ics).not.toMatch(/70000000-0000-4000/);
+    expect(ics).toMatch(/UID:[0-9a-f]{32}@label-os\r\n/);
     expect(ics).not.toMatch(/Nova|Kilo(?! LP)|DESCRIPTION|URL|LOCATION|ATTENDEE/);
   });
 
@@ -349,12 +359,71 @@ describe('what the feed shows', () => {
     const { path } = await issue(OWN);
     const ics = await (await feed(path)).text();
     expect(ics).not.toMatch(/^ATTENDEE/m);
-    expect(ics).toContain('SUMMARY:Evil\\, Title\; ATTENDEE:mailto:x@y.z');
+    expect(ics).toContain('SUMMARY:Evil\\, Title\\; ATTENDEE:mailto:x@y.z');
   });
 
   it('is identical on the next fetch when nothing changed', async () => {
     const { path } = await issue(OWN);
     expect(await (await feed(path)).text()).toBe(await (await feed(path)).text());
+  });
+});
+
+describe('rate limiting cannot be turned against the member (review item 2)', () => {
+  it('junk tokens and junk ids never spend the member’s own bucket', async () => {
+    const { token } = await issue(AR);
+    limiterKeys = [];
+    for (let i = 0; i < 5; i += 1) await feed(`/x?token=${AR}.${'A'.repeat(42)}${i}`);
+    await feed('/x?token=zzz');
+    expect(limiterKeys.filter((k) => k.startsWith(`org-feed:${L}:${AR}`))).toEqual([]);
+    // …so even with the per-IP bucket generous and the per-user one exhausted by someone else, shape errors stay 404.
+    refuse = ['org-feed:'];
+    expect((await feed(`/x?token=${AR}.${'A'.repeat(43)}`)).status).toBe(404);
+    expect(token).toBeTruthy();
+  });
+
+  it('the member’s bucket is spent only after the token verified', async () => {
+    const { path } = await issue(AR);
+    limiterKeys = [];
+    expect((await feed(path)).status).toBe(200);
+    expect(limiterKeys).toEqual([`org-feed-ip:127.0.0.1:${L}`, `org-feed:${L}:${AR}`]);
+  });
+
+  it('a refused per-IP bucket is a 429 before any lookup', async () => {
+    const { path } = await issue(AR);
+    refuse = ['org-feed-ip:'];
+    expect((await feed(path)).status).toBe(429);
+  });
+
+  it('a non-UUID org id is a 404 that reaches no limiter; case variants share one key', async () => {
+    limiterKeys = [];
+    const res = await feed(`/x?token=${AR}.${'A'.repeat(43)}`, 'not-a-uuid');
+    expect(res.status).toBe(404);
+    expect(limiterKeys).toEqual([]);
+    await feed(`/x?token=${AR}.${'A'.repeat(43)}`, L.toUpperCase());
+    await feed(`/x?token=${AR}.${'A'.repeat(43)}`, L);
+    expect(new Set(limiterKeys).size).toBe(1);
+  });
+});
+
+describe('revocation does not depend on how many feed events there are (review item 1)', () => {
+  it('still revokes and rotates when the member has more feed events than a PostgREST page holds', async () => {
+    // The old read was an ascending, capped select: past the cap it froze on the OLDEST events.
+    db.maxRows = 3;
+    db.tables.activity_events = Array.from({ length: 10 }, (_, i) => ({
+      id: `e${String(i).padStart(2, '0')}`, org_id: L, actor_id: AR, verb: i % 2 === 0 ? 'calendar_feed.issued' : 'calendar_feed.revoked',
+      subject_type: 'member', subject_id: AR, payload: {}, audit: true, visibility: 'internal', created_at: `2026-09-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+    }));
+    // 10 events, the last (i=9) is a revoke: off.
+    expect(await (await manage('GET', AR)).json()).toEqual({ active: false });
+    const first = await issue(AR);
+    expect((await feed(first.path)).status).toBe(200);
+    const second = await issue(AR);
+    expect(second.token).not.toBe(first.token);
+    expect((await feed(first.path)).status).toBe(404);
+    expect((await feed(second.path)).status).toBe(200);
+    await manage('DELETE', AR);
+    expect((await feed(second.path)).status).toBe(404);
+    expect(await (await manage('GET', AR)).json()).toEqual({ active: false });
   });
 });
 
