@@ -387,6 +387,24 @@ describe('LABEL-31: the legal queue and the legal pack are not an external membe
   }
 });
 
+describe('LABEL-35: Needs attention is not an external member\'s', () => {
+  const route = '[orgId]/attention/route.ts';
+
+  it('the route exists and is not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(externalRouteKeys()).not.toContain(`${route}:GET`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: is 403/404 with no item in the body, and nothing is written`, async () => {
+      const res = await call(route, 'GET', user);
+      expect([403, 404], `answered ${res.status}`).toContain(res.status);
+      expect(JSON.stringify(await res.json())).not.toMatch(/items|attention|restricted/);
+      expect(mem.writes).toEqual([]);
+    });
+  }
+});
+
 describe('LABEL-32: release readiness is not an external member\'s', () => {
   const route = '[orgId]/releases/[releaseId]/readiness/route.ts';
 

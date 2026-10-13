@@ -30,11 +30,11 @@ export type OrgOverview = RosterSummary & {
   releasesReady: boolean;
 };
 
-const CHUNK = 200;
+export const CHUNK = 200;
 const PAGE = 1000;
 
 /** A failed read, keeping PostgREST's own error so a caller can tell a missing table from a real failure. */
-class ReadError extends Error {
+export class ReadError extends Error {
   constructor(what: string, readonly raw: { message: string }) {
     super(`${what}: ${raw.message}`);
   }
@@ -45,7 +45,7 @@ function rows<T>(res: { data: unknown; error: { message: string } | null }, what
   return (res.data ?? []) as T[];
 }
 
-function chunks<T>(list: readonly T[]): T[][] {
+export function chunks<T>(list: readonly T[]): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < list.length; i += CHUNK) out.push(list.slice(i, i + CHUNK));
   return out;
@@ -54,7 +54,7 @@ function chunks<T>(list: readonly T[]): T[][] {
 type Read = PromiseLike<{ data: unknown; error: { message: string } | null }>;
 
 /** Every row of a read, one `range` page at a time, until a short page. The read must be ordered so pages do not overlap. */
-async function pageAll<T>(read: (from: number, to: number) => Read, what: string): Promise<T[]> {
+export async function pageAll<T>(read: (from: number, to: number) => Read, what: string): Promise<T[]> {
   const out: T[] = [];
   for (let from = 0; ; from += PAGE) {
     const page = rows<T>(await read(from, from + PAGE - 1), what);
@@ -64,7 +64,7 @@ async function pageAll<T>(read: (from: number, to: number) => Read, what: string
 }
 
 /** One paged read per chunk of ids, concatenated. */
-async function inChunks<T>(ids: readonly string[], read: (part: string[], from: number, to: number) => Read, what: string): Promise<T[]> {
+export async function inChunks<T>(ids: readonly string[], read: (part: string[], from: number, to: number) => Read, what: string): Promise<T[]> {
   const parts = await Promise.all(chunks([...new Set(ids)]).map((part) => pageAll<T>((from, to) => read(part, from, to), what)));
   return parts.flat();
 }
