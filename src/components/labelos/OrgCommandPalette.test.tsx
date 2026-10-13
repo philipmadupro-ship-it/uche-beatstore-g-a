@@ -41,10 +41,12 @@ afterEach(() => {
 });
 
 describe('OrgCommandPalette', () => {
-  it('renders nothing while closed and outside an org shell', () => {
+  it('renders nothing while closed and outside an org shell', async () => {
     const { container } = render(<OrgCommandPalette />);
     act(() => useCommandPalette.getState().setOpen(true));
     expect(container.innerHTML).toBe('');
+    await new Promise((r) => setTimeout(r, 200));
+    expect(fetchMock).not.toHaveBeenCalled(); // outside the org shell: nothing mounts, nothing is requested
   });
 
   it('lists the org destinations before anything is typed, and requests nothing', () => {
