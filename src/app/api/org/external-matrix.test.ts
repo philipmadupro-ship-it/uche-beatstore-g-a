@@ -283,6 +283,23 @@ describe('LABEL-23: tasks and notifications are not an external member\'s (route
   }
 });
 
+describe('LABEL-29: legal readiness is not an external member\'s', () => {
+  const route = '[orgId]/tracks/[id]/legal-readiness/route.ts';
+
+  it('the route exists and is not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(externalRouteKeys()).not.toContain(`${route}:GET`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: the readiness of a song of their own project is still 403/404 (no counts, no percentage)`, async () => {
+      const res = await call(route, 'GET', user);
+      expect([403, 404], `answered ${res.status}`).toContain(res.status);
+      expect(JSON.stringify(await res.json())).not.toMatch(/percent|blockerCount|readiness/);
+    });
+  }
+});
+
 describe('LABEL-27: credits and parties (route by route)', () => {
   const credits = '[orgId]/tracks/[id]/credits/route.ts';
   const decide = '[orgId]/tracks/[id]/credits/[creditId]/route.ts';
