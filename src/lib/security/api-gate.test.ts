@@ -5,6 +5,8 @@ import {
   isLabelOsJoinApiPath,
   isLabelOsJoinPagePath,
   isLabelOsPagePath,
+  isLabelOsRestoreApiPath,
+  isLabelOsRestorePagePath,
   isPublicApiPath,
   requiresProducerForApi,
 } from './api-gate';
@@ -18,7 +20,7 @@ describe('isPublicApiPath', () => {
   ])('allows %s', (p) => expect(isPublicApiPath(p)).toBe(true));
 
   it.each([
-    '/api/email', '/api/invite', '/api/team', '/api/upload/init', '/api/upload/image',
+    '/api/email', '/api/upload/init', '/api/upload/image',
     '/api/tracks', '/api/tracks/abc', '/api/tracks/abc/heatmap/extra', '/api/projects',
     '/api/projects/abc', '/api/audio', '/api/sales', '/api/contacts', '/api/cover/generate',
     '/api/stripe/diagnostics', '/api/privacy/erase', '/api/profile',
@@ -81,6 +83,32 @@ describe('the join exception (LABEL-08)', () => {
       expect(apiGateFor(p, true), p).toBe('member');
     }
     expect(requiresProducerForApi('/api/org/join', true)).toBe(false);
+  });
+});
+
+describe('the restore exception (LABEL-39)', () => {
+  const ID = '0b0e1a57-0000-4000-8000-000000000001';
+
+  it('is exactly /api/org/<uuid>/restore', () => {
+    expect(isLabelOsRestoreApiPath(`/api/org/${ID}/restore`)).toBe(true);
+    for (const p of [`/api/org/${ID}/restore/`, `/api/org/${ID}/restore/x`, `/api/org/${ID}`, '/api/org/x/restore', `/api/org/${ID}/export`, `/api/org/${ID}/restored`, '/api/org/restore', `/api/org/${ID}/x/restore`, `/api/orgs/${ID}/restore`]) {
+      expect(isLabelOsRestoreApiPath(p), p).toBe(false);
+    }
+  });
+
+  it('admits any signed-in caller to it and to nothing beside it; the route authorises', () => {
+    expect(apiGateFor(`/api/org/${ID}/restore`, true)).toBe('session');
+    expect(apiGateFor(`/api/org/${ID}/restore`, false)).toBe('none');
+    for (const p of [`/api/org/${ID}/export`, `/api/org/${ID}`, `/api/org/${ID}/members`]) {
+      expect(apiGateFor(p, true), p).toBe('member');
+    }
+  });
+
+  it('the restore page is /restore/<uuid>', () => {
+    for (const p of [`/restore/${ID}`, `/restore/${ID}/`]) expect(isLabelOsRestorePagePath(p), p).toBe(true);
+    for (const p of ['/restore', '/restore/', '/restore/abc', `/restore/${ID}/x`, `/o/restore/${ID}`, `/restored/${ID}`]) {
+      expect(isLabelOsRestorePagePath(p), p).toBe(false);
+    }
   });
 });
 

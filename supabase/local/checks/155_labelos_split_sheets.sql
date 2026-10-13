@@ -242,6 +242,9 @@ SELECT public.check_eq('saving a draft replaces its lines',
                        jsonb_build_object('party_id', :PB::text, 'role', 'writer', 'share', '33.3333'),
                        jsonb_build_object('party_id', :PC::text, 'role', 'writer', 'share', '33.3333'))) -> 'sheet' ->> 'note'), 'second cut');
 RESET ROLE;
+SELECT public.check_eq('… in the order they were written (rows of one statement share a created_at, so position says which is first)',
+  (SELECT string_agg(party_id::text, ',' ORDER BY position) FROM public.split_lines WHERE track_id = :S1 AND role = 'writer'),
+  :PA || ',' || :PB || ',' || :PC);
 SELECT public.check_eq('… three lines, summing to exactly 100.0000',
   (SELECT sum(share) FROM public.split_lines WHERE track_id = :S1 AND role = 'writer'), 100.0000::numeric);
 

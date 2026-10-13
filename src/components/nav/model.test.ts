@@ -101,6 +101,14 @@ describe('navGroupsFor', () => {
     expect(producer.map((g) => g.key)).not.toContain('roster');
   });
 
+  it('Connections (LABEL-41) is for label and artist orgs, for whoever holds org.manage', () => {
+    const items = (kind: string, caps: string[]) => navGroupsFor(kind, new Set(caps), { slug: 's', viewerIsProducer: false }).find((g) => g.key === 'org')?.items.map((i) => i.href);
+    expect(items('label', ['org.manage', 'catalog.read'])).toEqual(['/o/s/settings/members', '/o/s/settings/connections']);
+    expect(items('artist', ['org.manage'])).toEqual(['/o/s/settings/members', '/o/s/settings/connections']);
+    expect(items('label', ['catalog.read'])).toEqual(['/o/s/settings/members']);
+    expect(items('producer', ['org.manage'])).toEqual(['/o/s/settings/members']);
+  });
+
   it('an org without its slug, or of an unknown kind, has nothing to link to', () => {
     expect(navGroupsFor('label', new Set(ALL_CAPABILITIES))).toEqual([]);
     expect(navGroupsFor('agency', new Set(ALL_CAPABILITIES), { slug: 'x', viewerIsProducer: true })).toEqual([]);

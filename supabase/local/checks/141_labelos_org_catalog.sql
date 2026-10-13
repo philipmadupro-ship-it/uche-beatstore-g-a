@@ -251,8 +251,8 @@ SELECT public.check_eq('the service-only write trigger sits on every table the p
   (SELECT string_agg(c.relname, ',' ORDER BY c.relname) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
    WHERE t.tgname = 'labelos_org_rows_service_only' AND NOT t.tgisinternal),
   -- approvals: 157's org table (LABEL-30)
-  'approvals,artist_messages,artist_portals,contact_track_states,notifications,'
-  -- parties: 153's org table (LABEL-27)
+  -- artist_direction, artist_references: 152's org tables (LABEL-26); parties: 153's (LABEL-27)
+  'approvals,artist_direction,artist_messages,artist_portals,artist_references,contact_track_states,notifications,'
   'parties,project_assets,project_comments,project_contacts,'
   'project_folder_items,project_shares,project_tags,project_tracks,projects,'
   -- release_items, releases: 144's own org tables (LABEL-16)

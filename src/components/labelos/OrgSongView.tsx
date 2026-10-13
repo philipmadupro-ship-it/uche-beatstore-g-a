@@ -17,7 +17,7 @@
  *
  * Credits (LABEL-27) follow the recordings: a pill per person with its status and
  * rights-holder party. Tasks on this song (LABEL-23) sit at the foot, the member's
- * own side of them. Legal readiness (LABEL-29) follows the credits.
+ * own side of them. Splits (LABEL-28) and legal readiness (LABEL-29) follow the credits.
  */
 
 import { useState } from 'react';
@@ -27,6 +27,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { RestrictedNote } from '@/components/artists/OrgArtistWorkspaceTabs';
 import { OrgCredits } from '@/components/labelos/OrgCredits';
+import { OrgSplits } from '@/components/labelos/OrgSplits';
 import { OrgApprovals } from '@/components/labelos/OrgApprovals';
 import { OrgLegalReadiness } from '@/components/labelos/OrgLegalReadiness';
 import { SongStageControl } from '@/components/labelos/SongStageControl';
@@ -172,6 +173,8 @@ export function OrgSongView({ orgId, orgSlug, detail }: { orgId: string; orgSlug
       </section>
 
       <OrgCredits key={song.id} orgId={orgId} trackId={song.id} />
+
+      <OrgSplits key={song.id} orgId={orgId} trackId={song.id} />
 
       <OrgLegalReadiness key={song.id} orgId={orgId} trackId={song.id} />
 

@@ -21,6 +21,8 @@ export async function GET() {
   const body: MyOrgsResponse = {
     orgs: mine.orgs.map((o) => ({ ...o, home: orgHome(o, mine.isProducer) })),
     shared: shared.ok ? shared.projects.map((p) => ({ id: p.id, name: p.name, href: p.href })) : [],
+    // Only when there is one: the switcher's answer is unchanged for everyone else.
+    ...(mine.pendingDeletion?.length ? { pendingDeletion: mine.pendingDeletion } : {}),
   };
   return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
 }

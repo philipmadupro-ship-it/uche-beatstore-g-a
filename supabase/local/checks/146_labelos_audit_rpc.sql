@@ -65,8 +65,9 @@ SELECT public.check_eq('all five functions exist',
      -- 148 (LABEL-21) adds the project-member family; it is checked in 148's own file.
      AND proname NOT LIKE 'labelos\_audit\_project\_%' AND proname <> 'labelos_audit_insert_project'
      -- 153 (LABEL-27) adds credit decisions; checked in 153's own file.
-     AND proname NOT LIKE 'labelos\_audit\_credit\_%'
+     -- 154 (LABEL-41) adds the connection family; checked in 154's own file.
      -- 155 (LABEL-28) adds split sheet transitions; checked in 155's own file.
+     AND proname NOT LIKE 'labelos\_audit\_credit\_%' AND proname NOT LIKE 'labelos\_audit\_connection\_%'
      AND proname NOT LIKE 'labelos\_audit\_split\_%'
      -- 157 (LABEL-30) adds approval request / decision; checked in 157's own file.
      AND proname NOT LIKE 'labelos\_audit\_approval\_%'), 5);
