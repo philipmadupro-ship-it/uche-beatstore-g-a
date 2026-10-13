@@ -1252,6 +1252,19 @@ export const OrgSongStageBodySchema = z.object({
 export type OrgSongStageBody = z.infer<typeof OrgSongStageBodySchema>;
 
 /**
+ * PUT /api/org/[orgId]/tracks/[id]/samples (LABEL-29): the song's sample
+ * declaration. `note` and `asset_id` are optional: omitted keeps what is
+ * there, `null` clears. Declaring `none` or `unknown` drops both (a clearance
+ * of nothing is meaningless; `planSamples` does it, not the client).
+ */
+export const OrgSamplesBodySchema = z.object({
+  samples: z.enum(['none', 'yes', 'unknown']),
+  note: z.string().trim().max(2000).nullable().optional(),
+  asset_id: z.string().uuid().nullable().optional(),
+}).strict();
+export type OrgSamplesBody = z.infer<typeof OrgSamplesBodySchema>;
+
+/**
  * PUT /api/org/[orgId]/tracks/[id]/reviews (LABEL-25): MY review of a song.
  * Each field is optional: omitted keeps what is there, `null` clears it. The
  * merged review must still hold a rating, a verdict or a note.
