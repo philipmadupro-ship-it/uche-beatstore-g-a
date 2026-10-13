@@ -112,6 +112,26 @@ describe('the restore exception (LABEL-39)', () => {
   });
 });
 
+describe('the release calendar feed (LABEL-34) needs no exception', () => {
+  const ID = '0b0e1a57-0000-4000-8000-000000000001';
+
+  it('is inside the Label OS namespace, so LABEL_OS_ENABLED and the database check still apply to it', () => {
+    expect(isLabelOsApiPath(`/api/org/${ID}/calendar.ics`)).toBe(true);
+  });
+
+  it('a calendar app has no cookies: signed out is left to the route (token check), signed in is the ordinary member gate', () => {
+    expect(apiGateFor(`/api/org/${ID}/calendar.ics`, false)).toBe('none');
+    expect(apiGateFor(`/api/org/${ID}/calendar.ics`, true)).toBe('member');
+  });
+
+  it('opens nothing beside it: the link management and the export are ordinary member routes', () => {
+    for (const p of [`/api/org/${ID}/calendar/feed`, `/api/org/${ID}/releases/${ID}/export`, `/api/org/${ID}/calendar.ics/x`]) {
+      expect(apiGateFor(p, true), p).toBe('member');
+    }
+    expect(requiresProducerForApi(`/api/org/${ID}/calendar.ics`, true)).toBe(false);
+  });
+});
+
 describe('apiGateFor', () => {
   it('gates Label OS paths on membership, never on producer', () => {
     expect(apiGateFor('/api/org', true)).toBe('member');

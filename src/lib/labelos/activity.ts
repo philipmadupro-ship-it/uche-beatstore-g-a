@@ -113,6 +113,10 @@ export const VERBS = [
   'release.updated',
   'release.deleted',
   'release.delivered',
+  // Distributor metadata export + release calendar feed (LABEL-34)
+  'release.metadata_exported',
+  'calendar_feed.issued',
+  'calendar_feed.revoked',
   // The legal pack left the building (LABEL-31): who took the contracts and rights data of a release
   'release.legal_pack_exported',
   // Label ↔ artist connections (LABEL-41)
@@ -151,6 +155,10 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'approval.requested',
   'approval.decided',
   'release.delivered',
+  // The feed verbs ARE the token's revocation state (feed-token.ts): pruning one would revive a revoked URL.
+  'release.metadata_exported',
+  'calendar_feed.issued',
+  'calendar_feed.revoked',
   'release.legal_pack_exported',
   'connection.requested',
   'connection.accepted',
@@ -249,6 +257,9 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'release.updated': 'artist',
   'release.deleted': 'artist',
   'release.delivered': 'artist',
+  'release.metadata_exported': 'internal',
+  'calendar_feed.issued': 'internal',
+  'calendar_feed.revoked': 'internal',
   // Contracts and legal names: the business side only.
   'release.legal_pack_exported': 'internal',
   'connection.requested': 'internal',

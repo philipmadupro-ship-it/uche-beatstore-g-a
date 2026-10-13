@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { memoryAdmin, type MemoryDb } from './mocks/memory-db';
 import { gatherOrgExport, dueOrgs, pruneOldEvents, purgeOrg, restoreOrg, softDeleteOrg } from './org-lifecycle-store';
 import { AUDIT_VERBS } from './activity';
+import { FEED_EVENT_VERBS, feedState } from './feed-token';
 
 const A = '10000000-0000-4000-8000-00000000000a'; // the org under test
 const B = '10000000-0000-4000-8000-00000000000b'; // another org
@@ -212,6 +213,24 @@ describe('pruneOldEvents (D9)', () => {
     for (const v of AUDIT_VERBS) db.tables.activity_events.push(ev(`a-${v}`, { verb: v, audit: false, created_at: '2020-01-01T00:00:00Z' }));
     expect((await pruneOldEvents(mem.client as never, NOW)).deleted).toBe(0);
     expect(db.tables.activity_events).toHaveLength(AUDIT_VERBS.length);
+  });
+
+  it('retention can never revive a revoked calendar link (LABEL-34): the feed verbs are audit verbs and the prune keeps them, flagged or not', async () => {
+    for (const v of FEED_EVENT_VERBS) expect(AUDIT_VERBS, v).toContain(v);
+    db.tables.activity_events.push(
+      ev('f1', { verb: 'calendar_feed.issued', audit: true, actor_id: 'u1', created_at: '2019-01-01T00:00:00Z' }),
+      ev('f2', { verb: 'calendar_feed.revoked', audit: false, actor_id: 'u1', created_at: '2019-02-01T00:00:00Z' }),
+      ev('old-plain', { created_at: '2019-03-01T00:00:00Z' }),
+    );
+    const verbsOf = () =>
+      db.tables.activity_events
+        .filter((e) => e.actor_id === 'u1')
+        .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+        .map((e) => String(e.verb));
+    const before = feedState(verbsOf());
+    expect(before).toEqual({ active: false, version: 2 });
+    expect((await pruneOldEvents(mem.client as never, NOW)).deleted).toBe(1);
+    expect(feedState(verbsOf())).toEqual(before);
   });
 
   it('is idempotent', async () => {

@@ -219,6 +219,9 @@ test('4 · gates name their blockers; a member without rights.read is told how m
   await page.getByTestId('release-gate-open-credits_splits').click();
   // The owner has rights.read: the rights detail is named.
   await expect(page.getByTestId('release-gate-popover-credits_splits')).toContainText('Track 1');
+  // LABEL-34: release.write sees the export buttons (and the rights note) in the actions area.
+  await expect(page.getByTestId('release-actions').getByRole('button', { name: 'Download CSV' })).toBeVisible();
+  await expect(page.getByTestId('release-actions')).toContainText('Credits are included only if you have rights access.');
   await owner.close();
 
   const mk = await as(browser, baseURL!, marketing.id, marketing.email);
@@ -232,6 +235,10 @@ test('4 · gates name their blockers; a member without rights.read is told how m
   // Read-only: no tracklist controls, no delivery button.
   await expect(view.getByLabel('Remove Bravo')).toHaveCount(0);
   await expect(view.getByTestId('release-deliver')).toHaveCount(0);
+  // LABEL-34: no export buttons or calendar link without release.write, and the route agrees.
+  await expect(view.getByRole('button', { name: 'Download CSV' })).toHaveCount(0);
+  await expect(view.getByRole('button', { name: 'Calendar link' })).toHaveCount(0);
+  expect((await mk.request.get(`${api}/releases/${ids.blocked}/export?format=csv`)).status()).toBe(403);
   expect((await mk.request.post(`${api}/releases/${ids.blocked}/deliver`, { data: { distributor: 'x' } })).status()).toBe(403);
   await mk.close();
 });
