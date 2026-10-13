@@ -27,6 +27,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { RestrictedNote } from '@/components/artists/OrgArtistWorkspaceTabs';
 import { OrgCredits } from '@/components/labelos/OrgCredits';
+import { OrgSplits } from '@/components/labelos/OrgSplits';
 import { SongStageControl } from '@/components/labelos/SongStageControl';
 import { TasksPanel } from '@/components/labelos/TasksPanel';
 import { abSeekFraction, toPlayerTrack, type RecordingView } from '@/lib/labelos/org-workspace';
@@ -170,6 +171,8 @@ export function OrgSongView({ orgId, orgSlug, detail }: { orgId: string; orgSlug
       </section>
 
       <OrgCredits key={song.id} orgId={orgId} trackId={song.id} />
+
+      <OrgSplits key={song.id} orgId={orgId} trackId={song.id} />
 
       <section aria-labelledby="org-song-where" className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div>

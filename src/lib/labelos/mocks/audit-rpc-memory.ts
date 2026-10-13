@@ -205,10 +205,10 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       };
       sheets.push(sheet);
       const lines = (tables.split_lines ??= []);
-      const add = (party_id: unknown, role: unknown, share: unknown) =>
-        lines.push({ id: randomUUID(), split_sheet_id: sheet.id, org_id: args.p_org, track_id: args.p_track, party_id, role, share, signed_at: null, signature_method: null, signature_asset_id: null, signed_by: null, created_at: new Date().toISOString() });
-      if (source) for (const l of lines.filter((x) => x.split_sheet_id === source!.id).map((x) => ({ ...x }))) add(l.party_id, l.role, l.share);
-      else for (const e of (args.p_lines as Row[] | null) ?? []) add(e.party_id, e.role, Number(e.share));
+      const add = (party_id: unknown, role: unknown, share: unknown, position: number) =>
+        lines.push({ id: randomUUID(), split_sheet_id: sheet.id, org_id: args.p_org, track_id: args.p_track, party_id, role, share, position, signed_at: null, signature_method: null, signature_asset_id: null, signed_by: null, created_at: new Date().toISOString() });
+      if (source) for (const l of lines.filter((x) => x.split_sheet_id === source!.id).map((x) => ({ ...x }))) add(l.party_id, l.role, l.share, Number(l.position ?? 0));
+      else ((args.p_lines as Row[] | null) ?? []).forEach((e, i) => add(e.party_id, e.role, Number(e.share), i));
       return ok({ sheet: { ...sheet } });
     },
     labelos_split_save_draft: (args, tables) => {
@@ -217,8 +217,8 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       if (sheet.status !== 'draft') return ok({ error: 'not_draft' });
       if (args.p_set_lines) {
         tables.split_lines = (tables.split_lines ?? []).filter((l) => l.split_sheet_id !== sheet.id);
-        for (const e of (args.p_lines as Row[]) ?? []) {
-          tables.split_lines.push({ id: randomUUID(), split_sheet_id: sheet.id, org_id: sheet.org_id, track_id: sheet.track_id, party_id: e.party_id, role: e.role, share: Number(e.share), signed_at: null, signature_method: null, signature_asset_id: null, signed_by: null, created_at: new Date().toISOString() });
+        for (const [i, e] of ((args.p_lines as Row[]) ?? []).entries()) {
+          tables.split_lines.push({ id: randomUUID(), split_sheet_id: sheet.id, org_id: sheet.org_id, track_id: sheet.track_id, party_id: e.party_id, role: e.role, share: Number(e.share), position: i, signed_at: null, signature_method: null, signature_asset_id: null, signed_by: null, created_at: new Date().toISOString() });
         }
       }
       if (args.p_set_note) sheet.note = args.p_note ?? null;

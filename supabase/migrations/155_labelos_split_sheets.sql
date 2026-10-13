@@ -93,6 +93,8 @@ CREATE TABLE IF NOT EXISTS public.split_lines (
   party_id           uuid NOT NULL REFERENCES public.parties(id),
   role               text NOT NULL,
   share              numeric(7,4) NOT NULL,
+  -- The order the sheet is written in (rows of one statement share a created_at).
+  position           int NOT NULL DEFAULT 0,
   signed_at          timestamptz,
   signature_method   text,
   signature_asset_id uuid REFERENCES public.project_assets(id) ON DELETE SET NULL,
@@ -282,7 +284,7 @@ BEGIN
     END IF;
     IF v_sheet.status <> 'draft' THEN
       -- Only the signature may be written, once; its file may be cleared.
-      IF NEW.party_id <> OLD.party_id OR NEW.role <> OLD.role OR NEW.share <> OLD.share THEN
+      IF NEW.party_id <> OLD.party_id OR NEW.role <> OLD.role OR NEW.share <> OLD.share OR NEW.position <> OLD.position THEN
         RAISE EXCEPTION 'split_lines: a circulated sheet cannot be edited' USING ERRCODE = 'check_violation';
       END IF;
       IF OLD.signed_at IS NOT NULL AND (NEW.signed_at IS DISTINCT FROM OLD.signed_at OR NEW.signature_method IS DISTINCT FROM OLD.signature_method
@@ -455,13 +457,13 @@ BEGIN
   END;
 
   IF p_copy_from IS NOT NULL THEN
-    INSERT INTO public.split_lines (split_sheet_id, org_id, track_id, party_id, role, share)
-    SELECT v_sheet.id, p_org, p_track, l.party_id, l.role, l.share
+    INSERT INTO public.split_lines (split_sheet_id, org_id, track_id, party_id, role, share, position)
+    SELECT v_sheet.id, p_org, p_track, l.party_id, l.role, l.share, l.position
     FROM public.split_lines l WHERE l.split_sheet_id = p_copy_from;
   ELSIF p_lines IS NOT NULL THEN
-    INSERT INTO public.split_lines (split_sheet_id, org_id, track_id, party_id, role, share)
-    SELECT v_sheet.id, p_org, p_track, (e->>'party_id')::uuid, e->>'role', (e->>'share')::numeric
-    FROM jsonb_array_elements(p_lines) e;
+    INSERT INTO public.split_lines (split_sheet_id, org_id, track_id, party_id, role, share, position)
+    SELECT v_sheet.id, p_org, p_track, (e.value->>'party_id')::uuid, e.value->>'role', (e.value->>'share')::numeric, (e.ord - 1)::int
+    FROM jsonb_array_elements(p_lines) WITH ORDINALITY AS e(value, ord);
   END IF;
 
   RETURN jsonb_build_object('sheet', to_jsonb(v_sheet));
@@ -505,9 +507,9 @@ BEGIN
 
   IF p_set_lines THEN
     DELETE FROM public.split_lines WHERE split_sheet_id = p_sheet;
-    INSERT INTO public.split_lines (split_sheet_id, org_id, track_id, party_id, role, share)
-    SELECT p_sheet, v_sheet.org_id, v_sheet.track_id, (e->>'party_id')::uuid, e->>'role', (e->>'share')::numeric
-    FROM jsonb_array_elements(p_lines) e;
+    INSERT INTO public.split_lines (split_sheet_id, org_id, track_id, party_id, role, share, position)
+    SELECT p_sheet, v_sheet.org_id, v_sheet.track_id, (e.value->>'party_id')::uuid, e.value->>'role', (e.value->>'share')::numeric, (e.ord - 1)::int
+    FROM jsonb_array_elements(p_lines) WITH ORDINALITY AS e(value, ord);
   END IF;
   IF p_set_note THEN
     UPDATE public.split_sheets SET note = p_note WHERE id = p_sheet;
