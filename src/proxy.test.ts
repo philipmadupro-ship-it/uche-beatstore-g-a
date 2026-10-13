@@ -267,6 +267,21 @@ describe('Label OS gate: flag on', () => {
     expect(membershipReads).toBe(0);
   });
 
+  it('lets a signed-out calendar app reach the token-authenticated feed (LABEL-34) without reading membership', async () => {
+    const feed = '/api/org/0b0e1a57-0000-4000-8000-000000000001/calendar.ics?token=x';
+    expect((await run(feed)).status).toBe(200);
+    expect(membershipReads).toBe(0);
+  });
+
+  it('opens nothing else to a signed-out caller: the management and export routes stay behind the route’s own 401', async () => {
+    // The proxy passes every signed-out /api request on; what protects these is the route (401), not the gate.
+    // The point of this test is that the feed adds NO new gate: a signed-in buyer is still refused on all three.
+    currentUser = { id: 'buyer-1' };
+    for (const p of ['/api/org/o1/calendar.ics?token=x', '/api/org/o1/calendar/feed', '/api/org/o1/releases/r1/export?format=csv']) {
+      expect((await run(p)).status, p).toBe(403);
+    }
+  });
+
   it('reads membership live on every request', async () => {
     currentUser = { id: 'member-1' };
     expect((await run('/api/org')).status).toBe(200);

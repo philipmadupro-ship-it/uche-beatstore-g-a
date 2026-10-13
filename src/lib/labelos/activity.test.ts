@@ -73,6 +73,9 @@ describe('verb vocabulary', () => {
       'approval.requested',
       'approval.decided',
       'release.delivered',
+      'release.metadata_exported',
+      'calendar_feed.issued',
+      'calendar_feed.revoked',
       'release.legal_pack_exported',
     ] as const) {
       expect(isAuditVerb(v)).toBe(true);
@@ -147,6 +150,9 @@ describe('default visibility (D4, D5, 08 §B4)', () => {
       'connection.requested',
       'connection.accepted',
       'connection.ended',
+      'release.metadata_exported',
+      'calendar_feed.issued',
+      'calendar_feed.revoked',
     ] as const) {
       expect(defaultVisibility(v), v).toBe('internal');
     }
