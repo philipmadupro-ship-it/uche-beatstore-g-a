@@ -1409,7 +1409,14 @@ Drop the table; flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-21
-**Status:** In Progress (branch label-os/LABEL-22; runs in parallel with LABEL-25, migration 150 reserved)
+**Status:** Done (PR #87, squash 1e32a3d, 2026-10-09; migration 150, not applied — apply at final merge, after 149)
+
+**Orchestrator decisions on #87 (accepted as implemented):**
+- Gate: CI green on the latest commit (build-and-test, e2e, secret-scan); merges cleanly with LABEL-23. Two stray `data/upload-staging/*/_meta.json` artefacts from the base merge were removed and `data/upload-staging/` is now gitignored (it recurred on #88 and #87).
+- Acceptance verified by: portal/share redaction tests and an e2e on the public share endpoint, DB CHECK refusing `internal` on share/portal rows, `db:local:check` 150 (RLS with each person's own JWT), carry-forward pure/route/jsdom/e2e tests, external-members matrix.
+- Fixes a leak: `GET /api/activity` treated `user_id IS NULL` as the producer's own and exposed org project comments/titles to any producer (closes one of the open carried items). Other producer routes with the same pattern (`api/tracks/[id]/similar`, `api/tracks/tags/bulk`, `api/tracks/tags`) remain open.
+- Decisions accepted: commenting = `review.comment` OR `catalog.write`; team-only is a role rule (never role `artist`, never external members); current version = newest `version` link; owner/admin moderate comments on any project recording.
+- Carries: no comments panel on the org song page; guest share-link comments on org projects are not in the org list; no realtime (30 s poll).
 
 ## Objective
 Threaded, region-pinned comments for org members, by extending `project_comments` (`17` R5). **No new `comments` table.**
@@ -1703,7 +1710,7 @@ Drop the table.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-17
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-26; runs in parallel with LABEL-27, migration 152 reserved)
 
 ## Objective
 A per-artist memory of references and direction.
@@ -1740,6 +1747,19 @@ Recommendations.
 ## Rollback
 Drop.
 
+## Built (LABEL-26)
+- **Migration 152** (not applied): `artist_direction` (PK `contact_id`) and `artist_references` (kind `track|link|file|note`, `visibility artist|internal`), both org-only with service-role writes; integrity trigger (same-org artist / track / file; files only visual + not restricted); one SELECT policy each, no per-row SECURITY DEFINER call.
+- **Routes** under `/api/org/[orgId]/artists/[contactId]/`: `direction` (GET, PUT), `references` (POST), `references/[referenceId]` (PATCH, DELETE), `references/choices` (track + file pickers). All mutations record an event (`direction.updated`, `reference.added|updated|removed`); `DEFAULT_VISIBILITY` and the digest phrases cover the new verbs.
+- **UI**: the Direction tab on the org artist workspace (`ArtistDirectionTab`): six structured fields saved on blur (Escape restores), keywords, a references list, an inline add form with a track search and a file picker, a one-click Team-only toggle. No modal.
+
+## Verification (LABEL-26)
+- Artist cannot read internal references: `direction/route.test.ts` (route, in-memory DB), `supabase/local/checks/152_*.sql` (as an `authenticated` role with the artist's own claims, plus an `EXPLAIN` for R-08), `e2e/label-org-direction.spec.ts` (route, PostgREST with her JWT, and the page's HTML).
+- `external-matrix.test.ts`: every direction / reference handler is refused (403/404) for all four external project roles and writes nothing.
+- Full `npm test`, `tsc`, eslint, `npm run build` (CI stub env), `npm run db:local:check`, and the real-DB e2e (direction + workspace, activity, tasks, comments, external members).
+
+## Not done
+- Recommendations (Out of Scope). Reordering references (the `position` column and PATCH exist; no drag UI). Uploading a visual file straight from the Direction tab (files are picked from the artist's project files, added in the Files tab via LABEL-15).
+
 ---
 
 # LABEL-27 — Parties + credits on `track_collaborators`
@@ -1749,7 +1769,7 @@ Drop.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-21 (D7: 115 applied on prod)
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-27; runs in parallel with LABEL-26, migration 153 reserved; D7 satisfied — 115 applied on production 2026-09-30)
 
 ## Objective
 Legal-grade credits by extending `track_collaborators` (`17` R8), and rights-holder parties. **No new `credits` table.**
@@ -2428,6 +2448,11 @@ Existing tests updated; `invite/route.test.ts` removed with the route.
 
 ## Out of Scope
 Dropping the tables.
+
+## Built / Verification / Not done
+**Built:** `/api/invite` and `/api/team` (with `invite/route.test.ts`) deleted; the Team members and Invite collaborator cards removed from `/settings`; `team_members` / `invites` removed from `local-store.ts` and the e2e store fixture; `TeamRole` / `TeamMember` / `Invite` types and `InviteCreateBodySchema` deleted. `/invite/[token]` is now a static page saying "This invite has expired, ask for a new one" (no token read, no table touched). Tables and `is_team_member()` stay.
+**Verification:** `grep -rnE "api/invite|api/team" src e2e scripts CLAUDE.md AGENTS.md .github` returns nothing; `tsc`, eslint, full `npm test` (430 files, 7059 tests) and `npm run build` with the CI stub env pass. `/api/email` and `/api/share` are untouched.
+**Not done:** dropping the tables (out of scope).
 
 ## Rollback
 Revert.
