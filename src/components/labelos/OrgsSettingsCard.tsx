@@ -20,6 +20,7 @@ import { ORG_KIND_LABELS, type MyOrgsResponse } from '@/lib/labelos/switcher';
 export function OrgsSettingsCard() {
   const enabled = useLabelOsEnabled();
   const [orgs, setOrgs] = useState<MyOrgsResponse['orgs']>([]);
+  const [pending, setPending] = useState<NonNullable<MyOrgsResponse['pendingDeletion']>>([]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -28,6 +29,7 @@ export function OrgsSettingsCard() {
       .then((r) => (r.ok ? r.json() : null))
       .then((j: MyOrgsResponse | null) => {
         if (alive && j && Array.isArray(j.orgs)) setOrgs(j.orgs);
+        if (alive && j && Array.isArray(j.pendingDeletion)) setPending(j.pendingDeletion);
       })
       .catch(() => undefined);
     return () => {
@@ -35,7 +37,7 @@ export function OrgsSettingsCard() {
     };
   }, [enabled]);
 
-  if (!enabled || orgs.length === 0) return null;
+  if (!enabled || (orgs.length === 0 && pending.length === 0)) return null;
 
   return (
     <section aria-labelledby="orgs-settings-heading">
@@ -55,6 +57,19 @@ export function OrgsSettingsCard() {
                 </p>
                 <h3 className="truncate text-[14px] font-semibold text-[var(--text-primary)]">{o.name}</h3>
                 <p className="mt-0.5 text-[11px] text-[var(--text-readable)]">Members, invitations and the organization’s name.</p>
+              </div>
+              <ArrowRight size={16} className="shrink-0 text-white/40 transition-colors group-hover:text-[var(--text-primary)]" aria-hidden="true" />
+            </Card>
+          </Link>
+        ))}
+        {/* LABEL-39: an org the caller deleted is hidden everywhere else; this is the way back. */}
+        {pending.map((o) => (
+          <Link key={o.id} href={`/restore/${o.id}`} className="group block">
+            <Card interactive className="flex items-center gap-5 p-6">
+              <div className="min-w-0 flex-1">
+                <p className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-readable)]">Scheduled for deletion</p>
+                <h3 className="truncate text-[14px] font-semibold text-[var(--text-primary)]">{o.name}</h3>
+                <p className="mt-0.5 text-[11px] text-[var(--text-readable)]">Deleted for good on {new Date(o.purgeAfter).toLocaleDateString()}. Restore it before then.</p>
               </div>
               <ArrowRight size={16} className="shrink-0 text-white/40 transition-colors group-hover:text-[var(--text-primary)]" aria-hidden="true" />
             </Card>

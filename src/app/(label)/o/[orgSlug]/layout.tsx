@@ -9,8 +9,11 @@
  * Mounts PlayerBar (CLAUDE.md player rule: any page that plays through
  * `usePlayer` must sit under a layout that mounts it). It renders per
  * request, never prerendered: the org depends on the session.
+ *
+ * A soft-deleted org (LABEL-39) is gone here: 404 — except to its owner, who
+ * is sent to `/restore/<id>` while the grace period lasts.
  */
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { TopBar } from '@/components/nav/TopBar';
 import { PlayerBar } from '@/components/player/PlayerBar';
 import { MediaSessionBridge } from '@/components/player/MediaSessionBridge';
@@ -19,7 +22,7 @@ import { UploadsTray } from '@/components/upload/UploadsTray';
 import { LabelOsFlagProvider } from '@/components/labelos/LabelOsFlag';
 import { OrgShellProvider } from '@/components/labelos/OrgShellContext';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
-import { orgShellFor } from '@/lib/auth/org-access';
+import { orgShellFor, ownedDeletedOrgFor } from '@/lib/auth/org-access';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +38,13 @@ export default async function OrgShellLayout({
   if (!isLabelOsEnabled()) notFound();
   const { orgSlug } = await params;
   const shell = await orgShellFor(orgSlug);
-  if (!shell) notFound();
+  if (!shell) {
+    // An owner whose org is inside its 30-day grace period (LABEL-39) is sent
+    // to where it can be restored; everyone else gets the same 404 as ever.
+    const pending = await ownedDeletedOrgFor(orgSlug);
+    if (pending) redirect(`/restore/${pending.id}`);
+    notFound();
+  }
 
   const body = (
     <div className="min-h-screen bg-[#090907]">

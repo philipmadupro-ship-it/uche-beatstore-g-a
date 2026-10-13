@@ -23,7 +23,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === '/auth/v1/user') {
       const claims = verify((req.headers.authorization || '').replace(/^Bearer /, ''));
       if (!claims?.sub) return send(401, { message: 'invalid token' });
-      return send(200, { id: claims.sub, aud: 'authenticated', role: 'authenticated', email: claims.email, app_metadata: { provider: 'email' }, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' });
+      return send(200, { id: claims.sub, aud: 'authenticated', role: 'authenticated', email: claims.email, app_metadata: { provider: 'email' }, user_metadata: {}, created_at: '2026-01-01T00:00:00Z', last_sign_in_at: new Date((claims.iat ?? 0) * 1000).toISOString() });
     }
     if (url.pathname === '/auth/v1/token') {
       const body = JSON.parse((await readBody(req)).toString() || '{}');
