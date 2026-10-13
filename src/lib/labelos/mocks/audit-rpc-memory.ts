@@ -155,6 +155,34 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       event(tables, args, 'project.member_removed', 'member', args.p_user, args.p_payload);
       return ok({ removed: true });
     },
+    // Migration 153 (LABEL-27): confirm / dispute a credit, with its event in the same step.
+    labelos_audit_credit_decide: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const credit = (tables.track_collaborators ?? []).find((c) => c.id === args.p_credit && c.org_id === args.p_org);
+      if (!credit) return ok({ error: 'not_found' });
+      const decision = String(args.p_decision);
+      if (credit.status === decision) return ok({ error: 'unchanged' });
+      if (decision === 'confirmed') {
+        Object.assign(credit, { status: 'confirmed', confirmed_by: args.p_actor, confirmed_at: new Date().toISOString(), dispute_note: null });
+      } else {
+        Object.assign(credit, { status: 'disputed', confirmed_by: null, confirmed_at: null, dispute_note: args.p_note ?? null });
+      }
+      const subject = (args.p_subject ?? {}) as Row;
+      (tables.activity_events ??= []).push({
+        org_id: args.p_org,
+        actor_id: args.p_actor,
+        verb: decision === 'confirmed' ? 'credit.confirmed' : 'credit.disputed',
+        subject_type: 'credit',
+        subject_id: credit.id,
+        artist_id: subject.artist_id ?? null,
+        project_id: subject.project_id ?? null,
+        song_id: subject.song_id ?? null,
+        payload: args.p_payload,
+        audit: true,
+        visibility: 'artist',
+      });
+      return ok({ credit: { ...credit } });
+    },
     labelos_audit_invitation_revoke: (args, tables) => {
       if (opts.failAudit?.()) return failed();
       const inv = (tables.org_invitations ?? []).find((i) => i.org_id === args.p_org && i.id === args.p_id && !i.accepted_at && !i.revoked_at);
