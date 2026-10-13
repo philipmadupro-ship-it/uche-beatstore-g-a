@@ -38,6 +38,20 @@
  * request. Never an `org_members` lookup for an external member, never a
  * widening of an org capability: what a role may do is `externalCan`.
  *
+ * Artist ↔ label connection (LABEL-41, D1): a LABEL member may read, and only
+ * read, the music an ARTIST org shared with their label. The helpers at the
+ * bottom (`requireConnectedTrack` / `requireConnectedProject` /
+ * `requireConnectionOfLabel`) are an explicit opt-in per route, never folded
+ * into requireObjectAccess: every other route keeps answering 404 for a row
+ * of another org, so a write route can never be reached through a
+ * connection by accident. They answer for the LABEL org the route names:
+ * live label membership, an ACTIVE connection to the row's org, the row in a
+ * shared project, the member's OWN artist scope on the connection's roster
+ * contact, and `catalog.read` — then the route applies D4 with the member's
+ * own capabilities. Any refusal is 404 (never 403): what the artist org holds
+ * is not theirs to learn. Ending the connection, narrowing the share or
+ * soft-deleting either org takes effect on the next request (read live).
+ *
  * Artist scope (06 §2.5, LABEL-10): a member with `scope = 'artists'` (role
  * `artist` always) sees only the roster contacts in `member_artist_scopes`,
  * read live with the membership. requireObjectAccess answers 404 for an
@@ -59,6 +73,16 @@ import {
 } from '@/lib/labelos/capabilities';
 import { artistScopeFilter, scopeAllowsAnyContact, scopeAllowsContact, toArtistScope, type ArtistScope } from '@/lib/labelos/artist-scope';
 import { orgProjectScopeContacts } from '@/lib/labelos/org-read';
+import {
+  CONNECTED_CAPABILITY,
+  CONNECTION_COLUMNS,
+  connectionReachesAnyProject,
+  connectionReachesProject,
+  labelScopeReaches,
+  toSharedSet,
+  type ConnectionRow,
+} from '@/lib/labelos/connections';
+import { isMissingConnections } from '@/lib/labelos/audit-rpc';
 import { externalMayAny, sortSharedProjects, sharedProjectHref, toMembership, type ExternalMembership, type ProjectMemberRow, type SharedProjectRef } from '@/lib/labelos/project-members';
 import { createLogger } from '@/lib/log';
 import { isUUID } from '@/lib/validate';
@@ -961,3 +985,176 @@ export async function myExternalProjects(): Promise<
     return fail(500, 'Could not list shared projects');
   }
 }
+
+
+// ── Artist ↔ label connection (LABEL-41) ────────────────────────────────
+
+/**
+ * A LABEL member admitted to music of a connected ARTIST org. `orgId` and the
+ * capabilities are the LABEL's (the route's org, the member's own); `sourceOrgId`
+ * is the artist org whose rows are read. Read access only: callers that write
+ * anything write to the label org (`orgId`) and never to `sourceOrgId`.
+ */
+export type ConnectedAccessOk = OrgAccessOk & { connection: ConnectionRow; sourceOrgId: string };
+export type ConnectedAccessResult = ConnectedAccessOk | OwnershipFail;
+
+async function activeConnection(admin: AdminClient, labelOrgId: string, artistOrgId: string): Promise<{ row: ConnectionRow | null; error: boolean }> {
+  const { data, error } = await admin
+    .from('org_connections')
+    .select(CONNECTION_COLUMNS)
+    .eq('label_org_id', labelOrgId)
+    .eq('artist_org_id', artistOrgId)
+    .eq('status', 'active')
+    .maybeSingle();
+  // Migration 154 not applied: there is no connection, which reads as 404.
+  if (error) return isMissingConnections(error) ? { row: null, error: false } : { row: null, error: true };
+  return { row: (data as ConnectionRow | null) ?? null, error: false };
+}
+
+/** The shared project ids of a connection (only read when share_mode is `selected`). */
+async function sharedProjects(admin: AdminClient, conn: ConnectionRow): Promise<Set<string> | null> {
+  if (conn.share_mode === 'all') return new Set();
+  const { data, error } = await admin.from('connection_projects').select('project_id').eq('connection_id', conn.id);
+  if (error) return null;
+  return toSharedSet(((data ?? []) as { project_id: string }[]).map((r) => r.project_id));
+}
+
+/** Is the artist org live and of kind artist? */
+async function liveArtistOrg(admin: AdminClient, orgId: string): Promise<boolean | null> {
+  const { data, error } = await admin.from('organizations').select('id, kind').eq('id', orgId).is('deleted_at', null).maybeSingle();
+  if (error) return null;
+  return (data as { kind?: string } | null)?.kind === 'artist';
+}
+
+/**
+ * The rule shared by the helpers below. `labelOrgId` is the route's org; the
+ * rows read belong to `sourceOrgId`; `projectIds` are the projects the object
+ * sits in (a project: itself). Null = refuse (404); a thrown Error = 500.
+ */
+async function connectedContext(
+  userId: string,
+  labelOrgId: string,
+  sourceOrgId: string,
+  projectIds: readonly string[],
+  cap: typeof CONNECTED_CAPABILITY,
+): Promise<ConnectedAccessResult> {
+  const access = await memberContext(userId, labelOrgId, NOT_FOUND);
+  if (!access.ok) return access;
+  if (access.orgKind !== 'label' || labelOrgId.toLowerCase() === sourceOrgId.toLowerCase()) return NOT_FOUND();
+  const { admin } = access;
+  const found = await activeConnection(admin, labelOrgId, sourceOrgId);
+  if (found.error) {
+    log.error('connection read failed', { labelOrgId });
+    return fail(500, 'Could not check organization access');
+  }
+  const conn = found.row;
+  if (!conn) return NOT_FOUND();
+  const live = await liveArtistOrg(admin, sourceOrgId);
+  if (live === null) return fail(500, 'Could not check organization access');
+  if (!live) return NOT_FOUND();
+  const shared = await sharedProjects(admin, conn);
+  if (!shared) return fail(500, 'Could not check organization access');
+  // Only projects of the ARTIST org count; the caller names them by id.
+  let inSource: string[] = [];
+  if (projectIds.length > 0) {
+    const { data, error } = await admin.from('projects').select('id').in('id', [...projectIds]).eq('org_id', sourceOrgId);
+    if (error) return fail(500, 'Could not check organization access');
+    inSource = ((data ?? []) as { id: string }[]).map((p) => p.id);
+  }
+  if (!connectionReachesAnyProject(conn, shared, inSource)) return NOT_FOUND();
+  // The member's own artist scope, on the roster contact that stands for this artist.
+  if (!labelScopeReaches(access.artistScope, conn)) return NOT_FOUND();
+  if (!access.capabilities.has(cap)) return NOT_FOUND();
+  return { ...access, connection: conn, sourceOrgId };
+}
+
+/**
+ * A recording of a connected artist org, reached by a member of the route's
+ * LABEL org. 401 without a session; 404 for everything else (a producer
+ * track, another org's, a recording outside the shared projects, an ended or
+ * pending connection, a member out of scope or without `catalog.read`).
+ */
+export async function requireConnectedTrack(opts: { trackId: string; orgId: string; cap: typeof CONNECTED_CAPABILITY }): Promise<ConnectedAccessResult> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  if (!isUUID(opts.trackId) || !isUUID(opts.orgId)) return NOT_FOUND();
+  const admin = createServiceClient();
+  try {
+    const { data, error } = await admin.from('tracks').select('org_id').eq('id', opts.trackId).maybeSingle();
+    if (error) {
+      log.error('track read failed', { trackId: opts.trackId, error: error.message });
+      return fail(500, 'Could not check organization access');
+    }
+    const source = (data as { org_id?: unknown } | null)?.org_id;
+    if (typeof source !== 'string' || !isUUID(source)) return NOT_FOUND();
+    const links = await admin.from('project_tracks').select('project_id').eq('track_id', opts.trackId);
+    if (links.error) return fail(500, 'Could not check organization access');
+    const projectIds = [...new Set(((links.data ?? []) as { project_id: string }[]).map((l) => l.project_id))];
+    return await connectedContext(userId, opts.orgId, source, projectIds, opts.cap);
+  } catch (err) {
+    log.error('connected track access failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check organization access');
+  }
+}
+
+/** A project of a connected artist org, reached by a member of the route's LABEL org. Same refusals as the track. */
+export async function requireConnectedProject(opts: { projectId: string; orgId: string; cap: typeof CONNECTED_CAPABILITY }): Promise<ConnectedAccessResult> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  if (!isUUID(opts.projectId) || !isUUID(opts.orgId)) return NOT_FOUND();
+  const admin = createServiceClient();
+  try {
+    const { data, error } = await admin.from('projects').select('org_id').eq('id', opts.projectId).maybeSingle();
+    if (error) {
+      log.error('project read failed', { projectId: opts.projectId, error: error.message });
+      return fail(500, 'Could not check organization access');
+    }
+    const source = (data as { org_id?: unknown } | null)?.org_id;
+    if (typeof source !== 'string' || !isUUID(source)) return NOT_FOUND();
+    return await connectedContext(userId, opts.orgId, source, [opts.projectId], opts.cap);
+  } catch (err) {
+    log.error('connected project access failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check organization access');
+  }
+}
+
+/**
+ * The route's LABEL org and ONE connection of it, for the routes that list the
+ * shared music (`…/connections/[connectionId]/projects`) or copy from it. The
+ * connection must be active, belong to this label, have a live artist org and
+ * be within the member's own artist scope. Reaches the connection, not a
+ * particular project: the route then lists only what the connection shares.
+ */
+export async function requireConnectionOfLabel(opts: { orgId: string; connectionId: string; cap: typeof CONNECTED_CAPABILITY }): Promise<ConnectedAccessResult> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  if (!isUUID(opts.orgId)) return FORBIDDEN();
+  const access = await memberContext(userId, opts.orgId, FORBIDDEN);
+  if (!access.ok) return access;
+  if (!isUUID(opts.connectionId) || access.orgKind !== 'label') return NOT_FOUND();
+  const { admin } = access;
+  try {
+    const { data, error } = await admin
+      .from('org_connections')
+      .select(CONNECTION_COLUMNS)
+      .eq('id', opts.connectionId)
+      .eq('label_org_id', opts.orgId)
+      .eq('status', 'active')
+      .maybeSingle();
+    if (error) return isMissingConnections(error) ? NOT_FOUND() : fail(500, 'Could not check organization access');
+    const conn = data as ConnectionRow | null;
+    if (!conn) return NOT_FOUND();
+    const live = await liveArtistOrg(admin, conn.artist_org_id);
+    if (live === null) return fail(500, 'Could not check organization access');
+    if (!live) return NOT_FOUND();
+    if (!labelScopeReaches(access.artistScope, conn)) return NOT_FOUND();
+    if (!access.capabilities.has(opts.cap)) return NOT_FOUND();
+    return { ...access, connection: conn, sourceOrgId: conn.artist_org_id };
+  } catch (err) {
+    log.error('connection access failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not check organization access');
+  }
+}
+
+// Re-exported so a route that lists a connection's shared projects asks the one rule.
+export { connectionReachesProject };

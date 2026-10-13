@@ -51,6 +51,8 @@ export type OrgContactView = OrgContactRow & {
   in_roster: boolean;
   /** The /contacts role tabs this person belongs in, main first. */
   groups: RoleGroup[];
+  /** A label's roster contact that stands for a connected artist org (LABEL-41); absent otherwise. */
+  connected?: { connectionId: string; orgName: string; orgSlug: string };
 };
 
 export function toOrgContactView(row: OrgContactRow): OrgContactView {
