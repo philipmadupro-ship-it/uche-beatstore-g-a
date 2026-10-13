@@ -1482,6 +1482,15 @@ export const OrgApprovalDecideBodySchema = z.object({
 }).strict();
 export type OrgApprovalDecideBody = z.infer<typeof OrgApprovalDecideBodySchema>;
 
+/** POST /api/org/[orgId]/releases/[releaseId]/deliver (LABEL-33). `override` + a note is the owner's way past unsatisfied gates. */
+export const OrgReleaseDeliverBodySchema = z.object({
+  distributor: z.string().trim().min(1).max(120),
+  delivered_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional(),
+  override: z.boolean().optional(),
+  override_note: z.string().max(1000).optional(),
+}).strict();
+export type OrgReleaseDeliverBody = z.infer<typeof OrgReleaseDeliverBodySchema>;
+
 /** POST /api/org/[orgId]/releases/[releaseId]/items — appended at the end. No master = the song itself. */
 export const OrgReleaseItemCreateBodySchema = z.object({
   song_track_id: z.string().uuid(),
