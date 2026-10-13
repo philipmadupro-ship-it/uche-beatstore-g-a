@@ -83,6 +83,7 @@ describe('navGroupsFor', () => {
     const groups = navGroupsFor('label', new Set(['catalog.read']), { slug: 'night-shift', viewerIsProducer: true });
     expect(shape(groups)).toEqual([
       { key: 'roster', label: 'Artists', icon: 'MicVocal', items: [{ label: 'Artists', href: '/o/night-shift/artists', icon: 'MicVocal' }] },
+      { key: 'releases', label: 'Releases', icon: 'Disc3', items: [{ label: 'Releases', href: '/o/night-shift/releases', icon: 'Disc3' }] },
       { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/night-shift/settings/members', icon: 'UsersRound' }] },
     ]);
   });
@@ -96,9 +97,19 @@ describe('navGroupsFor', () => {
 
   it('the Artists hub needs catalog.read, and is for label and artist orgs only (LABEL-10)', () => {
     expect(navGroupsFor('label', new Set(), { slug: 'ns', viewerIsProducer: false }).map((g) => g.key)).toEqual(['org']);
-    expect(navGroupsFor('artist', new Set(['catalog.read']), { slug: 'nova', viewerIsProducer: false }).map((g) => g.key)).toEqual(['roster', 'org']);
+    expect(navGroupsFor('artist', new Set(['catalog.read']), { slug: 'nova', viewerIsProducer: false }).map((g) => g.key)).toEqual(['roster', 'releases', 'org']);
     const producer = navGroupsFor('producer', new Set(ALL_CAPABILITIES), { slug: 'uche', viewerIsProducer: true });
     expect(producer.map((g) => g.key)).not.toContain('roster');
+  });
+
+  it('the Releases hub (LABEL-33) is for label and artist orgs, for a member who can read the catalogue, and nowhere else', () => {
+    const keys = (kind: string, caps: string[], viewerIsProducer = false) => navGroupsFor(kind, new Set(caps), { slug: 's', viewerIsProducer }).map((g) => g.key);
+    expect(keys('label', ['catalog.read'])).toContain('releases');
+    expect(keys('artist', ['catalog.read'])).toContain('releases');
+    expect(keys('label', [])).not.toContain('releases');
+    expect(keys('label', ['release.write'])).not.toContain('releases');
+    expect(keys('producer', ALL_CAPABILITIES as unknown as string[], true)).not.toContain('releases');
+    expect(activeGroupIn(navGroupsFor('label', new Set(['catalog.read']), { slug: 's', viewerIsProducer: false }), '/o/s/releases/abc')?.key).toBe('releases');
   });
 
   it('Connections (LABEL-41) is for label and artist orgs, for whoever holds org.manage', () => {

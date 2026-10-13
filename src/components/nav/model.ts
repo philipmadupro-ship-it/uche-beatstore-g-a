@@ -1,7 +1,7 @@
 import {
   Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
   CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
-  Building2, UsersRound, Mic2, Inbox,
+  Building2, UsersRound, Mic2, Inbox, Disc3,
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 
@@ -127,6 +127,15 @@ function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null
 }
 
 /**
+ * The release hub (LABEL-33, 07 §2.5): the board of every release with its
+ * gates. Label and artist orgs, for a member who can see the catalogue — the
+ * board's own capability — so the entry never points at a page that 404s.
+ */
+function releasesGroup(slug: string): NavGroup {
+  return { key: 'releases', label: 'Releases', icon: Disc3, items: [{ label: 'Releases', href: `/o/${slug}/releases`, icon: Disc3 }] };
+}
+
+/**
  * The hubs for an org context (07-information-architecture.md §1). One model,
  * one function, so the top bar and the org shell cannot drift.
  *
@@ -138,7 +147,7 @@ function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null
  *   that exist for it: Artists (LABEL-10, catalog.read), then the org's own
  *   pages. The IA's other label hubs (Overview, Releases, A&R, Rights) are
  *   added here by the tasks that build those pages (LABEL-17, 18, 24, 29,
- *   31), each gated on its capability in `caps`; a hub that pointed at a
+ *   31; Releases is LABEL-33's), each gated on its capability in `caps`; a hub that pointed at a
  *   page not yet built would be a dead link.
  * - Anything unknown: no hubs.
  */
@@ -151,5 +160,6 @@ export function navGroupsFor(
   if (!org) return orgKind === 'producer' ? NAV_GROUPS : [];
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
   const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps)] : [];
-  return [...producerHubs, ...roster, orgGroup(org.slug, orgKind, caps)];
+  const releases = orgKind !== 'producer' && caps?.has('catalog.read') ? [releasesGroup(org.slug)] : [];
+  return [...producerHubs, ...roster, ...releases, orgGroup(org.slug, orgKind, caps)];
 }
