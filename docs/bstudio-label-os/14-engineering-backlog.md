@@ -1879,6 +1879,22 @@ E-signature integration.
 ## Rollback
 Drop the tables.
 
+**Built (for the orchestrator's merge gate):**
+- **Migration 155** (not applied): `split_sheets`, `split_lines (share numeric(7,4), position, signature columns)` — see `supabase/MIGRATIONS.md`. The sum-to-100 rule and the immutability of a circulated sheet are TRIGGERS (`split_sheets_guard`, `split_lines_guard`), not only route checks; one draft and one live sheet per (song, kind) by partial unique indexes. `labelos_split_create_draft` / `labelos_split_save_draft` (sheet + lines atomic), `labelos_audit_split_circulate` (supersedes the live version in the same transaction, two events) and `labelos_audit_split_sign` (signature(s) → `signed` on the last line, one event), all `service_role` only. Reads: `rights.read` (whole org / artist scope) or your own line on a non-draft sheet, via one uncorrelated `labelos_my_split_lines()`.
+- **`lib/labelos/splits.ts`** (pure, integer units — no float anywhere): parse / format, `validateSheet` per kind, `suggestRemainder`, `evenShares`, lifecycle, `planSignature`, `sheetView` (own-line readers get their line only). `splits-form.ts` is the form's live arithmetic; `splits-store.ts` / `splits-client.ts` the I/O.
+- **Routes** `/api/org/[orgId]/tracks/[id]/splits` (GET, POST), `[sheetId]` (PATCH, DELETE of a draft), `circulate`, `supersede`, `signatures` (acknowledge as JSON; a signed PDF as multipart → a restricted `split_sheet` `project_assets` row whose downloads are the existing audited restricted download). GET and the acknowledgement are open to external project members (their own line only); the rest needs `rights.write`.
+- **Events.** `split_sheet.created/updated/deleted` (everyday), `.circulated/.superseded/.signed` (audit), all `internal`; `VERB_PHRASES` and `DEFAULT_VISIBILITY` extended.
+- **UI.** `OrgSplits` in the org song view: Composition / Master tabs, versions, the draft form with the LIVE sum and "Add remainder", Circulate disabled with its reason, the circulated sheet's per-line signatures, Acknowledge / Upload signed PDF / New version.
+
+**Verification:** `tsc`, `eslint`, full `vitest` (7331 tests), `next build` with the CI stub env, `npm run db:local:check` (155's check as the service role and as `authenticated` with each member's own claims: 33.3333 × 3 refused by the function AND the raw trigger, composition / master roles, every write to a circulated sheet refused (line update / insert / delete, note, sheet delete, status back), signature once, supersession atomic with its events, one draft + one live index, reads per member incl. scoped / own line / marketing / external / other org / anon, writes refused to the API roles, function grants, `EXPLAIN` hashed subplans, cascades; plus every rollback) and `e2e/label-org-splits.spec.ts` against the real-database stack (6 tests: the three acceptance criteria through the route and straight at the tables, the real page, D2 through the route and with each member's own JWT, the signed-PDF path with its audited restricted download).
+
+**Not done / carried:**
+- `disputed` is in the vocabulary, the guards and the policies, but no route sets it (a dispute of a sheet is for LABEL-29/30's flows); a line cannot be disputed individually.
+- A signed PDF over 4 MB is refused (no presigned path); a song in no project can only be acknowledged.
+- The signature is an acknowledgement or an uploaded PDF, as scoped — no e-signature integration. An acknowledgement is not identity-verified beyond the signed-in account on the party.
+- Publisher shares are a plain line (all lines sum to 100); there is no "publisher takes x % of the writer's share" model.
+- Legal readiness (LABEL-29) should read `split_sheets.status` and the live sheet per kind; `labelos_my_split_lines()` is the own-line set.
+
 ---
 
 # LABEL-29 — Legal readiness

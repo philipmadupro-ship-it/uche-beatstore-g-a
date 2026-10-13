@@ -19,11 +19,14 @@
  *   connectionEnd            connection.ended     (both orgs)
  *   connectionShare          share.created | share.revoked (the artist org)
  *   creditDecide             credit.confirmed | credit.disputed (153, LABEL-27)
+ *   splitCirculate           split_sheet.circulated (+ .superseded for the version it replaces) (155, LABEL-28)
+ *   splitSign                split_sheet.signed (155, LABEL-28)
  *
  * Accepting an invitation (`member.joined`) is 138's
  * `labelos_accept_invitation` (lib/labelos/invitations.ts), which already
- * did both writes in one transaction. Split transitions, approvals and
- * delivery have no mutating route yet; each lands its function with its route.
+ * did both writes in one transaction. Split transitions landed with
+ * LABEL-28; approvals and delivery have no mutating route yet and each lands its
+ * function with its route.
  *
  * `auditRpc` is the one caller. The route does the authorisation and the
  * planning (requireOrgCapability, planMemberChange); the function does only
@@ -54,6 +57,9 @@ export const AUDIT_RPCS = {
   connectionShare: 'labelos_audit_connection_share',
   // Migration 153 (LABEL-27): a credit is confirmed or disputed, with its event.
   creditDecide: 'labelos_audit_credit_decide',
+  // Migration 155 (LABEL-28): a split sheet is circulated (superseding the live one) or signed, with its event.
+  splitCirculate: 'labelos_audit_split_circulate',
+  splitSign: 'labelos_audit_split_sign',
 } as const;
 export type AuditRpcKey = keyof typeof AUDIT_RPCS;
 
@@ -136,6 +142,26 @@ export type AuditRpcArgs = {
     p_subject: { artist_id: string | null; project_id: string | null; song_id: string | null };
     p_payload: EventPayload;
   };
+  splitCirculate: {
+    p_org: string;
+    p_actor: string;
+    p_sheet: string;
+    /** The song's context keys the events are filed under: { artist_id, project_id, song_id }. */
+    p_subject: { artist_id: string | null; project_id: string | null; song_id: string | null };
+    p_payload: EventPayload;
+  };
+  splitSign: {
+    p_org: string;
+    p_actor: string;
+    p_sheet: string;
+    /** The line signed; null = every unsigned line (a signed PDF covering the sheet). */
+    p_line: string | null;
+    p_method: 'upload' | 'acknowledged';
+    /** The restricted split_sheet file (required for 'upload'). */
+    p_asset: string | null;
+    p_subject: { artist_id: string | null; project_id: string | null; song_id: string | null };
+    p_payload: EventPayload;
+  };
 };
 
 export type AuditRpcError = { message: string; code?: string };
@@ -168,6 +194,7 @@ export function isMissingAuditRpc(error: AuditRpcError | null): boolean {
 
 export const AUDIT_RPC_NOT_READY = 'Auditing is not set up yet (migration 146 has not been applied).';
 export const CREDITS_NOT_READY = 'Credits and parties are not set up yet (migration 153 has not been applied).';
+export const SPLITS_NOT_READY = 'Split sheets are not set up yet (migration 155 has not been applied).';
 export const PROJECT_MEMBERS_NOT_READY = 'External project members are not set up yet (migration 148 has not been applied).';
 
 /**

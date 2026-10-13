@@ -50,6 +50,10 @@ const TASK = '90000000-0000-4000-8000-000000000001';
 const NOTE = '90000000-0000-4000-8000-000000000002';
 const NOVA_PARTY = 'a0000000-0000-4000-8000-000000000001';
 const NOVA_CREDIT = 'a0000000-0000-4000-8000-000000000002';
+const SHEET = 'b0000000-0000-4000-8000-000000000001';
+const SPLIT_NOVA = 'b0000000-0000-4000-8000-000000000002';
+const SPLIT_EDITOR = 'b0000000-0000-4000-8000-000000000003';
+const EDITOR_PARTY = 'a0000000-0000-4000-8000-000000000003';
 const REFERENCE = '90000000-0000-4000-8000-0000000000d1';
 const COMMENT = '90000000-0000-4000-8000-0000000000c1'; // artist-visible
 const INTERNAL = '90000000-0000-4000-8000-0000000000c2'; // team-only
@@ -187,6 +191,7 @@ function paramsFor(path: string): Record<string, string> {
     invitationId: INV,
     commentId: COMMENT,
     creditId: NOVA_CREDIT,
+    sheetId: SHEET,
     partyId: NOVA_PARTY,
     userId: EDITOR,
     taskId: TASK,
@@ -377,6 +382,87 @@ describe('LABEL-27: credits and parties (route by route)', () => {
     expect((await get(new NextRequest(`https://app.test/api/org/${L}/tracks/${S2}/credits`), ctx)).status).toBe(404);
     expect((await post(new NextRequest(`https://app.test/api/org/${L}/tracks/${S2}/credits`, { method: 'POST', body: JSON.stringify({ role: 'mixer' }) }), ctx)).status).toBe(404);
     expect(db.tables.track_collaborators).toHaveLength(1);
+  });
+});
+
+describe('LABEL-28: split sheets (route by route)', () => {
+  const splits = '[orgId]/tracks/[id]/splits/route.ts';
+  const signatures = '[orgId]/tracks/[id]/splits/[sheetId]/signatures/route.ts';
+  const writes = [
+    '[orgId]/tracks/[id]/splits/[sheetId]/route.ts',
+    '[orgId]/tracks/[id]/splits/[sheetId]/circulate/route.ts',
+    '[orgId]/tracks/[id]/splits/[sheetId]/supersede/route.ts',
+  ];
+
+  // A circulated sheet on the shared song: Nova 50 (not theirs), the editor 50 (their own line).
+  beforeEach(() => {
+    db.tables.parties.push({ id: EDITOR_PARTY, org_id: L, kind: 'person', display_name: 'Eddie', legal_name: 'Eddie Editor', ipi: null, user_id: EDITOR, contact_id: null, created_at: '2026-10-01' });
+    db.tables.split_sheets = [{ id: SHEET, org_id: L, track_id: S1, kind: 'composition', version: 1, status: 'circulated', note: 'internal', document_asset_id: null, created_by: OWNER, created_at: '2026-10-01', circulated_at: '2026-10-02', signed_at: null, superseded_at: null, superseded_by: null }];
+    db.tables.split_lines = [
+      { id: SPLIT_NOVA, split_sheet_id: SHEET, org_id: L, track_id: S1, party_id: NOVA_PARTY, role: 'writer', share: 50, signed_at: null, signature_method: null, signature_asset_id: null, created_at: '2026-10-01T10:00:00Z' },
+      { id: SPLIT_EDITOR, split_sheet_id: SHEET, org_id: L, track_id: S1, party_id: EDITOR_PARTY, role: 'publisher', share: 50, signed_at: null, signature_method: null, signature_asset_id: null, created_at: '2026-10-01T10:00:01Z' },
+    ];
+    db.tables.project_assets = [];
+  });
+
+  const ack = (user: string, lineId: string, method = 'POST') => {
+    current = user;
+    return loaders[`./${signatures}`]().then((mod) => {
+      const post = mod[method] as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+      return post(
+        new NextRequest(`https://app.test/api/org/${L}/tracks/${S1}/splits/${SHEET}/signatures`, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method: 'acknowledged', line_id: lineId }) }),
+        { params: Promise.resolve({ orgId: L, id: S1, sheetId: SHEET }) },
+      );
+    });
+  };
+
+  it('only the listing (GET) and the acknowledgement (POST signatures) are open to an external member; editing, circulating and superseding never are', () => {
+    expect(externalRouteKeys().filter((k) => k.includes('/splits')).sort()).toEqual([`${signatures}:POST`, `${splits}:GET`]);
+    for (const path of writes) {
+      expect(files, path).toContain(path);
+      for (const method of handlersOf(path)) expect(externalRouteKeys(), `${path}:${method}`).not.toContain(`${path}:${method}`);
+    }
+    expect(handlersOf(splits)).toContain('POST'); // starting a sheet exists, and is not on the list
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: reads their own split line only — never Nova’s share, the total, the note or anyone’s legal data`, async () => {
+      const res = await call(splits, 'GET', user);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.me).toMatchObject({ reach: 'own', canWrite: false });
+      const text = JSON.stringify(body);
+      for (const leak of ['Nova', 'Okafor', '00987654321', NOVA_PARTY, SPLIT_NOVA, 'internal']) expect(text, leak).not.toContain(leak);
+      if (user === EDITOR) {
+        expect(body.sheets).toHaveLength(1);
+        expect(body.sheets[0].lines).toHaveLength(1);
+        expect(body.sheets[0]).toMatchObject({ lines: [{ name: 'Eddie', share: '50', mine: true }] });
+        expect(body.sheets[0].total).toBeUndefined();
+      } else {
+        expect(body.sheets).toEqual([]);
+      }
+    });
+
+    it(`${role}: cannot acknowledge Nova’s line (404), upload a signed PDF, or change anything`, async () => {
+      expect((await ack(user, SPLIT_NOVA)).status).toBe(404);
+      expect(db.tables.split_lines.every((l) => !l.signed_at)).toBe(true);
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+
+  it('the editor acknowledges their own line — and only that', async () => {
+    const res = await ack(EDITOR, SPLIT_EDITOR);
+    expect(res.status).toBe(200);
+    expect(db.tables.split_lines.find((l) => l.id === SPLIT_EDITOR)).toMatchObject({ signature_method: 'acknowledged', signed_by: EDITOR });
+    expect(db.tables.split_lines.find((l) => l.id === SPLIT_NOVA)!.signed_at).toBeNull();
+    expect(db.tables.split_sheets[0].status).toBe('circulated');
+  });
+
+  it('a song in a project they are NOT a member of: 404', async () => {
+    current = EDITOR;
+    const mod = await loaders[`./${splits}`]();
+    const get = mod.GET as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+    expect((await get(new NextRequest(`https://app.test/api/org/${L}/tracks/${S2}/splits`), { params: Promise.resolve({ orgId: L, id: S2 }) })).status).toBe(404);
   });
 });
 
