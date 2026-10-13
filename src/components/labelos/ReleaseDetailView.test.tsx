@@ -187,3 +187,29 @@ describe('delivery', () => {
     expect(within(screen.getByTestId('release-actions')).getByText('Export')).toBeTruthy();
   });
 });
+
+describe('the export and calendar controls (LABEL-34)', () => {
+  it('release.write sees the export buttons, the rights note and the calendar link, and drawing them requests nothing', () => {
+    mount(detail());
+    const actions = screen.getByTestId('release-actions');
+    expect(within(actions).getByRole('button', { name: 'Download CSV' })).toBeTruthy();
+    expect(within(actions).getByRole('button', { name: 'Download JSON' })).toBeTruthy();
+    expect(within(actions).getByText('Credits are included only if you have rights access.')).toBeTruthy();
+    expect(within(actions).getByRole('button', { name: 'Calendar link' })).toBeTruthy();
+    expect(calls).toEqual([]);
+  });
+
+  it('a member without release.write sees none of it', () => {
+    mount(detail({ me: { canWrite: false, isOwner: false, mayReadRights: false } }));
+    const actions = screen.getByTestId('release-actions');
+    expect(within(actions).queryByRole('button', { name: 'Download CSV' })).toBeNull();
+    expect(within(actions).queryByRole('button', { name: 'Calendar link' })).toBeNull();
+  });
+
+  it('a delivered release can still be exported (it is a copy of facts, not an edit)', () => {
+    const d = detail();
+    d.release.state = 'delivered';
+    mount(d);
+    expect(screen.getByRole('button', { name: 'Download CSV' })).toBeTruthy();
+  });
+});

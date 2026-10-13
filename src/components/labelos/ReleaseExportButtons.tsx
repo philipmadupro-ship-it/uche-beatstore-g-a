@@ -36,6 +36,7 @@ export function ReleaseExportButtons({ orgId, releaseId, canExport }: { orgId: s
       <button type="button" className={BTN} disabled={busy !== null} onClick={() => void run('json')}>
         {busy === 'json' ? 'Exporting…' : 'Download JSON'}
       </button>
+      <span className="basis-full text-[10px] text-white/40">Credits are included only if you have rights access.</span>
     </div>
   );
 }

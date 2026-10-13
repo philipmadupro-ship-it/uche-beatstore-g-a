@@ -90,6 +90,8 @@ describe('ReleaseCalendarLink', () => {
       return { status: 200, body: active ? { active: true, path: `/api/org/${ORG}/calendar.ics?token=t` } : { active: false } };
     };
     render(<ReleaseCalendarLink orgId={ORG} />);
+    expect(calls).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Calendar link' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Create calendar link' }));
     const copyButton = await screen.findByRole('button', { name: 'Copy link' });
     fireEvent.click(copyButton);
@@ -101,10 +103,11 @@ describe('ReleaseCalendarLink', () => {
     expect(calls.map((c) => c.method)).toEqual(['GET', 'POST', 'POST', 'DELETE']);
   });
 
-  it('draws nothing when the member cannot read the link state', async () => {
+  it('says so, and stays closed, when the member cannot read the link state', async () => {
     handler = () => ({ status: 403, body: { error: 'Forbidden' } });
-    const { container } = render(<ReleaseCalendarLink orgId={ORG} />);
-    await waitFor(() => expect(calls).toHaveLength(1));
-    expect(container.innerHTML).toBe('');
+    render(<ReleaseCalendarLink orgId={ORG} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Calendar link' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not read the calendar link', 'Forbidden'));
+    expect(screen.queryByRole('button', { name: 'Create calendar link' })).toBeNull();
   });
 });

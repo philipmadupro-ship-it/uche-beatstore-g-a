@@ -4,9 +4,9 @@
  * The member's own release-calendar link (LABEL-34): create it, copy it,
  * replace it (the old URL stops working) or switch it off. The link shows
  * only release titles and dates; anyone holding it can read them, which is
- * what "replace" and "turn off" are for. Self-contained and not yet mounted.
+ * what "replace" and "turn off" are for. Mounted on the release page for `release.write`.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from '@/hooks/useToast';
 import { copyToClipboard } from '@/lib/clipboard';
 import { fetchCalendarLink, issueCalendarLink, revokeCalendarLink, type CalendarLink } from '@/lib/labelos/metadata-export-client';
@@ -19,15 +19,14 @@ export function ReleaseCalendarLink({ orgId }: { orgId: string }) {
   const [link, setLink] = useState<CalendarLink | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let live = true;
-    void fetchCalendarLink(orgId).then((res) => {
-      if (live && res.ok) setLink(res.active ? { active: true, path: res.path } : { active: false });
-    });
-    return () => {
-      live = false;
-    };
-  }, [orgId]);
+  /** Nothing is requested until the member asks: the page does not poll for a link nobody opened. */
+  async function open() {
+    setBusy(true);
+    const res = await fetchCalendarLink(orgId);
+    setBusy(false);
+    if (!res.ok) return toast.error('Could not read the calendar link', res.error);
+    setLink(res.active ? { active: true, path: res.path } : { active: false });
+  }
 
   const change = useCallback(
     async (call: typeof issueCalendarLink, done: string) => {
@@ -48,7 +47,13 @@ export function ReleaseCalendarLink({ orgId }: { orgId: string }) {
     else toast.error('Could not copy the link');
   }
 
-  if (!link) return null;
+  if (!link) {
+    return (
+      <button type="button" className={BTN} disabled={busy} onClick={() => void open()}>
+        Calendar link
+      </button>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Release calendar link">
       <span className={LABEL}>Release calendar</span>
