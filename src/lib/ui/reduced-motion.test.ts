@@ -29,7 +29,6 @@ import { execSync } from 'node:child_process';
  */
 const ALLOWLIST = new Set([
   'src/app/embed/[id]/page.tsx',
-  'src/app/(auth)/invite/[token]/page.tsx',
   'src/components/tracks/drawer/DrawerStemOverlay.tsx',
   'src/components/store/StoreSidebar.tsx',
   'src/components/player/WavePlayer.tsx',

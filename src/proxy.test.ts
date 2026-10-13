@@ -57,7 +57,7 @@ beforeEach(() => {
 describe('proxy API producer gate', () => {
   it('refuses a signed-in buyer on dashboard API routes', async () => {
     currentUser = { id: 'buyer-1' };
-    for (const path of ['/api/email', '/api/tracks', '/api/upload/init', '/api/sales', '/api/team']) {
+    for (const path of ['/api/email', '/api/tracks', '/api/upload/init', '/api/sales', '/api/contacts']) {
       const res = await run(path);
       expect(res.status, path).toBe(403);
     }
@@ -147,7 +147,7 @@ const PUBLIC_EXISTING_PATHS = new Set([
 describe('Label OS gate: every existing API folder is gated as before', () => {
   it('enumerates the real API folders', () => {
     // Sanity: the enumeration found the tree, not an empty directory.
-    expect(EXISTING_API_FOLDERS).toEqual(expect.arrayContaining(['tracks', 'audio', 'contacts', 'store', 'team']));
+    expect(EXISTING_API_FOLDERS).toEqual(expect.arrayContaining(['tracks', 'audio', 'contacts', 'store']));
     expect(EXISTING_API_FOLDERS.length).toBeGreaterThan(30);
   });
 

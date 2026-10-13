@@ -4,12 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { UserPlus, Settings as SettingsIcon, Loader2, LogOut, CheckCircle2, Shield, User, ArrowRight, FileText, Trash2 } from 'lucide-react';
+import { Settings as SettingsIcon, Loader2, LogOut, Shield, User, ArrowRight, FileText, Trash2 } from 'lucide-react';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Dropdown } from '@/components/ui/Dropdown';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { Field } from '@/components/ui/Field';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { ErasureRequestSchema } from '@/lib/contracts';
@@ -18,13 +16,6 @@ import { TagColorsCard } from '@/components/settings/TagColorsCard';
 import { DesktopNotificationsRow } from '@/components/settings/DesktopNotificationsRow';
 import { OrgsSettingsCard } from '@/components/labelos/OrgsSettingsCard';
 
-interface TeamMember {
-  user_id: string;
-  role: 'owner' | 'admin' | 'collaborator';
-  email: string;
-  name: string;
-}
-
 interface Prefs {
   lossless_exports: boolean;
   auto_tagging: boolean;
@@ -32,12 +23,6 @@ interface Prefs {
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
-  const [team, setTeam] = useState<TeamMember[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'collaborator'>('collaborator');
-  const [sending, setSending] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>({ lossless_exports: true, auto_tagging: false });
   const [eraseEmail, setEraseEmail] = useState('');
   const [erasing, setErasing] = useState(false);
@@ -45,14 +30,7 @@ export default function SettingsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [teamRes, profileRes] = await Promise.all([
-          fetch('/api/team'),
-          fetch('/api/profile'),
-        ]);
-        if (teamRes.ok) {
-          const j = await teamRes.json();
-          setTeam(j.members ?? []);
-        }
+        const profileRes = await fetch('/api/profile');
         if (profileRes.ok) {
           const j = await profileRes.json();
           const p = j.profile;
@@ -63,9 +41,7 @@ export default function SettingsPage() {
             });
           }
         }
-      } catch {/* silent */} finally {
-        setLoading(false);
-      }
+      } catch {/* silent */}
     })();
   }, []);
 
@@ -124,31 +100,6 @@ export default function SettingsPage() {
       toast.error(err instanceof Error ? err.message : 'Erasure failed');
     } finally {
       setErasing(false);
-    }
-  };
-
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSending(true);
-    try {
-      const res = await fetch('/api/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        // Previously: `if (res.ok) {…}` with no else and a console.error in
-        // the catch. A rejected invite looked identical to no click at all.
-        throw new Error(j?.error || `HTTP ${res.status}`);
-      }
-      setSuccess(true);
-      setInviteEmail('');
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      toast.error('Invite not sent', err instanceof Error ? err.message : 'Try again');
-    } finally {
-      setSending(false);
     }
   };
 
@@ -219,85 +170,6 @@ export default function SettingsPage() {
 
           {/* Label OS organizations — nothing at all while the flag is off. */}
           <OrgsSettingsCard />
-
-          {/* Team */}
-          <section>
-            <div className="flex items-center gap-2 mb-4">
-              <Shield size={14} className="text-white/40" />
-              <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Team members</h2>
-            </div>
-            {loading ? (
-              <div className="py-12 flex justify-center"><Loader2 size={16} className="animate-spin text-white/40" /></div>
-            ) : team.length === 0 ? (
-              <EmptyState
-                title="No team members yet"
-                description="Invite collaborators below."
-                className="py-10"
-              />
-            ) : (
-              <Card className="divide-y divide-white/10 overflow-hidden">
-                {team.map((m) => (
-                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-white/[0.04]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-[#0D0D0A] border border-white/10 flex items-center justify-center text-[10px] font-medium text-white/80">
-                        {m.name?.[0] || m.email[0]}
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-medium text-white">{m.name || m.email}</p>
-                        {m.name && <p className="text-[10px] font-mono text-white/40">{m.email}</p>}
-                      </div>
-                    </div>
-                    <span className={`text-[10px] font-mono uppercase tracking-wider ${m.role === 'owner' ? 'text-white' : 'text-white/40'}`}>
-                      {m.role}
-                    </span>
-                  </div>
-                ))}
-              </Card>
-            )}
-          </section>
-
-          {/* Invite */}
-          <section>
-            <div className="flex items-center gap-2 mb-4">
-              <UserPlus size={14} className="text-white/40" />
-              <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Invite collaborator</h2>
-            </div>
-            <Card>
-              <form onSubmit={handleInvite} className="space-y-4 p-6">
-              <Field
-                required
-                type="email"
-                label="Email"
-                placeholder="name@email.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-              />
-              <div>
-                <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-wider text-[var(--text-readable)]">Role</label>
-                <Dropdown
-                  value={inviteRole}
-                  onChange={(value) => setInviteRole(value)}
-                  options={[
-                    { value: 'collaborator', label: 'Collaborator' },
-                    { value: 'admin', label: 'Admin' },
-                  ]}
-                  aria-label="Invite role"
-                  className="min-h-11 w-full rounded-xl border-[var(--border)] bg-[var(--bg-page)] px-4 py-3 text-xs text-[var(--text-primary)] focus:border-[var(--accent)]"
-                />
-              </div>
-              <Button
-                disabled={sending || success}
-                type="submit"
-                variant={success ? 'secondary' : 'primary'}
-                className={success ? 'w-full border-green-500/20 bg-green-500/10 text-green-400' : 'w-full'}
-                loading={sending}
-                leadingIcon={success ? <CheckCircle2 size={13} aria-hidden="true" /> : <UserPlus size={13} aria-hidden="true" />}
-              >
-                {sending ? 'Sending...' : success ? 'Invite sent' : 'Send invite'}
-              </Button>
-              </form>
-            </Card>
-          </section>
 
           {/* Default artwork + brand palette */}
           <DefaultArtworkCard />

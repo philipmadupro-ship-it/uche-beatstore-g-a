@@ -15,8 +15,9 @@
  * hear (D4: marketing never gets demos, loops or toplines) are absent from
  * the payload and the section says "restricted" (07 §3.4).
  *
- * Tasks on this song (LABEL-23) sit at the foot, the member's own side of them.
- * Reviews, credits, splits and comments are later tasks (LABEL-22–28).
+ * Credits (LABEL-27) follow the recordings: a pill per person with its status and
+ * rights-holder party. Tasks on this song (LABEL-23) sit at the foot, the member's
+ * own side of them. Splits are a later task (LABEL-28).
  */
 
 import { useState } from 'react';
@@ -25,6 +26,7 @@ import { Music, Pause, Play } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { RestrictedNote } from '@/components/artists/OrgArtistWorkspaceTabs';
+import { OrgCredits } from '@/components/labelos/OrgCredits';
 import { SongStageControl } from '@/components/labelos/SongStageControl';
 import { TasksPanel } from '@/components/labelos/TasksPanel';
 import { abSeekFraction, toPlayerTrack, type RecordingView } from '@/lib/labelos/org-workspace';
@@ -166,6 +168,8 @@ export function OrgSongView({ orgId, orgSlug, detail }: { orgId: string; orgSlug
           <div className="mt-3"><RestrictedNote testId="org-song-restricted">{recordingsText(detail.restrictedRecordings)}</RestrictedNote></div>
         )}
       </section>
+
+      <OrgCredits key={song.id} orgId={orgId} trackId={song.id} />
 
       <section aria-labelledby="org-song-where" className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div>

@@ -20,7 +20,7 @@ describe('isPublicApiPath', () => {
   ])('allows %s', (p) => expect(isPublicApiPath(p)).toBe(true));
 
   it.each([
-    '/api/email', '/api/invite', '/api/team', '/api/upload/init', '/api/upload/image',
+    '/api/email', '/api/upload/init', '/api/upload/image',
     '/api/tracks', '/api/tracks/abc', '/api/tracks/abc/heatmap/extra', '/api/projects',
     '/api/projects/abc', '/api/audio', '/api/sales', '/api/contacts', '/api/cover/generate',
     '/api/stripe/diagnostics', '/api/privacy/erase', '/api/profile',

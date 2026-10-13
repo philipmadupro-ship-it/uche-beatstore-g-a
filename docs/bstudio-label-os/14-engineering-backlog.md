@@ -1747,6 +1747,19 @@ Recommendations.
 ## Rollback
 Drop.
 
+## Built (LABEL-26)
+- **Migration 152** (not applied): `artist_direction` (PK `contact_id`) and `artist_references` (kind `track|link|file|note`, `visibility artist|internal`), both org-only with service-role writes; integrity trigger (same-org artist / track / file; files only visual + not restricted); one SELECT policy each, no per-row SECURITY DEFINER call.
+- **Routes** under `/api/org/[orgId]/artists/[contactId]/`: `direction` (GET, PUT), `references` (POST), `references/[referenceId]` (PATCH, DELETE), `references/choices` (track + file pickers). All mutations record an event (`direction.updated`, `reference.added|updated|removed`); `DEFAULT_VISIBILITY` and the digest phrases cover the new verbs.
+- **UI**: the Direction tab on the org artist workspace (`ArtistDirectionTab`): six structured fields saved on blur (Escape restores), keywords, a references list, an inline add form with a track search and a file picker, a one-click Team-only toggle. No modal.
+
+## Verification (LABEL-26)
+- Artist cannot read internal references: `direction/route.test.ts` (route, in-memory DB), `supabase/local/checks/152_*.sql` (as an `authenticated` role with the artist's own claims, plus an `EXPLAIN` for R-08), `e2e/label-org-direction.spec.ts` (route, PostgREST with her JWT, and the page's HTML).
+- `external-matrix.test.ts`: every direction / reference handler is refused (403/404) for all four external project roles and writes nothing.
+- Full `npm test`, `tsc`, eslint, `npm run build` (CI stub env), `npm run db:local:check`, and the real-DB e2e (direction + workspace, activity, tasks, comments, external members).
+
+## Not done
+- Recommendations (Out of Scope). Reordering references (the `position` column and PATCH exist; no drag UI). Uploading a visual file straight from the Direction tab (files are picked from the artist's project files, added in the Files tab via LABEL-15).
+
 ---
 
 # LABEL-27 — Parties + credits on `track_collaborators`
@@ -1800,6 +1813,21 @@ Public credits on the store.
 
 ## Rollback
 Drop `parties` and the new columns.
+
+**Built (for the orchestrator's merge gate):**
+- **Migration 153** (not applied): `parties` and the new `track_collaborators` columns (see `supabase/MIGRATIONS.md`). Existing rows read unchanged (`status` defaults `confirmed`, org / party / scope NULL); a trigger keeps Label OS data off producer-track credits and stamps the org on org-track credits (a filename-read one arrives `proposed`). Org read policy for credits (`rights.read` + scope, or the credit is yours) and for parties; 141's RESTRICTIVE guard on `track_collaborators` is replaced so the org policy can admit org credits; `labelos_audit_credit_decide` makes confirm / dispute one transaction with its audit event.
+- **Routes.** `/api/org/[orgId]/tracks/[id]/credits` (GET, POST), `…/credits/[creditId]` (PATCH confirm / dispute), `/api/org/[orgId]/parties` and `/parties/[partyId]` (CRUD, `rights.write`). The credits routes serve external project members too (allowlisted): they read and decide their OWN line and, as contributor / editor, propose a credit naming themselves.
+- **Vocabulary** `lib/labelos/credit-roles.ts` (RIN-aligned, legacy producer / feature / collaborator kept); pure rules in `credits.ts`, `parties.ts`, `credit-strip.ts`.
+- **UI.** `OrgCredits` in the org song view: `groupCredits` pills with a status and party, Confirm / Dispute, an inline propose form ("Credit me" without `rights.write`).
+- **Events.** `party.created/updated/deleted` added to `VERBS`, `DEFAULT_VISIBILITY` (internal), `VERB_PHRASES`, `SUBJECT_TYPES` (`party`).
+
+**Verification:** `tsc`, `eslint --quiet`, full `vitest`, `next build`, `npm run db:local:check` (153's check: existing credits unchanged, trigger refusals, reads as `authenticated` per member — rights.read, scoped, own line, marketing, external, other org, producer, anon — writes refused to the API roles, the audit function's atomicity and grants, an `EXPLAIN` showing the parties read plans hashed subplans only; the credits policy's shape is held by `rls-final-state.test.ts`), and `e2e/label-org-credits.spec.ts` against the real-database stack (6 tests: producer credits unchanged, the owner's party / propose / confirm on the real page, **an external member cannot propose a credit for someone else**, decisions and who may make them, the same rules from PostgREST with each member's own JWT, an own line reads only its own credit and party).
+
+**Not done / carried:**
+- No UI for an external member's own credit (the routes are done and tested; `SharedProjectView` shows none yet) and no credit delete / withdraw (needs a `credit.removed` verb; a wrong credit is disputed).
+- No party management page (the API is complete; the org song view only picks a party).
+- Importing the producer-era credits into parties ("import into credits later", D7) is not done: they stay name-only `confirmed` rows.
+- Split sheets (LABEL-28) will key on `parties`. `rights.write` is held by owner / admin and the legal function only, so in practice legal proposes credits for others; A&R and project managers hold `rights.read` (and so their own line).
 
 ---
 
@@ -2425,6 +2453,11 @@ Existing tests updated; `invite/route.test.ts` removed with the route.
 
 ## Out of Scope
 Dropping the tables.
+
+## Built / Verification / Not done
+**Built:** `/api/invite` and `/api/team` (with `invite/route.test.ts`) deleted; the Team members and Invite collaborator cards removed from `/settings`; `team_members` / `invites` removed from `local-store.ts` and the e2e store fixture; `TeamRole` / `TeamMember` / `Invite` types and `InviteCreateBodySchema` deleted. `/invite/[token]` is now a static page saying "This invite has expired, ask for a new one" (no token read, no table touched). Tables and `is_team_member()` stay.
+**Verification:** `grep -rnE "api/invite|api/team" src e2e scripts CLAUDE.md AGENTS.md .github` returns nothing; `tsc`, eslint, full `npm test` (430 files, 7059 tests) and `npm run build` with the CI stub env pass. `/api/email` and `/api/share` are untouched.
+**Not done:** dropping the tables (out of scope).
 
 ## Rollback
 Revert.
