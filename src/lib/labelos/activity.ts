@@ -76,6 +76,11 @@ export const VERBS = [
   'task.updated',
   'task.completed',
   'task.deleted',
+  // Creative direction (LABEL-26; the payload names fields and kinds, never the words)
+  'direction.updated',
+  'reference.added',
+  'reference.updated',
+  'reference.removed',
   // Files
   'file.uploaded',
   'file.updated',
@@ -85,6 +90,10 @@ export const VERBS = [
   'credit.proposed',
   'credit.confirmed',
   'credit.disputed',
+  // Rights identities (LABEL-27; the subject is the party)
+  'party.created',
+  'party.updated',
+  'party.deleted',
   'split_sheet.circulated',
   // Releases
   'approval.requested',
@@ -187,6 +196,12 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'task.updated': 'internal',
   'task.completed': 'internal',
   'task.deleted': 'internal',
+  // The direction is what the artist is told; a reference route overrides to `internal` for an
+  // internal reference — the event of a team-only reference is team-only too.
+  'direction.updated': 'artist',
+  'reference.added': 'artist',
+  'reference.updated': 'artist',
+  'reference.removed': 'artist',
   'file.uploaded': 'internal',
   'file.updated': 'internal',
   'file.deleted': 'internal',
@@ -194,6 +209,10 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'credit.proposed': 'artist',
   'credit.confirmed': 'artist',
   'credit.disputed': 'artist',
+  // A party carries legal names and IPIs: the business side, like contacts.
+  'party.created': 'internal',
+  'party.updated': 'internal',
+  'party.deleted': 'internal',
   'split_sheet.circulated': 'internal',
   'approval.requested': 'internal',
   'approval.decided': 'internal',
@@ -238,6 +257,7 @@ export const SUBJECT_TYPES = [
   'asset',
   'comment',
   'credit',
+  'party',
   'split_sheet',
   'approval',
   'release',

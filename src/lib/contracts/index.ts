@@ -25,6 +25,17 @@ import { CURSOR_RE } from '@/lib/labelos/activity-feed';
 import { SONG_STAGES } from '@/lib/labelos/song-stage';
 import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
 import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
+import {
+  DIRECTION_KEYWORDS_MAX,
+  DIRECTION_KEYWORD_MAX,
+  DIRECTION_TEXT_MAX,
+  REFERENCE_KINDS,
+  REFERENCE_NOTE_MAX,
+  REFERENCE_TITLE_MAX,
+  REFERENCE_URL_MAX,
+  REFERENCE_VISIBILITIES,
+  safeReferenceUrl,
+} from '@/lib/labelos/direction';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -508,17 +519,6 @@ export const StemStartBodySchema = z.object({
   model: z.string().max(40).optional(),
 });
 export type StemStartBody = z.infer<typeof StemStartBodySchema>;
-
-// ── Invites ──────────────────────────────────────────────────────────────
-// POST /api/invite — team invite. Role mirrors the settings UI's options.
-export const INVITE_ROLES = ['admin', 'collaborator'] as const;
-export type InviteRole = (typeof INVITE_ROLES)[number];
-
-export const InviteCreateBodySchema = z.object({
-  email: z.string().email().max(200),
-  role: z.enum(INVITE_ROLES),
-}).strict();
-export type InviteCreateBody = z.infer<typeof InviteCreateBodySchema>;
 
 // ── Share links ──────────────────────────────────────────────────────────
 // POST /api/share — legacy track/project share-link creation.
@@ -1253,6 +1253,56 @@ export const OrgSongReviewBodySchema = z.object({
 export type OrgSongReviewBody = z.infer<typeof OrgSongReviewBodySchema>;
 
 /**
+ * /api/org/[orgId]/parties (LABEL-27): a rights identity. Free text is
+ * trimmed and length-bounded here; the legal identifiers are normalised and
+ * checked by `partyColumns` (lib/labelos/parties), which is what the database
+ * CHECKs accept. `user_id` links an account (an org member, or an external
+ * member of one of the org's projects — the route checks which).
+ */
+const PARTY_TEXT = (max: number) => z.string().trim().max(max).nullable().optional();
+const PartyFields = {
+  kind: z.enum(['person', 'company']).optional(),
+  display_name: z.string().trim().min(1).max(200).optional(),
+  legal_name: PARTY_TEXT(200),
+  email: PARTY_TEXT(320),
+  ipi: PARTY_TEXT(32),
+  isni: PARTY_TEXT(32),
+  pro: PARTY_TEXT(80),
+  pro_affiliation: z.enum(['affiliated', 'not_affiliated', 'unknown']).optional(),
+  publisher_name: PARTY_TEXT(200),
+  publisher_ipi: PARTY_TEXT(32),
+  contact_id: z.string().uuid().nullable().optional(),
+  user_id: z.string().uuid().nullable().optional(),
+};
+export const OrgPartyCreateBodySchema = z.object({ ...PartyFields, display_name: z.string().trim().min(1).max(200) }).strict();
+export type OrgPartyCreateBody = z.infer<typeof OrgPartyCreateBodySchema>;
+export const OrgPartyPatchBodySchema = z.object(PartyFields).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgPartyPatchBody = z.infer<typeof OrgPartyPatchBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/tracks/[id]/credits (LABEL-27): propose a credit.
+ * `party_id` / `name` / `contact_id` name WHO — a member without
+ * `rights.write` (and every external member) may only omit them or name
+ * themselves; the route refuses anything else (lib/labelos/credits#planPropose).
+ */
+export const OrgCreditProposeBodySchema = z.object({
+  role: z.string().trim().min(1).max(60),
+  scope: z.enum(['composition', 'recording']).nullable().optional(),
+  role_detail: z.string().trim().max(200).nullable().optional(),
+  party_id: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(200).optional(),
+  contact_id: z.string().uuid().nullable().optional(),
+}).strict();
+export type OrgCreditProposeBody = z.infer<typeof OrgCreditProposeBodySchema>;
+
+/** PATCH /api/org/[orgId]/tracks/[id]/credits/[creditId]: confirm or dispute (a dispute may say why). */
+export const OrgCreditDecisionBodySchema = z.object({
+  action: z.enum(['confirm', 'dispute']),
+  note: z.string().trim().min(1).max(1000).nullable().optional(),
+}).strict();
+export type OrgCreditDecisionBody = z.infer<typeof OrgCreditDecisionBodySchema>;
+
+/**
  * POST /api/org/[orgId]/tasks (LABEL-23): a task on at most ONE artist,
  * project, song or release (`target`), or on none (an org-level task), with an
  * optional assignee and due date. The target is fixed at creation: a task is
@@ -1268,6 +1318,54 @@ export const OrgTaskCreateBodySchema = z.object({
   target: z.object({ kind: z.enum(TASK_OBJECT_KINDS), id: z.string().uuid() }).strict().nullable().optional(),
 }).strict();
 export type OrgTaskCreateBody = z.infer<typeof OrgTaskCreateBodySchema>;
+
+/** PUT /api/org/[orgId]/artists/[contactId]/direction (LABEL-26): the whole document; an empty string clears a field. */
+const DIRECTION_TEXT = z.string().max(DIRECTION_TEXT_MAX);
+export const OrgDirectionPutBodySchema = z.object({
+  direction: z.object({
+    sound: DIRECTION_TEXT.optional(),
+    lyrics: DIRECTION_TEXT.optional(),
+    visual: DIRECTION_TEXT.optional(),
+    influences: DIRECTION_TEXT.optional(),
+    avoid: DIRECTION_TEXT.optional(),
+    next: DIRECTION_TEXT.optional(),
+    keywords: z.array(z.string().max(DIRECTION_KEYWORD_MAX)).max(DIRECTION_KEYWORDS_MAX).optional(),
+  }).strict(),
+}).strict();
+export type OrgDirectionPutBody = z.infer<typeof OrgDirectionPutBodySchema>;
+
+/** POST /api/org/[orgId]/artists/[contactId]/references: exactly the pointer the kind needs. */
+const REFERENCE_TITLE = z.string().trim().min(1).max(REFERENCE_TITLE_MAX);
+const REFERENCE_NOTE = z.string().trim().min(1).max(REFERENCE_NOTE_MAX);
+export const OrgReferenceCreateBodySchema = z.object({
+  kind: z.enum(REFERENCE_KINDS),
+  title: REFERENCE_TITLE.optional(),
+  note: REFERENCE_NOTE.nullable().optional(),
+  url: z.string().max(REFERENCE_URL_MAX).optional(),
+  track_id: z.string().uuid().optional(),
+  asset_id: z.string().uuid().optional(),
+  visibility: z.enum(REFERENCE_VISIBILITIES).optional(),
+}).strict().superRefine((b, ctx) => {
+  const need = (ok: boolean, path: string, message: string) => { if (!ok) ctx.addIssue({ code: 'custom', path: [path], message }); };
+  const only = (...names: Array<'url' | 'track_id' | 'asset_id'>) => {
+    for (const n of ['url', 'track_id', 'asset_id'] as const) if (!names.includes(n)) need(b[n] === undefined, n, `Not used by a ${b.kind} reference`);
+  };
+  if (b.kind === 'track') { need(!!b.track_id, 'track_id', 'Pick a track'); only('track_id'); }
+  if (b.kind === 'file') { need(!!b.asset_id, 'asset_id', 'Pick a file'); only('asset_id'); }
+  if (b.kind === 'link') { need(safeReferenceUrl(b.url) !== null, 'url', 'A link must be an https address'); need(!!b.title, 'title', 'Name the link'); only('url'); }
+  if (b.kind === 'note') { need(!!b.note, 'note', 'Write the note'); need(!!b.title, 'title', 'Give the note a title'); only(); }
+});
+export type OrgReferenceCreateBody = z.infer<typeof OrgReferenceCreateBodySchema>;
+
+/** PATCH …/references/[referenceId]: omitted keeps; the pointer of a reference never changes. */
+export const OrgReferencePatchBodySchema = z.object({
+  title: REFERENCE_TITLE.optional(),
+  note: REFERENCE_NOTE.nullable().optional(),
+  url: z.string().max(REFERENCE_URL_MAX).optional(),
+  visibility: z.enum(REFERENCE_VISIBILITIES).optional(),
+  position: z.number().int().min(0).max(100000).optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgReferencePatchBody = z.infer<typeof OrgReferencePatchBodySchema>;
 
 /** PATCH /api/org/[orgId]/tasks/[taskId]: omitted keeps, `null` clears; `done` ticks it off or reopens it. */
 export const OrgTaskPatchBodySchema = z.object({

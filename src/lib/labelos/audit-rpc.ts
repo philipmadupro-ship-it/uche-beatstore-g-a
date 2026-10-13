@@ -18,6 +18,7 @@
  *   connectionAccept         connection.accepted  (both orgs)
  *   connectionEnd            connection.ended     (both orgs)
  *   connectionShare          share.created | share.revoked (the artist org)
+ *   creditDecide             credit.confirmed | credit.disputed (153, LABEL-27)
  *
  * Accepting an invitation (`member.joined`) is 138's
  * `labelos_accept_invitation` (lib/labelos/invitations.ts), which already
@@ -51,6 +52,8 @@ export const AUDIT_RPCS = {
   connectionAccept: 'labelos_audit_connection_accept',
   connectionEnd: 'labelos_audit_connection_end',
   connectionShare: 'labelos_audit_connection_share',
+  // Migration 153 (LABEL-27): a credit is confirmed or disputed, with its event.
+  creditDecide: 'labelos_audit_credit_decide',
 } as const;
 export type AuditRpcKey = keyof typeof AUDIT_RPCS;
 
@@ -120,6 +123,15 @@ export type AuditRpcArgs = {
     p_connection: string;
     p_patch: Record<string, unknown>;
     p_project_ids: string[] | null;
+  creditDecide: {
+    p_org: string;
+    p_actor: string;
+    p_credit: string;
+    p_decision: 'confirmed' | 'disputed';
+    /** The reason given with a dispute; null for a confirmation. */
+    p_note: string | null;
+    /** The song's context keys the event is filed under: { artist_id, project_id, song_id }. */
+    p_subject: { artist_id: string | null; project_id: string | null; song_id: string | null };
     p_payload: EventPayload;
   };
 };
@@ -153,6 +165,7 @@ export function isMissingAuditRpc(error: AuditRpcError | null): boolean {
 }
 
 export const AUDIT_RPC_NOT_READY = 'Auditing is not set up yet (migration 146 has not been applied).';
+export const CREDITS_NOT_READY = 'Credits and parties are not set up yet (migration 153 has not been applied).';
 export const PROJECT_MEMBERS_NOT_READY = 'External project members are not set up yet (migration 148 has not been applied).';
 
 /**
