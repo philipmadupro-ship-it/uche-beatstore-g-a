@@ -100,6 +100,9 @@ function labelOsTables(): string[] {
     'song_reviews',
     // 151_labelos_tasks_notifications.sql (LABEL-23)
     'tasks',
+    // 152_labelos_creative_direction.sql (LABEL-26)
+    'artist_direction',
+    'artist_references',
   ];
 }
 

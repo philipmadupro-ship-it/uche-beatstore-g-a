@@ -76,6 +76,11 @@ export const VERBS = [
   'task.updated',
   'task.completed',
   'task.deleted',
+  // Creative direction (LABEL-26; the payload names fields and kinds, never the words)
+  'direction.updated',
+  'reference.added',
+  'reference.updated',
+  'reference.removed',
   // Files
   'file.uploaded',
   'file.updated',
@@ -187,6 +192,12 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'task.updated': 'internal',
   'task.completed': 'internal',
   'task.deleted': 'internal',
+  // The direction is what the artist is told; a reference route overrides to `internal` for an
+  // internal reference — the event of a team-only reference is team-only too.
+  'direction.updated': 'artist',
+  'reference.added': 'artist',
+  'reference.updated': 'artist',
+  'reference.removed': 'artist',
   'file.uploaded': 'internal',
   'file.updated': 'internal',
   'file.deleted': 'internal',

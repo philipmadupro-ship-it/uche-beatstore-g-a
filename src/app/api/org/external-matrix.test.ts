@@ -48,6 +48,7 @@ const ITEM = '70000000-0000-4000-8000-000000000002';
 const INV = '80000000-0000-4000-8000-000000000001';
 const TASK = '90000000-0000-4000-8000-000000000001';
 const NOTE = '90000000-0000-4000-8000-000000000002';
+const REFERENCE = '90000000-0000-4000-8000-0000000000d1';
 const COMMENT = '90000000-0000-4000-8000-0000000000c1'; // artist-visible
 const INTERNAL = '90000000-0000-4000-8000-0000000000c2'; // team-only
 
@@ -112,6 +113,8 @@ function seed(): MemoryDb {
       activity_events: [],
       // LABEL-23: rows that even NAME an external member (a stale assignment, a notification addressed to them)
       // must not be readable by them — they are not org members.
+      artist_direction: [{ contact_id: C1, org_id: L, direction: { sound: 'Dusty drums' }, updated_by: OWNER, updated_at: '2026-10-01' }],
+      artist_references: [{ id: REFERENCE, org_id: L, contact_id: C1, kind: 'note', title: 'Candid', note: 'Team only', url: null, track_id: null, asset_id: null, visibility: 'internal', position: 0, created_by: OWNER, created_at: '2026-10-01', updated_at: '2026-10-01' }],
       tasks: [{ id: TASK, org_id: L, title: 'Clear the sample', assignee_id: EDITOR, created_by: OWNER, song_id: S1, artist_id: null, project_id: null, release_id: null, created_at: '2026-10-01', done_at: null }],
       notifications: [{ id: NOTE, user_id: EDITOR, org_id: L, kind: 'task_assigned', title: 'Owner assigned you a task', body: 'Clear the sample', data: null, read: false, created_at: '2026-10-01' }],
       user_profiles: [],
@@ -167,6 +170,7 @@ function paramsFor(path: string): Record<string, string> {
     commentId: COMMENT,
     userId: EDITOR,
     taskId: TASK,
+    referenceId: REFERENCE,
   };
   return Object.fromEntries(names.map((n) => [n, values[n] ?? P1]));
 }
@@ -267,6 +271,42 @@ describe('LABEL-23: tasks and notifications are not an external member\'s (route
       expect(db.tables.tasks).toHaveLength(1);
       expect(db.tables.tasks[0].done_at ?? null).toBeNull();
       expect(db.tables.notifications[0].read).toBe(false);
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-26: creative direction and references are never an external member\'s (route by route)', () => {
+  const routes = [
+    ['[orgId]/artists/[contactId]/direction/route.ts', 'GET', ''],
+    ['[orgId]/artists/[contactId]/direction/route.ts', 'PUT', ''],
+    ['[orgId]/artists/[contactId]/references/route.ts', 'POST', ''],
+    ['[orgId]/artists/[contactId]/references/[referenceId]/route.ts', 'PATCH', ''],
+    ['[orgId]/artists/[contactId]/references/[referenceId]/route.ts', 'DELETE', ''],
+    ['[orgId]/artists/[contactId]/references/choices/route.ts', 'GET', '?kind=track&q='],
+    ['[orgId]/artists/[contactId]/references/choices/route.ts', 'GET', '?kind=file'],
+  ] as const;
+
+  it('the routes exist and none of them is on the external allowlist', () => {
+    for (const [path, method] of routes) {
+      expect(files, path).toContain(path);
+      expect(externalRouteKeys(), `${path}:${method}`).not.toContain(`${path}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: reads no direction, no internal reference, and changes nothing`, async () => {
+      for (const [path, method, query] of routes) {
+        const res = await call(path, method, user, {
+          query,
+          body: method === 'PUT' ? { direction: { sound: 'x' } } : method === 'POST' ? { kind: 'note', title: 'x', note: 'y' } : method === 'PATCH' ? { title: 'x' } : undefined,
+        });
+        expect([403, 404], `${method} ${path}${query} answered ${res.status}`).toContain(res.status);
+        expect(JSON.stringify(await res.clone().json().catch(() => ({})))).not.toContain('Team only');
+      }
+      expect(db.tables.artist_references).toHaveLength(1);
+      expect(db.tables.artist_references[0]).toMatchObject({ title: 'Candid', visibility: 'internal' });
+      expect(db.tables.artist_direction[0].direction).toEqual({ sound: 'Dusty drums' });
       expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
     });
   }

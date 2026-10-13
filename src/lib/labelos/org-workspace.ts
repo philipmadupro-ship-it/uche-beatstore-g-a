@@ -35,9 +35,9 @@ import { SONG_STAGE_LABEL, isSongStage, type SongStage } from './song-stage';
  * The org workspace's tabs, in order. The producer's Beats / Messages /
  * Notes tabs are pitching and CRM surfaces with no org data behind them yet;
  * Activity is the artist's feed (LABEL-20, `/api/org/[orgId]/activity?artist=`);
- * Credits & Rights and Direction are LABEL-27/26 (Out of Scope here).
+ * Direction is the creative-direction memory (LABEL-26); Credits & Rights is LABEL-27.
  */
-export const ORG_WORKSPACE_TABS = ['overview', 'projects', 'songs', 'releases', 'files', 'activity'] as const;
+export const ORG_WORKSPACE_TABS = ['overview', 'projects', 'songs', 'releases', 'files', 'direction', 'activity'] as const;
 export type OrgWorkspaceTab = (typeof ORG_WORKSPACE_TABS)[number];
 
 export const ORG_WORKSPACE_TAB_LABEL: Record<OrgWorkspaceTab, string> = {
@@ -46,6 +46,7 @@ export const ORG_WORKSPACE_TAB_LABEL: Record<OrgWorkspaceTab, string> = {
   songs: 'Songs',
   releases: 'Releases',
   files: 'Files',
+  direction: 'Direction',
   activity: 'Activity',
 };
 
