@@ -1710,7 +1710,7 @@ Drop the table.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-17
-**Status:** In Progress (branch label-os/LABEL-26; runs in parallel with LABEL-27, migration 152 reserved)
+**Status:** Done (PR #93, squash 3fbbafd; migration 152 not applied — apply at final merge). Open decision for the owner: role `artist` holds `catalog.write`, so a roster artist can edit their own direction and artist-visible references (never internal ones); say if it should be team-only.
 
 ## Objective
 A per-artist memory of references and direction.
@@ -1769,7 +1769,7 @@ Drop.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-21 (D7: 115 applied on prod)
-**Status:** In Progress (branch label-os/LABEL-27; runs in parallel with LABEL-26, migration 153 reserved; D7 satisfied — 115 applied on production 2026-09-30)
+**Status:** Done (PR #94, squash eff3f1e; migration 153 not applied — apply at final merge). Not done, by design: UI for an external member's own credit (routes tested), credit withdraw (needs a `credit.removed` verb), a parties management page, importing producer-era credits into parties.
 
 ## Objective
 Legal-grade credits by extending `track_collaborators` (`17` R8), and rights-holder parties. **No new `credits` table.**
@@ -1838,7 +1838,7 @@ Drop `parties` and the new columns.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-27
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-28, PR #96; migration 155 reserved)
 
 ## Objective
 Versioned composition and master split sheets that validate to exactly 100%.
@@ -1888,7 +1888,7 @@ Drop the tables.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-28
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-29, stacked on label-os/LABEL-28; no migration)
 
 ## Objective
 Derived legal readiness per song, rolled up per release.
@@ -2351,7 +2351,7 @@ Disable the cron.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-19, LABEL-15
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-39)
 
 ## Objective
 Owners can export and delete an org. Non-audit events are pruned per D9.
@@ -2398,7 +2398,7 @@ Disable the crons; soft-deleted orgs can be restored within the grace period.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-08
-**Status:** Not Started
+**Status:** Done (PR #95, squash aaa1556; no migration)
 
 ## Objective
 Remove the non-functional `invites` / `team_members` surfaces, so no one builds on them.
@@ -2450,7 +2450,7 @@ Revert.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-10, LABEL-21
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-41; migration 154 reserved)
 
 ## Objective
 An artist org can connect to a label org and share its whole catalogue or selected projects. The label sees that music through its roster, under its own staff permissions (D1).
