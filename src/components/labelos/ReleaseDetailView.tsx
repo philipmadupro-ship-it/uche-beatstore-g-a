@@ -12,13 +12,16 @@
  *
  * Reordering is up / down buttons and a position field, never dragging (07
  * §2.5). The actions area (`data-testid="release-actions"`) is a plain flex
- * row on purpose: LABEL-34's export buttons are mounted there.
+ * row on purpose: LABEL-34's export buttons and calendar link are mounted there, for
+ * `release.write` only.
  */
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
+import { ReleaseCalendarLink } from './ReleaseCalendarLink';
+import { ReleaseExportButtons } from './ReleaseExportButtons';
 import { Dropdown, type DropdownOption } from '@/components/ui/Dropdown';
 import { InlineText } from '@/components/ui/InlineText';
 import { Popover } from '@/components/ui/Popover';
@@ -116,6 +119,12 @@ export function ReleaseDetailView({ orgId, orgSlug, detail, extraActions }: { or
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2" data-testid="release-actions">
+            {me.canWrite && (
+              <>
+                <ReleaseExportButtons orgId={orgId} releaseId={release.id} canExport />
+                <ReleaseCalendarLink orgId={orgId} />
+              </>
+            )}
             {extraActions}
             {menu.length > 0 && <ActionMenu sections={menu} label="Release actions" align="right" busy={busy} />}
           </div>

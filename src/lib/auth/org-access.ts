@@ -277,6 +277,37 @@ export async function liveMembership(
   }
 }
 
+/**
+ * A member's access context for a caller with NO session: the one route
+ * whose credential is a signed feed token (the release calendar, LABEL-34 —
+ * a calendar app cannot send cookies). Same membership, role, capability and
+ * artist-scope rules as `requireOrgMember`, read live on every call, plus
+ * the membership's `joined_at` so a token can die when the person leaves and
+ * rejoins. `none` = not a (live) member; `error` = could not tell, which the
+ * route answers 5xx, never as "not a member". The TOKEN was already checked
+ * by the caller; this does not authenticate anyone.
+ */
+export async function memberAccessFor(
+  orgId: string,
+  userId: string,
+): Promise<(OrgAccessOk & { joinedAt: string }) | { ok: false; reason: 'none' | 'error' }> {
+  if (!isUUID(orgId) || !isUUID(userId)) return { ok: false, reason: 'none' };
+  const context = await memberContext(userId, orgId, NOT_FOUND);
+  if (!context.ok) return { ok: false, reason: context.res.status === 404 ? 'none' : 'error' };
+  const { data, error } = await context.admin
+    .from('org_members')
+    .select('joined_at')
+    .eq('org_id', orgId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    log.error('joined_at read failed', { orgId, error: error.message });
+    return { ok: false, reason: 'error' };
+  }
+  const joinedAt = (data as { joined_at?: string } | null)?.joined_at;
+  return joinedAt ? { ...context, joinedAt } : { ok: false, reason: 'none' };
+}
+
 /** requireOrgMember, plus the capability. 403 when the member lacks it. */
 export async function requireOrgCapability(orgId: string, cap: Capability): Promise<OrgAccessResult> {
   const access = await requireOrgMember(orgId);
