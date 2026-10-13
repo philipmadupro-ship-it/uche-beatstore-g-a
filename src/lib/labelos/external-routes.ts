@@ -59,6 +59,16 @@ export const EXTERNAL_ROUTES: Readonly<Record<string, { methods: readonly string
     kind: 'project',
     why: 'D2: confirm or dispute their OWN credit (not one they proposed themselves). A credit that is not theirs is 404.',
   },
+  '[orgId]/tracks/[id]/splits/route.ts': {
+    methods: ['GET'],
+    kind: 'project',
+    why: 'D2: see their OWN split line on a circulated sheet of a song of their project. Never the other lines, the total, a draft or anyone’s legal data. Starting a sheet (POST) is org members only.',
+  },
+  '[orgId]/tracks/[id]/splits/[sheetId]/signatures/route.ts': {
+    methods: ['POST'],
+    kind: 'project',
+    why: 'D2: acknowledge their OWN line (JSON). A line that is not theirs is 404; uploading a signed PDF is a rights writer’s act and is refused for them.',
+  },
   '[orgId]/audio/[trackId]/route.ts': {
     methods: ['GET', 'HEAD'],
     kind: 'project',

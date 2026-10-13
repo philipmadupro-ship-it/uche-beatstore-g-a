@@ -256,6 +256,8 @@ SELECT public.check_eq('the service-only write trigger sits on every table the p
   'project_folder_items,project_shares,project_tags,project_tracks,projects,'
   -- release_items, releases: 144's own org tables (LABEL-16)
   'release_items,releases,song_beats,song_reviews,'
+  -- split_lines, split_sheets: 155's org tables (LABEL-28)
+  'split_lines,split_sheets,'
   -- tasks: 151's org table (LABEL-23)
   'tasks,track_collaborators,'
   'track_licenses,track_links,track_stem_files,track_versions,tracks');

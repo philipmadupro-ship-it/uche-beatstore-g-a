@@ -102,6 +102,9 @@ function labelOsTables(): string[] {
     'tasks',
     // 153_labelos_parties_credits.sql (LABEL-27)
     'parties',
+    // 155_labelos_split_sheets.sql (LABEL-28)
+    'split_sheets',
+    'split_lines',
   ];
 }
 
@@ -127,6 +130,8 @@ const ORG_HELPERS = [
   'labelos_scoped_releases',
   // 153 (LABEL-27): the parties credited on songs of the scoped projects, for parties.
   'labelos_scoped_parties',
+  // 155 (LABEL-28): the caller's own split lines, one uncorrelated call, for split_sheets / split_lines.
+  'labelos_my_split_lines',
 ];
 const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 
@@ -456,6 +461,34 @@ describe('final RLS policy state', () => {
       const writes = [...policies]
         .filter(([k, body]) => /^(parties|track_collaborators)\./.test(k) && /FOR\s+(INSERT|UPDATE|DELETE)\b/i.test(body))
         .map(([k]) => k);
+      expect(writes).toEqual([]);
+    });
+  });
+
+  describe('Label OS split sheets (mig 155, LABEL-28)', () => {
+    const onSplit = () => [...policies].filter(([k]) => /^(split_sheets|split_lines)\./.test(k));
+
+    it('each table has exactly one policy, a SELECT: rights.read in a whole-org / scoped reach, or the caller’s own non-draft line', () => {
+      expect(onSplit().map(([k]) => k).sort()).toEqual(['split_lines.split_lines_member_read', 'split_sheets.split_sheets_member_read']);
+      for (const [k, body] of onSplit()) {
+        expect(body, k).toMatch(/^\s*FOR SELECT\s+USING\b/i);
+        expect(body, k).toMatch(/has_org_cap\(cm\.org_id, 'rights\.read'\)/);
+        expect(body, k).toMatch(/labelos_scoped_tracks\(\)/);
+        expect(body, k).toMatch(/labelos_my_split_lines\(\)/);
+        // Asked of the caller's few memberships (an uncorrelated subplan), never of the row's own org: R-08.
+        expect(body, k).not.toMatch(/has_org_cap\(\s*org_id/);
+        expect(body, k).not.toMatch(/can_see_org_|can_read_org_track|labelos_is_org_/);
+        expect(body, k).not.toMatch(/WITH CHECK/i);
+      }
+    });
+
+    it('the two policies never read each other’s table (no recursion): the own-line set is a function', () => {
+      expect(policies.get('split_sheets.split_sheets_member_read')).not.toMatch(/FROM public\.split_lines/);
+      expect(policies.get('split_lines.split_lines_member_read')).not.toMatch(/FROM public\.split_sheets/);
+    });
+
+    it('no policy on either table writes', () => {
+      const writes = onSplit().filter(([, body]) => /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body)).map(([k]) => k);
       expect(writes).toEqual([]);
     });
   });

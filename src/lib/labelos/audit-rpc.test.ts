@@ -9,7 +9,9 @@ const SQL_146 = readFileSync(join(process.cwd(), 'supabase/migrations/146_labelo
 const SQL_148 = readFileSync(join(process.cwd(), 'supabase/migrations/148_labelos_project_members.sql'), 'utf8');
 // LABEL-27 adds the credit decision (confirm / dispute).
 const SQL_153 = readFileSync(join(process.cwd(), 'supabase/migrations/153_labelos_parties_credits.sql'), 'utf8');
-const SQL = SQL_146 + SQL_148 + SQL_153;
+// LABEL-28 adds the split sheet transitions (circulate, sign).
+const SQL_155 = readFileSync(join(process.cwd(), 'supabase/migrations/155_labelos_split_sheets.sql'), 'utf8');
+const SQL = SQL_146 + SQL_148 + SQL_153 + SQL_155;
 
 describe('auditRpc', () => {
   it('calls the named function with the arguments untouched', async () => {
@@ -46,7 +48,7 @@ describe('auditRpc', () => {
   });
 });
 
-describe('migrations 146 + 148 + 153 hold exactly these functions, service_role only', () => {
+describe('migrations 146 + 148 + 153 + 155 hold exactly these functions, service_role only', () => {
   for (const [key, name] of Object.entries(AUDIT_RPCS)) {
     it(`${key} → ${name}`, () => {
       expect(SQL).toMatch(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\(`));

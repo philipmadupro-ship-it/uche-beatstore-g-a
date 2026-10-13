@@ -8,6 +8,7 @@
  * honest about what the routes may assume of it.
  */
 import { randomUUID } from 'node:crypto';
+import { FULL_SHARE, ROLES_BY_KIND, isSplitKind, parseShare } from '../splits';
 
 type Row = Record<string, unknown>;
 type Tables = Record<string, Row[]>;
@@ -182,6 +183,109 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
         visibility: 'artist',
       });
       return ok({ credit: { ...credit } });
+    },
+    // Migration 155 (LABEL-28): split sheets. These mimic the SQL: the same refusals, in the same order.
+    labelos_split_create_draft: (args, tables) => {
+      const track = (tables.tracks ?? []).find((t) => t.id === args.p_track && t.org_id === args.p_org && t.type === 'song');
+      if (!track) return ok({ error: 'not_found' });
+      const sheets = (tables.split_sheets ??= []);
+      const kind = String(args.p_kind);
+      if (sheets.some((s) => s.track_id === args.p_track && s.kind === kind && s.status === 'draft')) return ok({ error: 'draft_exists' });
+      let source: Row | undefined;
+      if (args.p_copy_from) {
+        source = sheets.find((s) => s.id === args.p_copy_from && s.org_id === args.p_org && s.track_id === args.p_track && s.kind === kind);
+        if (!source) return ok({ error: 'not_found' });
+      }
+      const version = Math.max(0, ...sheets.filter((s) => s.track_id === args.p_track && s.kind === kind).map((s) => Number(s.version))) + 1;
+      const sheet: Row = {
+        id: randomUUID(), org_id: args.p_org, track_id: args.p_track, kind, version, status: 'draft',
+        note: args.p_note ?? source?.note ?? null, document_asset_id: null, created_by: args.p_actor,
+        circulated_by: null, circulated_at: null, signed_at: null, superseded_at: null, superseded_by: null,
+        created_at: new Date().toISOString(),
+      };
+      sheets.push(sheet);
+      const lines = (tables.split_lines ??= []);
+      const add = (party_id: unknown, role: unknown, share: unknown) =>
+        lines.push({ id: randomUUID(), split_sheet_id: sheet.id, org_id: args.p_org, track_id: args.p_track, party_id, role, share, signed_at: null, signature_method: null, signature_asset_id: null, signed_by: null, created_at: new Date().toISOString() });
+      if (source) for (const l of lines.filter((x) => x.split_sheet_id === source!.id).map((x) => ({ ...x }))) add(l.party_id, l.role, l.share);
+      else for (const e of (args.p_lines as Row[] | null) ?? []) add(e.party_id, e.role, Number(e.share));
+      return ok({ sheet: { ...sheet } });
+    },
+    labelos_split_save_draft: (args, tables) => {
+      const sheet = (tables.split_sheets ?? []).find((s) => s.id === args.p_sheet && s.org_id === args.p_org);
+      if (!sheet) return ok({ error: 'not_found' });
+      if (sheet.status !== 'draft') return ok({ error: 'not_draft' });
+      if (args.p_set_lines) {
+        tables.split_lines = (tables.split_lines ?? []).filter((l) => l.split_sheet_id !== sheet.id);
+        for (const e of (args.p_lines as Row[]) ?? []) {
+          tables.split_lines.push({ id: randomUUID(), split_sheet_id: sheet.id, org_id: sheet.org_id, track_id: sheet.track_id, party_id: e.party_id, role: e.role, share: Number(e.share), signed_at: null, signature_method: null, signature_asset_id: null, signed_by: null, created_at: new Date().toISOString() });
+        }
+      }
+      if (args.p_set_note) sheet.note = args.p_note ?? null;
+      return ok({ sheet: { ...sheet } });
+    },
+    labelos_audit_split_circulate: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const sheets = (tables.split_sheets ??= []);
+      const sheet = sheets.find((s) => s.id === args.p_sheet && s.org_id === args.p_org);
+      if (!sheet) return ok({ error: 'not_found' });
+      if (sheet.status !== 'draft') return ok({ error: 'not_draft' });
+      const lines = (tables.split_lines ?? []).filter((l) => l.split_sheet_id === sheet.id);
+      if (lines.length === 0) return ok({ error: 'no_lines' });
+      const total = lines.reduce((sum, l) => sum + (parseShare(Number(l.share).toFixed(4)) ?? 0), 0);
+      if (total !== FULL_SHARE) return ok({ error: 'bad_total', total: total / 10000 });
+      if (!isSplitKind(sheet.kind) || lines.some((l) => !(ROLES_BY_KIND[sheet.kind as 'composition' | 'master'] as readonly string[]).includes(String(l.role)))) {
+        return { data: null, error: { message: 'split_sheets: a sheet carries a role that does not belong to it', code: '23514' } };
+      }
+      const subject = (args.p_subject ?? {}) as Row;
+      const ev = (verb: string, id: unknown, payload: unknown) =>
+        (tables.activity_events ??= []).push({ org_id: args.p_org, actor_id: args.p_actor, verb, subject_type: 'split_sheet', subject_id: id, artist_id: subject.artist_id ?? null, project_id: subject.project_id ?? null, song_id: subject.song_id ?? null, payload, audit: true, visibility: 'internal' });
+      const old = sheets.find((s) => s.track_id === sheet.track_id && s.kind === sheet.kind && s.id !== sheet.id && ['circulated', 'signed', 'disputed'].includes(String(s.status)));
+      if (old) {
+        Object.assign(old, { status: 'superseded', superseded_by: sheet.id, superseded_at: new Date().toISOString() });
+        ev('split_sheet.superseded', old.id, { kind: old.kind, version: old.version, by_version: sheet.version });
+      }
+      Object.assign(sheet, { status: 'circulated', circulated_by: args.p_actor, circulated_at: new Date().toISOString() });
+      ev('split_sheet.circulated', sheet.id, old ? { ...(args.p_payload as Row), supersedes_version: old.version } : args.p_payload);
+      return ok({ sheet: { ...sheet }, superseded: old?.id ?? null });
+    },
+    labelos_audit_split_sign: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const method = String(args.p_method);
+      if (method !== 'upload' && method !== 'acknowledged') return ok({ error: 'bad_method' });
+      if (method === 'acknowledged' && (!args.p_line || args.p_asset)) return ok({ error: 'bad_method' });
+      if (method === 'upload' && !args.p_asset) return ok({ error: 'bad_asset' });
+      if (args.p_asset && !(tables.project_assets ?? []).some((a) => a.id === args.p_asset && a.org_id === args.p_org && a.kind === 'split_sheet' && a.sensitivity === 'restricted')) {
+        return ok({ error: 'bad_asset' });
+      }
+      const sheet = (tables.split_sheets ?? []).find((s) => s.id === args.p_sheet && s.org_id === args.p_org);
+      if (!sheet) return ok({ error: 'not_found' });
+      if (sheet.status !== 'circulated') return ok({ error: 'not_circulated' });
+      const lines = (tables.split_lines ?? []).filter((l) => l.split_sheet_id === sheet.id);
+      const sign = (l: Row) => Object.assign(l, { signed_at: new Date().toISOString(), signature_method: method, signature_asset_id: args.p_asset ?? null, signed_by: args.p_actor });
+      let signed = 0;
+      if (args.p_line) {
+        const line = lines.find((l) => l.id === args.p_line);
+        if (!line) return ok({ error: 'no_line' });
+        if (line.signed_at) return ok({ error: 'already_signed' });
+        sign(line);
+        signed = 1;
+      } else {
+        const open = lines.filter((l) => !l.signed_at);
+        if (open.length === 0) return ok({ error: 'already_signed' });
+        open.forEach(sign);
+        signed = open.length;
+      }
+      const complete = lines.every((l) => !!l.signed_at);
+      if (complete) Object.assign(sheet, { status: 'signed', signed_at: new Date().toISOString(), document_asset_id: args.p_line ? sheet.document_asset_id : args.p_asset });
+      else if (!args.p_line) sheet.document_asset_id = args.p_asset;
+      const subject = (args.p_subject ?? {}) as Row;
+      (tables.activity_events ??= []).push({
+        org_id: args.p_org, actor_id: args.p_actor, verb: 'split_sheet.signed', subject_type: 'split_sheet', subject_id: sheet.id,
+        artist_id: subject.artist_id ?? null, project_id: subject.project_id ?? null, song_id: subject.song_id ?? null,
+        payload: { ...(args.p_payload as Row), complete, lines: signed }, audit: true, visibility: 'internal',
+      });
+      return ok({ sheet: { ...sheet }, complete, signed });
     },
     labelos_audit_invitation_revoke: (args, tables) => {
       if (opts.failAudit?.()) return failed();

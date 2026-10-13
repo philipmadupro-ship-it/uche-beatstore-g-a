@@ -25,6 +25,7 @@ import { CURSOR_RE } from '@/lib/labelos/activity-feed';
 import { SONG_STAGES } from '@/lib/labelos/song-stage';
 import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
 import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
+import { SPLIT_KINDS, SPLIT_ROLES } from '@/lib/labelos/splits';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -1301,6 +1302,43 @@ export const OrgCreditDecisionBodySchema = z.object({
   note: z.string().trim().min(1).max(1000).nullable().optional(),
 }).strict();
 export type OrgCreditDecisionBody = z.infer<typeof OrgCreditDecisionBodySchema>;
+
+/**
+ * Split sheets (LABEL-28). A share is a decimal STRING ("33.3333") or a number
+ * with at most four decimals; it is parsed to integer units by
+ * lib/labelos/splits#parseShare (no float arithmetic ever touches it), so the
+ * schema only bounds the shape.
+ */
+const SplitShareSchema = z.union([z.string().trim().regex(/^\d{1,3}(\.\d{1,4})?$/, 'A share has at most four decimals'), z.number().finite()]);
+const SplitLineSchema = z.object({
+  party_id: z.string().uuid(),
+  role: z.enum(SPLIT_ROLES),
+  share: SplitShareSchema,
+}).strict();
+const SplitNoteSchema = z.string().trim().max(2000).nullable().optional();
+
+/** POST /api/org/[orgId]/tracks/[id]/splits: a new draft (optionally with lines). */
+export const OrgSplitCreateBodySchema = z.object({
+  kind: z.enum(SPLIT_KINDS),
+  note: SplitNoteSchema,
+  lines: z.array(SplitLineSchema).max(50).optional(),
+}).strict();
+export type OrgSplitCreateBody = z.infer<typeof OrgSplitCreateBodySchema>;
+
+/** PATCH …/splits/[sheetId]: replace a draft's note and / or its whole set of lines. */
+export const OrgSplitPatchBodySchema = z.object({
+  note: SplitNoteSchema,
+  lines: z.array(SplitLineSchema).max(50).optional(),
+}).strict().refine((b) => b.note !== undefined || b.lines !== undefined, { message: 'Nothing to change' });
+export type OrgSplitPatchBody = z.infer<typeof OrgSplitPatchBodySchema>;
+
+/** POST …/splits/[sheetId]/signatures as JSON: an acknowledgement of one line. (An upload is multipart: `file` + optional `line_id`.) */
+export const OrgSplitAcknowledgeBodySchema = z.object({
+  method: z.literal('acknowledged'),
+  line_id: z.string().uuid(),
+}).strict();
+export type OrgSplitAcknowledgeBody = z.infer<typeof OrgSplitAcknowledgeBodySchema>;
+export const OrgSplitUploadFieldsSchema = z.object({ line_id: z.string().uuid().optional() }).strict();
 
 /**
  * POST /api/org/[orgId]/tasks (LABEL-23): a task on at most ONE artist,

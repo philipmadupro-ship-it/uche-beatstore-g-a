@@ -50,6 +50,7 @@ const TASK = '90000000-0000-4000-8000-000000000001';
 const NOTE = '90000000-0000-4000-8000-000000000002';
 const NOVA_PARTY = 'a0000000-0000-4000-8000-000000000001';
 const NOVA_CREDIT = 'a0000000-0000-4000-8000-000000000002';
+const SHEET = 'b0000000-0000-4000-8000-000000000001';
 const COMMENT = '90000000-0000-4000-8000-0000000000c1'; // artist-visible
 const INTERNAL = '90000000-0000-4000-8000-0000000000c2'; // team-only
 
@@ -171,6 +172,7 @@ function paramsFor(path: string): Record<string, string> {
     invitationId: INV,
     commentId: COMMENT,
     creditId: NOVA_CREDIT,
+    sheetId: SHEET,
     partyId: NOVA_PARTY,
     userId: EDITOR,
     taskId: TASK,
