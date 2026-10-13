@@ -239,6 +239,9 @@ describe('OrgSplits — a circulated sheet', () => {
     fireEvent.change(input, { target: { files: [pdf] } });
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(writes()[0].body).toMatchObject({ line_id: 'l3' });
+    // Let the first upload settle: the whole-sheet button is disabled while busy, and a click on it then does
+    // nothing — so the next file would still be filed under the previous line (a race, seen once in CI).
+    await waitFor(() => expect((screen.getByTestId('splits-upload') as HTMLButtonElement).disabled).toBe(false));
 
     fireEvent.click(screen.getByTestId('splits-upload'));
     fireEvent.change(input, { target: { files: [pdf] } });
