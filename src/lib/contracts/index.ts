@@ -942,6 +942,28 @@ export function parseReadinessSettings(raw: unknown): OrgReadinessSettings {
 }
 
 /**
+ * `organizations.settings` as Needs attention reads it (LABEL-35, 07 §2.1).
+ * Two thresholds, whole days, total: a missing, non-numeric, fractional or
+ * out-of-range value reads as its default, so a bad row can neither switch
+ * the list off nor flood it. Unknown keys are dropped. Read-only.
+ */
+export const ATTENTION_DEFAULTS = { attention_release_days: 30, attention_stalled_days: 30 } as const;
+const attentionDays = (fallback: number) => z.number().int().min(1).max(365).catch(fallback);
+export const OrgAttentionSettingsSchema = z.object({
+  /** A draft release whose target date is this many days away (or past) is listed when a gate is blocked. */
+  attention_release_days: attentionDays(ATTENTION_DEFAULTS.attention_release_days),
+  /** A song in a working stage for MORE than this many days is listed. */
+  attention_stalled_days: attentionDays(ATTENTION_DEFAULTS.attention_stalled_days),
+});
+export type OrgAttentionSettings = z.infer<typeof OrgAttentionSettingsSchema>;
+
+/** Total over any stored value: null, a string or an array reads as the defaults. */
+export function parseAttentionSettings(raw: unknown): OrgAttentionSettings {
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  return OrgAttentionSettingsSchema.parse(obj);
+}
+
+/**
  * PATCH /api/org/[orgId]/members. Which roles, functions, scopes and
  * switches are allowed is decided per org kind and per actor by
  * `planMemberChange` (lib/labelos/members), so here they are only bounded
