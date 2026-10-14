@@ -10,7 +10,7 @@
 import type { AdminClient } from '@/lib/auth/ownership';
 import { isUUID } from '@/lib/validate';
 import { objectAccessFor, liveMembership, orgProjectIdsInScope, type OrgContext } from '@/lib/auth/org-access';
-import { scopeAllowsContact } from './artist-scope';
+import { mayListMember, scopeAllowsContact, type ArtistScope } from './artist-scope';
 import type { Role } from './capabilities';
 import type { EventSubject } from './activity';
 import { memberIdentities, memberLabel, type IdentityAdmin } from './member-identity';
@@ -235,11 +235,32 @@ export async function assigneeMayTake(admin: AdminClient, orgId: string, userId:
   return true;
 }
 
-/** The org's members (id + display name) who may be handed a task on `target`, name order. Bounded to the first 200 members: it runs only when the add-task form opens. */
-export async function assignableMembers(admin: AdminClient, orgId: string, target: TaskTarget): Promise<{ id: string; name: string }[]> {
-  const res = await admin.from('org_members').select('user_id').eq('org_id', orgId).limit(200);
+/**
+ * The org's members (id + display name) who may be handed a task on `target`, name order. Bounded to the first
+ * 200 members: it runs only when the add-task form opens. `viewer` is who is asking: an artist's login is that
+ * artist's name, so it is listed only where `mayListMember` allows (never another artist's to an artist, and to
+ * staff limited to some artists only those artists').
+ */
+export async function assignableMembers(
+  admin: AdminClient,
+  orgId: string,
+  target: TaskTarget,
+  viewer: { userId: string; role: string; scope: ArtistScope },
+): Promise<{ id: string; name: string }[]> {
+  const res = await admin.from('org_members').select('user_id, role').eq('org_id', orgId).limit(200);
   if (res.error) fail('member read', res.error);
-  const ids = ((res.data ?? []) as { user_id: string }[]).map((m) => m.user_id);
+  const rows = (res.data ?? []) as { user_id: string; role: string }[];
+  const logins = new Map<string, string[]>();
+  if (viewer.role !== 'artist' && viewer.scope !== null && rows.some((m) => m.role === 'artist')) {
+    const links = await admin.from('member_artist_scopes').select('user_id, contact_id').eq('org_id', orgId);
+    if (links.error) fail('artist list read', links.error);
+    for (const l of (links.data ?? []) as { user_id: string; contact_id: string }[]) {
+      const key = l.user_id.toLowerCase();
+      logins.set(key, [...(logins.get(key) ?? []), l.contact_id]);
+    }
+  }
+  const listed = rows.filter((m) => mayListMember(viewer, { userId: m.user_id, role: m.role }, logins.get(m.user_id.toLowerCase()) ?? []));
+  const ids = listed.map((m) => m.user_id);
   const allowed = (await Promise.all(ids.map(async (id) => ((await assigneeMayTake(admin, orgId, id, target)) ? id : null)))).filter((id): id is string => id !== null);
   const names = await memberIdentities(admin as unknown as IdentityAdmin, orgId, allowed, { withEmail: false });
   return allowed.map((id) => ({ id, name: memberLabel(names.get(id)) })).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));

@@ -58,3 +58,24 @@ export function scopeAllowsAnyContact(scope: ArtistScope, contactIds: readonly s
   if (scope === null) return true;
   return contactIds.some((id) => scopeAllowsContact(scope, id));
 }
+
+/**
+ * May `viewer` see `member` in a list of the org's people? An artist's login
+ * is that artist's name and their existence, so it follows the artist's
+ * contact (`member_artist_scopes`): another artist never sees it, staff limited
+ * to some artists see only the logins of those artists, everyone else sees
+ * all. Staff and owners are always listed. `memberContactIds` is the artist
+ * login's own roster list.
+ */
+export function mayListMember(
+  viewer: { userId: string; role: string; scope: ArtistScope },
+  member: { userId: string; role: string },
+  memberContactIds: readonly string[],
+): boolean {
+  if (member.role !== 'artist') return true;
+  if (member.userId.toLowerCase() === viewer.userId.toLowerCase()) return true;
+  if (viewer.role === 'artist') return false;
+  if (viewer.scope === null) return true;
+  return memberContactIds.some((id) => viewer.scope!.has(id.toLowerCase()));
+}
+

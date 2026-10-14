@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { artistScopeFilter, scopeAllowsAnyContact, scopeAllowsContact, toArtistScope } from './artist-scope';
+import { artistScopeFilter, mayListMember, scopeAllowsAnyContact, scopeAllowsContact, toArtistScope } from './artist-scope';
 
 const C1 = '00000000-0000-4000-8000-0000000000c1';
 const C2 = '00000000-0000-4000-8000-0000000000c2';
@@ -79,3 +79,29 @@ describe('scopeAllowsAnyContact (a project / track reaches its artists through p
     expect(scopeAllowsAnyContact(new Set([C1]), [])).toBe(false);
   });
 });
+
+describe('mayListMember', () => {
+  const C1 = '11111111-1111-4111-8111-111111111111';
+  const C2 = '22222222-2222-4222-8222-222222222222';
+  const staffScopedToC1 = { userId: 'u-staff', role: 'member', scope: new Set([C1]) as ReadonlySet<string> };
+  const wholeOrg = { userId: 'u-owner', role: 'owner', scope: null };
+  const artistC1 = { userId: 'u-artist-1', role: 'artist', scope: new Set([C1]) as ReadonlySet<string> };
+
+  it('lists staff to everyone', () => {
+    expect(mayListMember(artistC1, { userId: 'u-x', role: 'member' }, [])).toBe(true);
+    expect(mayListMember(staffScopedToC1, { userId: 'u-x', role: 'owner' }, [])).toBe(true);
+  });
+  it('lists every artist login to someone who sees the whole org', () => {
+    expect(mayListMember(wholeOrg, { userId: 'u-a2', role: 'artist' }, [C2])).toBe(true);
+  });
+  it('shows staff limited to some artists only the logins of those artists', () => {
+    expect(mayListMember(staffScopedToC1, { userId: 'u-a1', role: 'artist' }, [C1.toUpperCase()])).toBe(true);
+    expect(mayListMember(staffScopedToC1, { userId: 'u-a2', role: 'artist' }, [C2])).toBe(false);
+    expect(mayListMember(staffScopedToC1, { userId: 'u-a3', role: 'artist' }, [])).toBe(false);
+  });
+  it('shows an artist only themselves, never another artist', () => {
+    expect(mayListMember(artistC1, { userId: 'u-artist-1', role: 'artist' }, [C1])).toBe(true);
+    expect(mayListMember(artistC1, { userId: 'u-a2', role: 'artist' }, [C1])).toBe(false);
+  });
+});
+

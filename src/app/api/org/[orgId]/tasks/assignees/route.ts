@@ -36,7 +36,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       const obj = await requireObjectAccess({ table: TARGET_OBJECT_TABLE[target.kind], id: target.id, cap: 'catalog.read', orgId: access.orgId });
       if (!obj.ok) return obj.res;
     }
-    return json(200, { members: await assignableMembers(access.admin, access.orgId, target) });
+    return json(200, { members: await assignableMembers(access.admin, access.orgId, target, { userId: access.userId, role: access.role, scope: access.artistScope }) });
   } catch (err) {
     log.error('assignee list failed', { orgId: access.orgId, error: errorMessage(err) });
     return json(500, { error: 'Could not load the members' });

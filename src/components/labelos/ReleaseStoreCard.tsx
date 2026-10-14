@@ -12,7 +12,7 @@
  * Playback is two buttons, not a Dropdown: a Dropdown portals to <body>, and
  * inside a Popover that reads as an outside click.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
@@ -51,13 +51,16 @@ export function ReleaseStoreCard({
   const [store, setStore] = useState<StoreState | null>(null);
   const [playback, setPlayback] = useState<'preview' | 'full'>('preview');
   const [busy, setBusy] = useState(false);
+  // True once the member has clicked a playback choice: a load that lands after that (a slower second
+  // request — StrictMode runs the mount effect twice — or a refetch) must not put the server's value back.
+  const picked = useRef(false);
 
   const load = useCallback(async () => {
     const res = await getReleaseStore(orgId, releaseId);
     if (res.ok) {
       setStore(res);
       // Someone who may not choose full songs never starts on them (an old value on an unlisted release).
-      setPlayback(!canManagePublic && !res.listed ? 'preview' : res.playback);
+      if (!picked.current) setPlayback(!canManagePublic && !res.listed ? 'preview' : res.playback);
     }
   }, [orgId, releaseId, canManagePublic]);
 
@@ -76,6 +79,7 @@ export function ReleaseStoreCard({
     setBusy(false);
     if (!res.ok) return void toast.error(res.error);
     toast.success(store.listed ? 'Store listing updated' : 'On the store');
+    picked.current = false; // what was saved is now the server's value
     await load();
     router.refresh();
   };
@@ -128,7 +132,10 @@ export function ReleaseStoreCard({
                     aria-checked={playback === p.value}
                     disabled={p.value === 'full' && fullLocked}
                     title={p.value === 'full' && fullLocked ? 'Only an owner or an admin can choose full songs' : undefined}
-                    onClick={() => setPlayback(p.value)}
+                    onClick={() => {
+                      picked.current = true;
+                      setPlayback(p.value);
+                    }}
                     className={cn(BTN, playback === p.value && 'border-white/30 bg-white/[0.14] text-white')}
                     data-testid={`release-store-playback-${p.value}`}
                   >
