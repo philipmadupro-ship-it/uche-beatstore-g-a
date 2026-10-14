@@ -6,6 +6,7 @@
  * previews only when the server says the owner has that choice, and sends the
  * playback the member picked.
  */
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReleaseStoreCard } from './ReleaseStoreCard';
@@ -52,6 +53,36 @@ describe('ReleaseStoreCard', () => {
     fireEvent.click(screen.getByTestId('release-store-list'));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
     expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ url: '/api/org/o1/releases/r1/store', body: { listed: true, playback: 'full' } });
+  });
+
+
+  it('a slow second load never undoes the playback the member already picked', async () => {
+    // Under StrictMode (dev) the mount effect runs twice: the first answer draws the card, and the
+    // second, slower one lands AFTER the member clicked "full". It used to reset the choice to the
+    // server's value, so "Put on the store" listed with the wrong playback (found by e2e under load).
+    let release: (() => void) | null = null;
+    let gets = 0;
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (method === 'GET' && ++gets === 2) await new Promise<void>((resolve) => { release = resolve; });
+      return { ok: true, status: 200, json: async () => (method === 'GET' ? state : { listed: true, playback: 'full', promoted: 0 }) } as Response;
+    });
+    render(
+      <StrictMode>
+        <ReleaseStoreCard orgId="o1" releaseId="r1" canWrite canManagePublic imported={false} />
+      </StrictMode>,
+    );
+    await screen.findByTestId('release-store');
+    fireEvent.click(screen.getByTestId('release-store-playback-full'));
+    await waitFor(() => expect(release).not.toBeNull());
+    release!();
+    await waitFor(() => expect(gets).toBe(2));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByTestId('release-store-playback-full').getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByTestId('release-store-list'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(calls.find((c) => c.method === 'PUT')?.body).toMatchObject({ playback: 'full' });
   });
 
   it('draws nothing where the org can never list (a label-owned release)', async () => {
