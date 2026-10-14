@@ -911,6 +911,15 @@ export const OrgPatchBodySchema = z.object({
 }).strict();
 export type OrgPatchBody = z.infer<typeof OrgPatchBodySchema>;
 
+/** PUT /api/org/[orgId]/digest (LABEL-38): the caller's own weekly-digest switch. */
+export const DigestPreferenceBodySchema = z.object({ enabled: z.boolean() }).strict();
+
+/**
+ * PUT /api/org/[orgId]/digest/slack (LABEL-38). The URL is only checked for
+ * shape here; whether it is a Slack webhook is `validateSlackWebhookUrl`.
+ */
+export const DigestSlackBodySchema = z.object({ url: z.string().max(400) }).strict();
+
 /**
  * DELETE /api/org/[orgId] (LABEL-39). The owner types the organization's
  * name; whether it matches is `confirmationMatches` (lib/labelos/org-lifecycle),

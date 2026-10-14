@@ -22,6 +22,9 @@ describe('the export table list', () => {
   it('keeps private inboxes and settings out, and the invitation secret off the invitations', () => {
     expect(EXPORT_TABLE_NAMES).not.toContain('notifications');
     expect(EXPORT_TABLE_NAMES).not.toContain('user_profiles');
+    // The encrypted Slack webhook (LABEL-38) never leaves in an export.
+    expect(EXPORT_TABLE_NAMES).not.toContain('org_digest_channels');
+    expect(EXPORT_TABLE_NAMES).not.toContain('org_digest_members');
     const inv = EXPORT_TABLES.find((t) => t.name === 'org_invitations')!;
     expect(redactRow(inv, { id: 'i', email: 'a@b.c', token_hash: 'secret' })).toEqual({ id: 'i', email: 'a@b.c' });
   });

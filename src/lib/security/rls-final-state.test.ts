@@ -113,6 +113,9 @@ function labelOsTables(): string[] {
     'split_lines',
     // 157_labelos_approvals.sql (LABEL-30)
     'approvals',
+    // 160_labelos_weekly_digest.sql (LABEL-38)
+    'org_digest_members',
+    'org_digest_channels',
   ];
 }
 
@@ -231,8 +234,14 @@ describe('final RLS policy state', () => {
   describe('Label OS org core (mig 136)', () => {
     const onTable = (table: string) => [...policies].filter(([k]) => k.startsWith(`${table}.`));
 
-    it('every org-core table has at least one policy', () => {
-      for (const table of labelOsTables()) expect(onTable(table).length, table).toBeGreaterThan(0);
+    // Tables only the service role touches (RLS on, no policy, no grant): a policy would only invite a read. Each is asserted policy-less in its own block.
+    const SERVICE_ONLY = ['org_digest_members', 'org_digest_channels'];
+
+    it('every org-core table has at least one policy, except the service-role-only ones, which have none', () => {
+      for (const table of labelOsTables()) {
+        if (SERVICE_ONLY.includes(table)) expect(onTable(table).length, table).toBe(0);
+        else expect(onTable(table).length, table).toBeGreaterThan(0);
+      }
     });
 
     it('activity_events is append-only: no UPDATE, DELETE or ALL policy', () => {
@@ -522,6 +531,12 @@ describe('final RLS policy state', () => {
 
     it('no policy writes: approvals are appended by the audit functions only', () => {
       expect(onApprovals().filter(([, body]) => /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body))).toEqual([]);
+    });
+  });
+
+  describe('Label OS weekly digest (mig 160, LABEL-38)', () => {
+    it('has NO policy on either table: both are service-role only, so a member’s own JWT reads nothing (the Slack URL is a secret)', () => {
+      expect([...policies].filter(([k]) => k.startsWith('org_digest_members.') || k.startsWith('org_digest_channels.'))).toEqual([]);
     });
   });
 

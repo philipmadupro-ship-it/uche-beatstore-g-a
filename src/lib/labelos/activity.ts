@@ -123,6 +123,11 @@ export const VERBS = [
   'connection.requested',
   'connection.accepted',
   'connection.ended',
+  // Weekly digest (LABEL-38): a member's own opt-in, and the org's Slack channel
+  'digest.subscribed',
+  'digest.unsubscribed',
+  'digest.channel_set',
+  'digest.channel_removed',
 ] as const;
 export type Verb = (typeof VERBS)[number];
 
@@ -163,6 +168,9 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'connection.requested',
   'connection.accepted',
   'connection.ended',
+  // Where the org's digest goes is a security setting.
+  'digest.channel_set',
+  'digest.channel_removed',
 ];
 
 export type EventVisibility = 'internal' | 'artist';
@@ -265,6 +273,10 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'connection.requested': 'internal',
   'connection.accepted': 'internal',
   'connection.ended': 'internal',
+  'digest.subscribed': 'internal',
+  'digest.unsubscribed': 'internal',
+  'digest.channel_set': 'internal',
+  'digest.channel_removed': 'internal',
 };
 
 export function defaultVisibility(verb: Verb): EventVisibility {
