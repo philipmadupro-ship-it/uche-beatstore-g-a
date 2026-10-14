@@ -38,6 +38,7 @@ import {
 } from './org-workspace';
 import { countsAsOnRelease, RELEASE_ITEM_COLUMNS, type ReleaseItemRow } from './releases';
 import { songRecordings } from './recording-kind';
+import { chunks, inChunks, pageAll, ReadError } from './paged-read';
 
 export type ObjectAccessOk = Extract<ObjectAccessResult, { ok: true }>;
 
@@ -63,17 +64,15 @@ const PROJECT_COLUMNS = 'id, name, cover_url, status, inbox_for_contact_id, crea
 
 /** The artist's projects of this org: their Inbox and every project linking them (LABEL-14's rule). */
 export async function artistProjects(admin: AdminClient, org: string, contactId: string): Promise<OrgProjectRow[]> {
-  const [inboxRes, linkedRes] = await Promise.all([
-    admin.from('projects').select('id').eq('org_id', org).eq('inbox_for_contact_id', contactId),
-    admin.from('project_contacts').select('project_id').eq('contact_id', contactId),
+  const [inbox, linked] = await Promise.all([
+    pageAll<{ id: string }>((from, to) => admin.from('projects').select('id').eq('org_id', org).eq('inbox_for_contact_id', contactId).order('id').range(from, to), 'inbox lookup'),
+    pageAll<{ project_id: string }>((from, to) => admin.from('project_contacts').select('project_id').eq('contact_id', contactId).order('project_id').range(from, to), 'project link lookup'),
   ]);
-  const ids = [
-    ...rows<{ id: string }>(inboxRes, 'inbox lookup').map((p) => p.id),
-    ...rows<{ project_id: string }>(linkedRes, 'project link lookup').map((p) => p.project_id),
-  ];
+  const ids = [...inbox.map((p) => p.id), ...linked.map((p) => p.project_id)];
   if (ids.length === 0) return [];
-  const projects = rows<OrgProjectRow>(
-    await admin.from('projects').select(PROJECT_COLUMNS).in('id', [...new Set(ids)]).eq('org_id', org),
+  const projects = await inChunks<OrgProjectRow>(
+    ids,
+    (part, from, to) => admin.from('projects').select(PROJECT_COLUMNS).in('id', part).eq('org_id', org).order('id').range(from, to),
     'project read',
   );
   // Inbox first, then newest.
@@ -87,25 +86,42 @@ export async function artistProjects(admin: AdminClient, org: string, contactId:
  * treat it as invisible (fail closed).
  */
 export async function orgTrackFacts(admin: AdminClient, org: string, trackIds: readonly string[]): Promise<Map<string, OrgTrackFacts>> {
-  const ids = [...new Set(trackIds)];
+  const out = new Map<string, OrgTrackFacts>();
+  // An `in (…)` list of a whole Inbox overruns the request line: a chunk at a time.
+  for (const part of chunks([...new Set(trackIds)])) {
+    for (const [id, facts] of await orgTrackFactsChunk(admin, org, part)) out.set(id, facts);
+  }
+  return out;
+}
+
+async function orgTrackFactsChunk(admin: AdminClient, org: string, ids: readonly string[]): Promise<Map<string, OrgTrackFacts>> {
   const out = new Map<string, OrgTrackFacts>();
   if (ids.length === 0) return out;
-  const [tracksRes, beatsRes, linksRes, mainBeatRes] = await Promise.all([
-    admin.from('tracks').select('id, type, song_stage').in('id', ids).eq('org_id', org),
-    admin.from('song_beats').select('song_track_id, beat_track_id').in('beat_track_id', ids),
-    admin.from('track_links').select('from_track_id, to_track_id, relation').in('to_track_id', ids),
-    admin.from('tracks').select('id, beat_track_id').in('beat_track_id', ids).eq('org_id', org),
+  const [tracks, beats, links, mainBeat] = await Promise.all([
+    pageAll<{ id: string; type: string | null; song_stage: string | null }>(
+      (from, to) => admin.from('tracks').select('id, type, song_stage').in('id', [...ids]).eq('org_id', org).order('id').range(from, to),
+      'track read',
+    ),
+    pageAll<{ song_track_id: string; beat_track_id: string }>(
+      (from, to) => admin.from('song_beats').select('song_track_id, beat_track_id').in('beat_track_id', [...ids]).order('song_track_id').order('beat_track_id').range(from, to),
+      'song_beats read',
+    ),
+    pageAll<{ from_track_id: string; to_track_id: string; relation: string }>(
+      (from, to) => admin.from('track_links').select('from_track_id, to_track_id, relation').in('to_track_id', [...ids]).order('from_track_id').order('to_track_id').range(from, to),
+      'track_links read',
+    ),
+    pageAll<{ id: string; beat_track_id: string }>(
+      (from, to) => admin.from('tracks').select('id, beat_track_id').in('beat_track_id', [...ids]).eq('org_id', org).order('id').range(from, to),
+      'main beat read',
+    ),
   ]);
-  const tracks = rows<{ id: string; type: string | null; song_stage: string | null }>(tracksRes, 'track read');
-  const beats = rows<{ song_track_id: string; beat_track_id: string }>(beatsRes, 'song_beats read');
-  const links = rows<{ from_track_id: string; to_track_id: string; relation: string }>(linksRes, 'track_links read');
-  const mainBeat = rows<{ id: string; beat_track_id: string }>(mainBeatRes, 'main beat read');
 
   const fromIds = [...new Set([...beats.map((b) => b.song_track_id), ...links.map((l) => l.from_track_id), ...mainBeat.map((m) => m.id)])];
   const types = new Map<string, string | null>();
   if (fromIds.length > 0) {
-    const fromRows = rows<{ id: string; type: string | null }>(
-      await admin.from('tracks').select('id, type').in('id', fromIds).eq('org_id', org),
+    const fromRows = await inChunks<{ id: string; type: string | null }>(
+      fromIds,
+      (part, from, to) => admin.from('tracks').select('id, type').in('id', part).eq('org_id', org).order('id').range(from, to),
       'linked track read',
     );
     for (const r of fromRows) types.set(r.id, r.type);
@@ -246,19 +262,17 @@ export async function loadOrgArtistWorkspace(access: ObjectAccessOk): Promise<Or
 
   const projects = await artistProjects(admin, org, contactId);
   const projectIds = projects.map((p) => p.id);
-  const placements = projectIds.length
-    ? rows<{ project_id: string; track_id: string }>(
-      await admin.from('project_tracks').select('project_id, track_id').in('project_id', projectIds),
-      'project track read',
-    )
-    : [];
+  const placements = await inChunks<{ project_id: string; track_id: string }>(
+    projectIds,
+    (part, from, to) => admin.from('project_tracks').select('project_id, track_id').in('project_id', part).order('project_id').order('track_id').range(from, to),
+    'project track read',
+  );
   const trackIds = [...new Set(placements.map((p) => p.track_id))];
-  const tracks = trackIds.length
-    ? rows<TrackRow>(
-      await admin.from('tracks').select('id, title, type, song_stage, cover_url, created_at').in('id', trackIds).eq('org_id', org),
-      'track read',
-    )
-    : [];
+  const tracks = await inChunks<TrackRow>(
+    trackIds,
+    (part, from, to) => admin.from('tracks').select('id, title, type, song_stage, cover_url, created_at').in('id', part).eq('org_id', org).order('id').range(from, to),
+    'track read',
+  );
   const candidates = tracks.filter(isWorkspaceSong);
   const facts = await orgTrackFacts(admin, org, candidates.map((t) => t.id));
   const caps = access.capabilities;
@@ -311,30 +325,44 @@ async function artistReleases(access: ObjectAccessOk, contactId: string): Promis
   const org = access.object.orgId;
   const scoped = await orgProjectIdsInScope(admin, access);
   if (scoped !== null && scoped.length === 0) return { ready: true, list: [] };
-  let q = admin
-    .from('releases')
-    .select('id, project_id, title, type, state, target_date, release_date, created_at')
-    .eq('org_id', org)
-    .eq('contact_id', contactId);
-  if (scoped !== null) q = q.in('project_id', scoped);
-  const res = await q.order('created_at', { ascending: false });
-  if (res.error) {
-    if (isMissingSchema(res.error)) return { ready: false, list: [] };
-    throw new Error(`release read: ${res.error.message}`);
+  // By artist, then narrowed to the member's projects here: a scoped member's project list can be
+  // too long for a request line.
+  let all: ReleaseListRow[];
+  try {
+    all = await pageAll<ReleaseListRow>(
+      (from, to) => admin
+        .from('releases')
+        .select('id, project_id, title, type, state, target_date, release_date, created_at')
+        .eq('org_id', org)
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: false })
+        .order('id')
+        .range(from, to),
+      'release read',
+    );
+  } catch (err) {
+    if (err instanceof ReadError && isMissingSchema(err.raw)) return { ready: false, list: [] };
+    throw err;
   }
-  const list = (res.data ?? []) as ReleaseListRow[];
+  const allowed = scoped === null ? null : new Set(scoped);
+  const list = all.filter((r) => allowed === null || allowed.has(r.project_id));
   if (list.length === 0) return { ready: true, list: [] };
 
-  const items = rows<ReleaseItemRow>(
-    await admin.from('release_items').select(RELEASE_ITEM_COLUMNS).in('release_id', list.map((r) => r.id)).eq('org_id', org),
+  const items = await inChunks<ReleaseItemRow>(
+    list.map((r) => r.id),
+    (part, from, to) => admin.from('release_items').select(RELEASE_ITEM_COLUMNS).in('release_id', part).eq('org_id', org).order('release_id').order('position').range(from, to),
     'release item read',
   );
   const songIds = [...new Set(items.map((i) => i.song_track_id))];
   const [facts, titleRows] = await Promise.all([
     orgTrackFacts(admin, org, songIds),
-    songIds.length ? admin.from('tracks').select('id, title').in('id', songIds).eq('org_id', org) : Promise.resolve({ data: [], error: null }),
+    inChunks<{ id: string; title: string | null }>(
+      songIds,
+      (part, from, to) => admin.from('tracks').select('id, title').in('id', part).eq('org_id', org).order('id').range(from, to),
+      'release song read',
+    ),
   ]);
-  const titles = new Map(rows<{ id: string; title: string | null }>(titleRows, 'release song read').map((t) => [t.id, t.title]));
+  const titles = new Map(titleRows.map((t) => [t.id, t.title]));
   const visible = (id: string) => {
     const f = facts.get(id);
     return !!f && memberSeesTrackRow(access.capabilities, f);

@@ -27,6 +27,8 @@ export type MemoryDb = {
   tables: Record<string, Row[]>;
   /** PostgREST's `max-rows`: a select never returns more than this, silently (the cap a paging read must survive). */
   maxRows?: number;
+  /** A request line has a length limit: an `in (…)` list longer than this fails the read (414), as an oversized one does against PostgREST. */
+  maxInList?: number;
   /** column lists that must be unique per table, e.g. { contacts: [['org_id', 'email']] } */
   unique?: Record<string, string[][]>;
   /** Database functions for `.rpc(name, args)`: answer like PostgREST would. */
@@ -154,6 +156,7 @@ export function memoryAdmin(db: MemoryDb) {
     const orders: { col: string; asc: boolean }[] = [];
     let limit: number | null = null;
     let offset = 0;
+    let tooLong = false;
     let returning = false;
     let wantCount = false;
     let headOnly = false;
@@ -181,6 +184,7 @@ export function memoryAdmin(db: MemoryDb) {
     }
 
     function run(): { data: unknown; error: Err | null; count?: number } {
+      if (tooLong) return { data: null, error: { message: 'Request-URI Too Long', code: '414' } };
       const matching = rowsOf().filter((r) => filters.every((f) => f(r)));
       if (mode === 'select') {
         let rows = [...matching];
@@ -282,6 +286,7 @@ export function memoryAdmin(db: MemoryDb) {
         return b;
       },
       in(col: string, values: unknown[]) {
+        if (db.maxInList !== undefined && values.length > db.maxInList) tooLong = true;
         const set = new Set(values.map(lower));
         filters.push((r) => set.has(lower(r[col])));
         return b;
