@@ -8,8 +8,8 @@
  * A restricted download is an audit event (06 §6, `file.restricted_downloaded`)
  * and is recorded BEFORE a byte is sent: recordEvent throws for an audit
  * verb, so if the record cannot be written, nothing is downloaded. It is
- * recorded once per download — a request without Range or from byte 0 —
- * not for every later chunk a PDF viewer or player asks for.
+ * recorded for every request that streams the file, Range chunks included:
+ * a Range header cannot tell a download's start from its continuation.
  *
  * The stored reference must be this org project's own key in the private
  * bucket (or `data/orgs/…` locally), or the file is treated as missing.
@@ -23,7 +23,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { assetDownloadName } from '@/lib/projects/assets';
-import { isDownloadStart, orgProjectAssetKeyOf } from '@/lib/labelos/org-assets';
+import { orgProjectAssetKeyOf } from '@/lib/labelos/org-assets';
 import { projectAssetBuckets, streamProjectAsset } from '@/lib/storage/project-assets';
 import { orgAssetRow } from '../../access';
 
@@ -49,8 +49,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ orgI
 
   const inline = req.nextUrl.searchParams.get('inline') === '1';
   try {
-    // Once per download: not again for each Range chunk a viewer fetches.
-    if (row.sensitivity !== 'normal' && isDownloadStart(req.headers.get('range'))) {
+    // Every request: a Range header cannot tell "a download" from "a chunk of
+    // one" (`bytes=1-` or a suffix range returns the file without starting at
+    // byte 0), so no request that moves bytes goes unrecorded.
+    if (row.sensitivity !== 'normal') {
       await recordEvent(
         access.admin,
         { orgId: org, userId: access.userId },

@@ -119,16 +119,6 @@ export function assignableOrgAssetKinds(perms: { restricted: boolean; working: b
   });
 }
 
-/**
- * Whether a download request should be audited: once per download, not per
- * Range chunk a player or PDF viewer fetches. A request with no Range, or
- * one starting at byte 0, is a (re)start of the file.
- */
-export function isDownloadStart(range: string | null): boolean {
-  if (!range) return true;
-  return /^bytes=0-/.test(range.trim());
-}
-
 const SESSION_EXT = ['als', 'flp', 'ptx', 'rpp', 'cpr'];
 const DOCUMENT_EXT = ['pdf', 'doc', 'docx', 'pages', 'rtf', 'txt', 'md', 'csv', 'xlsx'];
 const VIDEO_EXT = ['mp4', 'mov', 'webm', 'm4v'];
