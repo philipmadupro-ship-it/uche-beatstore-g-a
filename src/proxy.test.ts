@@ -197,7 +197,8 @@ describe('Label OS gate: every existing API folder is gated as before', () => {
         currentUser = { id: 'member-1' };
         const res = await run('/library');
         expect(res.status).toBe(307);
-        expect(new URL(res.headers.get('location')!).pathname).toBe('/store/account/me');
+        // Flag on: a member goes to their label (/o); flag off: nothing changed.
+        expect(new URL(res.headers.get('location')!).pathname).toBe(flag === 'true' ? '/o' : '/store/account/me');
         currentUser = { id: 'producer-1' };
         expect((await run('/library')).status).toBe(200);
         // `/offline` shares a letter with `/o` and must stay a dashboard page.
@@ -372,7 +373,7 @@ describe('Label OS join admission (flag on)', () => {
       expect((await run(p)).status, p).toBe(PUBLIC_EXISTING_PATHS.has(p) ? 200 : 403);
     }
     const lib = await run('/library');
-    expect(new URL(lib.headers.get('location')!).pathname).toBe('/store/account/me');
+    expect(new URL(lib.headers.get('location')!).pathname).toBe('/o');
   });
 
   it('serves the join page to signed-out visitors, buyers and non-members (no login or / redirect)', async () => {
@@ -395,5 +396,43 @@ describe('Label OS join admission (flag on)', () => {
     currentUser = null;
     expect((await run('/join')).status).toBe(200);
     expect((await run('/joiner/x')).status).toBe(200);
+  });
+});
+
+describe('Label OS landing for a signed-in member who is not the producer (flag on)', () => {
+  beforeEach(() => vi.stubEnv('LABEL_OS_ENABLED', 'true'));
+  const where = (res: Response) => new URL(res.headers.get('location')!);
+
+  it('/login with a Label OS `next` goes there, not to the buyer account', async () => {
+    currentUser = { id: 'member-1' };
+    const res = await run('/login?next=%2Fo%2Facme%2Fartists');
+    expect(res.status).toBe(307);
+    expect(where(res).pathname).toBe('/o/acme/artists');
+  });
+
+  it('/login without one, or with any other `next`, goes to /o', async () => {
+    currentUser = { id: 'member-1' };
+    for (const q of ['', '?next=%2Flibrary', '?next=%2F%2Fevil.test', '?next=%2Fo%2F..%2Flibrary']) {
+      expect(where(await run(`/login${q}`)).pathname, q).toBe('/o');
+    }
+  });
+
+  it('a buyer with no membership still goes to the buyer account', async () => {
+    currentUser = { id: 'buyer-1' };
+    expect(where(await run('/login?next=%2Fo%2Facme')).pathname).toBe('/store/account/me');
+    expect(where(await run('/library')).pathname).toBe('/store/account/me');
+  });
+
+  it('the producer is untouched', async () => {
+    currentUser = { id: 'producer-1' };
+    expect(where(await run('/login')).pathname).toBe('/library');
+  });
+});
+
+describe('Label OS landing: flag off changes nothing', () => {
+  it('a member goes to the buyer account as before', async () => {
+    currentUser = { id: 'member-1' };
+    expect(new URL((await run('/login?next=%2Fo%2Facme')).headers.get('location')!).pathname).toBe('/store/account/me');
+    expect(membershipReads).toBe(0);
   });
 });
