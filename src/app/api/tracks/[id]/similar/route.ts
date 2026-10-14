@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getById, getAll } from '@/lib/local-store';
 import { requireRowOwnership } from '@/lib/auth/ownership';
+import { withoutOrgRows } from '@/lib/auth/producer-rows';
 import { findSimilar } from '@/lib/audio/similarity';
 import type { Track } from '@/lib/types';
 import { errorMessage } from '@/lib/errors';
@@ -45,10 +46,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
       // Pool = caller's tracks (incl. legacy null-owner rows, matching the
       // loosened RLS semantics elsewhere). Service-role + manual filter.
-      const { data: rows, error: pErr } = await owner.admin
-        .from('tracks')
-        .select('*')
-        .or(`user_id.eq.${owner.userId},user_id.is.null`);
+      // The ownerless arm is for pre-ownership producer rows, not an org's songs.
+      const { data: rows, error: pErr } = await withoutOrgRows((excludeOrg) => {
+        const q = owner.admin.from('tracks').select('*').or(`user_id.eq.${owner.userId},user_id.is.null`);
+        return excludeOrg ? q.is('org_id', null) : q;
+      });
       if (pErr) throw pErr;
       pool = (rows ?? []) as Track[];
     } else {
