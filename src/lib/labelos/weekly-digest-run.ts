@@ -136,10 +136,16 @@ export async function runWeeklyDigest(ports: DigestPorts, now: Date = new Date()
   if (!result.stoppedForTime) {
     const maxChannels = opts.maxChannels ?? MAX_CHANNELS;
     const maxLookups = opts.maxAuthorLookups ?? MAX_AUTHOR_LOOKUPS;
-    const channels = await ports.dueChannels(week, null, maxChannels);
+    // Walk with a cursor, like the members: a channel that is skipped or fails keeps its old week and would
+    // otherwise sit at the front of every run's first page and starve the ones behind it.
+    let channelAfter: string | null = null;
+    channels: for (;;) {
+    const channels = await ports.dueChannels(week, channelAfter, maxChannels);
+    if (channels.length === 0) break;
+    channelAfter = channels[channels.length - 1].orgId;
     const orgs = await ports.orgInfo(channels.map((c) => c.orgId));
     for (const channel of channels) {
-      if (outOfTime()) { result.stoppedForTime = true; break; }
+      if (outOfTime()) { result.stoppedForTime = true; break channels; }
       const org = orgs.get(channel.orgId);
       if (!org) { result.skipped += 1; continue; }
       try {
@@ -167,6 +173,7 @@ export async function runWeeklyDigest(ports: DigestPorts, now: Date = new Date()
       } catch {
         result.failed += 1;
       }
+    }
     }
   }
   return result;

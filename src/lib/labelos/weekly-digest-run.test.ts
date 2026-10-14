@@ -240,5 +240,20 @@ describe('runWeeklyDigest', () => {
       expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ slacked: 0, failed: 1 });
       expect(f.channel.week).toBe('');
     });
+
+    it('channels that cannot be served do not starve the ones behind them (cursor, not a fixed first slice)', async () => {
+      const f = fake({ members: [{ userId: 'boss' }], email: false });
+      const week: Record<string, string> = { c1: '', c2: '', c3: '' };
+      const posted: string[] = [];
+      f.ports.dueChannels = async (w, after, limit) =>
+        Object.keys(week).filter((id) => week[id] !== w && (after === null || id > after)).sort().slice(0, limit).map((orgId) => ({ orgId, lastSentWeek: week[orgId] }));
+      f.ports.orgInfo = async (ids) => new Map(ids.map((id) => [id, { id, name: id, slug: id }]));
+      f.ports.channelAuthors = async (orgId) => (orgId === 'c3' ? ['boss'] : []); // c1, c2: nobody opted in
+      f.ports.recipient = async (orgId, userId) => ({ orgId, userId, role: 'owner' });
+      f.ports.claimChannel = async (orgId, w) => { week[orgId] = w; return true; };
+      f.ports.postSlack = async (orgId) => { posted.push(orgId); return true; };
+      await runWeeklyDigest(f.ports, NOW, { maxChannels: 2 });
+      expect(posted).toEqual(['c3']);
+    });
   });
 });
