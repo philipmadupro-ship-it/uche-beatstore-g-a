@@ -168,7 +168,9 @@ function keysOnOrg(body: string): boolean {
 }
 
 const DENY_ALL = /\bUSING\s*\(\s*false\s*\)(?![\s\S]*\bWITH CHECK\s*\(\s*(?!false\s*\)))/i;
-const OPEN_PREDICATE = /(USING|WITH CHECK)\s*\(\s*true\s*\)/i;
+// `USING (true)` and its disguises: a helper call OR-ed with a constant is still open to everyone, and the
+// "keys on a helper" check below would pass it because the helper IS named in the body.
+const OPEN_PREDICATE = /(USING|WITH CHECK)\s*\(\s*true\s*\)|\bOR\s+\(?\s*true\b|\btrue\s*\)?\s+OR\b|\b1\s*=\s*1\b/i;
 
 /** Every way the listed tables break the Label OS rules; empty = clean. */
 function labelOsViolations(state: ReplayState, tables: string[]): string[] {
@@ -728,6 +730,21 @@ describe('Label OS RLS guards (LABEL-04)', () => {
         fx('b_open', `CREATE POLICY lo_fixture_open ON public.lo_fixture FOR SELECT USING (true);`),
       );
       expect(labelOsViolations(state, tables)).toContain('lo_fixture.lo_fixture_open: USING (true) / WITH CHECK (true)');
+    });
+
+    it('an open predicate OR-ed with a membership helper is still open', () => {
+      for (const body of [
+        'USING (true OR (SELECT public.org_role(org_id)) IS NOT NULL)',
+        'USING ((SELECT public.org_role(org_id)) IS NOT NULL OR true)',
+        'USING ((SELECT public.org_role(org_id)) IS NOT NULL OR (true))',
+        'USING (1 = 1 OR (SELECT public.org_role(org_id)) IS NOT NULL)',
+      ]) {
+        const state = withFixture(
+          fx('a_good', GOOD),
+          fx('b_or', `CREATE POLICY lo_fixture_or ON public.lo_fixture FOR SELECT ${body};`),
+        );
+        expect(labelOsViolations(state, tables), body).toContain('lo_fixture.lo_fixture_or: USING (true) / WITH CHECK (true)');
+      }
     });
 
     it('a WITH CHECK (true) policy keyed on org_id elsewhere', () => {

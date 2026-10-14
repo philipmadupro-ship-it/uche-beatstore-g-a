@@ -40,7 +40,7 @@ const row = (over: Partial<Row> = {}): Row => ({
 });
 
 let denied: number | null = null;
-let myRole: 'owner' | 'admin' = 'admin';
+let myRole: 'owner' | 'admin' | 'artist' = 'admin';
 let myCaps = ['members.manage'];
 let target: Row | null = row();
 let owners = 1;
@@ -203,6 +203,20 @@ describe('GET members', () => {
     myCaps = ['catalog.read'];
     const body = await (await GET(new NextRequest('http://x'), params)).json();
     expect(body.members.every((m: { email: unknown }) => m.email === null)).toBe(true);
+  });
+
+  it('a roster artist reads the staff and themselves, never the other roster artists (D5 / 06 §2.4: artists never see other artists)', async () => {
+    myRole = 'artist';
+    myCaps = ['catalog.read', 'review.comment'];
+    myArtistScope = new Set([C1]);
+    listRows = [
+      row({ user_id: OWNER2, role: 'owner', functions: [] }),
+      row({ user_id: ME, role: 'artist', functions: [], scope: 'artists' }),
+      row({ user_id: THEM, role: 'artist', functions: [], scope: 'artists' }),
+      row({ user_id: '88888888-8888-4888-8888-888888888888', role: 'member', functions: ['a_and_r'] }),
+    ];
+    const body = await (await GET(new NextRequest('http://x'), params)).json();
+    expect(body.members.map((m: { user_id: string }) => m.user_id)).toEqual([OWNER2, ME, '88888888-8888-4888-8888-888888888888']);
   });
 
   it('passes the helper’s refusal through', async () => {
