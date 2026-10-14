@@ -61,20 +61,46 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (parsed.data.state && release.state === 'delivered') {
     return fail(409, 'A delivered release keeps its state', { field: 'state' }).res;
   }
+  // LABEL-42: once a release is delivered or entered as already out, its date is the record of when
+  // it came out — the store judges "released" by it, so it is not editable (a street date next month
+  // cannot be moved to yesterday to put the release on the store).
+  const wentOut = release.state === 'delivered' || release.imported_released;
+  const manages = access.role === 'owner' || access.role === 'admin';
+  if (parsed.data.release_date !== undefined && parsed.data.release_date !== release.release_date && wentOut) {
+    if (release.release_date !== null) {
+      return fail(409, 'The release date of a release that went out is fixed', { field: 'release_date' }).res;
+    }
+    // A delivery can go out with a target date only; the day it came out is then the owner's or an admin's to
+    // state once (a date that has come is what puts a release on the store).
+    if (!manages) return fail(403, 'Only an owner or an admin can set the release date of a release that went out', { field: 'release_date' }).res;
+  }
+  // What the public sees the moment it is saved: while a release is on the store (or was entered as already out)
+  // its title, type, label, genre and artwork are the owner's or an admin's to change.
+  const PUBLIC_FIELDS = ['title', 'type', 'label_name', 'primary_genre', 'artwork_asset_id'] as const;
+  if ((release.store_listed || release.imported_released) && !manages) {
+    const touched = PUBLIC_FIELDS.filter((f) => parsed.data[f] !== undefined && parsed.data[f] !== release[f]);
+    if (touched.length > 0) {
+      return fail(403, 'Only an owner or an admin can change what the public sees of a release that is on the store', { field: touched[0] }).res;
+    }
+  }
   if (parsed.data.artwork_asset_id) {
     const art = await checkArtwork(access, release, parsed.data.artwork_asset_id);
     if (!art.ok) return art.res;
   }
 
   try {
-    const { data, error } = await access.admin
+    // Guarded in the statement: state and release date are repeated as READ, so a delivery (or a cancel)
+    // that landed between the read and this write cannot be overwritten — it matches no row and is a 409.
+    let guarded = access.admin
       .from('releases')
       .update(parsed.data)
       .eq('id', release.id)
       .eq('org_id', access.object.orgId)
-      .select(RELEASE_COLUMNS)
-      .single();
-    if (error || !data) return writeError(error ?? {}, 'Could not save the release').res;
+      .eq('state', release.state);
+    guarded = release.release_date === null ? guarded.is('release_date', null) : guarded.eq('release_date', release.release_date);
+    const { data, error } = await guarded.select(RELEASE_COLUMNS).maybeSingle();
+    if (error) return writeError(error, 'Could not save the release').res;
+    if (!data) return fail(409, 'The release changed while it was being saved; reload and try again', { field: 'state' }).res;
     await recordEvent(
       access.admin,
       { orgId: access.object.orgId, userId: access.userId },

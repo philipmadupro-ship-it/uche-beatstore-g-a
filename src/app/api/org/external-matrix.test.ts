@@ -447,6 +447,29 @@ describe('LABEL-33: delivering a release is not an external member\'s', () => {
   }
 });
 
+describe('LABEL-42: putting a release on the store is not an external member\'s', () => {
+  const route = '[orgId]/releases/[releaseId]/store/route.ts';
+
+  it('the route exists and is not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(externalRouteKeys()).not.toContain(`${route}:GET`);
+    expect(externalRouteKeys()).not.toContain(`${route}:PUT`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: reading the listing or listing / unlisting is 403/404, nothing is written and nothing is recorded`, async () => {
+      for (const [method, body] of [['GET', undefined], ['PUT', { listed: true }], ['PUT', { listed: false }]] as const) {
+        const res = await call(route, method, user, { body });
+        expect([403, 404], `${method} answered ${res.status}`).toContain(res.status);
+        expect(JSON.stringify(await res.json())).not.toMatch(/canList|playback|listed/);
+      }
+      expect(db.tables.releases[0].store_listed).not.toBe(true);
+      expect(db.tables.activity_events ?? []).toEqual([]);
+      expect(mem.writes).toEqual([]);
+    });
+  }
+});
+
 describe('LABEL-27: credits and parties (route by route)', () => {
   const credits = '[orgId]/tracks/[id]/credits/route.ts';
   const decide = '[orgId]/tracks/[id]/credits/[creditId]/route.ts';

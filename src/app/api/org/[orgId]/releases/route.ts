@@ -21,6 +21,7 @@ import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { RELEASE_COLUMNS, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
+import { importedDeliveredAt, planImport } from '@/lib/labelos/release-import';
 import { checkArtwork, fail, notReady, writeError } from './access';
 
 export const runtime = 'nodejs';
@@ -65,6 +66,14 @@ export async function POST(req: NextRequest, { params }: Params) {
   const body = parsed.data;
   const { admin } = access;
   const org = access.orgId;
+
+  // LABEL-42: "already released" skips every gate on the owner's word, so it
+  // is the owner's or an admin's to give — checked before anything is read.
+  const importing = body.imported_released === true;
+  if (importing) {
+    const plan = planImport({ role: access.role, releaseDate: body.release_date ?? null }, new Date());
+    if (!plan.ok) return fail(plan.status, plan.error, plan.field ? { field: plan.field } : {}).res;
+  }
 
   // The artist and (if named) the project: this org's, in the member's scope.
   const artist = await requireObjectAccess({ table: 'contacts', id: body.contact_id, cap: 'release.write', orgId: org });
@@ -128,7 +137,15 @@ export async function POST(req: NextRequest, { params }: Params) {
         target_date: body.target_date ?? null,
         release_date: body.release_date ?? null,
         artwork_asset_id: body.artwork_asset_id ?? null,
-        state: 'draft',
+        // An import is entered as delivered: it has gone out, so no gate applies.
+        ...(importing
+          ? {
+              state: 'delivered',
+              imported_released: true,
+              delivered_at: importedDeliveredAt(body.release_date as string),
+              delivered_to: 'Imported (already released)',
+            }
+          : { state: 'draft' }),
         created_by: access.userId,
       })
       .select(RELEASE_COLUMNS)
@@ -154,6 +171,24 @@ export async function POST(req: NextRequest, { params }: Params) {
       projectId,
       releaseId: release.id,
     }, { type: release.type });
+
+    if (importing) {
+      // Audit-class: no import without its record (the release is put back).
+      try {
+        await recordEvent(admin, { orgId: org, userId: access.userId }, 'release.imported', {
+          type: 'release',
+          id: release.id,
+          artistId: artist.object.id,
+          projectId,
+          releaseId: release.id,
+        }, { releaseDate: body.release_date ?? null, type: release.type });
+      } catch (err) {
+        await admin.from('releases').delete().eq('id', release.id).eq('org_id', org);
+        await removeProject(admin, org, createdProject ? projectId : null);
+        log.error('import audit failed', { orgId: org, error: errorMessage(err) });
+        return NextResponse.json({ error: 'Could not create the release' }, { status: 500 });
+      }
+    }
 
     return NextResponse.json({ release: toReleaseView(release) }, { status: 201, headers: NO_STORE });
   } catch (err) {

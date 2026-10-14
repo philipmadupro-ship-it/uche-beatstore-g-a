@@ -77,6 +77,9 @@ describe('verb vocabulary', () => {
       'calendar_feed.issued',
       'calendar_feed.revoked',
       'release.legal_pack_exported',
+      'release.store_listed',
+      'release.store_unlisted',
+      'release.imported',
     ] as const) {
       expect(isAuditVerb(v)).toBe(true);
     }
@@ -147,6 +150,7 @@ describe('default visibility (D4, D5, 08 §B4)', () => {
       'approval.requested',
       'approval.decided',
       'release.legal_pack_exported',
+      'release.imported',
       'connection.requested',
       'connection.accepted',
       'connection.ended',
@@ -156,6 +160,12 @@ describe('default visibility (D4, D5, 08 §B4)', () => {
     ] as const) {
       expect(defaultVisibility(v), v).toBe('internal');
     }
+  });
+
+  it('the store bridge is part of the artist\'s record, except the import on the owner\'s word', () => {
+    expect(defaultVisibility('release.store_listed')).toBe('artist');
+    expect(defaultVisibility('release.store_unlisted')).toBe('artist');
+    expect(defaultVisibility('release.imported')).toBe('internal');
   });
 
   it('a file event is artist-visible only when the file never was restricted (fail closed on anything unknown)', () => {

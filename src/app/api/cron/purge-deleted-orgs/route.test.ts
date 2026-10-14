@@ -19,10 +19,15 @@ let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
 let configured = true;
 const deleteOrgObjects = vi.fn<(orgId: string) => Promise<number>>();
+const deleteStoreReleaseObjects = vi.fn<(ids: readonly string[]) => Promise<number>>();
 
 vi.mock('@/lib/db', () => ({ isSupabaseConfigured: () => configured }));
 vi.mock('@/lib/auth/ownership', () => ({ createServiceClient: () => mem.client }));
-vi.mock('@/lib/storage/org-objects', () => ({ deleteOrgObjects: (id: string) => deleteOrgObjects(id) }));
+vi.mock('@/lib/storage/org-objects', () => ({
+  deleteOrgObjects: (id: string) => deleteOrgObjects(id),
+  deleteStoreReleaseObjects: (ids: readonly string[]) => deleteStoreReleaseObjects(ids),
+  orgReleaseIds: async (_admin: unknown, orgId: string) => (db.tables.releases ?? []).filter((r) => r.org_id === orgId).map((r) => r.id as string),
+}));
 vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
 
 const request = (secret?: string) =>
@@ -44,6 +49,8 @@ beforeEach(() => {
   mem = memoryAdmin(db);
   deleteOrgObjects.mockReset();
   deleteOrgObjects.mockResolvedValue(7);
+  deleteStoreReleaseObjects.mockReset();
+  deleteStoreReleaseObjects.mockResolvedValue(0);
 });
 
 const { GET } = await import('./route');
@@ -80,6 +87,28 @@ describe('GET /api/cron/purge-deleted-orgs', () => {
     });
     await GET(request('cron-secret'));
     expect(ids()).not.toContain(A);
+  });
+
+  it('also deletes the previews promoted to the public store for the org’s releases (LABEL-42), before the row', async () => {
+    db.tables.releases = [{ id: 'r-a1', org_id: A }, { id: 'r-a2', org_id: A }, { id: 'r-b', org_id: B }];
+    deleteStoreReleaseObjects.mockImplementation(async () => {
+      expect(ids()).toContain(A);
+      return 2;
+    });
+    await GET(request('cron-secret'));
+    expect(deleteStoreReleaseObjects.mock.calls.map((c) => [...c[0]])).toEqual([[], ['r-a1', 'r-a2']]);
+    expect(ids()).not.toContain(A);
+  });
+
+  it('keeps an org whose public previews could not be deleted', async () => {
+    db.tables.releases = [{ id: 'r-a1', org_id: A }];
+    deleteStoreReleaseObjects.mockImplementation(async (rel) => {
+      if (rel.length) throw new Error('AccessDenied');
+      return 0;
+    });
+    const body = await (await GET(request('cron-secret'))).json();
+    expect(body.kept).toEqual([{ orgId: A, reason: expect.stringContaining('AccessDenied') }]);
+    expect(ids()).toContain(A);
   });
 
   it('keeps an org whose objects could not be deleted, reports it, and carries on with the rest', async () => {

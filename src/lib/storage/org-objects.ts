@@ -31,7 +31,8 @@ export function orgPrefix(orgId: string): string {
 }
 
 /**
- * Buckets an org's objects may be in: the private bucket, plus the public one if configured (nothing should be there; D8).
+ * Buckets an org's objects may be in: the private bucket, plus the public one if configured. Nothing is kept under `orgs/<id>/` there (D8);
+ * the previews promoted for released music (LABEL-42) are under `store-releases/<release>/` — see `deleteStoreReleaseObjects`.
  * Throws without the private bucket: skipping it would let a purge "succeed" while the masters stay behind.
  */
 export function orgBuckets(): string[] {
@@ -142,4 +143,52 @@ export async function deleteOrgObjects(orgId: string): Promise<number> {
   let removed = 0;
   for (const bucket of orgBuckets()) removed += await deletePrefix(r2, bucket, prefix);
   return removed;
+}
+
+// ── Promoted release previews (LABEL-42) ────────────────────────────────
+
+/** `store-releases/<release_id>/` for each valid id; anything that is not a UUID is dropped, never interpolated. */
+export function storeReleasePrefixes(releaseIds: readonly string[]): string[] {
+  return releaseIds.filter((id) => isUUID(id)).map((id) => `store-releases/${id.toLowerCase()}/`);
+}
+
+/**
+ * The PUBLIC-bucket copies promoted for an org's releases. They are not under
+ * `orgs/<id>/`, so an org's purge and export must name them through its
+ * releases. Without R2 (or without a public bucket) nothing is ever promoted.
+ */
+export async function listStoreReleaseObjects(releaseIds: readonly string[]): Promise<StoredObject[]> {
+  const bucket = process.env.R2_BUCKET_NAME;
+  if (!isR2Configured() || !bucket) return [];
+  return listStoreReleasePrefixes(r2, bucket, releaseIds);
+}
+
+/** The client-taking core (tests drive it with a fake). */
+export async function listStoreReleasePrefixes(client: S3Like, bucket: string, releaseIds: readonly string[]): Promise<StoredObject[]> {
+  const out: StoredObject[] = [];
+  for (const prefix of storeReleasePrefixes(releaseIds)) out.push(...(await listPrefix(client, bucket, prefix)));
+  return out.sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/** Delete them. Throws when something could not be removed, like `deleteOrgObjects`. */
+export async function deleteStoreReleaseObjects(releaseIds: readonly string[]): Promise<number> {
+  const bucket = process.env.R2_BUCKET_NAME;
+  if (!isR2Configured() || !bucket) return 0;
+  return deleteStoreReleasePrefixes(r2, bucket, releaseIds);
+}
+
+export async function deleteStoreReleasePrefixes(client: S3Like, bucket: string, releaseIds: readonly string[]): Promise<number> {
+  let removed = 0;
+  for (const prefix of storeReleasePrefixes(releaseIds)) removed += await deletePrefix(client, bucket, prefix);
+  return removed;
+}
+
+/** Ids of every release of the org (any state); [] where the release tables are not applied. */
+export async function orgReleaseIds(admin: { from: (t: string) => any }, orgId: string): Promise<string[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { data, error } = await admin.from('releases').select('id').eq('org_id', orgId);
+  if (error) {
+    if (/does not exist|schema cache/i.test(error.message ?? '') || ['42P01', 'PGRST205'].includes(error.code ?? '')) return [];
+    throw new Error(error.message);
+  }
+  return ((data ?? []) as { id: string }[]).map((r) => r.id);
 }

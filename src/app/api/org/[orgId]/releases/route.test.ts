@@ -575,3 +575,158 @@ describe('the producer is untouched', () => {
     expect(db.tables.tracks.find((tr) => tr.id === PS1)).toMatchObject({ org_id: null });
   });
 });
+
+describe('LABEL-42: entering a release that is already out', () => {
+  const body = (extra: Record<string, unknown> = {}) => ({ title: 'Night Shift', type: 'album', contact_id: C1, release_date: '2024-02-02', imported_released: true, ...extra });
+  const imports = () => db.tables.activity_events.filter((e) => e.verb === 'release.imported');
+
+  it('an owner enters it delivered and imported, skipping every gate, with one audit event', async () => {
+    const res = await collection('POST', OWN, L, body());
+    expect(res.status).toBe(201);
+    const { release: view } = await res.json();
+    expect(view).toMatchObject({ state: 'delivered', importedReleased: true, deliveredTo: 'Imported (already released)', releaseDate: '2024-02-02' });
+    expect(view.storeListed).toBeFalsy();
+    expect(db.tables.releases.find((r) => r.id === view.id)).toMatchObject({ state: 'delivered', imported_released: true, delivered_at: '2024-02-02T12:00:00.000Z' });
+    expect(imports()).toHaveLength(1);
+    expect(imports()[0]).toMatchObject({ org_id: L, actor_id: OWN, release_id: view.id, artist_id: C1, audit: true, visibility: 'internal' });
+  });
+
+  it('an admin may; A&R holds release.write but is not an owner or admin: 403, nothing created', async () => {
+    db.tables.org_members.push(member(u(40), 'admin'));
+    expect((await collection('POST', u(40), L, body())).status).toBe(201);
+    const before = db.tables.releases.length;
+    expect((await collection('POST', AR, L, body())).status).toBe(403);
+    expect(db.tables.releases).toHaveLength(before);
+    expect(imports()).toHaveLength(1);
+  });
+
+  it('needs a release date that has come: 400 naming the field', async () => {
+    for (const release_date of [undefined, '2999-01-01']) {
+      const res = await collection('POST', OWN, L, body({ release_date }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).field).toBe('release_date');
+    }
+    expect(imports()).toHaveLength(0);
+  });
+
+  it('`imported_released: false` is not a thing', async () => {
+    expect((await collection('POST', OWN, L, body({ imported_released: false }))).status).toBe(400);
+  });
+
+  it('an import that cannot be audited leaves no release and no project behind', async () => {
+    const releases = db.tables.releases.length;
+    const projects = db.tables.projects.length;
+    const real = mem.client.from.bind(mem.client);
+    const spy = vi.spyOn(mem.client, 'from').mockImplementation(((table: string) => {
+      if (table === 'activity_events') {
+        const res = { data: null, error: { message: 'insert failed' } };
+        const q: Record<string, unknown> = {};
+        for (const m of ['insert', 'select']) q[m] = () => q;
+        q.single = async () => res;
+        q.maybeSingle = async () => res;
+        return q;
+      }
+      return real(table);
+    }) as typeof mem.client.from);
+    try {
+      expect((await collection('POST', OWN, L, body())).status).toBe(500);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(db.tables.releases).toHaveLength(releases);
+    expect(db.tables.projects).toHaveLength(projects);
+  });
+
+  it('its tracklist stays editable until it is on the store, then 409 until it is taken off', async () => {
+    const { release: view } = await (await collection('POST', OWN, L, body({ project_id: LP1 }))).json();
+    expect((await items('POST', OWN, L, view.id, { song_track_id: S1 })).status).toBe(201);
+    db.tables.releases.find((r) => r.id === view.id)!.store_listed = true;
+    const locked = await items('POST', OWN, L, view.id, { song_track_id: S1, master_track_id: V1 });
+    expect(locked.status).toBe(409);
+    expect((await locked.json()).field).toBe('store_listed');
+    db.tables.releases.find((r) => r.id === view.id)!.store_listed = false;
+    expect((await items('POST', OWN, L, view.id, { song_track_id: S1, master_track_id: V1 })).status).toBe(201);
+  });
+});
+
+describe('LABEL-42 review fixes: an import is held by its owner, and its date is fixed', () => {
+  const body = { title: 'Night Shift', type: 'album', contact_id: C1, release_date: '2024-02-02', imported_released: true };
+
+  it('A&R (release.write, not owner/admin) cannot add, reorder, edit or remove a song of an imported release', async () => {
+    const { release: view } = await (await collection('POST', OWN, L, body)).json();
+    expect((await items('POST', OWN, L, view.id, { song_track_id: S1 })).status).toBe(201);
+    const itemId = db.tables.release_items.find((i) => i.release_id === view.id)!.id as string;
+    expect((await items('POST', AR, L, view.id, { song_track_id: S2 })).status).toBe(403);
+    expect((await items('PATCH', AR, L, view.id, { order: [itemId] })).status).toBe(403);
+    expect((await anItem('PATCH', AR, L, view.id, itemId, { explicit: true })).status).toBe(403);
+    expect((await anItem('DELETE', AR, L, view.id, itemId)).status).toBe(403);
+    expect(db.tables.release_items.filter((i) => i.release_id === view.id)).toHaveLength(1);
+    // The same A&R edits an ordinary draft as before.
+    expect((await items('POST', AR, L, R1, { song_track_id: S1, master_track_id: V1 })).status).toBe(201);
+  });
+
+  it('release_date cannot be changed once a release is delivered or imported (409), a draft’s can', async () => {
+    const { release: view } = await (await collection('POST', OWN, L, body)).json();
+    const res = await one('PATCH', OWN, L, view.id, { release_date: '2020-01-01' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).field).toBe('release_date');
+    expect(db.tables.releases.find((r) => r.id === view.id)!.release_date).toBe('2024-02-02');
+    // Saying the same date again is not a change.
+    expect((await one('PATCH', OWN, L, view.id, { release_date: '2024-02-02', title: 'Night Shift II' })).status).toBe(200);
+    db.tables.releases[0].state = 'delivered';
+    db.tables.releases[0].release_date = '2026-12-01';
+    expect((await one('PATCH', AR, L, R1, { release_date: '2020-01-01' })).status).toBe(409);
+    db.tables.releases[0].release_date = null;
+    db.tables.releases[0].state = 'draft';
+    expect((await one('PATCH', AR, L, R1, { release_date: '2030-01-01' })).status).toBe(200);
+  });
+});
+
+describe('LABEL-42 re-review: a delivery with no release date', () => {
+  it('stating the date of a delivered release that has none is the owner’s or an admin’s, once; then it is fixed', async () => {
+    Object.assign(db.tables.releases[0], { state: 'delivered', delivered_at: '2026-10-01T00:00:00Z', release_date: null, target_date: '2999-01-01' });
+    const denied = await one('PATCH', AR, L, R1, { release_date: '2020-01-01' });
+    expect(denied.status).toBe(403);
+    expect((await denied.json()).field).toBe('release_date');
+    expect(db.tables.releases[0].release_date).toBeNull();
+    expect((await one('PATCH', OWN, L, R1, { release_date: '2026-10-05' })).status).toBe(200);
+    expect((await one('PATCH', OWN, L, R1, { release_date: '2020-01-01' })).status).toBe(409);
+  });
+
+  it('while a release is on the store (or imported), its public fields are the owner’s or an admin’s; its other fields are not', async () => {
+    Object.assign(db.tables.releases[0], { state: 'delivered', delivered_at: '2026-10-01T00:00:00Z', release_date: '2026-10-05', store_listed: true, store_listed_at: '2026-10-06T00:00:00Z' });
+    for (const patch of [{ title: 'Leaked title' }, { type: 'album' }, { label_name: 'Other' }, { primary_genre: 'Pop' }, { artwork_asset_id: A1 }]) {
+      expect((await one('PATCH', AR, L, R1, patch)).status, JSON.stringify(patch)).toBe(403);
+    }
+    expect(db.tables.releases[0].title).toBe('Nova EP');
+    // Saying what is already there is not a change; fields the public never sees are open as before.
+    expect((await one('PATCH', AR, L, R1, { title: 'Nova EP', upc: '036000291452' })).status).toBe(200);
+    expect((await one('PATCH', OWN, L, R1, { title: 'Nova EP (Deluxe)' })).status).toBe(200);
+    // Off the store and not imported: A&R edits as before.
+    db.tables.releases[0].store_listed = false;
+    expect((await one('PATCH', AR, L, R1, { title: 'Nova EP again' })).status).toBe(200);
+  });
+});
+
+describe('LABEL-42 round 3: PATCH is guarded in its statement', () => {
+  it('a delivery that lands between the read and the write is not overwritten: 409, and the date stays unset', async () => {
+    const real = mem.client.from.bind(mem.client);
+    vi.spyOn(mem.client, 'from').mockImplementation(((table: string) => {
+      const q = real(table) as Record<string, unknown>;
+      if (table === 'releases') {
+        const update = q.update as (...a: unknown[]) => unknown;
+        q.update = (...a: unknown[]) => {
+          // The release is delivered after the route read it, before its update runs.
+          Object.assign(db.tables.releases[0], { state: 'delivered', delivered_at: '2026-10-01T00:00:00Z' });
+          return update(...a);
+        };
+      }
+      return q;
+    }) as typeof mem.client.from);
+    const res = await one('PATCH', AR, L, R1, { release_date: '2020-01-01' });
+    vi.restoreAllMocks();
+    expect(res.status).toBe(409);
+    expect(db.tables.releases[0].release_date ?? null).toBeNull();
+    expect(db.tables.releases[0].state).toBe('delivered');
+  });
+});

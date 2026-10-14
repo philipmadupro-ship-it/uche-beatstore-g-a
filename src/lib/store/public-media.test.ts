@@ -24,3 +24,15 @@ describe('public store media redaction', () => {
     expect(safe.wav_url).toBeNull();
   });
 });
+
+describe('publicAnalysisUrl (LABEL-42)', () => {
+  it('a catalogue track is analysed through its preview route', async () => {
+    const { publicAnalysisUrl } = await import('./public-media');
+    expect(publicAnalysisUrl('t1', '/api/store/preview/t1')).toBe('/api/store/preview/t1');
+  });
+  it('a release item has no preview route to ask (its id is not a track id)', async () => {
+    const { publicAnalysisUrl } = await import('./public-media');
+    expect(publicAnalysisUrl('item1', '/api/store/releases/r1/audio/item1')).toBeNull();
+    expect(publicAnalysisUrl(null, null)).toBeNull();
+  });
+});

@@ -58,7 +58,10 @@ export function ReleaseDetailView({ orgId, orgSlug, detail, extraActions }: { or
   const router = useRouter();
   const { release, me } = detail;
   const draft = release.state === 'draft';
-  const editable = draft && me.canWrite;
+  // An import (LABEL-42) is entered delivered, but its tracklist is what is being entered:
+  // editable until it is on the store, where each song's public preview was promoted for that list.
+  const importedOpen = release.importedReleased && release.state === 'delivered' && !release.storeListed && me.canManagePublic;
+  const editable = (draft || importedOpen) && me.canWrite;
   const [busy, setBusy] = useState(false);
 
   /** One write, then a refresh of the server data; the server's own words on failure. */
@@ -151,7 +154,7 @@ type Act = (run: () => Promise<{ ok: true } | { ok: false; error: string }>, suc
 // ── Tracklist ───────────────────────────────────────────────────────────
 
 function Tracklist({ orgId, orgSlug, detail, editable, busy, act }: { orgId: string; orgSlug: string; detail: Detail; editable: boolean; busy: boolean; act: Act }) {
-  const { release, items, candidates } = detail;
+  const { release, items, candidates, me } = detail;
   const order = items.map((i) => i.id);
   const [pick, setPick] = useState('');
   const options: DropdownOption<string>[] = candidates.map((c) => ({ value: c.id, label: c.title }));
@@ -232,7 +235,7 @@ function Tracklist({ orgId, orgSlug, detail, editable, busy, act }: { orgId: str
           )}
         </div>
       )}
-      {!editable && release.state !== 'draft' && <p className="mt-3 text-[11px] text-white/40">A {release.state} release keeps its tracklist.</p>}
+      {!editable && release.state !== 'draft' && <p className="mt-3 text-[11px] text-white/40">{release.importedReleased && release.storeListed ? 'Take this release off the store to change its tracklist.' : release.importedReleased && !me.canManagePublic ? 'Only an owner or an admin can change the tracklist of a release that was entered as already out.' : `A ${release.state} release keeps its tracklist.`}</p>}
     </section>
   );
 }

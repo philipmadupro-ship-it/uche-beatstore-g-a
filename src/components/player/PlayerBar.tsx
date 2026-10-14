@@ -1,5 +1,6 @@
 'use client';
 
+import { publicAnalysisUrl as publicAnalysisSource } from '@/lib/store/public-media';
 import { usePlayer } from '@/hooks/usePlayer';
 import { usePlayerReactivity } from '@/hooks/usePlayerReactivity';
 import {
@@ -124,9 +125,7 @@ export function PlayerBar({
   // rather than a second decode. Called before the early return below because
   // hooks must run unconditionally. Same hook as the store preview drawer, so
   // both surfaces react identically by construction rather than by coincidence.
-  const publicAnalysisUrl = publicStore && currentTrack?.id
-    ? `/api/store/preview/${encodeURIComponent(currentTrack.id)}`
-    : null;
+  const publicAnalysisUrl = publicStore ? publicAnalysisSource(currentTrack?.id, currentTrack?.audio_url) : null;
   const { level: nowPlayingLevel, bass: nowPlayingBass } = useAudioReactivity(
     currentTrack?.id ?? null,
     currentTrack?.audio_url,

@@ -16,7 +16,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { RELEASE_ITEM_COLUMNS, releaseEventSubject, toReleaseItemView, type ReleaseItemRow } from '@/lib/labelos/releases';
-import { checkItemTracks, itemsOf, releaseRow, schemaAware, tracklistLocked, writeError, type ObjectAccessOk } from '../../../access';
+import { checkItemTracks, importedNeedsOwnerOrAdmin, itemsOf, releaseRow, schemaAware, tracklistLocked, writeError, type ObjectAccessOk } from '../../../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,6 +50,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!found.ok) return found.res;
   const locked = tracklistLocked(found.release);
   if (locked) return locked.res;
+  const notYours = importedNeedsOwnerOrAdmin(found.release, access.role);
+  if (notYours) return notYours.res;
   const parsed = await readBody(req, OrgReleaseItemPatchBodySchema);
   if (!parsed.ok) return parsed.res;
 
@@ -93,6 +95,8 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (!found.ok) return found.res;
   const locked = tracklistLocked(found.release);
   if (locked) return locked.res;
+  const notYours = importedNeedsOwnerOrAdmin(found.release, access.role);
+  if (notYours) return notYours.res;
 
   try {
     const { data, error } = await access.admin.rpc('labelos_release_item_remove', {
