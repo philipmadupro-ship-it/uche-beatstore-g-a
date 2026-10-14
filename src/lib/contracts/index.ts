@@ -1581,3 +1581,24 @@ export const OrgTrackCopyBodySchema = z.object({
   project_id: z.string().uuid().optional(),
 }).strict();
 export type OrgTrackCopyBody = z.infer<typeof OrgTrackCopyBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/views (LABEL-37) — save a filter view. `definition` is
+ * validated by `parseDefinition` (lib/labelos/filters.ts) in the route, which
+ * answers with the field that is wrong; here it only has to be present.
+ */
+export const OrgViewCreateBodySchema = z.object({
+  subject: z.enum(['songs', 'releases']),
+  name: z.string().trim().min(1).max(80),
+  definition: z.unknown().refine((v) => v !== undefined && v !== null, { message: 'A view needs a definition' }),
+  shared: z.boolean().optional(),
+}).strict();
+export type OrgViewCreateBody = z.infer<typeof OrgViewCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/views/[viewId]. The subject of a view never changes. */
+export const OrgViewPatchBodySchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  definition: z.unknown().optional(),
+  shared: z.boolean().optional(),
+}).strict().refine((b) => b.name !== undefined || b.definition !== undefined || b.shared !== undefined, { message: 'Nothing to update' });
+export type OrgViewPatchBody = z.infer<typeof OrgViewPatchBodySchema>;

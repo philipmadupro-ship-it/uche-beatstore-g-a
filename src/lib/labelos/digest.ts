@@ -441,6 +441,9 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'connection.requested': { one: 'asked to connect', many: 'asked to connect {n} times' },
   'connection.accepted': { one: 'accepted a connection', many: 'accepted {n} connections' },
   'connection.ended': { one: 'ended a connection', many: 'ended {n} connections' },
+  'view.created': { one: 'saved a view', many: 'saved {n} views' },
+  'view.updated': { one: 'changed a saved view', many: 'changed {n} saved views' },
+  'view.deleted': { one: 'deleted a saved view', many: 'deleted {n} saved views' },
 };
 
 function quoted(title: string | null): string | null {

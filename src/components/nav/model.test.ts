@@ -82,7 +82,7 @@ describe('navGroupsFor', () => {
   it('a label org lists the pages that exist for it, under its slug', () => {
     const groups = navGroupsFor('label', new Set(['catalog.read']), { slug: 'night-shift', viewerIsProducer: true });
     expect(shape(groups)).toEqual([
-      { key: 'roster', label: 'Artists', icon: 'MicVocal', items: [{ label: 'Artists', href: '/o/night-shift/artists', icon: 'MicVocal' }] },
+      { key: 'roster', label: 'Artists', icon: 'MicVocal', items: [{ label: 'Artists', href: '/o/night-shift/artists', icon: 'MicVocal' }, { label: 'Music', href: '/o/night-shift/music', icon: 'Music2' }] },
       { key: 'releases', label: 'Releases', icon: 'Disc3', items: [{ label: 'Releases', href: '/o/night-shift/releases', icon: 'Disc3' }] },
       { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/night-shift/settings/members', icon: 'UsersRound' }] },
     ]);
@@ -90,9 +90,9 @@ describe('navGroupsFor', () => {
 
   it('the A&R inbox entry is for members who can review (LABEL-25), and only there', () => {
     const items = (caps: string[]) => navGroupsFor('label', new Set(caps), { slug: 'ns', viewerIsProducer: false }).find((g) => g.key === 'roster')?.items.map((i) => i.href);
-    expect(items(['catalog.read', 'review.write'])).toEqual(['/o/ns/artists', '/o/ns/ar']);
-    expect(items(['catalog.read', 'review.comment'])).toEqual(['/o/ns/artists']);
-    expect(items(['catalog.read'])).toEqual(['/o/ns/artists']);
+    expect(items(['catalog.read', 'review.write'])).toEqual(['/o/ns/artists', '/o/ns/music', '/o/ns/ar']);
+    expect(items(['catalog.read', 'review.comment'])).toEqual(['/o/ns/artists', '/o/ns/music']);
+    expect(items(['catalog.read'])).toEqual(['/o/ns/artists', '/o/ns/music']);
   });
 
   it('the Artists hub needs catalog.read, and is for label and artist orgs only (LABEL-10)', () => {

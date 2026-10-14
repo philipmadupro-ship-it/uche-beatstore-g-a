@@ -1,7 +1,7 @@
 import {
   Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
   CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
-  Building2, UsersRound, Mic2, Inbox, Disc3, Scale,
+  Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2,
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
@@ -121,7 +121,11 @@ function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | 
  * member who can see the catalogue (the page's own capability).
  */
 function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null): NavGroup {
-  const items: NavGroup['items'] = [{ label: 'Artists', href: `/o/${slug}/artists`, icon: Mic2 }];
+  // LABEL-37: Music is the org-wide list of songs with the structured filter bar and saved views; same capability as the roster.
+  const items: NavGroup['items'] = [
+    { label: 'Artists', href: `/o/${slug}/artists`, icon: Mic2 },
+    { label: 'Music', href: `/o/${slug}/music`, icon: Music2 },
+  ];
   // The A&R inbox (LABEL-25) is the reviewers' queue: only a member who can rate sees the entry. The page itself stays open to the catalogue, so an artist reads the reviews of their songs by link.
   if (caps?.has('review.write')) items.push({ label: 'A&R inbox', href: `/o/${slug}/ar`, icon: Inbox });
   return { key: 'roster', label: 'Artists', icon: Mic2, items };

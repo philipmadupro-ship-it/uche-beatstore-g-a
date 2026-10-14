@@ -50,6 +50,8 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'releases', source: { by: 'org' }, order: ['id'] },
   { name: 'release_items', source: { by: 'org' }, order: ['id'] },
   { name: 'tasks', source: { by: 'org' }, order: ['id'] },
+  // LABEL-37: filter definitions only (ids and enums, never results)
+  { name: 'org_saved_views', source: { by: 'org' }, order: ['id'] },
   { name: 'activity_events', source: { by: 'org' }, order: ['created_at', 'id'] },
 ];
 

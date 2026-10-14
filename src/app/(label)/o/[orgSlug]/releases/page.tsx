@@ -6,7 +6,7 @@
  */
 import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
-import { ReleaseBoardView } from '@/components/labelos/ReleaseBoardView';
+import { FilteredReleaseBoard } from '@/components/labelos/FilteredReleaseBoard';
 import { orgShellFor, requireOrgCapability } from '@/lib/auth/org-access';
 import { isBoardFilter } from '@/lib/labelos/release-board';
 import { loadReleaseBoard } from '@/lib/labelos/release-board-store';
@@ -38,7 +38,7 @@ export default async function ReleaseBoardPage({
           Every release and where its gates stand. Open one to work its tracklist and artwork, or to mark it delivered.
         </p>
       </header>
-      <ReleaseBoardView
+      <FilteredReleaseBoard
         orgSlug={shell.org.slug}
         releases={board.releases}
         more={board.more}

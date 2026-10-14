@@ -123,6 +123,10 @@ export const VERBS = [
   'connection.requested',
   'connection.accepted',
   'connection.ended',
+  // Saved filter views (LABEL-37; the subject is the view, the payload never carries the filter or its name)
+  'view.created',
+  'view.updated',
+  'view.deleted',
 ] as const;
 export type Verb = (typeof VERBS)[number];
 
@@ -265,6 +269,11 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'connection.requested': 'internal',
   'connection.accepted': 'internal',
   'connection.ended': 'internal',
+  // A saved view is a person's way of looking at the catalogue, not part of the creative record: the
+  // business side. It names no artist, project or song, so a scoped member's feed never carries it.
+  'view.created': 'internal',
+  'view.updated': 'internal',
+  'view.deleted': 'internal',
 };
 
 export function defaultVisibility(verb: Verb): EventVisibility {
@@ -305,6 +314,7 @@ export const SUBJECT_TYPES = [
   'release',
   'connection',
   'task',
+  'view',
 ] as const;
 export type SubjectType = (typeof SUBJECT_TYPES)[number];
 
