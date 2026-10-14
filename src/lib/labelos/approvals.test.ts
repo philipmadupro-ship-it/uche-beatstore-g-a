@@ -8,6 +8,7 @@ import {
   approvalIsStale,
   buildSnapshot,
   changedParts,
+  snapshotKey,
   currentByGate,
   currentDecision,
   gateAppliesTo,
@@ -186,6 +187,14 @@ describe('snapshot + isStale', () => {
     const m1 = buildSnapshot('master', { items: [{ songId: 's1', masterId: 'm1' }], details: [base] });
     const m2 = buildSnapshot('master', { items: [{ songId: 's1', masterId: 'm1' }], details: [{ ...base, isrc: null }] });
     expect(isStale(m1, m2)).toBe(false);
+  });
+
+  it('snapshotKey is equal exactly when the snapshots are equal', () => {
+    const a = buildSnapshot('metadata', { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP', upc: '1' }, details: [{ songId: 's1', isrc: 'X', explicit: false, versionTitle: null }] });
+    const reordered = { v: a.v, gate: a.gate, parts: { release: { upc: '1', title: 'EP' }, details: a.parts.details, items: a.parts.items } } as typeof a;
+    expect(snapshotKey(reordered)).toBe(snapshotKey(a));
+    expect(snapshotKey(buildSnapshot('metadata', { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP', upc: '2' }, details: a.parts.details as never }))).not.toBe(snapshotKey(a));
+    expect(snapshotKey(buildSnapshot('marketing', {}))).not.toBe(snapshotKey(buildSnapshot('artwork', { artworkAssetId: null })));
   });
 
   it('a snapshot that cannot be read vouches for nothing: null, wrong version, another gate', () => {

@@ -12,6 +12,8 @@
  *    (`subject_snapshot`: the split sheet versions in force and the credits for
  *    legal, the artwork file, the tracklist). It is never edited; if the
  *    facts move later the approval reads as stale (GET /approvals), derived.
+ *  - `seen` (the `snapshotKey` the screen was drawn from) makes "Approved" mean "approved what I was looking at": when the
+ *    facts changed since, it is a 409 and nothing is written. Optional for API callers; the app always sends it.
  *  - ONE Postgres function (`labelos_audit_approval_decide`) inserts the row and
  *    its `approval.decided` event in one transaction and re-checks the
  *    self-approval rule against the latest row under a lock, so two people
@@ -25,7 +27,7 @@ import { readBody } from '@/lib/validate';
 import { OrgApprovalDecideBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { approvalIsStale, currentDecision, isOwnerOrAdmin, planDecide } from '@/lib/labelos/approvals';
+import { approvalIsStale, currentDecision, isOwnerOrAdmin, planDecide, snapshotKey } from '@/lib/labelos/approvals';
 import { ApprovalsNotReadyError, approvalContext, currentSnapshot, isMissingApprovalsSchema, legalGateReadiness, listApprovals, readReleaseFacts } from '@/lib/labelos/approvals-store';
 import { actorOf, gateStates, json, resolveSubject } from '@/lib/labelos/approvals-route';
 import { APPROVALS_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
@@ -81,6 +83,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       legalBlockers: readiness?.blockers,
     });
     if (!plan.ok) return json(plan.status, { error: plan.error, code: plan.code });
+
+    // Approve what the approver looked at: if the facts moved after their screen was drawn, they have not seen what
+    // this approval would record. (After the capability and input checks, so those answers do not depend on it.)
+    if (plan.decision === 'approved' && body.seen && body.seen !== snapshotKey(snapshot)) {
+      return json(409, { error: 'This changed after you opened it. Look at it again before approving.', code: 'changed_since_seen' });
+    }
 
     const ctx = await approvalContext(admin, org, subject, release);
     const { data, error } = await auditRpc(admin, 'approvalDecide', {

@@ -19,6 +19,8 @@ export type GateStateView = {
   canDecide: boolean;
   selfApprovalBlocked: boolean;
   canRequest: boolean;
+  /** Sent back as `seen` when approving, so the approval records what was on screen. Null for a viewer who cannot decide. */
+  snapshotKey?: string | null;
   /** `tasks.write`: "Send to legal" may also create a task for the person asked. */
   canTask?: boolean;
   approvers: { userId: string; name: string }[];
@@ -55,10 +57,11 @@ export const requestApproval = (orgId: string, input: { subject: ApprovalSubject
     ...(input.withTask ? { with_task: true } : {}),
   });
 
-export const decideApproval = (orgId: string, input: { subject: ApprovalSubject; gate: string; decision: 'approved' | 'changes_requested'; note?: string }) =>
+export const decideApproval = (orgId: string, input: { subject: ApprovalSubject; gate: string; decision: 'approved' | 'changes_requested'; note?: string; seen?: string | null }) =>
   send<ApprovalsPayload>(`/api/org/${orgId}/approvals/decide`, 'POST', {
     subject: input.subject,
     gate: input.gate,
     decision: input.decision,
     ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+    ...(input.seen ? { seen: input.seen } : {}),
   });

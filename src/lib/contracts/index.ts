@@ -1525,6 +1525,8 @@ export const OrgApprovalDecideBodySchema = z.object({
   gate: z.enum(APPROVAL_GATES),
   decision: z.enum(APPROVAL_DECISIONS),
   note: z.string().max(APPROVAL_NOTE_MAX).nullable().optional(),
+  /** `snapshotKey` of the gate as the screen drew it. When given with "approved" and the facts moved since, 409 `changed_since_seen`. */
+  seen: z.string().max(64).nullable().optional(),
 }).strict();
 export type OrgApprovalDecideBody = z.infer<typeof OrgApprovalDecideBodySchema>;
 
