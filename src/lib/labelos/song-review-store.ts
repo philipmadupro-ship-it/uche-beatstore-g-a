@@ -6,6 +6,7 @@
  */
 import type { AdminClient } from '@/lib/auth/ownership';
 import { memberIdentities, memberLabel, type IdentityAdmin } from './member-identity';
+import { pageAll } from './overview-store';
 import { isReviewVerdict, type ReviewContent } from './song-review';
 
 type ReviewRow = {
@@ -56,9 +57,12 @@ export async function listReviews(admin: AdminClient, org: string, trackId: stri
 export async function reviewsForSongs(admin: AdminClient, org: string, trackIds: readonly string[]): Promise<Map<string, { reviewerId: string; rating: number | null; verdict: ReviewContent['verdict']; note: string | null }[]>> {
   const out = new Map<string, { reviewerId: string; rating: number | null; verdict: ReviewContent['verdict']; note: string | null }[]>();
   if (trackIds.length === 0) return out;
-  const res = await admin.from('song_reviews').select(`track_id, ${COLUMNS}`).eq('org_id', org).in('track_id', [...trackIds]);
-  if (res.error) fail('review read', res.error);
-  for (const r of (res.data ?? []) as (ReviewRow & { track_id: string })[]) {
+  // Paged: 100 songs with a dozen reviewers each is past PostgREST's `max-rows`.
+  const rows = await pageAll<ReviewRow & { track_id: string }>(
+    (from, to) => admin.from('song_reviews').select(`track_id, ${COLUMNS}`).eq('org_id', org).in('track_id', [...trackIds]).order('track_id').order('reviewer_id').range(from, to),
+    'review read',
+  );
+  for (const r of rows) {
     const c = toContent(r);
     out.set(r.track_id, [...(out.get(r.track_id) ?? []), { reviewerId: r.reviewer_id, ...c }]);
   }

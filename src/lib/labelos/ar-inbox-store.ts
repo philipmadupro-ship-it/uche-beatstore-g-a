@@ -12,6 +12,7 @@ import type { AdminClient } from '@/lib/auth/ownership';
 import { orgTrackFacts, projectArtists } from './org-workspace-store';
 import { partitionSongs } from './org-workspace';
 import { INBOX_STAGES, mayReview, sortInbox, summarizeReviews, type ReviewContent, type ReviewSummary } from './song-review';
+import { inChunks, pageAll } from './overview-store';
 import { reviewsForSongs } from './song-review-store';
 import { SONG_STAGES } from './song-stage';
 
@@ -67,14 +68,24 @@ function must<T>(res: { data: T | null; error: { message: string } | null }, wha
 /** Org songs in the inbox stages inside the member's reach (null project list = whole org). */
 async function inboxCandidates(admin: AdminClient, org: string, scoped: string[] | null): Promise<TrackRow[]> {
   if (scoped === null) {
-    return must(await admin.from('tracks').select(COLUMNS).eq('org_id', org).eq('type', 'song').in('song_stage', [...INBOX_STAGES]), 'inbox read') as TrackRow[];
+    // Paged: an inbox can hold more than PostgREST's `max-rows`, which cuts a list silently.
+    return pageAll<TrackRow>(
+      (from, to) => admin.from('tracks').select(COLUMNS).eq('org_id', org).eq('type', 'song').in('song_stage', [...INBOX_STAGES]).order('id').range(from, to),
+      'inbox read',
+    );
   }
   if (scoped.length === 0) return [];
-  const placements = await Promise.all(chunks(scoped).map(async (part) => must(await admin.from('project_tracks').select('track_id').in('project_id', part), 'inbox placement read') as { track_id: string }[]));
-  const ids = [...new Set(placements.flat().map((l) => l.track_id))];
-  const reads = await Promise.all(chunks(ids).map(async (part) =>
-    must(await admin.from('tracks').select(COLUMNS).in('id', part).eq('org_id', org).eq('type', 'song').in('song_stage', [...INBOX_STAGES]), 'inbox read') as TrackRow[]));
-  return reads.flat();
+  const placements = await inChunks<{ track_id: string }>(
+    scoped,
+    (part, from, to) => admin.from('project_tracks').select('track_id').in('project_id', part).order('project_id').order('track_id').range(from, to),
+    'inbox placement read',
+  );
+  const ids = [...new Set(placements.map((l) => l.track_id))];
+  return inChunks<TrackRow>(
+    ids,
+    (part, from, to) => admin.from('tracks').select(COLUMNS).in('id', part).eq('org_id', org).eq('type', 'song').in('song_stage', [...INBOX_STAGES]).order('id').range(from, to),
+    'inbox read',
+  );
 }
 
 export async function loadArInbox(access: OrgAccessOk): Promise<ArInbox> {
