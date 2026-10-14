@@ -82,7 +82,7 @@ describe('navGroupsFor', () => {
   it('a label org lists the pages that exist for it, under its slug', () => {
     const groups = navGroupsFor('label', new Set(['catalog.read']), { slug: 'night-shift', viewerIsProducer: true });
     expect(shape(groups)).toEqual([
-      { key: 'roster', label: 'Artists', icon: 'MicVocal', items: [{ label: 'Artists', href: '/o/night-shift/artists', icon: 'MicVocal' }] },
+      { key: 'roster', label: 'Artists', icon: 'MicVocal', items: [{ label: 'Artists', href: '/o/night-shift/artists', icon: 'MicVocal' }, { label: 'Music', href: '/o/night-shift/music', icon: 'Music2' }] },
       { key: 'releases', label: 'Releases', icon: 'Disc3', items: [{ label: 'Releases', href: '/o/night-shift/releases', icon: 'Disc3' }] },
       { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/night-shift/settings/members', icon: 'UsersRound' }] },
     ]);
@@ -90,9 +90,19 @@ describe('navGroupsFor', () => {
 
   it('the A&R inbox entry is for members who can review (LABEL-25), and only there', () => {
     const items = (caps: string[]) => navGroupsFor('label', new Set(caps), { slug: 'ns', viewerIsProducer: false }).find((g) => g.key === 'roster')?.items.map((i) => i.href);
-    expect(items(['catalog.read', 'review.write'])).toEqual(['/o/ns/artists', '/o/ns/ar']);
-    expect(items(['catalog.read', 'review.comment'])).toEqual(['/o/ns/artists']);
-    expect(items(['catalog.read'])).toEqual(['/o/ns/artists']);
+    expect(items(['catalog.read', 'review.write'])).toEqual(['/o/ns/artists', '/o/ns/music', '/o/ns/ar']);
+    expect(items(['catalog.read', 'review.comment'])).toEqual(['/o/ns/artists', '/o/ns/music']);
+    expect(items(['catalog.read'])).toEqual(['/o/ns/artists', '/o/ns/music']);
+  });
+
+  it('Music (LABEL-37) is in the roster hub for anyone with catalog.read — a roster artist included, who then gets only their scope from the page — and for nobody else', () => {
+    const music = (kind: string, caps: string[]) => navGroupsFor(kind, new Set(caps), { slug: 's', viewerIsProducer: false }).flatMap((g) => g.items).some((i) => i.href === '/o/s/music');
+    expect(music('label', ['catalog.read'])).toBe(true);
+    expect(music('label', ['catalog.read', 'catalog.write', 'audio.finished', 'review.comment', 'rights.read'])).toBe(true); // role artist
+    expect(music('artist', ['catalog.read'])).toBe(true);
+    expect(music('label', ['release.write'])).toBe(false);
+    expect(music('label', [])).toBe(false);
+    expect(music('producer', ['catalog.read'])).toBe(false);
   });
 
   it('the Artists hub needs catalog.read, and is for label and artist orgs only (LABEL-10)', () => {

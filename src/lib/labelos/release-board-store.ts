@@ -36,7 +36,19 @@ async function inChunks<T, R>(list: readonly T[], size: number, fn: (x: T) => Pr
   return out;
 }
 
-export async function loadReleaseBoard(access: OrgAccessOk): Promise<ReleaseBoard> {
+export type BoardOptions = {
+  /**
+   * LABEL-37: a filter on the release ROW, applied before the newest
+   * `BOARD_LIMIT` are cut and before any gate is evaluated, so a filter is
+   * judged over the whole scoped list and not only over its newest hundred.
+   */
+  rowFilter?: (row: ReleaseRow) => boolean;
+};
+
+/** Most releases read when a row filter is given (the filter then cuts to `BOARD_LIMIT`). */
+const FILTERED_READ_LIMIT = 1000;
+
+export async function loadReleaseBoard(access: OrgAccessOk, opts: BoardOptions = {}): Promise<ReleaseBoard> {
   const { admin } = access;
   const org = access.orgId;
   const projectIds = await orgProjectIdsInScope(admin, access);
@@ -44,13 +56,18 @@ export async function loadReleaseBoard(access: OrgAccessOk): Promise<ReleaseBoar
 
   let query = admin.from('releases').select(RELEASE_COLUMNS, { count: 'exact' }).eq('org_id', org);
   if (projectIds !== null) query = query.in('project_id', projectIds);
-  const res = await query.order('created_at', { ascending: false }).limit(BOARD_LIMIT);
+  const res = await query.order('created_at', { ascending: false }).limit(opts.rowFilter ? FILTERED_READ_LIMIT : BOARD_LIMIT);
   if (res.error) {
     if (isMissingSchema(res.error)) return { schemaReady: false, releases: [], more: 0 };
     throw new Error(`release list: ${res.error.message}`);
   }
-  const rows = (res.data ?? []) as unknown as ReleaseRow[];
-  const more = Math.max(0, (res.count ?? rows.length) - rows.length);
+  let rows = (res.data ?? []) as unknown as ReleaseRow[];
+  let more = Math.max(0, (res.count ?? rows.length) - rows.length);
+  if (opts.rowFilter) {
+    rows = rows.filter(opts.rowFilter);
+    more = Math.max(0, rows.length - BOARD_LIMIT);
+    rows = rows.slice(0, BOARD_LIMIT);
+  }
   if (rows.length === 0) return { schemaReady: true, releases: [], more };
 
   const ids = rows.map((r) => r.id);

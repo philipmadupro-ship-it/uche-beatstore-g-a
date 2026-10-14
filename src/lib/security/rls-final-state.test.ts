@@ -113,6 +113,8 @@ function labelOsTables(): string[] {
     'split_lines',
     // 157_labelos_approvals.sql (LABEL-30)
     'approvals',
+    // 161_labelos_saved_views.sql (LABEL-37)
+    'org_saved_views',
     // 160_labelos_weekly_digest.sql (LABEL-38)
     'org_digest_members',
     'org_digest_channels',
@@ -156,12 +158,16 @@ const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
  * `org_id IS NOT NULL` admits everyone.
  */
 function keysOnOrg(body: string): boolean {
+  // A policy that grants nothing (`USING (false)`, and no WITH CHECK other than false) has no tenancy to get
+  // wrong: LABEL-37's org_saved_views uses one to write "the API roles read this through the route or not at all".
+  if (DENY_ALL.test(body)) return true;
   if (ORG_HELPERS.some((h) => new RegExp(`\\b${h}\\s*\\(`, 'i').test(body))) return true;
   // A bare org_id mention is not tenancy (`org_id IS NOT NULL` lets every
   // user in); without a helper it must be tied to the caller via auth.uid().
   return /\borg_id\b/i.test(body) && /\bauth\.uid\s*\(/i.test(body);
 }
 
+const DENY_ALL = /\bUSING\s*\(\s*false\s*\)(?![\s\S]*\bWITH CHECK\s*\(\s*(?!false\s*\)))/i;
 const OPEN_PREDICATE = /(USING|WITH CHECK)\s*\(\s*true\s*\)/i;
 
 /** Every way the listed tables break the Label OS rules; empty = clean. */
@@ -534,6 +540,27 @@ describe('final RLS policy state', () => {
     });
   });
 
+  describe('Label OS saved views (mig 161, LABEL-37)', () => {
+    it('has exactly one policy and it says no: a definition carries artist ids, so the API roles read it through the route or not at all', () => {
+      const own = [...policies].filter(([k]) => k.startsWith('org_saved_views.'));
+      expect(own.map(([k]) => k)).toEqual(['org_saved_views.org_saved_views_no_direct_access']);
+      const body = own[0][1];
+      expect(body).toMatch(/FOR ALL TO anon, authenticated\s+USING \(false\)\s+WITH CHECK \(false\)/i);
+      // …and no policy that grants anything, to any role
+      expect(own.filter(([, b]) => /USING\s*\((?!false\))/i.test(b))).toEqual([]);
+    });
+
+    it('row level security is on, the API roles hold no privilege and the service-only trigger is attached', () => {
+      const sql = readFileSync(join(DIR, '161_labelos_saved_views.sql'), 'utf8').replace(/--[^\n]*/g, '');
+      expect(sql).toMatch(/ALTER TABLE public\.org_saved_views ENABLE ROW LEVEL SECURITY/);
+      expect(sql).toMatch(/REVOKE ALL ON public\.org_saved_views FROM anon, authenticated/);
+      expect(sql).toMatch(/labelos_org_rows_service_only\('self', 'org_id'\)/);
+      // org-only: no user_id (every producer route filters on it), and it cascades from the organization
+      expect(sql).not.toMatch(/\buser_id\b/);
+      expect(sql).toMatch(/org_id\s+uuid NOT NULL REFERENCES public\.organizations\(id\) ON DELETE CASCADE/);
+    });
+  });
+
   describe('Label OS weekly digest (mig 160, LABEL-38)', () => {
     it('has NO policy on either table: both are service-role only, so a member’s own JWT reads nothing (the Slack URL is a secret)', () => {
       expect([...policies].filter(([k]) => k.startsWith('org_digest_members.') || k.startsWith('org_digest_channels.'))).toEqual([]);
@@ -670,6 +697,17 @@ describe('Label OS RLS guards (LABEL-04)', () => {
 
     it('control: a well-formed Label OS table passes', () => {
       expect(labelOsViolations(withFixture(fx('good', GOOD)), tables)).toEqual([]);
+    });
+
+    it('a deny-all policy (USING (false)) is the one policy that needs no tenancy; a deny that also grants a WITH CHECK does not', () => {
+      const deny = `
+        CREATE TABLE IF NOT EXISTS public.lo_fixture (id uuid PRIMARY KEY, org_id uuid NOT NULL);
+        ALTER TABLE public.lo_fixture ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY lo_fixture_no ON public.lo_fixture FOR ALL TO anon, authenticated USING (false) WITH CHECK (false);
+      `;
+      expect(labelOsViolations(withFixture(fx('deny', deny)), tables)).toEqual([]);
+      const sneaky = deny.replace('WITH CHECK (false)', 'WITH CHECK (user_id = auth.uid())');
+      expect(labelOsViolations(withFixture(fx('sneaky', sneaky)), tables)).toHaveLength(1);
     });
 
     it('RLS never enabled', () => {
