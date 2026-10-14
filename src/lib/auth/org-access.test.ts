@@ -346,6 +346,10 @@ describe('requireObjectAccess', () => {
     const r = await requireObjectAccess({ table: 'projects', id: ROW, cap: 'catalog.read' });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.res.status).toBe(404);
+    // Refused on the row alone: membership was never looked up for "no org". Without the explicit guard the
+    // lookup runs with org_id = null, which a real database answers with a uuid error (500), an oracle that
+    // tells a producer row from a missing one.
+    expect(calls.some((c) => c.table === 'org_members')).toBe(false);
   });
 
   it('never returns 200 for a row in an org the caller is not in', async () => {
