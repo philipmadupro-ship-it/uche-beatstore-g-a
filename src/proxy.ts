@@ -4,6 +4,7 @@ import { buildCsp, cspHeaderName as cspHeaderNameFor } from '@/lib/security/csp'
 import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath, isLabelOsRestorePagePath } from '@/lib/security/api-gate';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
+import { memberLanding } from '@/lib/labelos/member-landing';
 import { isSupabaseConfigured } from '@/lib/local-store';
 
 /**
@@ -198,6 +199,13 @@ export async function proxy(request: NextRequest) {
   // via RLS — if it returns null the logged-in user is a buyer, not the producer.
   if (user && (isProtectedPath || path === '/login')) {
     if (!(await isProducer(user.id))) {
+      // A label member who is not the producer lands in their label (or on
+      // the `next` they came for, if it is a Label OS page), not on the buyer
+      // account. Flag off: exactly as before.
+      if (isLabelOsEnabled() && (await hasAnyLabelOsMembership(supabase, user.id))) {
+        const target = memberLanding(path, request.nextUrl.searchParams.get('next'));
+        return NextResponse.redirect(new URL(target, request.url));
+      }
       const url = request.nextUrl.clone();
       url.pathname = '/store/account/me';
       return NextResponse.redirect(url);
