@@ -154,7 +154,8 @@ Three kinds, kept apart so nothing is mistaken for the owner's word.
 | A | **Listing an artist org's release on the producer store:** the label owner may list it; the artist receives a notification and can say no (unlist / veto). | A new closed-union notification kind in `lib/labelos/notify.ts`, an artist-side decline/unlist action, a store-owner list "Releases from connected artists" with Unlist, a place to record the artist's no (migration 172). Say so on the connection-accept screen. | |
 | B | **Full playback is an option chosen per release** and can be switched back to the short preview every time. | Already true that the choice is per release; G9/G10 findings below say it is not tied to release state. | |
 | C | **Roster artists may see the splits for now**, but a label has many artists, so each artist sees only their own songs. | Scope already applies; the PII question below narrows what "splits" includes. | |
-| D | One item ("coffee" in the transcript) the owner does not care about. | Unclear which item; handled by my choice below. | |
+| D | "Coffee" and "July" from the transcript: ignore (owner, later message). | Nothing; dropped. | |
+| E | **The artist always has the final say** on store listing; the label may list highlights ("greatest moments"), the artist's no is final (see doc 22 section 5). | As A, plus consent record. | |
 
 The remainder of the message was "the rest I don't understand, choose as best you see fit", which I
 treat as delegation for 5.2. The owner's first answer on open decisions had been "no, you can't";
@@ -191,9 +192,9 @@ this later message replaces it for the items in 5.2 only.
 
 - **Which of section 3 and section 4 to build, and in what order.** My suggested order, for what it is worth: 163 (D2 blocker) → H-1 (song/recording editor, default master) → H-2 (create org / add artist / new release) → 170 with 168 (atomic deliver) → 164/165 → decision A (artist veto) → role views and plans.
 - **What is metered** under plans (decision 21).
-- **Decision A's exact shape**: does the artist's "no" hold the listing until they answer, or does the listing go live and the artist can pull it? I read it as the second (listed, notified, can say no); tell me if it is the first.
+- **Decision A's exact shape**: owner later said the artist always has the final say; I read it as: listed, artist notified, artist's no is final and withdraws the listing. Confirm in doc 22 section 7.
 - **A label's own releases on the producer store** (G10 D-7): confirm they should not be listable.
-- **Unclear transcript pieces:** "coffee" and "July" in the voice message. Treated as above; tell me what they meant.
+- The larger product direction (setup screens, real music-business data, contracts + splits, one app for the whole label) is in `22-product-brief-setup-and-music-business-data.md`, with its own questions in section 7.
 
 ---
 
