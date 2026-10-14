@@ -53,6 +53,7 @@ let capRequested: string | null = null;
 let myArtistScope: Set<string> | null = null;
 let listRows: Row[] | null = null;
 let scopeRows: string[] = [];
+let scopeTable: { user_id: string; contact_id: string }[] | null = null;
 const replaced: string[][] = [];
 const C1 = '66666666-6666-4666-8666-666666666666';
 const C2 = '77777777-7777-4777-8777-777777777777';
@@ -126,6 +127,7 @@ function answer(chain: Chain): Answer {
   if (chain.table === 'member_artist_scopes') {
     if (eqs(chain).user_id) return { data: scopeRows.map((contact_id) => ({ contact_id })), error: null };
     expect(eqs(chain)).toEqual({ org_id: ORG });
+    if (scopeTable) return { data: scopeTable, error: null };
     return { data: [{ user_id: THEM, contact_id: C2 }, { user_id: THEM, contact_id: C1 }], error: null };
   }
   if (chain.table !== 'org_members') return { data: null, error: { message: `unexpected ${chain.table}` } };
@@ -182,6 +184,7 @@ beforeEach(() => {
   myArtistScope = null;
   listRows = null;
   scopeRows = [];
+  scopeTable = null;
   replaced.length = 0;
   admin = fakeAdmin({ answer, rpc });
 });
@@ -217,6 +220,34 @@ describe('GET members', () => {
     ];
     const body = await (await GET(new NextRequest('http://x'), params)).json();
     expect(body.members.map((m: { user_id: string }) => m.user_id)).toEqual([OWNER2, ME, '88888888-8888-4888-8888-888888888888']);
+  });
+
+
+  it('a member limited to some artists does not see the logins of the artists outside their list (scope: no names, no existence)', async () => {
+    const IN_SCOPE_ARTIST = '88888888-8888-4888-8888-888888888881';
+    const OUT_OF_SCOPE_ARTIST = '88888888-8888-4888-8888-888888888882';
+    myCaps = ['catalog.read'];
+    myArtistScope = new Set([C1]);
+    listRows = [
+      row({ user_id: ME, scope: 'artists' }),
+      row({ user_id: OWNER2, role: 'owner', functions: [] }),
+      row({ user_id: IN_SCOPE_ARTIST, role: 'artist', functions: [], scope: 'artists' }),
+      row({ user_id: OUT_OF_SCOPE_ARTIST, role: 'artist', functions: [], scope: 'artists' }),
+    ];
+    scopeTable = [
+      { user_id: IN_SCOPE_ARTIST, contact_id: C1 },
+      { user_id: OUT_OF_SCOPE_ARTIST, contact_id: C2 },
+    ];
+    const body = await (await GET(new NextRequest('http://x'), params)).json();
+    expect(body.members.map((m: { user_id: string }) => m.user_id)).toEqual([ME, OWNER2, IN_SCOPE_ARTIST]);
+  });
+
+  it('a limited member who does not read the artist logins asks the scope table nothing (no artist rows, no read)', async () => {
+    myCaps = ['catalog.read'];
+    myArtistScope = new Set([C1]);
+    listRows = [row({ user_id: ME, scope: 'artists' }), row({ user_id: OWNER2, role: 'owner', functions: [] })];
+    await GET(new NextRequest('http://x'), params);
+    expect(admin.chains.some((c) => c.table === 'member_artist_scopes')).toBe(false);
   });
 
   it('passes the helper’s refusal through', async () => {

@@ -370,6 +370,16 @@ describe('assignees', () => {
     expect(org.members.map((m: { id: string }) => m.id).sort()).toEqual([OWN, AR, AR2, MKT, AR_C2, ART].sort());
   });
 
+
+  it('an org-wide task offers a member limited to some artists only the artist logins of their own list (not another artist’s name)', async () => {
+    // AR_C2 is limited to Kilo; ART is Nova’s login. Whole-org members still see her (above).
+    const res = await call('assignees', 'GET', AR_C2);
+    expect(res.status).toBe(200);
+    const ids = ((await res.json()) as { members: { id: string }[] }).members.map((m) => m.id).sort();
+    expect(ids).toEqual([OWN, AR, AR2, MKT, AR_C2].sort());
+    expect(ids).not.toContain(ART);
+  });
+
   it('needs tasks.write and reaches no further than the caller: out-of-scope object is 404', async () => {
     expect((await call('assignees', 'GET', ART)).status).toBe(403);
     expect((await call('assignees', 'GET', AR_C2, { query: `?kind=song&id=${S1}` })).status).toBe(404);

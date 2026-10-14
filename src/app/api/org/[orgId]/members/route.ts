@@ -42,7 +42,7 @@ import { errorMessage } from '@/lib/errors';
 import { AUDIT_RPC_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { memberIdentities, type IdentityAdmin } from '@/lib/labelos/member-identity';
 import { planMemberChange, planMemberRemoval, type MemberState } from '@/lib/labelos/members';
-import { toArtistScope } from '@/lib/labelos/artist-scope';
+import { mayListMember, toArtistScope } from '@/lib/labelos/artist-scope';
 import { createLogger } from '@/lib/log';
 import { isUUID, readBody } from '@/lib/validate';
 
@@ -147,9 +147,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ org
     const { data, error } = await scopedOrgQuery(access.admin, 'org_members', access, COLUMNS).order('joined_at', { ascending: true });
     if (error) throw new Error(error.message);
     // D5 / 06 §2.4: a roster artist never sees other artists. They read the staff and themselves.
-    const rows = ((data ?? []) as unknown as MemberRow[]).filter(
-      (r) => access.role !== 'artist' || r.role !== 'artist' || r.user_id.toLowerCase() === access.userId.toLowerCase(),
-    );
+    let rows = (data ?? []) as unknown as MemberRow[];
+    // The same rule for everyone (mayListMember): an artist's login is that artist's name and existence, so another
+    // artist never sees it, and staff limited to some artists see only the logins of those artists
+    // (scopedOrgQuery does not narrow member_artist_scopes, so the lists are matched here).
+    if (rows.some((r) => r.role === 'artist')) {
+      const logins = new Map<string, string[]>();
+      if (access.role !== 'artist' && access.artistScope !== null) {
+        const { data: links, error: linkError } = await scopedOrgQuery(access.admin, 'member_artist_scopes', access, 'user_id, contact_id');
+        if (linkError) throw new Error(linkError.message);
+        for (const l of (links ?? []) as unknown as { user_id: string; contact_id: string }[]) {
+          const key = l.user_id.toLowerCase();
+          logins.set(key, [...(logins.get(key) ?? []), l.contact_id]);
+        }
+      }
+      const viewer = { userId: access.userId, role: access.role, scope: access.artistScope };
+      rows = rows.filter((r) => mayListMember(viewer, { userId: r.user_id, role: r.role }, logins.get(r.user_id.toLowerCase()) ?? []));
+    }
     const withEmail = access.capabilities.has('members.manage');
     const [ids, lists] = await Promise.all([
       memberIdentities(access.admin as unknown as IdentityAdmin, access.orgId, rows.map((r) => r.user_id), { withEmail }),
