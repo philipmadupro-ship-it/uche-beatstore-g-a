@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   HITS_PER_GROUP,
+  collectVisible,
   MAX_QUERY_TERMS,
   detectIdentifier,
   groupHits,
@@ -34,6 +35,95 @@ describe('parseSearchQuery', () => {
   it('caps the length, the number of words and the size of a word', () => {
     expect(parseSearchQuery('x '.repeat(500)).terms).toHaveLength(MAX_QUERY_TERMS);
     expect(parseSearchQuery('y'.repeat(500)).terms[0].length).toBeLessThanOrEqual(40);
+  });
+});
+
+describe('parseSearchQuery — scripts with combining marks (LABEL-45)', () => {
+  it('keeps a Hindi word whole: the vowel signs and the virama are marks, not separators', () => {
+    expect(parseSearchQuery('हिन्दी गाना').terms).toEqual(['हिन्दी', 'गाना']);
+    expect(parseSearchQuery('हिन्दी').tsquery).toBe('हिन्दी:*');
+  });
+
+  it('keeps a Thai word whole', () => {
+    expect(parseSearchQuery('สวัสดี').terms).toEqual(['สวัสดี']);
+    expect(parseSearchQuery('เพลง ใหม่').terms).toEqual(['เพลง', 'ใหม่']);
+  });
+
+  it('keeps an accent written as base + combining mark in one piece', () => {
+    expect(parseSearchQuery('Ade\u0301').terms).toEqual(['adé']);
+  });
+
+  it('a mark on its own is not a word, and operators are still gone', () => {
+    expect(parseSearchQuery('\u0301').tsquery).toBeNull();
+    expect(parseSearchQuery('हिन्दी & (गाना)').tsquery).toBe('हिन्दी:* & गाना:*');
+  });
+
+  it('ranks a title in those scripts by its words', () => {
+    const q = parseSearchQuery('गाना');
+    expect(matchRank(q, 'गाना')).toBe(0);
+    expect(matchRank(q, 'नया गाना')).toBe(2);
+  });
+
+  it('splits file names and addresses the way the index does: _ . - @ / are separators', () => {
+    expect(parseSearchQuery('final_mix.wav').terms).toEqual(['final', 'mix', 'wav']);
+    expect(parseSearchQuery('a@x.com').tsquery).toBe('a:* & x:* & com:*');
+    expect(parseSearchQuery('x com').tsquery).toBe('x:* & com:*');
+  });
+});
+
+describe('collectVisible — paging until enough visible hits (LABEL-45)', () => {
+  const source = (total: number) => {
+    const reads: number[] = [];
+    const read = async (from: number, to: number) => {
+      reads.push(from);
+      return Array.from({ length: Math.max(0, Math.min(to + 1, total) - from) }, (_, i) => from + i);
+    };
+    return { read, reads };
+  };
+  const evens = async (rows: number[]) => rows.filter((n) => n % 2 === 0);
+
+  it('stops at the first page when it already holds enough', async () => {
+    const s = source(500);
+    const hits = await collectVisible([s.read], evens, (h) => h.length >= 6, { pageSize: 40 });
+    expect(hits.length).toBe(20);
+    expect(s.reads).toEqual([0]);
+  });
+
+  it('keeps paging past pages that are entirely hidden, so common words do not starve a scoped member', async () => {
+    const s = source(500);
+    const hits = await collectVisible([s.read], async (rows) => rows.filter((n) => n >= 130 && n < 140), (h) => h.length >= 6, { pageSize: 40 });
+    expect(hits).toEqual([130, 131, 132, 133, 134, 135, 136, 137, 138, 139]);
+    expect(s.reads).toEqual([0, 40, 80, 120]);
+  });
+
+  it('stops on a short page: the source is exhausted', async () => {
+    const s = source(50);
+    const hits = await collectVisible([s.read], async () => [], () => false, { pageSize: 40 });
+    expect(hits).toEqual([]);
+    expect(s.reads).toEqual([0, 40]);
+  });
+
+  it('is bounded: at most maxExtraPages beyond a source\'s first page, however much is hidden', async () => {
+    const s = source(100000);
+    await collectVisible([s.read], async () => [], () => false, { pageSize: 40, maxExtraPages: 3 });
+    expect(s.reads).toEqual([0, 40, 80, 120]);
+  });
+
+  it('reads every source\'s first page (a scope split into id chunks loses nothing) but pages no further than the budget', async () => {
+    const a = source(100000), b = source(10), c = source(100000);
+    const hits = await collectVisible([a.read, b.read, c.read], async (rows) => rows.filter((n) => n === 0), () => false, { pageSize: 40, maxExtraPages: 2 });
+    expect(a.reads).toEqual([0, 40, 80]);
+    expect(b.reads).toEqual([0]);
+    expect(c.reads).toEqual([0]);
+    expect(hits).toEqual([0, 0, 0]);
+  });
+
+  it('still reads every source\'s first page when an earlier one had enough, but pages no further', async () => {
+    const a = source(100), b = source(100);
+    const hits = await collectVisible([a.read, b.read], async (rows) => rows, (h) => h.length >= 6, { pageSize: 40 });
+    expect(a.reads).toEqual([0]);
+    expect(b.reads).toEqual([0]);
+    expect(hits.length).toBe(80);
   });
 });
 
