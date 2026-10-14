@@ -14,6 +14,7 @@ import { isUUID } from '@/lib/validate';
 import type { EventSubject } from './activity';
 import type { CreditRow, PartyRow } from './credits';
 import { memberIdentities, type IdentityAdmin } from './member-identity';
+import { inChunks, pageAll } from './overview-store';
 import { ownPartyName, PARTY_COLUMNS, type PartyColumns } from './parties';
 import { orgProjectIdsInScope, type OrgContext } from '@/lib/auth/org-access';
 import { songEventSubject } from './song-stage-store';
@@ -155,9 +156,17 @@ export async function ensureOwnParty(admin: AdminClient, org: string, userId: st
 
 /** Every party of the org, by name. */
 export async function listParties(admin: AdminClient, org: string): Promise<PartyRow[]> {
-  const res = await admin.from('parties').select(PARTY_COLUMNS).eq('org_id', org).order('display_name', { ascending: true });
-  check('party list', res.error);
-  return (res.data ?? []) as unknown as PartyRow[];
+  // Paged: PostgREST answers at most `max-rows` (1000) and says nothing when it cuts the list.
+  try {
+    return await pageAll<PartyRow>(
+      (from, to) => admin.from('parties').select(PARTY_COLUMNS).eq('org_id', org).order('display_name', { ascending: true }).order('id').range(from, to),
+      'party list',
+    );
+  } catch (err) {
+    const raw = (err as { raw?: { message: string; code?: string } }).raw;
+    if (raw) check('party list', raw);
+    throw err;
+  }
 }
 
 /**
@@ -169,13 +178,21 @@ export async function scopedPartyIds(admin: AdminClient, ctx: OrgContext): Promi
   const projectIds = await orgProjectIdsInScope(admin, ctx);
   if (projectIds === null) return [];
   if (projectIds.length === 0) return [];
-  const links = await admin.from('project_tracks').select('track_id').in('project_id', projectIds);
-  if (links.error) throw new Error(`scoped tracks: ${links.error.message}`);
-  const trackIds = [...new Set(((links.data ?? []) as { track_id: string }[]).map((l) => l.track_id))];
+  // Chunked and paged: a scope can hold thousands of projects and songs, and an
+  // unchunked `in` overflows the URL while an unpaged select is cut at max-rows.
+  const links = await inChunks<{ track_id: string }>(
+    projectIds,
+    (part, from, to) => admin.from('project_tracks').select('track_id').in('project_id', part).order('project_id').order('track_id').range(from, to),
+    'scoped tracks',
+  );
+  const trackIds = [...new Set(links.map((l) => l.track_id))];
   if (trackIds.length === 0) return [];
-  const res = await admin.from('track_collaborators').select('party_id').eq('org_id', ctx.orgId).in('track_id', trackIds);
-  check('scoped credits', res.error);
-  return [...new Set(((res.data ?? []) as { party_id: string | null }[]).map((r) => r.party_id).filter((p): p is string => !!p))];
+  const credits = await inChunks<{ party_id: string | null }>(
+    trackIds,
+    (part, from, to) => admin.from('track_collaborators').select('party_id').eq('org_id', ctx.orgId).in('track_id', part).order('id').range(from, to),
+    'scoped credits',
+  );
+  return [...new Set(credits.map((r) => r.party_id).filter((p): p is string => !!p))];
 }
 
 export async function insertParty(admin: AdminClient, org: string, createdBy: string, columns: PartyColumns): Promise<{ party: PartyRow } | { duplicate: true }> {
