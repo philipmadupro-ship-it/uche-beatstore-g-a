@@ -19,14 +19,19 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 const ORG = 'org1';
 const REL = 'rel1';
 let calls: { url: string; method: string; body: unknown }[];
+/** Every request, including the approvals panel's own read; `calls` leaves that one out so the page's actions are calls[0]. */
+let everything: { url: string; method: string; body: unknown }[];
 let reply: { status: number; body: unknown };
 
 beforeEach(() => {
   calls = [];
+  everything = [];
   reply = { status: 200, body: {} };
   global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as never;
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
-    calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    const call = { url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined };
+    everything.push(call);
+    if (!(call.method === 'GET' && url.includes('/approvals?'))) calls.push(call);
     return { ok: reply.status < 400, status: reply.status, json: async () => reply.body } as Response;
   });
   toast.success.mockReset();
@@ -134,6 +139,30 @@ describe('the gates', () => {
   it('say so when a migration is missing', () => {
     mount(detail({ readiness: null }));
     expect(screen.getByTestId('release-gates').textContent).toMatch(/could not be worked out/);
+  });
+});
+
+describe('approvals', () => {
+  it('a draft release shows the five approvals to ask for and answer, and the page refreshes when one is decided', async () => {
+    const gateRow = (g: string, label: string) => ({
+      gate: g, label, status: 'requested', stale: false, changed: [], chip: { label: 'Awaiting approval', tone: 'waiting' }, decision: null,
+      pending: { id: 'r1', gate: g, decision: 'requested', note: null, at: '2026-10-05T10:00:00Z', by: 'Ari', approver: 'Lena', approverId: 'u1' },
+      canDecide: g === 'artwork', snapshotKey: g === 'artwork' ? 'k1' : null, selfApprovalBlocked: false, canRequest: false, approvers: [],
+    });
+    reply = { status: 200, body: { schemaReady: true, gates: ['master', 'artwork', 'legal', 'marketing', 'metadata'].map((g) => gateRow(g, g)) } };
+    mount(detail());
+    const approve = await screen.findByTestId('org-approval-approve');
+    expect(everything[0].url).toBe(`/api/org/${ORG}/approvals?release=${REL}`);
+    expect(screen.getAllByTestId(/^org-approval-(master|artwork|legal|marketing|metadata)$/)).toHaveLength(5);
+    reply = { status: 201, body: { schemaReady: true, gates: [{ ...gateRow('artwork', 'artwork'), status: 'approved', pending: null }] } };
+    fireEvent.click(approve);
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(everything.find((c) => c.url.endsWith('/approvals/decide'))?.body).toMatchObject({ subject: { kind: 'release', id: REL }, gate: 'artwork', decision: 'approved', seen: 'k1' });
+  });
+
+  it('a delivered or cancelled release asks for nothing', () => {
+    mount(detail({ release: { ...detail().release, state: 'delivered', deliveredAt: '2026-10-05T00:00:00Z', deliveredTo: 'DistroKid' } }));
+    expect(everything.some((c) => c.url.includes('/approvals'))).toBe(false);
   });
 });
 
