@@ -91,6 +91,17 @@ describe('gatherOrgExport', () => {
     expect(JSON.stringify(t)).not.toContain('Producer');
   });
 
+  it('includes the connections the org is a side of (label or artist), and no other pair’s', async () => {
+    const C = '10000000-0000-4000-8000-00000000000c';
+    db.tables.org_connections = [
+      { id: 'k1', label_org_id: A, artist_org_id: B, status: 'active' },
+      { id: 'k2', label_org_id: B, artist_org_id: A, status: 'ended' },
+      { id: 'k3', label_org_id: B, artist_org_id: C, status: 'active' },
+    ];
+    const t = await gatherOrgExport(mem.client as never, A);
+    expect(t.org_connections.map((r) => r.id)).toEqual(['k1', 'k2']);
+  });
+
   it('never carries an invitation’s secret', async () => {
     const t = await gatherOrgExport(mem.client as never, A);
     expect(t.org_invitations).toEqual([{ id: 'i1', org_id: A, email: 'x@y.z', role: 'member' }]);
@@ -122,6 +133,13 @@ describe('soft delete and restore', () => {
     expect(await restoreOrg(mem.client as never, B, '2020-01-01T00:00:00.000Z')).toBe(false);
     expect(await restoreOrg(mem.client as never, B, NOW.toISOString())).toBe(true);
     expect(db.tables.organizations.find((o) => o.id === B)!.deleted_at).toBeNull();
+  });
+
+  it('does not restore an org whose grace period is over, even though its row is still there', async () => {
+    // A is stamped 31 days ago: the purge cron may already have deleted its files. The database, not
+    // only the route's clock, must refuse (a request that straddles the boundary).
+    expect(await restoreOrg(mem.client as never, A, daysAgo(31), NOW)).toBe(false);
+    expect(db.tables.organizations.find((o) => o.id === A)!.deleted_at).toBe(daysAgo(31));
   });
 
   it('touches nothing but the one org row', async () => {

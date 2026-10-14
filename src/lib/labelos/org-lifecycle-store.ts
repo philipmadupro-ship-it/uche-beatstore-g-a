@@ -22,6 +22,7 @@ import { AUDIT_VERBS } from './activity';
 import { EXPORT_TABLES, redactRow, type ExportTable, type Row } from './org-export';
 import { purgeCutoff, retentionCutoff } from './org-lifecycle';
 import { createLogger } from '@/lib/log';
+import { isUUID } from '@/lib/validate';
 import { errorMessage } from '@/lib/errors';
 
 const log = createLogger('lib.labelos.org-lifecycle-store');
@@ -57,7 +58,12 @@ export async function gatherOrgExport(admin: Admin, orgId: string): Promise<Reco
   const result: Record<string, Row[]> = {};
   for (const table of EXPORT_TABLES) {
     let rows: Row[];
-    if (table.source.by === 'org') {
+    if (table.source.by === 'either') {
+      // The id comes from a validated route param; it is still checked before it is put in a filter string.
+      if (!isUUID(orgId)) throw new Error('Invalid organization id');
+      const [a, b] = table.source.columns;
+      rows = await pagedRows(admin, table, (q) => q.or(`${a}.eq.${orgId},${b}.eq.${orgId}`));
+    } else if (table.source.by === 'org') {
       // `organizations` is keyed by id, everything else by org_id.
       const column = table.name === 'organizations' ? 'id' : 'org_id';
       rows = await pagedRows(admin, table, (q) => q.eq(column, orgId));
@@ -91,13 +97,19 @@ export async function softDeleteOrg(admin: Admin, orgId: string, now: Date = new
   return Array.isArray(data) && data.length > 0 ? stamp : null;
 }
 
-/** Clear `deleted_at` if it still holds `deletedAt` (compare-and-set). True when it was restored. */
-export async function restoreOrg(admin: Admin, orgId: string, deletedAt: string): Promise<boolean> {
+/**
+ * Clear `deleted_at` if it still holds `deletedAt` AND the grace period is not over (compare-and-set).
+ * The second condition is the database's own: the purge cron deletes an org's files BEFORE its row, so a
+ * restore that lands after the boundary (a request begun just before it) must not succeed on a row whose
+ * masters are already gone. True when it was restored.
+ */
+export async function restoreOrg(admin: Admin, orgId: string, deletedAt: string, now: Date = new Date()): Promise<boolean> {
   const { data, error } = await admin
     .from('organizations')
     .update({ deleted_at: null })
     .eq('id', orgId)
     .eq('deleted_at', deletedAt)
+    .gt('deleted_at', purgeCutoff(now).toISOString())
     .select('id');
   if (error) throw new Error(error.message);
   return Array.isArray(data) && data.length > 0;

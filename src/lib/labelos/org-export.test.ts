@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   EXPORT_TABLES,
@@ -108,5 +110,35 @@ describe('file name', () => {
     expect(exportFileName('night-shift', 'json', at)).toBe('night-shift-export-2026-10-13.json');
     expect(exportFileName('night-shift', 'csv', at)).toBe('night-shift-export-2026-10-13.zip');
     expect(exportFileName('../evil"', 'json', at)).toBe('evil-export-2026-10-13.json');
+  });
+});
+
+describe('the export covers every table that carries an org_id', () => {
+  // Tables left out ON PURPOSE, each with the reason. A new org-scoped table is either exported or listed here.
+  const DELIBERATELY_NOT_EXPORTED: Record<string, string> = {
+    notifications: "a person's inbox, not the organization's",
+    org_digest_members: 'a member’s own opt-in switch',
+    org_digest_channels: 'holds the encrypted Slack webhook secret',
+  };
+
+  function orgScopedTablesInMigrations(): string[] {
+    const dir = path.join(process.cwd(), 'supabase', 'migrations');
+    const found = new Set<string>();
+    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.sql'))) {
+      const sql = fs.readFileSync(path.join(dir, file), 'utf8');
+      for (const m of sql.matchAll(/CREATE TABLE IF NOT EXISTS public\.(\w+)\s*\(([\s\S]*?)\n\);/g)) {
+        if (/^\s+org_id\s/m.test(m[2])) found.add(m[1]);
+      }
+      for (const m of sql.matchAll(/ALTER TABLE (?:IF EXISTS )?public\.(\w+)\s+ADD COLUMN IF NOT EXISTS org_id\b/g)) found.add(m[1]);
+    }
+    return [...found].sort();
+  }
+
+  it('lists each org-scoped table as exported, or as deliberately left out with a reason', () => {
+    const tables = orgScopedTablesInMigrations();
+    // Guard the scan itself: if the regexes stop matching, this must not pass on an empty list.
+    expect(tables).toEqual(expect.arrayContaining(['tracks', 'releases', 'split_sheets', 'activity_events']));
+    const missing = tables.filter((t) => !EXPORT_TABLE_NAMES.includes(t) && !(t in DELIBERATELY_NOT_EXPORTED));
+    expect(missing, 'org tables missing from EXPORT_TABLES (add them, or give a reason above)').toEqual([]);
   });
 });
