@@ -50,6 +50,16 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'releases', source: { by: 'org' }, order: ['id'] },
   { name: 'release_items', source: { by: 'org' }, order: ['id'] },
   { name: 'tasks', source: { by: 'org' }, order: ['id'] },
+  // Rights and legal record (LABEL-27/28/30): credits, the parties they name, split sheets and their lines, approvals.
+  { name: 'parties', source: { by: 'org' }, order: ['id'] },
+  { name: 'track_collaborators', source: { by: 'org' }, order: ['id'] },
+  { name: 'split_sheets', source: { by: 'org' }, order: ['id'] },
+  { name: 'split_lines', source: { by: 'org' }, order: ['id'] },
+  { name: 'approvals', source: { by: 'org' }, order: ['id'] },
+  // Creative direction (LABEL-26) and what an artist org shares with a label (LABEL-41, the artist side's rows)
+  { name: 'artist_direction', source: { by: 'org' }, order: ['contact_id'] },
+  { name: 'artist_references', source: { by: 'org' }, order: ['id'] },
+  { name: 'connection_projects', source: { by: 'org' }, order: ['connection_id', 'project_id'] },
   // LABEL-37: filter definitions only (ids and enums, never results)
   { name: 'org_saved_views', source: { by: 'org' }, order: ['id'] },
   { name: 'activity_events', source: { by: 'org' }, order: ['created_at', 'id'] },
