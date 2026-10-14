@@ -193,6 +193,16 @@ describe('GET …/artists/[contactId]/workspace', () => {
     }
   });
 
+  it('a scoped member\'s Releases tab leaves out a release whose project they cannot see, even for their own artist', async () => {
+    db.tables.releases.push({ id: '60000000-0000-4000-8000-000000000009', org_id: L, project_id: LP1, contact_id: C2, title: 'Kilo in Nova project', type: 'single', state: 'draft', target_date: null, release_date: null, created_at: '2026-01-07' });
+    current = AR_C2;
+    const { workspace: scoped } = await (await workspace(C2)).json();
+    expect(scoped.releases).toEqual([]);
+    current = OWN;
+    const { workspace: whole } = await (await workspace(C2)).json();
+    expect(whole.releases.map((r: { title: string }) => r.title)).toEqual(['Kilo in Nova project']);
+  });
+
   it('a song on a release that is not cancelled is finished material, so marketing sees it (06 §2.3)', async () => {
     current = MKT;
     const { workspace: w } = await (await workspace(C1)).json();
