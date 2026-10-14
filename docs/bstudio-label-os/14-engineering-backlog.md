@@ -1997,7 +1997,7 @@ Drop the table.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-30
-**Status:** In Progress (branch label-os/LABEL-31; no migration expected)
+**Status:** Done (PR #105, squash 53057a0)
 
 ## Objective
 Send to legal, a legal queue, and an exportable legal pack.
@@ -2044,7 +2044,7 @@ Revert.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-30, LABEL-16
-**Status:** In Progress (branch label-os/LABEL-32; no migration expected)
+**Status:** Done (PR #104, squash 1fae85f)
 
 ## Objective
 Derived gate states per release.
@@ -2089,7 +2089,7 @@ Revert.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-32
-**Status:** Not Started
+**Status:** Done (PR #107, squash 1dec8e5)
 
 ## Objective
 Owners and PMs see every release's gates and can mark delivery.
@@ -2136,7 +2136,7 @@ Flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-32
-**Status:** Not Started
+**Status:** Done (PR #106, squash 41ba622; no migration)
 
 ## Objective
 Distributor-ready metadata and an ICS feed of release dates.
@@ -2182,7 +2182,7 @@ Revert.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-33, LABEL-20
-**Status:** Not Started
+**Status:** Done (PR #108, squash a2ca977; no migration, no cron)
 
 ## Objective
 The owner's exception list: blocked releases near target, songs stalled in a stage, overdue tasks.
@@ -2228,7 +2228,7 @@ Revert.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-35
-**Status:** Not Started
+**Status:** Done (PR #109, squash b2e3127; migration 159)
 
 ## Objective
 Fast, scope-safe keyword and identifier search across the org.
@@ -2275,7 +2275,7 @@ Drop the columns.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-36
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-37; migration 161 reserved)
 
 ## Objective
 Answer the `08` §A2 example queries, and save them.
@@ -2321,7 +2321,7 @@ Drop the table.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-35
-**Status:** Not Started
+**Status:** In Progress (PR #111, branch label-os/LABEL-38; migration 160)
 
 ## Objective
 An opt-in weekly summary for people who don't open the app daily.
@@ -2556,7 +2556,7 @@ Drop the connection tables; flag off.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-33, LABEL-41
-**Status:** Not Started
+**Status:** In Progress (PR #110, branch label-os/LABEL-42; migration 158)
 
 ## Objective
 A release that is **released** can be put on the store, where everyone can listen, including albums already out on Spotify.

@@ -234,7 +234,7 @@ Update this table when a run is confirmed.
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 157 (136–157 Label OS, not applied), 121 is `121_share_full_playback` (SHARE-01) (next new migration = 158; nothing is reserved). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 159 (136–159 Label OS, not applied), 121 is `121_share_full_playback` (SHARE-01) (next new migration = 162; 158 is reserved by LABEL-42, 160 by LABEL-38, 161 by LABEL-37, all in progress). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
