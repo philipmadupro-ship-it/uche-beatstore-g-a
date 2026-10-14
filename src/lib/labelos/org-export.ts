@@ -16,6 +16,8 @@
 
 export type ExportSource =
   | { by: 'org' }
+  /** A row the org is one side of: any of these columns holds the org id (an artist ↔ label connection). */
+  | { by: 'either'; columns: readonly [string, string] }
   | { by: 'parent'; parent: string; parentKey: string; column: string };
 
 export type ExportTable = {
@@ -59,6 +61,8 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   // Creative direction (LABEL-26) and what an artist org shares with a label (LABEL-41, the artist side's rows)
   { name: 'artist_direction', source: { by: 'org' }, order: ['contact_id'] },
   { name: 'artist_references', source: { by: 'org' }, order: ['id'] },
+  // LABEL-41: each side of a connection holds the record of who can see what.
+  { name: 'org_connections', source: { by: 'either', columns: ['label_org_id', 'artist_org_id'] }, order: ['id'] },
   { name: 'connection_projects', source: { by: 'org' }, order: ['connection_id', 'project_id'] },
   // LABEL-37: filter definitions only (ids and enums, never results)
   { name: 'org_saved_views', source: { by: 'org' }, order: ['id'] },
