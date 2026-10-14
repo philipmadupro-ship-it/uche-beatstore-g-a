@@ -55,3 +55,36 @@ export const deliverRelease = (orgId: string, releaseId: string, input: DeliverI
     ...(input.deliveredOn ? { delivered_on: input.deliveredOn } : {}),
     ...(input.override ? { override: true, override_note: input.overrideNote ?? '' } : {}),
   });
+
+/* ── The store bridge (LABEL-42) ─────────────────────────────────────── */
+
+export type StoreState = {
+  listed: boolean;
+  listedAt: string | null;
+  playback: 'preview' | 'full';
+  /** Whether the playback choice can be stored (migration 158). */
+  playbackChoice: boolean;
+  canList: { ok: true } | { ok: false; error: string; field: string | null };
+  unlist: { askToDeletePreviews: boolean };
+};
+
+export const getReleaseStore = (orgId: string, releaseId: string) => send<StoreState>(`${base(orgId, releaseId)}/store`, 'GET');
+
+export const listReleaseOnStore = (orgId: string, releaseId: string, playback: 'preview' | 'full') =>
+  send<{ listed: true; playback: string; promoted: number }>(`${base(orgId, releaseId)}/store`, 'PUT', { listed: true, playback });
+
+export const unlistReleaseFromStore = (orgId: string, releaseId: string, deletePreviews: boolean) =>
+  send<{ listed: false; previewsDeleted: boolean }>(`${base(orgId, releaseId)}/store`, 'PUT', { listed: false, delete_previews: deletePreviews });
+
+export type ImportInput = { title: string; contactId: string; type: string; releaseDate: string; upc?: string };
+
+/** "Already released": a release that skips every gate. Owner / admin only (the server decides). */
+export const importReleasedRelease = (orgId: string, input: ImportInput) =>
+  send<{ release: { id: string } }>(`/api/org/${orgId}/releases`, 'POST', {
+    title: input.title,
+    contact_id: input.contactId,
+    type: input.type,
+    release_date: input.releaseDate,
+    ...(input.upc ? { upc: input.upc } : {}),
+    imported_released: true,
+  });

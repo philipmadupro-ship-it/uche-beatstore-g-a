@@ -62,7 +62,7 @@ const detail = (over: Partial<ReleaseDetail> = {}): ReleaseDetail => ({
   candidates: [{ id: 's9', title: 'Extra' }],
   readiness: readiness({ legal: gate('blocked', [{ code: 'x', message: 'Track 1: the split is open' }]) }),
   artwork: { current: null, options: [] },
-  me: { canWrite: true, isOwner: false, mayReadRights: true },
+  me: { canWrite: true, isOwner: false, canManagePublic: false, mayReadRights: true },
   ...over,
 });
 const mount = (d: ReleaseDetail) => render(<ReleaseDetailView orgId={ORG} orgSlug="ns" detail={d} />);
@@ -108,7 +108,7 @@ describe('the tracklist', () => {
     expect(screen.queryByTestId('release-add-track')).toBeNull();
     expect(container.querySelectorAll('[draggable="true"]')).toHaveLength(0);
     cleanup();
-    mount(detail({ me: { canWrite: false, isOwner: false, mayReadRights: true } }));
+    mount(detail({ me: { canWrite: false, isOwner: false, canManagePublic: false, mayReadRights: true } }));
     expect(screen.queryByLabelText('Move Midnight down')).toBeNull();
   });
 });
@@ -124,7 +124,7 @@ describe('the gates', () => {
   });
 
   it('without rights.read says how many details are withheld, and names none', async () => {
-    mount(detail({ me: { canWrite: true, isOwner: false, mayReadRights: false }, readiness: readiness({ credits_splits: gate('blocked', [], 2) }) }));
+    mount(detail({ me: { canWrite: true, isOwner: false, canManagePublic: false, mayReadRights: false }, readiness: readiness({ credits_splits: gate('blocked', [], 2) }) }));
     fireEvent.click(screen.getByTestId('release-gate-open-credits_splits'));
     const pop = await screen.findByTestId('release-gate-popover-credits_splits');
     expect(pop.textContent).not.toMatch(/Blocking/);
@@ -160,7 +160,7 @@ describe('delivery', () => {
   });
 
   it('an owner may override, but only with a reason; the override and note are what is sent', async () => {
-    mount(detail({ me: { canWrite: true, isOwner: true, mayReadRights: true } }));
+    mount(detail({ me: { canWrite: true, isOwner: true, canManagePublic: true, mayReadRights: true } }));
     fill('Believe');
     expect(deliverBtn().disabled).toBe(true);
     fireEvent.click(screen.getByTestId('release-override'));
@@ -182,6 +182,31 @@ describe('delivery', () => {
     expect(screen.queryByTestId('release-deliver')).toBeNull();
   });
 
+  it('an imported already-released release keeps an editable tracklist until it is on the store (LABEL-42)', () => {
+    const d = detail();
+    d.release.state = 'delivered';
+    d.release.importedReleased = true;
+    d.me.canManagePublic = true;
+    mount(d);
+    expect(screen.queryByTestId('release-tracklist-empty')).toBeNull();
+    expect(screen.getAllByRole('button', { name: /remove|move/i }).length).toBeGreaterThan(0);
+    cleanup();
+    d.release.storeListed = true;
+    mount(d);
+    expect(screen.getByText(/Take this release off the store to change its tracklist/)).toBeTruthy();
+    expect(screen.queryAllByRole('button', { name: /remove/i })).toHaveLength(0);
+  });
+
+  it('an A&R sees an imported release’s tracklist read-only, with the reason', () => {
+    const d = detail();
+    d.release.state = 'delivered';
+    d.release.importedReleased = true;
+    d.me.canManagePublic = false;
+    mount(d);
+    expect(screen.queryAllByRole('button', { name: /remove/i })).toHaveLength(0);
+    expect(screen.getByText(/Only an owner or an admin can change the tracklist/)).toBeTruthy();
+  });
+
   it('leaves the actions area open for other buttons', () => {
     render(<ReleaseDetailView orgId={ORG} orgSlug="ns" detail={detail()} extraActions={<a href="/x">Export</a>} />);
     expect(within(screen.getByTestId('release-actions')).getByText('Export')).toBeTruthy();
@@ -200,7 +225,7 @@ describe('the export and calendar controls (LABEL-34)', () => {
   });
 
   it('a member without release.write sees none of it', () => {
-    mount(detail({ me: { canWrite: false, isOwner: false, mayReadRights: false } }));
+    mount(detail({ me: { canWrite: false, isOwner: false, canManagePublic: false, mayReadRights: false } }));
     const actions = screen.getByTestId('release-actions');
     expect(within(actions).queryByRole('button', { name: 'Download CSV' })).toBeNull();
     expect(within(actions).queryByRole('button', { name: 'Calendar link' })).toBeNull();

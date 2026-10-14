@@ -9,6 +9,7 @@
 import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ReleaseDetailView } from '@/components/labelos/ReleaseDetailView';
+import { ReleaseStoreCard } from '@/components/labelos/ReleaseStoreCard';
 import { orgShellFor, requireObjectAccess } from '@/lib/auth/org-access';
 import { loadReleaseDetail } from '@/lib/labelos/release-detail-store';
 
@@ -25,6 +26,12 @@ export default async function ReleasePage({ params }: { params: Promise<{ orgSlu
   return (
     <PageContainer>
       <ReleaseDetailView orgId={shell.org.id} orgSlug={shell.org.slug} detail={detail} />
+      {/* LABEL-42: released music on the public store; draws nothing where it can never apply. */}
+      {detail.release.state === 'delivered' && (
+        <div className="mt-6">
+          <ReleaseStoreCard orgId={shell.org.id} releaseId={detail.release.id} canWrite={detail.me.canWrite} canManagePublic={detail.me.canManagePublic} imported={detail.release.importedReleased} />
+        </div>
+      )}
     </PageContainer>
   );
 }

@@ -21,6 +21,7 @@ import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
 import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
 import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers';
 import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
+import { STORE_PLAYBACKS } from '@/lib/labelos/store-listing';
 import { CURSOR_RE } from '@/lib/labelos/activity-feed';
 import { DECISIONS as APPROVAL_DECISIONS, GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
 import { SONG_STAGES } from '@/lib/labelos/song-stage';
@@ -1272,8 +1273,22 @@ export const OrgReleaseCreateBodySchema = z.object({
   target_date: releaseFields.target_date.optional(),
   release_date: releaseFields.release_date.optional(),
   artwork_asset_id: releaseFields.artwork_asset_id.optional(),
+  /** LABEL-42: the music is already out (an album on Spotify). Owner / admin only; needs a past `release_date`; skips every gate. */
+  imported_released: z.literal(true).optional(),
 }).strict();
 export type OrgReleaseCreateBody = z.infer<typeof OrgReleaseCreateBodySchema>;
+
+/**
+ * PUT /api/org/[orgId]/releases/[releaseId]/store (LABEL-42): put a released
+ * release on the public store (and choose how it plays), or take it off (and
+ * say whether its promoted previews go, which the server honours only for
+ * music that was never publicly out).
+ */
+export const OrgReleaseStoreBodySchema = z.discriminatedUnion('listed', [
+  z.object({ listed: z.literal(true), playback: z.enum(STORE_PLAYBACKS).optional() }).strict(),
+  z.object({ listed: z.literal(false), delete_previews: z.boolean().optional() }).strict(),
+]);
+export type OrgReleaseStoreBody = z.infer<typeof OrgReleaseStoreBodySchema>;
 
 /** PATCH /api/org/[orgId]/releases/[releaseId]. The project and the artist are fixed. */
 export const OrgReleasePatchBodySchema = z.object({

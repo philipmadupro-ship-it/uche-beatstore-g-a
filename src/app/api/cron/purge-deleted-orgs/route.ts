@@ -4,7 +4,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { dueOrgs, purgeOrg } from '@/lib/labelos/org-lifecycle-store';
 import { createLogger } from '@/lib/log';
-import { deleteOrgObjects } from '@/lib/storage/org-objects';
+import { deleteOrgObjects, deleteStoreReleaseObjects, orgReleaseIds } from '@/lib/storage/org-objects';
 
 const log = createLogger('cron.purge-deleted-orgs');
 export const runtime = 'nodejs';
@@ -46,7 +46,12 @@ export async function GET(req: NextRequest) {
     const outcomes = [];
     for (const org of due) {
       if (outcomes.filter((o) => o.status === 'purged').length >= ORGS_PER_RUN) break;
-      const outcome = await purgeOrg(admin, org, deleteOrgObjects);
+      // The org's prefix, then the previews promoted to the public store for its releases (LABEL-42);
+      // ids are read BEFORE the rows go. Either failing keeps the org for tomorrow's run.
+      const outcome = await purgeOrg(admin, org, async (orgId) => {
+        const releaseIds = await orgReleaseIds(admin, orgId);
+        return (await deleteOrgObjects(orgId)) + (await deleteStoreReleaseObjects(releaseIds));
+      });
       if (outcome.status === 'purged') log.info('org purged', { orgId: org.id, objects: outcome.objects });
       outcomes.push(outcome);
     }

@@ -28,7 +28,7 @@ import {
   toReleaseItemView,
   type ReleaseItemRow,
 } from '@/lib/labelos/releases';
-import { checkItemTracks, fail, itemsOf, releaseRow, schemaAware, tracklistLocked, writeError } from '../../access';
+import { checkItemTracks, fail, importedNeedsOwnerOrAdmin, itemsOf, releaseRow, schemaAware, tracklistLocked, writeError } from '../../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,6 +48,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!found.ok) return found.res;
   const locked = tracklistLocked(found.release);
   if (locked) return locked.res;
+  const notYours = importedNeedsOwnerOrAdmin(found.release, access.role);
+  if (notYours) return notYours.res;
   const parsed = await readBody(req, OrgReleaseItemCreateBodySchema);
   if (!parsed.ok) return parsed.res;
   const body = parsed.data;
@@ -96,6 +98,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!found.ok) return found.res;
   const locked = tracklistLocked(found.release);
   if (locked) return locked.res;
+  const notYours = importedNeedsOwnerOrAdmin(found.release, access.role);
+  if (notYours) return notYours.res;
   const parsed = await readBody(req, OrgReleaseItemsReorderBodySchema);
   if (!parsed.ok) return parsed.res;
 

@@ -53,9 +53,31 @@ export async function schemaAware(denied: OwnershipFail): Promise<OwnershipFail>
   return error && isMissingSchema(error) ? notReady() : denied;
 }
 
-/** Only a draft's tracklist changes: a delivered one went out, a cancelled one is not going. */
+/**
+ * Only a draft's tracklist changes: a delivered one went out, a cancelled one
+ * is not going. LABEL-42: a release IMPORTED as already out is entered
+ * delivered, but its tracklist is the very thing being entered, so it stays
+ * editable — until it is on the store, where each item's public preview was
+ * promoted for that exact list (take it off the store to change it).
+ */
 export function tracklistLocked(release: ReleaseRow): OwnershipFail | null {
-  return release.state === 'draft' ? null : fail(409, `A ${release.state} release keeps its tracklist`, { field: 'state' });
+  if (release.state === 'draft') return null;
+  if (release.imported_released && release.state === 'delivered') {
+    return release.store_listed ? fail(409, 'Take this release off the store to change its tracklist', { field: 'store_listed' }) : null;
+  }
+  return fail(409, `A ${release.state} release keeps its tracklist`, { field: 'state' });
+}
+
+/**
+ * An IMPORTED release (LABEL-42) is music entered as already out on the
+ * owner's word, and its tracklist is what the public store will play. Anyone
+ * with `release.write` could otherwise slip an unreleased demo in as a song,
+ * so its tracklist, its listing and its playback are the owner's or an
+ * admin's (a role, as for the import itself), not A&R's.
+ */
+export function importedNeedsOwnerOrAdmin(release: Pick<ReleaseRow, 'imported_released'>, role: string): OwnershipFail | null {
+  if (!release.imported_released || role === 'owner' || role === 'admin') return null;
+  return fail(403, 'Only an owner or an admin can change a release that was entered as already out', { field: 'imported_released' });
 }
 
 /** A Postgres error from a write, as the member should see it. */

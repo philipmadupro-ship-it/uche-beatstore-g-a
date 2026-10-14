@@ -45,7 +45,7 @@ export type ReleaseDetail = {
   /** Null before migrations 153 / 155 / 157 or when the gates could not be worked out. */
   readiness: ReleaseReadinessView | null;
   artwork: { current: ArtworkOption | null; options: ArtworkOption[] };
-  me: { canWrite: boolean; isOwner: boolean; mayReadRights: boolean };
+  me: { canWrite: boolean; isOwner: boolean; /** owner or admin: the public-facing side of a release (LABEL-42) */ canManagePublic: boolean; mayReadRights: boolean };
 };
 
 /** `access` is requireObjectAccess on `releases` (`catalog.read`). Null when the release is not there. */
@@ -118,7 +118,7 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
     artwork: { current, options },
     me: {
       canWrite: access.capabilities.has('release.write'),
-      isOwner: access.role === 'owner',
+      isOwner: access.role === 'owner', canManagePublic: access.role === 'owner' || access.role === 'admin',
       mayReadRights: access.capabilities.has('rights.read'),
     },
   };

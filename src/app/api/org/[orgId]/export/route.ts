@@ -24,7 +24,7 @@ import { buildManifest, exportFileName, toCsv, type StoredObject } from '@/lib/l
 import { gatherOrgExport } from '@/lib/labelos/org-lifecycle-store';
 import { createLogger } from '@/lib/log';
 import { rateLimitDurable } from '@/lib/security/rate-limit';
-import { listOrgObjects } from '@/lib/storage/org-objects';
+import { listOrgObjects, listStoreReleaseObjects, orgReleaseIds } from '@/lib/storage/org-objects';
 
 const log = createLogger('api.org.export');
 export const runtime = 'nodejs';
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ orgI
     let stored: StoredObject[] | null = null;
     let storedError: string | undefined;
     try {
-      stored = await listOrgObjects(org.id);
+      stored = [...(await listOrgObjects(org.id)), ...(await listStoreReleaseObjects(await orgReleaseIds(admin, org.id)))];
     } catch (err) {
       storedError = errorMessage(err);
       log.warn('export: object store not listed', { orgId: org.id, error: storedError });

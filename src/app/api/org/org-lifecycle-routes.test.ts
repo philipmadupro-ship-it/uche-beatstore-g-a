@@ -49,6 +49,9 @@ vi.mock('@/lib/storage/org-objects', () => ({
     if (storedFails) throw new Error('bucket unreachable');
     return [{ key: `orgs/${orgId}/tracks/a.wav`, size: 3, lastModified: '2026-10-01T00:00:00.000Z' }];
   },
+  // LABEL-42: the previews promoted to the public store for the org's releases are listed in the manifest too.
+  orgReleaseIds: async (_admin: unknown, orgId: string) => (db.tables.releases ?? []).filter((r) => r.org_id === orgId).map((r) => r.id as string),
+  listStoreReleaseObjects: async (ids: readonly string[]) => ids.map((id) => ({ key: `store-releases/${id}/t1`, size: 3, lastModified: '2026-10-02T00:00:00.000Z' })),
 }));
 vi.mock('@/lib/labelos/activity', async (importActual) => {
   const actual = await importActual<typeof import('@/lib/labelos/activity')>();
@@ -373,6 +376,12 @@ describe('GET /api/org/[orgId]/export', () => {
     expect(body.manifest.stored).toEqual([{ key: `orgs/${L}/tracks/a.wav`, size: 3, lastModified: '2026-10-01T00:00:00.000Z' }]);
     expect(events('org.exported')).toHaveLength(1);
     expect(events('org.exported')[0]).toMatchObject({ org_id: L, actor_id: OWNER, audit: true, payload: { format: 'json' } });
+  });
+
+  it('names the previews promoted to the public store for the org’s releases in the manifest (LABEL-42), and none of another org’s', async () => {
+    db.tables.releases = [{ id: 'r-mine', org_id: L }, { id: 'r-theirs', org_id: L2 }];
+    const body = await (await exp(L)).json();
+    expect(body.manifest.stored.map((o: { key: string }) => o.key)).toEqual([`orgs/${L}/tracks/a.wav`, 'store-releases/r-mine/t1']);
   });
 
   it('holds no secret and nothing of another org', async () => {

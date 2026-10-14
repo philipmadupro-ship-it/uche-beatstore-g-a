@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   deleteLocalOrgObjects,
   deletePrefix,
+  deleteStoreReleasePrefixes,
+  listStoreReleasePrefixes,
+  storeReleasePrefixes,
   listLocalOrgObjects,
   listPrefix,
   localOrgDir,
@@ -137,5 +140,34 @@ describe('local fallback', () => {
 
   it('refuses a path that escapes', () => {
     expect(() => localOrgDir('../../etc', root())).toThrow();
+  });
+});
+
+describe('promoted release previews (LABEL-42)', () => {
+  const R1 = '33333333-3333-4333-8333-333333333333';
+  const R2 = '44444444-4444-4444-8444-444444444444';
+  const seed = [
+    `store-releases/${R1}/t1`,
+    `store-releases/${R1}/t2`,
+    `store-releases/${R2}/t1`, // another org's release
+    `store-releases/${R1}0/t1`, // look-alike id
+    `orgs/${ORG}/tracks/a.wav`,
+    'previews/producer.mp3',
+  ];
+
+  it('prefixes are built from UUIDs only, with a trailing slash', () => {
+    expect(storeReleasePrefixes([R1, '../x', 'nope'])).toEqual([`store-releases/${R1}/`]);
+  });
+
+  it('lists and deletes the org’s releases’ copies in the public bucket and nothing else', async () => {
+    const { client, keys } = fakeS3(seed, { pageSize: 1 });
+    expect((await listStoreReleasePrefixes(client, 'pub', [R1])).map((o) => o.key)).toEqual([`store-releases/${R1}/t1`, `store-releases/${R1}/t2`]);
+    expect(await deleteStoreReleasePrefixes(client, 'pub', [R1])).toBe(2);
+    expect([...keys].sort()).toEqual([`orgs/${ORG}/tracks/a.wav`, 'previews/producer.mp3', `store-releases/${R1}0/t1`, `store-releases/${R2}/t1`].sort());
+  });
+
+  it('a refused delete throws, so the purge keeps the org', async () => {
+    const { client } = fakeS3(seed, { failDelete: true });
+    await expect(deleteStoreReleasePrefixes(client, 'pub', [R1])).rejects.toThrow(/AccessDenied/);
   });
 });
