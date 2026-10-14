@@ -170,6 +170,24 @@ describe('snapshot + isStale', () => {
     expect(isStale(at, buildSnapshot('metadata', { items: [], release: { title: 'EP', upc: '123456789013' } }))).toBe(true);
   });
 
+  it('metadata also covers what each track carries to a distributor: ISRC, explicit flag, version title (09 §4)', () => {
+    const base = { songId: 's1', isrc: 'USRC17607839', explicit: false, versionTitle: null as string | null };
+    const at = buildSnapshot('metadata', { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP' }, details: [base] });
+    expect(isStale(at, buildSnapshot('metadata', { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP' }, details: [{ ...base }] }))).toBe(false);
+    for (const change of [{ isrc: 'USRC17607840' }, { isrc: null }, { explicit: true }, { versionTitle: 'Radio edit' }]) {
+      const now = buildSnapshot('metadata', { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP' }, details: [{ ...base, ...change }] });
+      expect(isStale(at, now), JSON.stringify(change)).toBe(true);
+      expect(changedParts(at, now)).toEqual(['details']);
+    }
+    // A snapshot stored before `details` existed cannot vouch for the tracks' metadata.
+    const legacy = { v: 1, gate: 'metadata', parts: { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP' } } };
+    expect(isStale(legacy, at)).toBe(true);
+    // The master gate does not care about metadata.
+    const m1 = buildSnapshot('master', { items: [{ songId: 's1', masterId: 'm1' }], details: [base] });
+    const m2 = buildSnapshot('master', { items: [{ songId: 's1', masterId: 'm1' }], details: [{ ...base, isrc: null }] });
+    expect(isStale(m1, m2)).toBe(false);
+  });
+
   it('a snapshot that cannot be read vouches for nothing: null, wrong version, another gate', () => {
     const now = buildSnapshot('legal', { songs: [] });
     expect(isStale(null, now)).toBe(true);

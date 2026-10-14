@@ -455,6 +455,29 @@ describe('stale detection — changing a split after approval', () => {
     db.tables.releases[0].artwork_asset_id = ART2;
     expect(artwork(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['artwork'] });
   });
+
+  it('a metadata approval goes stale when a track’s ISRC or explicit flag, or the primary artist’s name, changes afterwards', async () => {
+    const metadata = (b: { gates: { gate: string }[] }) => b.gates.find((g) => g.gate === 'metadata') as GateJson;
+    await request(AR, release(), 'metadata', OWN);
+    expect((await decide(OWN, release(), 'metadata', 'approved')).status).toBe(201);
+    expect(metadata(await state(OWN, `?release=${R1}`))).toMatchObject({ status: 'approved', stale: false });
+
+    const trackRow = db.tables.tracks.find((r) => r.id === S1) as Record<string, unknown>;
+    trackRow.isrc = 'USRC17607839';
+    expect(metadata(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['details'] });
+
+    // Renewing records the new facts; then each of the others stales it again.
+    await request(AR, release(), 'metadata', OWN);
+    expect((await decide(OWN, release(), 'metadata', 'approved')).status).toBe(201);
+    expect(metadata(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: false });
+    db.tables.release_items[0].explicit = true;
+    expect(metadata(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['details'] });
+
+    await request(AR, release(), 'metadata', OWN);
+    expect((await decide(OWN, release(), 'metadata', 'approved')).status).toBe(201);
+    (db.tables.contacts.find((c) => c.id === C1) as Record<string, unknown>).name = 'Renamed Artist';
+    expect(metadata(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['release'] });
+  });
 });
 
 describe('append-only', () => {
