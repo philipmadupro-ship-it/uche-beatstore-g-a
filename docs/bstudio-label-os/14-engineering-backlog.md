@@ -2275,7 +2275,7 @@ Drop the columns.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-36
-**Status:** In Progress (branch label-os/LABEL-37; migration 161 reserved)
+**Status:** Done (PR #113, squash 49fb03b; migration 161)
 
 ## Objective
 Answer the `08` §A2 example queries, and save them.
@@ -2321,7 +2321,7 @@ Drop the table.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-35
-**Status:** In Progress (PR #111, branch label-os/LABEL-38; migration 160)
+**Status:** Done (PR #111, squash d214873; migration 160)
 
 ## Objective
 An opt-in weekly summary for people who don't open the app daily.
@@ -2556,7 +2556,7 @@ Drop the connection tables; flag off.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-33, LABEL-41
-**Status:** In Progress (PR #110, branch label-os/LABEL-42; migration 158)
+**Status:** Done (PR #110, squash 31c05b7; migration 158)
 
 ## Objective
 A release that is **released** can be put on the store, where everyone can listen, including albums already out on Spotify.
