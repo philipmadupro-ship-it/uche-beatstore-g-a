@@ -1,7 +1,8 @@
 /**
  * /api/org/[orgId]/members (LABEL-09, 07 §2.6, 06 §2):
  *
- *  GET     every member of the org. Any member may read the list (136's RLS
+ *  GET     every member of the org (a roster artist: the staff and themselves,
+ *          not the other artists). Any member may read the list (136's RLS
  *          lets members read co-members); emails only for callers who manage
  *          members. `contact_ids` (LABEL-10) is an artists-scoped member's
  *          roster list, shown to managers for everyone and to each member
@@ -145,7 +146,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ org
   try {
     const { data, error } = await scopedOrgQuery(access.admin, 'org_members', access, COLUMNS).order('joined_at', { ascending: true });
     if (error) throw new Error(error.message);
-    const rows = (data ?? []) as unknown as MemberRow[];
+    // D5 / 06 §2.4: a roster artist never sees other artists. They read the staff and themselves.
+    const rows = ((data ?? []) as unknown as MemberRow[]).filter(
+      (r) => access.role !== 'artist' || r.role !== 'artist' || r.user_id.toLowerCase() === access.userId.toLowerCase(),
+    );
     const withEmail = access.capabilities.has('members.manage');
     const [ids, lists] = await Promise.all([
       memberIdentities(access.admin as unknown as IdentityAdmin, access.orgId, rows.map((r) => r.user_id), { withEmail }),
