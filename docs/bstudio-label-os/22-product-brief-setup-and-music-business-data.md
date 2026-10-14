@@ -115,3 +115,19 @@ sessions until the reset, then A–C first.
    withdraw it for all?
 4. Finance/royalties and e-signature: in scope for the first label customers, or later?
 5. Which departments does the first label customer actually need on day one?
+
+## 8. Owner's answers (2026-10-14, later message)
+
+1. **Account types:** "artist/producer, then only label". Two faces: an **independent
+   artist/producer** (one person, both) or a **label** (an organisation that has beatmakers,
+   producers, rappers, collaborators and staff). Studio is dropped as a separate type.
+2. **Contracts:** all contracts should have a template.
+3. **"Does one artist's no withdraw it for all?"** The owner did not follow the question and asked
+   the orchestrator to choose: **yes, any one credited artist's no withdraws the listing** (the
+   protective reading of "the artist always has the final say").
+4. **Finance, contracts and marketing must be actionable in the app** from day one.
+5. **All principal departments on day one:** finance, marketing (and PR), the CEO ("the big
+   boss"), artistic direction, the producers, the rappers, the collaborators.
+6. **Go:** write task lists like the first 41, action them one by one, do not worry about the
+   usage limit, and continue in a new conversation on Opus 5.5 with all the context
+   (`24-orchestrator-handoff.md`). Task list: `23-engineering-backlog-phase-2.md`.
