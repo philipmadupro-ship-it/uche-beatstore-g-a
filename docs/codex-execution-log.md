@@ -9327,3 +9327,10 @@ Changes (no schema, API or contract change):
 Tests: `buyer-session.test.ts` (3 new): a lost marker with a live session is restored and the next heart POSTs to `?session=1`; a gone session clears it; agreement reports no change.
 
 Not changed: the session is shared with the producer's dashboard login, so a producer browsing `/store` while signed in now syncs hearts under their own email and `upsertLeadContact` creates a lead for them (as opening `/store/account/me` already did). Skipping that needs the server to know the producer's email; left for a follow-up. `syncedIdentity` is keyed on the query string (`session=1`), not the user id, so switching accounts without signing out through `/store/account/me` would not re-sync until reload.
+
+## 2026-10-14 - Label OS phase 2 (LABEL-43..78): orchestrator log
+
+Orchestrator: session_01U1hEgSEMBP1MAk65kDjAcW. Backlog: `docs/bstudio-label-os/23-engineering-backlog-phase-2.md`. Every task PR merges into `claude/happy-bardeen-rnosf3`, never `main`; no migration is applied to Supabase.
+
+- 2026-10-14 23:33 UTC — #125 (docs 21–24) squash-merged into the Label OS branch, `e8ee54ab303691ad131eed7356e83df8894ca6fe`.
+- 2026-10-14 23:34 UTC — LABEL-43 (migrations 162–164) started, session_01XomWvrxzd67FGQzax9EyM4. LABEL-45 (migration 168, disjoint files) started in parallel, session_011ULZD1PDrEVrwr2TKj2iDr.

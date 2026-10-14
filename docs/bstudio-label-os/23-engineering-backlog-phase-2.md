@@ -73,7 +73,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## A. Hardening (from the independent review; small, no UI)
 
 ### LABEL-43 — Security hardening migrations
-**Priority:** P0 · **Risk:** High · **Deps:** none · **Migrations:** 162, 163, 164 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** none · **Migrations:** 162, 163, 164 · **Status:** In Progress (session_01XomWvrxzd67FGQzax9EyM4)
 - **162** `split_sheets`: `REVOKE SELECT … FROM anon, authenticated`; column-level `GRANT SELECT (id, org_id, track_id, kind, version, status, circulated_at, signed_at, superseded_at, created_at)`. Check asserts `note`, `created_by`, `circulated_by`, `document_asset_id` are unreadable for an own-line reader on their own JWT (doc 21 / G6 F1, the D2 breach).
 - **163** trigger refusing UPDATE and non-cascade DELETE of `activity_events` rows with `audit = true`, service role included (G1 F6).
 - **164** replace `org_members_member_read` and `user_profiles_self_or_co_member_read`: a caller whose org role is `artist` reads only their own row and rows with `role <> 'artist'`; staff limited to some artists do not read artists outside their list; uncorrelated (R-08), proved with `EXPLAIN` (G1 F1).
@@ -86,7 +86,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: concurrent-add and tracklist-race checks in `supabase/local/checks/`; routes map the DB errors to 409s with a plain message.
 
 ### LABEL-45 — Search tokenization
-**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 168 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 168 · **Status:** In Progress (session_011ULZD1PDrEVrwr2TKj2iDr)
 - `translate(file_name, '_.-@/', '     ')` in the generated tsvector columns; `[\p{L}\p{M}\p{N}]+` in `org-search.ts` `WORD`; apply D4 in the query (or page until 6 visible hits) so common words do not starve scoped members (G8 F2, F3).
 - Acceptance: `mix` finds `final_mix.wav`, `x com` finds `a@x.com`, Hindi/Thai words match; tests for each.
 
