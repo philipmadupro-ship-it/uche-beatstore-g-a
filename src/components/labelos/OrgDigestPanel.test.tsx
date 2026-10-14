@@ -45,6 +45,12 @@ describe('OrgDigestPanel', () => {
     await waitFor(() => expect((screen.getByLabelText(/slack webhook url/i) as HTMLInputElement).value).toBe(''));
   });
 
+  it('tells a manager when the saved webhook can no longer be opened', async () => {
+    state = { schemaReady: true, enabled: false, canManage: true, channelConfigured: true, needsReset: true };
+    render(<OrgDigestPanel orgId="o1" orgName="North Star" />);
+    expect((await screen.findByTestId('slack-reset')).textContent).toMatch(/no longer be opened/);
+  });
+
   it('says so when the migration is not applied', async () => {
     state = { schemaReady: false, enabled: false, canManage: false };
     render(<OrgDigestPanel orgId="o1" orgName="North Star" />);

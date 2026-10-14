@@ -52,6 +52,8 @@ export async function postToSlack(
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
+    // Free the connection; the body (Slack's "ok") carries nothing we use.
+    await res.body?.cancel().catch(() => undefined);
     if (res.status >= 300 && res.status < 400) return { ok: false, reason: 'redirect' };
     return res.ok ? { ok: true } : { ok: false, reason: 'rejected' };
   } catch {

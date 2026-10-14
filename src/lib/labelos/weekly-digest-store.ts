@@ -49,42 +49,65 @@ export async function writePreference(admin: AdminClient, orgId: string, userId:
 
 // ── Slack channel ───────────────────────────────────────────────────────
 
-/** True when a webhook is stored. Never selects the ciphertext. */
-export async function channelConfigured(admin: AdminClient, orgId: string): Promise<boolean> {
-  const res = await admin.from('org_digest_channels').select('org_id').eq('org_id', orgId).not('slack_webhook_cipher', 'is', null).maybeSingle();
+export type ChannelStatus = { configured: boolean; /** Stored, but this server can no longer open it (key lost or changed): save it again. */ needsReset: boolean };
+
+/** Whether a webhook is stored, and whether it still opens. The ciphertext is read here, server-side, and goes no further. */
+export async function channelStatus(admin: AdminClient, orgId: string): Promise<ChannelStatus> {
+  const res = await admin.from('org_digest_channels').select('slack_webhook_cipher').eq('org_id', orgId).maybeSingle();
   if (res.error) fail('digest channel read', res.error);
-  return !!res.data;
+  const cipher = (res.data as { slack_webhook_cipher: string | null } | null)?.slack_webhook_cipher;
+  if (!cipher) return { configured: false, needsReset: false };
+  return { configured: true, needsReset: decryptWebhook(cipher, orgId) === null };
 }
 
-export type ChannelBackup = { cipher: string | null } | null;
+/** What a channel change replaced (`previous`: null = there was no row) and what it wrote (`written`: null = it cleared). */
+export type ChannelChange = { previous: { cipher: string | null } | null; written: string | null };
 
-/** Stores the encrypted URL; returns what was there (for the route to put back if its audit event fails). */
-export async function writeChannel(admin: AdminClient, orgId: string, userId: string, url: string): Promise<ChannelBackup> {
-  const before = await admin.from('org_digest_channels').select('slack_webhook_cipher').eq('org_id', orgId).maybeSingle();
-  if (before.error) fail('digest channel read', before.error);
-  const previous = before.data ? { cipher: (before.data as { slack_webhook_cipher: string | null }).slack_webhook_cipher } : null;
+async function readCipher(admin: AdminClient, orgId: string): Promise<{ cipher: string | null } | null> {
+  const res = await admin.from('org_digest_channels').select('slack_webhook_cipher').eq('org_id', orgId).maybeSingle();
+  if (res.error) fail('digest channel read', res.error);
+  return res.data ? { cipher: (res.data as { slack_webhook_cipher: string | null }).slack_webhook_cipher } : null;
+}
+
+/** Stores the encrypted URL; returns the change, for the route to undo if its audit event cannot be written. */
+export async function writeChannel(admin: AdminClient, orgId: string, userId: string, url: string): Promise<ChannelChange> {
+  const previous = await readCipher(admin, orgId);
+  const written = encryptWebhook(url, orgId);
   const res = await admin
     .from('org_digest_channels')
-    .upsert({ org_id: orgId, slack_webhook_cipher: encryptWebhook(url, orgId), configured_by: userId, updated_at: new Date().toISOString() }, { onConflict: 'org_id' });
+    .upsert({ org_id: orgId, slack_webhook_cipher: written, configured_by: userId, updated_at: new Date().toISOString() }, { onConflict: 'org_id' });
   if (res.error) fail('digest channel write', res.error);
-  return previous;
+  return { previous, written };
 }
 
-export async function clearChannel(admin: AdminClient, orgId: string): Promise<ChannelBackup> {
-  const before = await admin.from('org_digest_channels').select('slack_webhook_cipher').eq('org_id', orgId).maybeSingle();
-  if (before.error) fail('digest channel read', before.error);
-  const previous = before.data ? { cipher: (before.data as { slack_webhook_cipher: string | null }).slack_webhook_cipher } : null;
+export async function clearChannel(admin: AdminClient, orgId: string): Promise<ChannelChange> {
+  const previous = await readCipher(admin, orgId);
   const res = await admin.from('org_digest_channels').update({ slack_webhook_cipher: null, updated_at: new Date().toISOString() }).eq('org_id', orgId);
   if (res.error) fail('digest channel clear', res.error);
-  return previous;
+  return { previous, written: null };
 }
 
-export async function restoreChannel(admin: AdminClient, orgId: string, backup: ChannelBackup): Promise<void> {
-  if (backup === null) {
-    await admin.from('org_digest_channels').delete().eq('org_id', orgId);
-    return;
+/**
+ * Undo a change, but only while the row still holds what that change wrote:
+ * an optimistic compare, so a concurrent save by someone else is never
+ * clobbered by a late rollback. There is no transaction to lean on (no atomic
+ * function without another migration), so this is the serialisation.
+ * Returns false when the undo did not (or could not) happen — the caller says
+ * the state is uncertain.
+ */
+export async function undoChannelChange(admin: AdminClient, orgId: string, change: ChannelChange): Promise<boolean> {
+  try {
+    const mine = admin.from('org_digest_channels');
+    if (change.previous === null) {
+      const res = change.written === null ? { error: null } : await mine.delete().eq('org_id', orgId).eq('slack_webhook_cipher', change.written);
+      return !res.error;
+    }
+    const q = admin.from('org_digest_channels').update({ slack_webhook_cipher: change.previous.cipher }).eq('org_id', orgId);
+    const res = change.written === null ? await q.is('slack_webhook_cipher', null) : await q.eq('slack_webhook_cipher', change.written);
+    return !res.error;
+  } catch {
+    return false;
   }
-  await admin.from('org_digest_channels').update({ slack_webhook_cipher: backup.cipher }).eq('org_id', orgId);
 }
 
 // ── Recipient content ───────────────────────────────────────────────────
@@ -118,19 +141,40 @@ export function databasePorts(admin: AdminClient, baseUrl: string): DigestPorts 
     emailConfigured,
     baseUrl,
 
-    async listDue(week) {
+    async nextDueOrg(week, afterOrgId) {
+      let first = admin.from('org_digest_members').select('org_id').eq('enabled', true).neq('last_sent_week', week);
+      if (afterOrgId) first = first.gt('org_id', afterOrgId);
+      const head = await first.order('org_id').limit(1);
+      if (head.error) fail('due org read', head.error);
+      const orgId = ((head.data ?? []) as Array<{ org_id: string }>)[0]?.org_id;
+      if (!orgId) return null;
+      // Every due member of THIS org, read before any is claimed (claims shift a live offset).
       const members: DueRow[] = [];
-      const m = await admin.from('org_digest_members').select('org_id, user_id, enabled, last_sent_week').eq('enabled', true).neq('last_sent_week', week).order('org_id').order('user_id').limit(PAGE);
-      if (m.error) fail('due members read', m.error);
-      for (const r of (m.data ?? []) as Array<{ org_id: string; user_id: string; enabled: boolean; last_sent_week: string }>) {
-        members.push({ orgId: r.org_id, userId: r.user_id, enabled: r.enabled, lastSentWeek: r.last_sent_week });
+      for (let from = 0; ; from += PAGE) {
+        const page = await admin
+          .from('org_digest_members')
+          .select('org_id, user_id, enabled, last_sent_week')
+          .eq('org_id', orgId)
+          .eq('enabled', true)
+          .neq('last_sent_week', week)
+          .order('user_id')
+          .range(from, from + PAGE - 1);
+        if (page.error) fail('due members read', page.error);
+        const rows = (page.data ?? []) as Array<{ org_id: string; user_id: string; enabled: boolean; last_sent_week: string }>;
+        for (const r of rows) members.push({ orgId: r.org_id, userId: r.user_id, enabled: r.enabled, lastSentWeek: r.last_sent_week });
+        if (rows.length < PAGE) break;
       }
+      return { orgId, members };
+    },
+
+    async dueChannels(week, afterOrgId, limit) {
       // No server secret = no webhook can be opened: leave the channels alone rather than claim and fail.
-      if (!secretAvailable()) return { members, channelOrgs: [] };
-      const c = await admin.from('org_digest_channels').select('org_id, slack_last_week').not('slack_webhook_cipher', 'is', null).neq('slack_last_week', week).order('org_id').limit(PAGE);
+      if (!secretAvailable()) return [];
+      let q = admin.from('org_digest_channels').select('org_id, slack_last_week').not('slack_webhook_cipher', 'is', null).neq('slack_last_week', week);
+      if (afterOrgId) q = q.gt('org_id', afterOrgId);
+      const c = await q.order('org_id').limit(limit);
       if (c.error) fail('due channels read', c.error);
-      const channelOrgs = ((c.data ?? []) as Array<{ org_id: string; slack_last_week: string }>).map((r) => ({ orgId: r.org_id, lastSentWeek: r.slack_last_week }));
-      return { members, channelOrgs };
+      return ((c.data ?? []) as Array<{ org_id: string; slack_last_week: string }>).map((r) => ({ orgId: r.org_id, lastSentWeek: r.slack_last_week }));
     },
 
     async orgInfo(orgIds) {
@@ -194,7 +238,7 @@ export function databasePorts(admin: AdminClient, baseUrl: string): DigestPorts 
     },
 
     async channelAuthors(orgId) {
-      const res = await admin.from('org_digest_members').select('user_id').eq('org_id', orgId).eq('enabled', true).limit(PAGE);
+      const res = await admin.from('org_digest_members').select('user_id').eq('org_id', orgId).eq('enabled', true).order('user_id').limit(PAGE);
       if (res.error) fail('digest authors read', res.error);
       return ((res.data ?? []) as Array<{ user_id: string }>).map((r) => r.user_id);
     },
@@ -217,7 +261,11 @@ export function databasePorts(admin: AdminClient, baseUrl: string): DigestPorts 
       if (res.error) fail('digest channel read', res.error);
       const cipher = (res.data as { slack_webhook_cipher: string | null } | null)?.slack_webhook_cipher;
       const url = cipher ? decryptWebhook(cipher, orgId) : null;
-      if (!url) return false;
+      if (!url) {
+        // Key lost or changed since the URL was saved. Once per org per run; the settings page tells the admin to save it again.
+        log.error('digest channel cannot be opened (needs reset)', { orgId });
+        return false;
+      }
       const sent = await postToSlack(url, message.slack);
       if (!sent.ok) log.warn('digest slack post failed', { orgId, reason: sent.reason });
       return sent.ok;

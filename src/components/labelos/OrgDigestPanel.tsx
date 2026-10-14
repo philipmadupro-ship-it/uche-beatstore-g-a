@@ -54,7 +54,7 @@ export function OrgDigestPanel({ orgId, orgName }: { orgId: string; orgName: str
     setBusy(false);
     if (!res.ok) return toast.error('Could not save the webhook', res.error);
     setUrl('');
-    setState((s) => (s ? { ...s, channelConfigured: true } : s));
+    setState((s) => (s ? { ...s, channelConfigured: true, needsReset: false } : s));
     toast.success('Slack webhook saved');
   }
 
@@ -64,7 +64,7 @@ export function OrgDigestPanel({ orgId, orgName }: { orgId: string; orgName: str
     const res = await removeSlackWebhook(orgId);
     setBusy(false);
     if (!res.ok) return toast.error('Could not remove the webhook', res.error);
-    setState((s) => (s ? { ...s, channelConfigured: false } : s));
+    setState((s) => (s ? { ...s, channelConfigured: false, needsReset: false } : s));
     toast.success('Slack webhook removed');
   }
 
@@ -96,6 +96,11 @@ export function OrgDigestPanel({ orgId, orgName }: { orgId: string; orgName: str
           <p className="mt-3 text-[11px] text-white/70" data-testid="slack-status">
             {state.channelConfigured ? 'A webhook is saved.' : 'No webhook is saved.'}
           </p>
+          {state.needsReset && (
+            <p role="alert" className="mt-2 max-w-xl text-[11px] leading-relaxed text-white/70" data-testid="slack-reset">
+              The saved webhook can no longer be opened by this server (its key changed). Nothing is being posted. Paste the webhook again to fix it.
+            </p>
+          )}
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
               type="password"

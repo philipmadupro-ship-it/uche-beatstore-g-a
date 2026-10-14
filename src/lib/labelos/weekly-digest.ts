@@ -96,8 +96,36 @@ export type DigestMessage = {
 
 const escapeHtml = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 /** Slack mrkdwn control characters. */
-const escapeSlack = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const clean = (s: string): string => s.replace(/\s+/g, ' ').trim();
+
+/** Zero-width space: keeps `*`, `_`, `` ` `` and `~` from opening bold, italics, code or strike in Slack. */
+const ZWSP = '\u200b';
+const MAX_PLAIN = 200;
+
+/**
+ * A user-supplied string for a Slack mrkdwn field. CLIP the plain text first (so
+ * no markup is ever cut in half), then neutralise: `&`, `<` and `>` become
+ * entities, which is what stops `<!channel>`, `<!here|x>`, `<@U123>`, `<#C1>`
+ * and `<url|text>` from being read as mentions or links, and `*_`~` get a
+ * zero-width space after them.
+ */
+export function slackText(s: string, max: number = MAX_PLAIN): string {
+  const plain = [...clean(s)].slice(0, max).join('');
+  return plain
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/[*_`~]/g, (ch) => `${ch}${ZWSP}`);
+}
+
+/** The text half of a `<url|text>` link: as `slackText`, and no `|` to end the link early. */
+export const slackLabel = (s: string, max: number = MAX_PLAIN): string => slackText(s, max).replace(/\|/g, '\u00a6');
+
+/** The url half: our own absolute link, with anything that could end it made harmless. */
+export const slackUrl = (u: string): string => u.replace(/[<>|\s]/g, (ch) => encodeURIComponent(ch));
+
+/** Slack allows 3000 characters in a section; leave room for the title and the "more" line. */
+const SLACK_SECTION_LIMIT = 2800;
 
 export function absoluteHref(baseUrl: string, href: string): string {
   return `${baseUrl.replace(/\/+$/, '')}${href}`;
@@ -165,19 +193,25 @@ export function buildWeeklyDigest(c: WeeklyDigestContent, baseUrl: string): Dige
     '</div></div>',
   );
 
-  const blocks: unknown[] = [{ type: 'header', text: { type: 'plain_text', text: clean(`${c.orgName}: your week`).slice(0, 150) } }];
-  if (attention.length > 0) {
-    const body = attention.map((a) => `• <${link(a)}|${escapeSlack(attentionLine(a)).replace(/\|/g, '/')}>`);
-    if (moreAttention > 0) body.push(`• <${overview}|and ${moreAttention} more>`);
-    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*Needs attention*\n${body.join('\n')}`.slice(0, 2900) } });
-  }
-  if (activity.length > 0) {
-    const body = activity.map((l) => `• ${escapeSlack(activityLine(l))}`);
-    if (moreActivity > 0) body.push(`• <${overview}|and ${moreActivity} more>`);
-    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*This week*\n${body.join('\n')}`.slice(0, 2900) } });
-  }
-  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `<${overview}|Open ${escapeSlack(c.orgName)}>` }] });
+  const blocks: unknown[] = [{ type: 'header', text: { type: 'plain_text', text: [...clean(`${c.orgName}: your week`).replace(/[<>]/g, '')].slice(0, 150).join('') } }];
+  const section = (title: string, lines: string[], more: number) => {
+    // Lines are built whole (each from already-clipped plain text) and added while they fit: a built `<url|text>` is never cut in half.
+    const kept: string[] = [];
+    let used = title.length + 1;
+    for (const line of lines) {
+      if (used + line.length + 1 > SLACK_SECTION_LIMIT) break;
+      kept.push(line);
+      used += line.length + 1;
+    }
+    const hidden = more + (lines.length - kept.length);
+    if (hidden > 0) kept.push(`• <${overview}|and ${hidden} more>`);
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `${title}\n${kept.join('\n')}` } });
+  };
+  if (attention.length > 0) section('*Needs attention*', attention.map((a) => `• <${slackUrl(link(a))}|${slackLabel(attentionLine(a))}>`), moreAttention);
+  if (activity.length > 0) section('*This week*', activity.map((l) => `• ${slackText(activityLine(l))}`), moreActivity);
+  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `<${slackUrl(overview)}|Open ${slackLabel(c.orgName, 80)}>` }] });
+  const slackSubject = slackText(subject, 300);
 
-  return { subject, text: textParts.join('\n'), html: htmlParts.join(''), slack: { text: subject, blocks } };
+  return { subject, text: textParts.join('\n'), html: htmlParts.join(''), slack: { text: slackSubject, blocks } };
 }
 

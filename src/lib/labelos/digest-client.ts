@@ -4,7 +4,7 @@
  * URL goes out in a PUT body and is never read back: the server answers only
  * `configured`.
  */
-export type DigestState = { schemaReady: boolean; enabled: boolean; canManage: boolean; channelConfigured?: boolean };
+export type DigestState = { schemaReady: boolean; enabled: boolean; canManage: boolean; channelConfigured?: boolean; needsReset?: boolean };
 type Failed = { ok: false; status: number; error: string };
 
 async function failure(res: Response): Promise<Failed> {

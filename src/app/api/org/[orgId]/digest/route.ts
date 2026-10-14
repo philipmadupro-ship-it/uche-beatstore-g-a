@@ -1,7 +1,7 @@
 /**
  * The weekly owner digest, the caller's own switch (LABEL-38).
  *
- *  GET  `{ enabled, canManage, channelConfigured? }` — `channelConfigured` (a
+ *  GET  `{ enabled, canManage, channelConfigured?, needsReset? }` — `channelConfigured` (a
  *       boolean, never the URL) only for a caller who may manage the org.
  *  PUT  `{ enabled }` — turn the caller's OWN digest on or off. The row it
  *       writes is (this org, the session's user); there is no way to name
@@ -20,7 +20,8 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
-import { DigestSchemaMissing, channelConfigured, readPreference, writePreference } from '@/lib/labelos/weekly-digest-store';
+import { DigestSchemaMissing, channelStatus, readPreference, writePreference } from '@/lib/labelos/weekly-digest-store';
+import { rateLimitDurable } from '@/lib/security/rate-limit';
 import { readBody } from '@/lib/validate';
 
 export const runtime = 'nodejs';
@@ -41,8 +42,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const canManage = access.capabilities.has('org.manage');
   try {
     const enabled = await readPreference(access.admin, access.orgId, access.userId);
-    const channel = canManage ? await channelConfigured(access.admin, access.orgId) : undefined;
-    return json(200, { schemaReady: true, enabled, canManage, ...(channel === undefined ? {} : { channelConfigured: channel }) });
+    const channel = canManage ? await channelStatus(access.admin, access.orgId) : undefined;
+    return json(200, { schemaReady: true, enabled, canManage, ...(channel === undefined ? {} : { channelConfigured: channel.configured, needsReset: channel.needsReset }) });
   } catch (err) {
     if (err instanceof DigestSchemaMissing) return json(200, { schemaReady: false, enabled: false, canManage });
     log.error('digest read failed', { orgId, error: errorMessage(err) });
@@ -55,6 +56,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!isSupabaseConfigured()) return json(501, { error: 'The weekly digest needs Supabase.' });
   const access = await requireOrgCapability(orgId, 'catalog.read');
   if (!access.ok) return access.res;
+  if (!(await rateLimitDurable(`org-digest-pref:${access.orgId}:${access.userId}`, 30, 60 * 60 * 1000))) {
+    return json(429, { error: 'Too many changes. Try again later.' });
+  }
   const parsed = await readBody(req, DigestPreferenceBodySchema);
   if (!parsed.ok) return parsed.res;
   const { enabled } = parsed.data;

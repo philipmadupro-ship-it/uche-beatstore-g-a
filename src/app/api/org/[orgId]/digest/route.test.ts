@@ -25,6 +25,8 @@ let current: string | null = null;
 let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
 let failEvents = false;
+let breakChannelAfterEvent = false;
+let channelBroken = false;
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({
@@ -33,7 +35,15 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     from: (table: string) => {
+      if (channelBroken && table === 'org_digest_channels') {
+        const q: Record<string, unknown> = {};
+        const res = { data: null, error: { message: 'down' } };
+        for (const m of ['update', 'delete', 'eq', 'is', 'select']) q[m] = () => q;
+        q.then = (ok: (v: unknown) => unknown) => Promise.resolve(res).then(ok);
+        return q;
+      }
       if (failEvents && table === 'activity_events') {
+        if (breakChannelAfterEvent) channelBroken = true;
         const q: Record<string, unknown> = {};
         const res = { data: null, error: { message: 'boom' } };
         for (const m of ['insert', 'select', 'single']) q[m] = () => q;
@@ -56,6 +66,8 @@ beforeEach(() => {
   process.env.DIGEST_SECRET = 'test-secret';
   current = null;
   failEvents = false;
+  breakChannelAfterEvent = false;
+  channelBroken = false;
   db = {
     tables: {
       organizations: [
@@ -168,6 +180,34 @@ describe('the Slack webhook', () => {
     failEvents = true;
     expect((await call('slack', 'DELETE', OWN)).status).toBe(500);
     expect((db.tables.org_digest_channels[0] as { slack_webhook_cipher: string }).slack_webhook_cipher).toBe(before);
+  });
+
+  it('says the state is uncertain, loudly, when the undo itself fails', async () => {
+    failEvents = true;
+    breakChannelAfterEvent = true;
+    const res = await call('slack', 'PUT', OWN, { url: SLACK_TEST_URL });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({ uncertain: true });
+  });
+
+  it('an undo never clobbers a save someone else made in between (it compares what it wrote)', async () => {
+    await call('slack', 'PUT', OWN, { url: SLACK_TEST_URL });
+    const mine = (db.tables.org_digest_channels[0] as { slack_webhook_cipher: string }).slack_webhook_cipher;
+    const { undoChannelChange } = await import('@/lib/labelos/weekly-digest-store');
+    (db.tables.org_digest_channels[0] as { slack_webhook_cipher: string }).slack_webhook_cipher = 'theirs';
+    expect(await undoChannelChange(mem.client as never, L, { previous: { cipher: 'old' }, written: mine })).toBe(true);
+    expect((db.tables.org_digest_channels[0] as { slack_webhook_cipher: string }).slack_webhook_cipher).toBe('theirs');
+  });
+
+  it('reports a saved webhook this server can no longer open, as a boolean, to managers only', async () => {
+    await call('slack', 'PUT', OWN, { url: SLACK_TEST_URL });
+    expect(await (await call('digest', 'GET', OWN)).json()).toMatchObject({ channelConfigured: true, needsReset: false });
+    process.env.DIGEST_SECRET = 'a-different-secret';
+    const owner = await (await call('digest', 'GET', OWN)).json();
+    expect(owner).toMatchObject({ channelConfigured: true, needsReset: true });
+    expect(await (await call('digest', 'GET', AR)).json()).not.toHaveProperty('needsReset');
+    await call('slack', 'PUT', OWN, { url: SLACK_TEST_URL });
+    expect(await (await call('digest', 'GET', OWN)).json()).toMatchObject({ needsReset: false });
   });
 
   it('removes it with an audit event, and a second removal is a quiet no-op', async () => {

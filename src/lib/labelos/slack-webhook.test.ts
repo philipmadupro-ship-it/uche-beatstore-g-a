@@ -47,6 +47,13 @@ describe('postToSlack', () => {
     expect(init.method).toBe('POST');
   });
 
+  it('consumes the response body', async () => {
+    const cancel = vi.fn(async () => undefined);
+    const f = vi.fn(async () => ({ status: 200, ok: true, body: { cancel } }));
+    expect(await postToSlack(GOOD, body, f as unknown as typeof fetch)).toEqual({ ok: true });
+    expect(cancel).toHaveBeenCalled();
+  });
+
   it('treats a redirect as a failure and does not follow it', async () => {
     const f = vi.fn(async () => new Response(null, { status: 302, headers: { location: 'http://169.254.169.254/' } }));
     expect(await postToSlack(GOOD, body, f as unknown as typeof fetch)).toEqual({ ok: false, reason: 'redirect' });

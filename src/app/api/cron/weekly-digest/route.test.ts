@@ -168,6 +168,11 @@ const to = (id: string) => `${id.slice(-2)}@digest.test`;
 const mailTo = (id: string) => sent.filter((m) => m.to === to(id));
 
 describe('auth and switches', () => {
+  it('declares a max duration, so a long run is stopped by its own budget rather than by the platform', async () => {
+    const mod = await import('./route');
+    expect(mod.maxDuration).toBeGreaterThan(0);
+  });
+
   it('rejects a request without the secret, and a server without one', async () => {
     expect((await GET(request())).status).toBe(401);
     expect((await GET(request('wrong'))).status).toBe(401);

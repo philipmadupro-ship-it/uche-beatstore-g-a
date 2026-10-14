@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AttentionItem } from './attention';
 import type { DigestEvent } from './digest';
-import { MAX_ACTIVITY, MAX_ATTENTION, activityLines, buildWeeklyDigest, digestSince, dueMembers, isEmptyDigest, isoWeekKey, type WeeklyDigestContent } from './weekly-digest';
+import { MAX_ACTIVITY, MAX_ATTENTION, activityLines, slackLabel, slackText, slackUrl, buildWeeklyDigest, digestSince, dueMembers, isEmptyDigest, isoWeekKey, type WeeklyDigestContent } from './weekly-digest';
 
 const item = (n: number, over: Partial<AttentionItem> = {}): AttentionItem => ({
   id: `release:${n}`,
@@ -115,4 +115,57 @@ describe('buildWeeklyDigest', () => {
   });
 
   it('says how to turn it off', () => expect(buildWeeklyDigest(content(), base).text).toMatch(/Turn it off/));
+});
+
+describe('Slack text is inert', () => {
+  const BAD = ['<!channel>', '<!here|everyone>', '<@U12345>', '<#C12345|general>', '<https://evil.test|click>', '<!subteam^S123>'];
+
+  it.each(BAD)('%s cannot become a mention or a link in any field', (bad) => {
+    const m = buildWeeklyDigest(
+      content({
+        orgName: `Org ${bad}`,
+        attention: [item(1, { title: bad, artistName: bad, detail: bad })],
+        activity: [{ artist: bad, actor: bad, text: bad }],
+      }),
+      'https://app.test',
+    );
+    const slack = JSON.stringify(m.slack);
+    // No raw angle bracket survives except the ones WE build: <url|label> links.
+    const withoutOurLinks = slack.replace(/<https:\/\/app\.test[^>|]*\|[^>]*>/g, '');
+    expect(withoutOurLinks).not.toMatch(/<[!@#]/);
+    expect(withoutOurLinks).not.toContain('<https://evil');
+    expect(slack).not.toContain('<!');
+    expect(m.slack.text).not.toContain('<');
+    expect(m.slack.text).toContain('&lt;');
+  });
+
+  it('puts the escaped org name in the top-level text too', () => {
+    expect(buildWeeklyDigest(content({ orgName: '<!channel> HQ' }), 'https://app.test').slack.text).toBe('&lt;!channel&gt; HQ: 1 item needs attention');
+  });
+
+  it('neutralises formatting characters and a pipe inside a link label', () => {
+    expect(slackText('*bold* _it_ `code` ~gone~')).not.toMatch(/\*b|_i|`c|~g/);
+    expect(slackText('a*b')).toBe('a*\u200bb');
+    expect(slackLabel('a|b')).not.toContain('|');
+    expect(slackUrl('https://x.test/a b|c>d')).not.toMatch(/[ |>]/);
+  });
+
+  it('clips the PLAIN text before building, so an entity or link is never cut in half', () => {
+    const long = '&'.repeat(500);
+    const t = slackText(long);
+    expect(t).toBe('&amp;'.repeat(200));
+    const m = buildWeeklyDigest(content({ attention: Array.from({ length: 8 }, (_, i) => item(i + 1, { title: long })) }), 'https://app.test');
+    for (const b of m.slack.blocks as Array<{ text?: { text: string } }>) {
+      const text = b.text?.text ?? '';
+      expect(text.length).toBeLessThanOrEqual(3000);
+      expect(text).not.toMatch(/&(?!amp;|lt;|gt;)/); // no entity cut mid-way
+      expect((text.match(/</g) ?? []).length).toBe((text.match(/>/g) ?? []).length); // every link closed
+    }
+  });
+
+  it('what does not fit is counted as "more", not cut', () => {
+    const m = buildWeeklyDigest(content({ attention: Array.from({ length: 8 }, (_, i) => item(i + 1, { title: '&'.repeat(500) })) }), 'https://app.test');
+    const section = (m.slack.blocks as Array<{ type: string; text?: { text: string } }>).find((b) => b.type === 'section')!.text!.text;
+    expect(section).toMatch(/and \d+ more/);
+  });
 });

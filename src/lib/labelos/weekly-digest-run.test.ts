@@ -15,7 +15,8 @@ const FULL: WeeklyDigestContent = {
 /** An in-memory database with the same compare-and-set the SQL claim has. */
 function fake(opts: { members?: Array<Partial<DueRow> & { userId: string }>; channel?: boolean; email?: boolean; roles?: Record<string, string | null>; content?: (r: RecipientAccess) => WeeklyDigestContent; sendOk?: boolean } = {}) {
   const rows = new Map<string, DueRow>();
-  for (const m of opts.members ?? []) rows.set(m.userId, { orgId: ORG, enabled: true, lastSentWeek: '', ...m } as DueRow);
+  for (const m of opts.members ?? []) rows.set(`${m.orgId ?? ORG}|${m.userId}`, { orgId: ORG, enabled: true, lastSentWeek: '', ...m } as DueRow);
+  const rowOf = (orgId: string, userId: string) => rows.get(`${orgId}|${userId}`);
   const channel = { present: opts.channel ?? false, week: '' };
   const sent: Array<{ to: string; subject: string; text: string }> = [];
   const posts: string[] = [];
@@ -24,11 +25,14 @@ function fake(opts: { members?: Array<Partial<DueRow> & { userId: string }>; cha
   const ports: DigestPorts = {
     emailConfigured: opts.email ?? true,
     baseUrl: 'https://app.test',
-    async listDue(week) {
-      return {
-        members: [...rows.values()].filter((r) => r.enabled && r.lastSentWeek !== week).map((r) => ({ ...r })),
-        channelOrgs: channel.present && channel.week !== week ? [{ orgId: ORG, lastSentWeek: channel.week }] : [],
-      };
+    async nextDueOrg(week, afterOrgId) {
+      const due = [...rows.values()].filter((r) => r.enabled && r.lastSentWeek !== week && (afterOrgId === null || r.orgId > afterOrgId));
+      if (due.length === 0) return null;
+      const orgId = due.map((r) => r.orgId).sort()[0];
+      return { orgId, members: due.filter((r) => r.orgId === orgId).map((r) => ({ ...r })) };
+    },
+    async dueChannels(week, afterOrgId, limit) {
+      return channel.present && channel.week !== week && (afterOrgId === null || ORG > afterOrgId) ? [{ orgId: ORG, lastSentWeek: channel.week }].slice(0, limit) : [];
     },
     async orgInfo(ids) {
       return new Map(ids.map((id) => [id, { id, name: 'Night Shift', slug: 'night-shift' }]));
@@ -41,15 +45,15 @@ function fake(opts: { members?: Array<Partial<DueRow> & { userId: string }>; cha
       builtFor.push(r.userId);
       return opts.content ? opts.content(r) : FULL;
     },
-    async claimMember(_org, userId, week) {
+    async claimMember(orgId, userId, week) {
       await Promise.resolve(); // yield, so concurrent runs interleave
-      const r = rows.get(userId);
+      const r = rowOf(orgId, userId);
       if (!r || !r.enabled || r.lastSentWeek === week) return false;
       r.lastSentWeek = week;
       return true;
     },
-    async releaseMember(_org, userId, week, previous) {
-      const r = rows.get(userId);
+    async releaseMember(orgId, userId, week, previous) {
+      const r = rowOf(orgId, userId);
       if (r && r.lastSentWeek === week) r.lastSentWeek = previous;
     },
     async claimChannel(_org, week) {
@@ -61,8 +65,8 @@ function fake(opts: { members?: Array<Partial<DueRow> & { userId: string }>; cha
     async releaseChannel(_org, week, previous) {
       if (channel.week === week) channel.week = previous;
     },
-    async channelAuthors() {
-      return [...rows.values()].filter((r) => r.enabled).map((r) => r.userId);
+    async channelAuthors(orgId) {
+      return [...rows.values()].filter((r) => r.enabled && r.orgId === orgId).map((r) => r.userId);
     },
     async emailOf(userId) {
       return `${userId}@x.test`;
@@ -112,7 +116,7 @@ describe('runWeeklyDigest', () => {
   it('a failed send gives the claim back, so the next run retries, and never sends twice', async () => {
     const f = fake({ members: [{ userId: 'a' }], sendOk: false });
     expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ emailed: 0, failed: 1 });
-    expect(f.rows.get('a')!.lastSentWeek).toBe('');
+    expect(f.rows.get(`${ORG}|a`)!.lastSentWeek).toBe('');
     f.state.sendOk = true;
     expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ emailed: 1 });
     expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ emailed: 0 });
@@ -122,14 +126,14 @@ describe('runWeeklyDigest', () => {
   it('puts back the PREVIOUS week, not a blank, when a retry fails', async () => {
     const f = fake({ members: [{ userId: 'a', lastSentWeek: '2026-W40' }], sendOk: false });
     await runWeeklyDigest(f.ports, NOW);
-    expect(f.rows.get('a')!.lastSentWeek).toBe('2026-W40');
+    expect(f.rows.get(`${ORG}|a`)!.lastSentWeek).toBe('2026-W40');
   });
 
   it('skips an empty digest and keeps the week claimed (nothing to say = no email)', async () => {
     const f = fake({ members: [{ userId: 'a' }], content: () => ({ ...FULL, attention: [], activity: [] }) });
     expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ emailed: 0, empty: 1 });
     expect(f.sent).toHaveLength(0);
-    expect(f.rows.get('a')!.lastSentWeek).toBe(WEEK);
+    expect(f.rows.get(`${ORG}|a`)!.lastSentWeek).toBe(WEEK);
     expect((await runWeeklyDigest(f.ports, NOW)).empty).toBe(0);
   });
 
@@ -139,7 +143,7 @@ describe('runWeeklyDigest', () => {
     expect(r).toMatchObject({ emailed: 1, skipped: 1 });
     expect(f.sent.map((s) => s.to)).toEqual(['kept@x.test']);
     expect(f.builtFor).toEqual(['kept']);
-    expect(f.rows.get('gone')!.lastSentWeek).toBe('');
+    expect(f.rows.get(`${ORG}|gone`)!.lastSentWeek).toBe('');
   });
 
   it('builds the content for each recipient separately', async () => {
@@ -158,14 +162,53 @@ describe('runWeeklyDigest', () => {
   it('without a Resend key nobody is emailed and nothing is claimed', async () => {
     const f = fake({ members: [{ userId: 'a' }], email: false });
     expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ emailed: 0 });
-    expect(f.rows.get('a')!.lastSentWeek).toBe('');
+    expect(f.rows.get(`${ORG}|a`)!.lastSentWeek).toBe('');
   });
 
   it('a member with no confirmed address is skipped and the claim is returned', async () => {
     const f = fake({ members: [{ userId: 'a' }] });
     f.ports.emailOf = async () => null;
     expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ emailed: 0, skipped: 1 });
-    expect(f.rows.get('a')!.lastSentWeek).toBe('');
+    expect(f.rows.get(`${ORG}|a`)!.lastSentWeek).toBe('');
+  });
+
+  describe('no member is starved', () => {
+    const many = (n: number, org = ORG) => Array.from({ length: n }, (_, i) => ({ userId: `u${String(i).padStart(4, '0')}`, orgId: org }));
+
+    it('serves more than a hundred due members in one run, across orgs', async () => {
+      const f = fake({ members: [...many(130), ...many(40, 'o2')] });
+      const r = await runWeeklyDigest(f.ports, NOW);
+      expect(r).toMatchObject({ emailed: 170, stoppedForTime: false });
+      expect(f.sent).toHaveLength(170);
+      expect([...f.rows.values()].every((row) => row.lastSentWeek === WEEK)).toBe(true);
+    });
+
+    it('when the budget ends the run, the rest stay UNclaimed and the next run (same week) finishes them without re-sending', async () => {
+      const f = fake({ members: many(30) });
+      let t = 0;
+      // Each member costs one tick; the budget allows ten.
+      f.ports.emailOf = async (id) => { t += 1; return `${id}@x.test`; };
+      const first = await runWeeklyDigest(f.ports, NOW, { budgetMs: 10, clock: () => t });
+      expect(first.stoppedForTime).toBe(true);
+      expect(first.emailed).toBe(10);
+      expect([...f.rows.values()].filter((r) => r.lastSentWeek === '')).toHaveLength(20);
+      t = 0;
+      const second = await runWeeklyDigest(f.ports, new Date(NOW.getTime() + 86_400_000), { budgetMs: 10, clock: () => t });
+      expect(second.emailed).toBe(10);
+      t = 0;
+      const third = await runWeeklyDigest(f.ports, new Date(NOW.getTime() + 2 * 86_400_000), { budgetMs: 10, clock: () => t });
+      expect(third.emailed).toBe(10);
+      expect(new Set(f.sent.map((s) => s.to)).size).toBe(30);
+      expect(f.sent).toHaveLength(30);
+    });
+
+    it('a member whose send keeps failing at the front does not stop the ones behind them', async () => {
+      const f = fake({ members: many(5) });
+      const real = f.ports.sendEmail;
+      f.ports.sendEmail = async (to, m) => (to.startsWith('u0000') ? false : real(to, m));
+      const r = await runWeeklyDigest(f.ports, NOW);
+      expect(r).toMatchObject({ emailed: 4, failed: 1 });
+    });
   });
 
   describe('Slack', () => {
@@ -181,6 +224,15 @@ describe('runWeeklyDigest', () => {
       const f = fake({ members: [{ userId: 'm' }], channel: true, email: false });
       expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ slacked: 0, skipped: 1 });
       expect(f.channel.week).toBe('');
+    });
+
+    it('looks at no more than the capped number of members for an owner or admin', async () => {
+      const f = fake({ members: Array.from({ length: 30 }, (_, i) => ({ userId: `m${String(i).padStart(2, '0')}` })).concat([{ userId: 'zz-boss' }]), channel: true, roles: { 'zz-boss': 'owner' }, email: false });
+      let lookups = 0;
+      const recipient = f.ports.recipient;
+      f.ports.recipient = async (o, u) => { lookups += 1; return recipient(o, u); };
+      expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ slacked: 0, skipped: 1 });
+      expect(lookups).toBe(20);
     });
 
     it('a failed post releases the channel claim', async () => {
