@@ -220,7 +220,9 @@ export const config = {
   // `share` must be a whole segment: as a bare prefix it also skipped
   // `/shared` (LABEL-21, "Shared with me"), which needs the flag check, the
   // session refresh and the membership gate like every Label OS page.
+  // The static-extension skip excludes the Label OS namespaces: `/api/org/…/x.png`
+  // would otherwise run with no LABEL_OS_ENABLED check and no membership gate.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|share(?:/|$)|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|share(?:/|$)|(?!api/org/|o/|shared/|join/|restore/).*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)',
   ],
 };
