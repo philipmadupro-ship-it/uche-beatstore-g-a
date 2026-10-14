@@ -62,6 +62,10 @@
     {
       "path": "/api/cron/prune-org-events",
       "schedule": "45 4 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-digest",
+      "schedule": "20 7 * * *"
     }
   ]
 }

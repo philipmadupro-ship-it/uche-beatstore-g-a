@@ -95,6 +95,16 @@ describe('navGroupsFor', () => {
     expect(items(['catalog.read'])).toEqual(['/o/ns/artists', '/o/ns/music']);
   });
 
+  it('Music (LABEL-37) is in the roster hub for anyone with catalog.read — a roster artist included, who then gets only their scope from the page — and for nobody else', () => {
+    const music = (kind: string, caps: string[]) => navGroupsFor(kind, new Set(caps), { slug: 's', viewerIsProducer: false }).flatMap((g) => g.items).some((i) => i.href === '/o/s/music');
+    expect(music('label', ['catalog.read'])).toBe(true);
+    expect(music('label', ['catalog.read', 'catalog.write', 'audio.finished', 'review.comment', 'rights.read'])).toBe(true); // role artist
+    expect(music('artist', ['catalog.read'])).toBe(true);
+    expect(music('label', ['release.write'])).toBe(false);
+    expect(music('label', [])).toBe(false);
+    expect(music('producer', ['catalog.read'])).toBe(false);
+  });
+
   it('the Artists hub needs catalog.read, and is for label and artist orgs only (LABEL-10)', () => {
     expect(navGroupsFor('label', new Set(), { slug: 'ns', viewerIsProducer: false }).map((g) => g.key)).toEqual(['org']);
     expect(navGroupsFor('artist', new Set(['catalog.read']), { slug: 'nova', viewerIsProducer: false }).map((g) => g.key)).toEqual(['roster', 'releases', 'org']);

@@ -444,6 +444,10 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'view.created': { one: 'saved a view', many: 'saved {n} views' },
   'view.updated': { one: 'changed a saved view', many: 'changed {n} saved views' },
   'view.deleted': { one: 'deleted a saved view', many: 'deleted {n} saved views' },
+  'digest.subscribed': { one: 'turned on the weekly digest', many: 'turned on the weekly digest {n} times' },
+  'digest.unsubscribed': { one: 'turned off the weekly digest', many: 'turned off the weekly digest {n} times' },
+  'digest.channel_set': { one: 'set the digest Slack channel', many: 'set the digest Slack channel {n} times' },
+  'digest.channel_removed': { one: 'removed the digest Slack channel', many: 'removed the digest Slack channel {n} times' },
 };
 
 function quoted(title: string | null): string | null {

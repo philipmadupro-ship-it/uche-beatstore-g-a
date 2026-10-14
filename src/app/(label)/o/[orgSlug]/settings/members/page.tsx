@@ -326,6 +326,12 @@ export default function OrgMembersPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href={`/o/${org.slug}/settings/digest`}
+            className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 underline-offset-4 hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+          >
+            Weekly digest
+          </Link>
           {shell?.role === 'owner' && (
             <Link
               href={`/o/${org.slug}/settings/data`}
