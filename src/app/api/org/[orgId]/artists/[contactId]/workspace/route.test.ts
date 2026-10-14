@@ -58,7 +58,7 @@ vi.mock('@supabase/supabase-js', () => ({
       if (!missingTables.has(table)) return mem.client.from(table);
       const err = { data: null, error: { code: 'PGRST205', message: `Could not find the table 'public.${table}' in the schema cache` } };
       const q: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'in', 'is', 'order', 'limit']) q[m] = () => q;
+      for (const m of ['select', 'eq', 'in', 'is', 'order', 'limit', 'range']) q[m] = () => q;
       q.then = (ok: (v: unknown) => unknown) => Promise.resolve(err).then(ok);
       return q;
     },
@@ -170,6 +170,39 @@ describe('GET …/artists/[contactId]/workspace', () => {
     expect(w.permissions).toEqual({ write: true, working: true, finished: true });
   });
 
+  it('an artist with a big Inbox: ids go to PostgREST in chunks and max-rows does not cut the songs or the projects', async () => {
+    db.maxRows = 1000;
+    db.maxInList = 200;
+    for (let n = 0; n < 1100; n++) {
+      const id = `51000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+      db.tables.tracks.push(track(id, L, 'song', `Demo ${n}`, 'inbox'));
+      db.tables.project_tracks.push({ project_id: LP2, track_id: id, position: n + 1 });
+    }
+    for (let n = 0; n < 300; n++) {
+      const id = `41000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+      db.tables.projects.push({ id, org_id: L, user_id: null, name: `Kilo ${n}`, cover_url: null, inbox_for_contact_id: null, status: 'in_progress', created_at: '2026-01-03' });
+      db.tables.project_contacts.push({ project_id: id, contact_id: C2, user_id: null });
+    }
+    for (const who of [OWN, AR_C2]) {
+      current = who;
+      const res = await workspace(C2);
+      expect(res.status, String(who)).toBe(200);
+      const { workspace: w } = await res.json();
+      expect(w.songs).toHaveLength(1101); // S2 + 1100 demos
+      expect(w.projects).toHaveLength(301);
+    }
+  });
+
+  it('a scoped member\'s Releases tab leaves out a release whose project they cannot see, even for their own artist', async () => {
+    db.tables.releases.push({ id: '60000000-0000-4000-8000-000000000009', org_id: L, project_id: LP1, contact_id: C2, title: 'Kilo in Nova project', type: 'single', state: 'draft', target_date: null, release_date: null, created_at: '2026-01-07' });
+    current = AR_C2;
+    const { workspace: scoped } = await (await workspace(C2)).json();
+    expect(scoped.releases).toEqual([]);
+    current = OWN;
+    const { workspace: whole } = await (await workspace(C2)).json();
+    expect(whole.releases.map((r: { title: string }) => r.title)).toEqual(['Kilo in Nova project']);
+  });
+
   it('a song on a release that is not cancelled is finished material, so marketing sees it (06 §2.3)', async () => {
     current = MKT;
     const { workspace: w } = await (await workspace(C1)).json();
@@ -279,6 +312,21 @@ describe('GET …/songs/[trackId]', () => {
 });
 
 describe('GET …/projects/[id]', () => {
+  it('the org project page of a big Inbox lists every song (chunked ids, paged placements)', async () => {
+    db.maxRows = 1000;
+    db.maxInList = 200;
+    for (let n = 0; n < 1100; n++) {
+      const id = `51000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+      db.tables.tracks.push(track(id, L, 'song', `Demo ${n}`, 'inbox'));
+      db.tables.project_tracks.push({ project_id: LP2, track_id: id, position: n + 1 });
+    }
+    current = OWN;
+    const res = await project(LP2);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.songs).toHaveLength(1101);
+  });
+
   it('lists the project’s artists and visible songs; out of scope is 404', async () => {
     current = MKT;
     const d = await (await project(LP1)).json();

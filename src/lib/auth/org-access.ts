@@ -85,6 +85,7 @@ import {
 import { isMissingConnections } from '@/lib/labelos/audit-rpc';
 import { externalMayAny, sortSharedProjects, sharedProjectHref, toMembership, type ExternalMembership, type ProjectMemberRow, type SharedProjectRef } from '@/lib/labelos/project-members';
 import { REAUTH_WINDOW_MINUTES, canRestore, isFreshSignIn, purgeAfter } from '@/lib/labelos/org-lifecycle';
+import { inChunks, pageAll, ReadError } from '@/lib/labelos/paged-read';
 import { createLogger } from '@/lib/log';
 import { isUUID } from '@/lib/validate';
 
@@ -612,20 +613,31 @@ export async function orgProjectIdsInScope(admin: AdminClient, ctx: OrgContext):
   if (ctx.artistScope === null) return null;
   const contacts = [...ctx.artistScope];
   if (contacts.length === 0) return [];
+  // Paged and chunked: PostgREST cuts a response at max-rows without an error (a scoped member would
+  // silently lose projects), and a catalogue-sized `in (…)` list overruns the request line.
+  const scopeRead = <T>(what: string, read: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>) =>
+    pageAll<T>(read, what).catch((err: unknown) => {
+      throw new Error(`Scope lookup failed: ${err instanceof ReadError ? err.raw.message : String(err)}`);
+    });
   const [inbox, linked] = await Promise.all([
-    admin.from('projects').select('id').eq('org_id', ctx.orgId).in('inbox_for_contact_id', contacts),
-    admin.from('project_contacts').select('project_id').in('contact_id', contacts),
+    scopeRead<{ id: string }>('inbox read', (from, to) =>
+      admin.from('projects').select('id').eq('org_id', ctx.orgId).in('inbox_for_contact_id', contacts).order('id').range(from, to)),
+    scopeRead<{ project_id: string }>('link read', (from, to) =>
+      admin.from('project_contacts').select('project_id').in('contact_id', contacts).order('project_id').order('contact_id').range(from, to)),
   ]);
-  if (inbox.error) throw new Error(`Scope lookup failed: ${inbox.error.message}`);
-  if (linked.error) throw new Error(`Scope lookup failed: ${linked.error.message}`);
-  const ids = new Set(((inbox.data ?? []) as { id: string }[]).map((p) => p.id));
-  const linkedIds = [...new Set(((linked.data ?? []) as { project_id: string }[]).map((l) => l.project_id))];
+  const ids = new Set(inbox.map((p) => p.id));
+  const linkedIds = [...new Set(linked.map((l) => l.project_id))];
   if (linkedIds.length > 0) {
     // A contact of this org can only be linked to this org's projects (141's
     // trigger), but the read is scoped to the org all the same.
-    const inOrg = await admin.from('projects').select('id').eq('org_id', ctx.orgId).in('id', linkedIds);
-    if (inOrg.error) throw new Error(`Scope lookup failed: ${inOrg.error.message}`);
-    for (const p of (inOrg.data ?? []) as { id: string }[]) ids.add(p.id);
+    const inOrg = await inChunks<{ id: string }>(
+      linkedIds,
+      (part, from, to) => admin.from('projects').select('id').eq('org_id', ctx.orgId).in('id', part).order('id').range(from, to),
+      'project read',
+    ).catch((err: unknown) => {
+      throw new Error(`Scope lookup failed: ${err instanceof ReadError ? err.raw.message : String(err)}`);
+    });
+    for (const p of inOrg) ids.add(p.id);
   }
   return [...ids].sort();
 }

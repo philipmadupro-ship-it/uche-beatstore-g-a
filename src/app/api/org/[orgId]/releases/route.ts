@@ -22,6 +22,7 @@ import { recordEvent } from '@/lib/labelos/activity';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { RELEASE_COLUMNS, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
 import { importedDeliveredAt, planImport } from '@/lib/labelos/release-import';
+import { inChunks, pageAll, ReadError } from '@/lib/labelos/overview-store';
 import { checkArtwork, fail, notReady, writeError } from './access';
 
 export const runtime = 'nodejs';
@@ -41,16 +42,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const projectIds = await orgProjectIdsInScope(access.admin, access);
     if (projectIds !== null && projectIds.length === 0) return NextResponse.json({ releases: [] }, { headers: NO_STORE });
-    let query = access.admin.from('releases').select(RELEASE_COLUMNS).eq('org_id', access.orgId);
-    if (projectIds !== null) query = query.in('project_id', projectIds);
-    const { data, error } = await query.order('created_at', { ascending: false });
-    if (error) {
-      if (isMissingSchema(error)) return NextResponse.json({ releases: [], schemaReady: false }, { headers: NO_STORE });
-      throw new Error(error.message);
-    }
-    const releases = ((data ?? []) as unknown as ReleaseRow[]).map(toReleaseView);
+    // PostgREST caps a response at max-rows without an error, and a scoped member's project list
+    // can overrun the request line: read in pages, and in chunks of project ids.
+    const read = (from: number, to: number, ids?: string[]) => {
+      let q = access.admin.from('releases').select(RELEASE_COLUMNS).eq('org_id', access.orgId);
+      if (ids) q = q.in('project_id', ids);
+      return q.order('created_at', { ascending: false }).order('id').range(from, to);
+    };
+    const data = projectIds === null
+      ? await pageAll<ReleaseRow>((from, to) => read(from, to), 'release read')
+      : await inChunks<ReleaseRow>(projectIds, (part, from, to) => read(from, to, part), 'release read');
+    data.sort((x, y) => y.created_at.localeCompare(x.created_at) || x.id.localeCompare(y.id));
+    const releases = data.map(toReleaseView);
     return NextResponse.json({ releases }, { headers: NO_STORE });
   } catch (err) {
+    if (err instanceof ReadError && isMissingSchema(err.raw)) return NextResponse.json({ releases: [], schemaReady: false }, { headers: NO_STORE });
     log.error('list failed', { orgId, error: errorMessage(err) });
     return NextResponse.json({ error: 'Could not load the releases' }, { status: 500 });
   }

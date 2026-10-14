@@ -196,6 +196,17 @@ describe('GET /api/org/[orgId]/overview', () => {
     expect(JSON.stringify(o)).not.toMatch(/Nova|Midnight|"stage":"selected"/);
   });
 
+  it('a draft release of Kilo that sits in Nova\'s project is not visible to a member limited to Kilo (144 reads a release through its project)', async () => {
+    db.tables.releases.push({ id: '60000000-0000-4000-8000-000000000009', org_id: L, project_id: LP1, contact_id: C2, title: 'Kilo in Nova project', type: 'single', state: 'draft', target_date: '2026-11-01', release_date: null, created_at: '2026-01-07' });
+    current = AR_C2;
+    const { overview: scoped } = await (await overview()).json();
+    expect(scoped.artists[0].nextRelease).toBeNull();
+    expect(JSON.stringify(scoped)).not.toMatch(/Kilo in Nova project/);
+    current = OWN;
+    const { overview: whole } = await (await overview()).json();
+    expect(whole.artists.find((a: { id: string }) => a.id === C2).nextRelease).toMatchObject({ title: 'Kilo in Nova project' });
+  });
+
   it('a member limited to no artists gets an empty roster, not an error', async () => {
     db.tables.member_artist_scopes = [];
     current = AR_C2;

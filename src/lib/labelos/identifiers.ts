@@ -41,7 +41,10 @@ const DESCRIPTIONS: Record<IdentifierKind, string> = {
 const stripSeparators = (raw: string) => raw.replace(/[\s.\-]/g, '');
 
 export function normalizeIsrc(raw: string): string | null {
-  const v = stripSeparators(raw).toUpperCase();
+  const stripped = stripSeparators(raw);
+  // toUpperCase folds some non-ASCII letters into code letters (ß → SS, ı → I, ſ → S): a code is ASCII.
+  if (/[^\x00-\x7f]/.test(stripped)) return null;
+  const v = stripped.toUpperCase();
   return IDENTIFIER_PATTERNS.isrc.test(v) ? v : null;
 }
 

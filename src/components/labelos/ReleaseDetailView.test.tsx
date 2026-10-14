@@ -100,6 +100,9 @@ describe('the tracklist', () => {
     mount(detail());
     fireEvent.click(screen.getByLabelText('Remove Dawn'));
     await waitFor(() => expect(calls[0]).toMatchObject({ url: `/api/org/${ORG}/releases/${REL}/items/i2`, method: 'DELETE' }));
+    // The controls stay disabled (busy) until the first write has settled and the page refreshed: a click before then is ignored.
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    await waitFor(() => expect((screen.getByLabelText('Remove Midnight') as HTMLButtonElement).disabled).toBe(false));
     reply = { status: 409, body: { error: 'The tracklist changed at the same time; reload and try again' } };
     fireEvent.click(screen.getByLabelText('Remove Midnight'));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The tracklist changed at the same time; reload and try again'));

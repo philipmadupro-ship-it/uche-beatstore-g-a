@@ -73,7 +73,7 @@ vi.mock('@supabase/supabase-js', () => ({
       if (!missing.has(table)) return mem.client.from(table);
       const res = { data: null, error: { message: `Could not find the table 'public.${table}' in the schema cache`, code: 'PGRST205' } };
       const q: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'in', 'is', 'order', 'limit', 'insert', 'update', 'delete']) q[m] = () => q;
+      for (const m of ['select', 'eq', 'in', 'is', 'order', 'limit', 'range', 'insert', 'update', 'delete']) q[m] = () => q;
       q.maybeSingle = async () => res;
       q.single = async () => res;
       q.then = (ok: (v: unknown) => unknown) => Promise.resolve(res).then(ok);
@@ -233,6 +233,15 @@ describe('GET /releases: catalog.read + the release project in scope (144)', () 
     expect(await titles(await collection('GET', ART, L))).toEqual(['Nova EP']);
     db.tables.member_artist_scopes = db.tables.member_artist_scopes.filter((s) => s.user_id !== AR_C2);
     expect(await titles(await collection('GET', AR_C2, L))).toEqual([]);
+  });
+
+  it('lists every release of a big org: PostgREST max-rows must not silently cut the list', async () => {
+    db.maxRows = 1000;
+    for (let n = 0; n < 1100; n++) {
+      db.tables.releases.push(release(`71000000-0000-4000-8000-${String(n).padStart(12, '0')}`, L, LP1, C1, `Bulk ${n}`, { created_at: '2026-09-01' }));
+    }
+    const { releases } = (await (await collection('GET', OWN, L)).json()) as { releases: unknown[] };
+    expect(releases).toHaveLength(1102);
   });
 
   it('no catalogue → 403; a non-member or another org\'s member → 403; signed out → 401', async () => {

@@ -27,12 +27,18 @@ const P = (n: number) => `00000000-0000-4000-8000-0000000000d${n}`;
 type Row = Record<string, unknown>;
 let tables: Record<string, Row[]> = {};
 
-/** A small in-memory PostgREST: eq / in / is filters, maybeSingle, awaited lists. */
+/** A small in-memory PostgREST: eq / in / is filters, order (rows are already in id order), range, maybeSingle, awaited lists. */
 function from(table: string) {
   const filters: ((r: Row) => boolean)[] = [];
-  const rows = () => (tables[table] ?? []).filter((r) => filters.every((f) => f(r)));
+  let window: [number, number] | null = null;
+  const rows = () => {
+    const all = (tables[table] ?? []).filter((r) => filters.every((f) => f(r)));
+    return window ? all.slice(window[0], window[1] + 1) : all;
+  };
   const b = {
     select: () => b,
+    order: () => b,
+    range: (from: number, to: number) => ((window = [from, to]), b),
     eq: (col: string, v: unknown) => (filters.push((r) => r[col] === v), b),
     in: (col: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[col])), b),
     is: (col: string, v: unknown) => (filters.push((r) => (r[col] ?? null) === v), b),
