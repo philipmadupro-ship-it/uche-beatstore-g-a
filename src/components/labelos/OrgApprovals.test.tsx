@@ -128,6 +128,27 @@ describe('deciding', () => {
     expect(toast.success).toHaveBeenCalledWith('Approved');
   });
 
+  it('Approve sends the token of the facts it was drawn from, so the server can tell if they moved', async () => {
+    mount(decider({ snapshotKey: 'abc123' }));
+    const approve = await screen.findByTestId('org-approval-approve');
+    reply = { status: 201, body: { schemaReady: true, gates: [gate({ status: 'approved', chip: { label: 'Approved', tone: 'good' }, decision: row() as never })] } };
+    fireEvent.click(approve);
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(JSON.parse(String(calls[1].init?.body)).seen).toBe('abc123');
+  });
+
+  it('if the facts changed since the screen was drawn, the server’s words are shown and the gate is reloaded', async () => {
+    mount(decider({ snapshotKey: 'old' }));
+    const approve = await screen.findByTestId('org-approval-approve');
+    reply = { status: 409, body: { error: 'This changed after you opened it. Look at it again before approving.', code: 'changed_since_seen' } };
+    fireEvent.click(approve);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('This changed after you opened it. Look at it again before approving.'));
+    // The reload: a third call asks for the state again (and carries the new token the next Approve will send).
+    reply = { status: 200, body: { schemaReady: true, gates: [decider({ snapshotKey: 'new' })] } };
+    await waitFor(() => expect(calls.length).toBe(3));
+    expect(calls[2].url).toBe(`/api/org/org1/approvals?song=${SONG}`);
+  });
+
   it('Request changes needs a note before it can be sent', async () => {
     mount(decider());
     fireEvent.click(await screen.findByTestId('org-approval-changes'));
@@ -224,5 +245,22 @@ describe('changedText', () => {
     expect(changedText(['songs'])).toBe('splits or credits');
     expect(changedText(['items', 'release'])).toBe('the tracklist and the release details');
     expect(changedText([])).toBe('what was approved');
+  });
+});
+
+describe('a release', () => {
+  const RELEASE = '60000000-0000-4000-8000-000000000001';
+
+  it('asks and answers for the release itself, and tells the page something changed', async () => {
+    reply = { status: 200, body: { schemaReady: true, gates: [gate({ gate: 'artwork', label: 'Artwork', canDecide: true, status: 'requested', chip: { label: 'Awaiting approval', tone: 'waiting' }, pending: row({ gate: 'artwork', decision: 'requested' }) as never, snapshotKey: 'k1' })] } };
+    const changed = vi.fn();
+    render(<OrgApprovals orgId="org1" subject={{ kind: 'release', id: RELEASE }} onChanged={changed} />);
+    const approve = await screen.findByTestId('org-approval-approve');
+    expect(calls[0].url).toBe(`/api/org/org1/approvals?release=${RELEASE}`);
+    reply = { status: 201, body: { schemaReady: true, gates: [gate({ gate: 'artwork', label: 'Artwork', status: 'approved', chip: { label: 'Approved', tone: 'good' }, decision: row({ gate: 'artwork' }) as never })] } };
+    fireEvent.click(approve);
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(JSON.parse(String(calls[1].init?.body))).toEqual({ subject: { kind: 'release', id: RELEASE }, gate: 'artwork', decision: 'approved', seen: 'k1' });
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
   });
 });

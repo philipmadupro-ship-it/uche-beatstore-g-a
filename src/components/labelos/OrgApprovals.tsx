@@ -1,9 +1,12 @@
 'use client';
 
 /**
- * The approval control of an org song (LABEL-30, 09 §3.3): a status chip and a
- * small control for the `legal` gate — the only gate a song is asked for; a
- * release's other four come with the release gates (LABEL-32).
+ * The approval control of an org song or release (LABEL-30, 09 §3.3): a status
+ * chip and a small control per gate. A song is asked for the `legal` gate only;
+ * a release for all five (master, artwork, legal, marketing, metadata) — the
+ * release page mounts it with `subject` so the people who hold those gates can
+ * ask and answer without leaving it (`onChanged` lets the page refresh its
+ * readiness).
  *
  * Words are Frame.io's: "Approved" and "Changes requested", each with a note.
  * An approval whose song has moved on reads "Stale — changed since approval"
@@ -20,7 +23,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Dropdown, type DropdownOption } from '@/components/ui/Dropdown';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
-import { decideApproval, fetchApprovals, requestApproval, type ApprovalsPayload, type GateStateView } from '@/lib/labelos/approvals-client';
+import { decideApproval, fetchApprovals, requestApproval, type ApprovalSubject, type ApprovalsPayload, type GateStateView } from '@/lib/labelos/approvals-client';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
@@ -43,14 +46,16 @@ export const changedText = (parts: readonly string[]): string => {
 
 const when = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
-export function OrgApprovals({ orgId, trackId }: { orgId: string; trackId: string }) {
+export function OrgApprovals({ orgId, trackId, subject: given, onChanged }: { orgId: string; trackId?: string; subject?: ApprovalSubject; onChanged?: () => void }) {
   const [data, setData] = useState<ApprovalsPayload | null>(null);
   const [hidden, setHidden] = useState(false);
+  const subject: ApprovalSubject = given ?? { kind: 'song', id: trackId ?? '' };
+  const { kind, id } = subject;
 
-  // A different song remounts this (the caller keys it by track).
+  // A different song or release remounts this (the caller keys it by subject).
   useEffect(() => {
     let live = true;
-    void fetchApprovals(orgId, { kind: 'song', id: trackId }).then((res) => {
+    void fetchApprovals(orgId, { kind, id }).then((res) => {
       if (!live) return;
       if (!res.ok || !res.schemaReady || res.gates.length === 0) setHidden(true);
       else setData(res);
@@ -58,31 +63,47 @@ export function OrgApprovals({ orgId, trackId }: { orgId: string; trackId: strin
     return () => {
       live = false;
     };
-  }, [orgId, trackId]);
+  }, [orgId, kind, id]);
+
+  /** Look again: the facts moved under an approver, so the screen they were deciding from is out of date. */
+  const reload = useCallback(() => {
+    void fetchApprovals(orgId, { kind, id }).then((res) => {
+      if (res.ok && res.schemaReady && res.gates.length > 0) setData(res);
+    });
+  }, [orgId, kind, id]);
 
   if (hidden) return null;
   if (!data) return <div className="h-8" aria-hidden="true" data-testid="org-approvals-loading" />;
 
   return (
     <section aria-labelledby="org-song-approvals" data-testid="org-approvals">
-      <h2 id="org-song-approvals" className={`${LABEL} mb-3`}>Approval</h2>
+      <h2 id="org-song-approvals" className={`${LABEL} mb-3`}>{kind === 'release' ? 'Approvals' : 'Approval'}</h2>
       <ul className="space-y-3">
         {data.gates.map((g) => (
-          <GateRow key={g.gate} orgId={orgId} trackId={trackId} gate={g} onChange={(next) => setData(next)} />
+          <GateRow
+            key={g.gate}
+            orgId={orgId}
+            subject={subject}
+            gate={g}
+            onChange={(next) => {
+              setData(next);
+              onChanged?.();
+            }}
+            onStale={reload}
+          />
         ))}
       </ul>
     </section>
   );
 }
 
-function GateRow({ orgId, trackId, gate, onChange }: { orgId: string; trackId: string; gate: GateStateView; onChange: (next: ApprovalsPayload) => void }) {
+function GateRow({ orgId, subject, gate, onChange, onStale }: { orgId: string; subject: ApprovalSubject; gate: GateStateView; onChange: (next: ApprovalsPayload) => void; onStale: () => void }) {
   const [busy, setBusy] = useState(false);
   const [asking, setAsking] = useState(false);
   const [deciding, setDeciding] = useState<null | 'changes_requested'>(null);
   const [approver, setApprover] = useState('');
   const [note, setNote] = useState('');
   const [withTask, setWithTask] = useState(true);
-  const subject = { kind: 'song' as const, id: trackId };
 
   const done = useCallback(
     (res: { ok: true } & ApprovalsPayload, message: string) => {
@@ -105,9 +126,14 @@ function GateRow({ orgId, trackId, gate, onChange }: { orgId: string; trackId: s
   };
   const decide = async (decision: 'approved' | 'changes_requested') => {
     setBusy(true);
-    const res = await decideApproval(orgId, { subject, gate: gate.gate, decision, note });
+    const res = await decideApproval(orgId, { subject, gate: gate.gate, decision, note, seen: decision === 'approved' ? gate.snapshotKey : undefined });
     setBusy(false);
-    if (!res.ok) return void toast.error(res.error);
+    if (!res.ok) {
+      toast.error(res.error);
+      // 409: what the approver was looking at changed. Show them the new state before they try again.
+      if (res.status === 409) onStale();
+      return;
+    }
     done(res, decision === 'approved' ? 'Approved' : 'Changes requested');
   };
 

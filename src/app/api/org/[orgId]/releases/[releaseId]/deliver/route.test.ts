@@ -39,6 +39,8 @@ let ready = false;
 let notReadySchema = false;
 /** Make the audit insert fail, as a database that lost the event write would. */
 let failEvents = false;
+/** Runs while readiness is being worked out, i.e. after the release row was read and before the claim. */
+let duringReadiness: (() => void) | null = null;
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({
@@ -76,6 +78,7 @@ vi.mock('@/lib/labelos/release-readiness', async (importOriginal) => {
   return {
     ...real,
     evaluateReleaseReadiness: (): ReleaseReadiness => {
+      duringReadiness?.();
       const gate = (status: GateState['status'], sensitive = false): GateState => ({
         status,
         blockers: status === 'blocked' ? [{ code: 'x', message: sensitive ? 'IPI of Nova is missing' : 'Add the cover', gate: 'artwork', fixCapability: 'release.write', sensitive }] : [],
@@ -111,6 +114,7 @@ beforeEach(() => {
   ready = false;
   notReadySchema = false;
   failEvents = false;
+  duringReadiness = null;
   db = {
     tables: {
       organizations: [
@@ -182,6 +186,18 @@ describe('a ready release', () => {
     const again = await deliver(OWN, L, R1);
     expect(again.status).toBe(409);
     expect(events()).toHaveLength(1);
+  });
+
+  it('two requests at once: the one that lost the claim is a 409, writes no event, and does not overwrite the winner', async () => {
+    ready = true;
+    // Another request delivers between this one's read of the row (draft) and its claim.
+    duringReadiness = () => {
+      Object.assign(db.tables.releases.find((r) => r.id === R1) as Record<string, unknown>, { state: 'delivered', delivered_at: '2026-10-01T09:00:00.000Z', delivered_to: 'Winner' });
+    };
+    const res = await deliver(OWN, L, R1, { distributor: 'Loser' });
+    expect(res.status).toBe(409);
+    expect(db.tables.releases.find((r) => r.id === R1)).toMatchObject({ state: 'delivered', delivered_to: 'Winner', delivered_at: '2026-10-01T09:00:00.000Z' });
+    expect(db.tables.activity_events.filter((e) => e.verb === 'release.delivered')).toHaveLength(0);
   });
 
   it('a body without a distributor is 400 and nothing changes', async () => {

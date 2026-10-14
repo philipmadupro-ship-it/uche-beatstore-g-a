@@ -22,6 +22,7 @@ import {
   GATE_LABEL,
   approvalChip,
   approvalIsStale,
+  snapshotKey,
   changedParts,
   currentDecision,
   gateAppliesTo,
@@ -97,6 +98,8 @@ export type GateState = {
   canRequest: boolean;
   /** The viewer may also hand the person asked a task ("Send to legal", LABEL-31): `tasks.write`. */
   canTask: boolean;
+  /** `snapshotKey` of what the gate covers right now, for a viewer who can decide it; sent back as `seen` when approving. */
+  snapshotKey: string | null;
   /** Members who could be asked (only for a viewer who may ask). */
   approvers: { userId: string; name: string }[];
 };
@@ -118,10 +121,13 @@ export async function gateStates(admin: AdminClient, access: OrgAccessOk, resolv
     const current = currentDecision(all.filter((r) => r.gate === gate));
     let stale = false;
     let changed: string[] = [];
-    if (current.status === 'approved' && current.latest) {
+    const canDecide = access.capabilities.has(gateCapability(gate));
+    let key: string | null = null;
+    if ((current.status === 'approved' && current.latest) || canDecide) {
       const now = await currentSnapshot(admin, org, subject, gate, release);
-      stale = approvalIsStale(current, now);
-      if (stale) changed = changedParts(current.latest.subject_snapshot, now);
+      if (canDecide) key = snapshotKey(now);
+      if (current.status === 'approved' && current.latest) stale = approvalIsStale(current, now);
+      if (stale && current.latest) changed = changedParts(current.latest.subject_snapshot, now);
     }
     const canRequest = mayRequest(actor, gate);
     out.push({
@@ -133,7 +139,8 @@ export async function gateStates(admin: AdminClient, access: OrgAccessOk, resolv
       chip: approvalChip(current, stale),
       decision: current.decided ? approvalView(current.decided, names) : null,
       pending: current.pending ? approvalView(current.pending, names) : null,
-      canDecide: access.capabilities.has(gateCapability(gate)),
+      canDecide,
+      snapshotKey: key,
       selfApprovalBlocked: !!current.pending && current.pending.actor_id === access.userId && !isOwnerOrAdmin(access.role),
       canRequest,
       canTask: access.capabilities.has('tasks.write'),

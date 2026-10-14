@@ -8,6 +8,7 @@ import {
   approvalIsStale,
   buildSnapshot,
   changedParts,
+  snapshotKey,
   currentByGate,
   currentDecision,
   gateAppliesTo,
@@ -168,6 +169,32 @@ describe('snapshot + isStale', () => {
     const at = buildSnapshot('metadata', { items: [], release: { title: 'EP', upc: '123456789012' } });
     expect(isStale(at, buildSnapshot('metadata', { items: [], release: { upc: '123456789012', title: 'EP' } }))).toBe(false);
     expect(isStale(at, buildSnapshot('metadata', { items: [], release: { title: 'EP', upc: '123456789013' } }))).toBe(true);
+  });
+
+  it('metadata also covers what each track carries to a distributor: ISRC, explicit flag, version title (09 §4)', () => {
+    const base = { songId: 's1', isrc: 'USRC17607839', explicit: false, versionTitle: null as string | null };
+    const at = buildSnapshot('metadata', { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP' }, details: [base] });
+    expect(isStale(at, buildSnapshot('metadata', { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP' }, details: [{ ...base }] }))).toBe(false);
+    for (const change of [{ isrc: 'USRC17607840' }, { isrc: null }, { explicit: true }, { versionTitle: 'Radio edit' }]) {
+      const now = buildSnapshot('metadata', { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP' }, details: [{ ...base, ...change }] });
+      expect(isStale(at, now), JSON.stringify(change)).toBe(true);
+      expect(changedParts(at, now)).toEqual(['details']);
+    }
+    // A snapshot stored before `details` existed cannot vouch for the tracks' metadata.
+    const legacy = { v: 1, gate: 'metadata', parts: { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP' } } };
+    expect(isStale(legacy, at)).toBe(true);
+    // The master gate does not care about metadata.
+    const m1 = buildSnapshot('master', { items: [{ songId: 's1', masterId: 'm1' }], details: [base] });
+    const m2 = buildSnapshot('master', { items: [{ songId: 's1', masterId: 'm1' }], details: [{ ...base, isrc: null }] });
+    expect(isStale(m1, m2)).toBe(false);
+  });
+
+  it('snapshotKey is equal exactly when the snapshots are equal', () => {
+    const a = buildSnapshot('metadata', { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP', upc: '1' }, details: [{ songId: 's1', isrc: 'X', explicit: false, versionTitle: null }] });
+    const reordered = { v: a.v, gate: a.gate, parts: { release: { upc: '1', title: 'EP' }, details: a.parts.details, items: a.parts.items } } as typeof a;
+    expect(snapshotKey(reordered)).toBe(snapshotKey(a));
+    expect(snapshotKey(buildSnapshot('metadata', { items: [{ songId: 's1', masterId: 'm1' }], release: { title: 'EP', upc: '2' }, details: a.parts.details as never }))).not.toBe(snapshotKey(a));
+    expect(snapshotKey(buildSnapshot('marketing', {}))).not.toBe(snapshotKey(buildSnapshot('artwork', { artworkAssetId: null })));
   });
 
   it('a snapshot that cannot be read vouches for nothing: null, wrong version, another gate', () => {

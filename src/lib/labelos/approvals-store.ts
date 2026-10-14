@@ -75,7 +75,7 @@ type ReleaseFacts = {
   projectId: string;
   artworkAssetId: string | null;
   fields: Record<string, string | null>;
-  items: { songId: string; masterId: string }[];
+  items: { songId: string; masterId: string; explicit: boolean; versionTitle: string | null }[];
 };
 
 const RELEASE_FIELDS = ['title', 'type', 'upc', 'label_name', 'c_line', 'p_line', 'primary_genre', 'target_date', 'release_date'] as const;
@@ -92,7 +92,7 @@ export async function readReleaseFacts(admin: AdminClient, org: string, releaseI
   if (rel.error) throw new Error(`release read: ${rel.error.message}`);
   const row = rel.data as unknown as Record<string, string | null> | null;
   if (!row) return null;
-  const items = await admin.from('release_items').select('position, song_track_id, master_track_id').eq('release_id', releaseId).eq('org_id', org).order('position', { ascending: true });
+  const items = await admin.from('release_items').select('position, song_track_id, master_track_id, explicit, version_title').eq('release_id', releaseId).eq('org_id', org).order('position', { ascending: true });
   if (items.error) throw new Error(`release items read: ${items.error.message}`);
   return {
     id: releaseId,
@@ -100,7 +100,12 @@ export async function readReleaseFacts(admin: AdminClient, org: string, releaseI
     projectId: String(row.project_id),
     artworkAssetId: row.artwork_asset_id ?? null,
     fields: Object.fromEntries(RELEASE_FIELDS.map((f) => [f, row[f] ?? null])),
-    items: ((items.data ?? []) as unknown as { song_track_id: string; master_track_id: string }[]).map((i) => ({ songId: i.song_track_id, masterId: i.master_track_id })),
+    items: ((items.data ?? []) as unknown as { song_track_id: string; master_track_id: string; explicit: boolean | null; version_title: string | null }[]).map((i) => ({
+      songId: i.song_track_id,
+      masterId: i.master_track_id,
+      explicit: i.explicit === true,
+      versionTitle: i.version_title ?? null,
+    })),
   };
 }
 
@@ -108,6 +113,22 @@ export async function readReleaseFacts(admin: AdminClient, org: string, releaseI
 async function songFacts(admin: AdminClient, org: string, songId: string): Promise<SnapshotSong> {
   const [sheets, credits] = await Promise.all([listSheets(admin, org, songId), listCredits(admin, org, songId)]);
   return songSnapshotFacts(songId, sheets, credits);
+}
+
+async function masterIsrcs(admin: AdminClient, org: string, masterIds: readonly string[]): Promise<Map<string, string | null>> {
+  const ids = [...new Set(masterIds)];
+  const out = new Map<string, string | null>();
+  if (ids.length === 0) return out;
+  const res = await admin.from('tracks').select('id, isrc').eq('org_id', org).in('id', ids);
+  check('master isrc read', res.error);
+  for (const t of (res.data ?? []) as { id: string; isrc: string | null }[]) out.set(t.id.toLowerCase(), t.isrc ?? null);
+  return out;
+}
+
+async function primaryArtistName(admin: AdminClient, org: string, contactId: string): Promise<string | null> {
+  const res = await admin.from('contacts').select('name').eq('id', contactId).eq('org_id', org).maybeSingle();
+  check('primary artist read', res.error);
+  return (res.data as { name: string | null } | null)?.name ?? null;
 }
 
 /**
@@ -125,8 +146,15 @@ export async function currentSnapshot(admin: AdminClient, org: string, subject: 
   const rel = release ?? (await readReleaseFacts(admin, org, subject.id));
   if (!rel) return buildSnapshot(gate, facts);
   facts.artworkAssetId = rel.artworkAssetId;
-  facts.items = rel.items;
+  facts.items = rel.items.map((i) => ({ songId: i.songId, masterId: i.masterId }));
   facts.release = rel.fields;
+  if (gate === 'metadata') {
+    // What the distributor is sent beyond the release row: each track's ISRC (read off the recording that goes out),
+    // its explicit flag and version title, and the primary artist's name. Read only for this gate.
+    const [isrcs, artist] = await Promise.all([masterIsrcs(admin, org, rel.items.map((i) => i.masterId)), primaryArtistName(admin, org, rel.contactId)]);
+    facts.details = rel.items.map((i) => ({ songId: i.songId, isrc: isrcs.get(i.masterId.toLowerCase()) ?? null, explicit: i.explicit, versionTitle: i.versionTitle }));
+    facts.release = { ...rel.fields, primary_artist: artist };
+  }
   if (gate === 'legal') {
     const ids = [...new Set(rel.items.map((i) => i.songId))].sort();
     facts.songs = await Promise.all(ids.map((id) => songFacts(admin, org, id)));

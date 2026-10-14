@@ -38,6 +38,7 @@ import {
   reorderReleaseItems,
   setReleaseArtwork,
 } from '@/lib/labelos/release-client';
+import { OrgApprovals } from '@/components/labelos/OrgApprovals';
 import type { ReleaseDetail } from '@/lib/labelos/release-detail-store';
 import { RELEASE_GATES, RELEASE_GATE_LABEL, type ReleaseGate } from '@/lib/labelos/release-readiness';
 import { moveBy, moveTo } from '@/lib/labelos/release-tracklist';
@@ -142,6 +143,8 @@ export function ReleaseDetailView({ orgId, orgSlug, detail, extraActions }: { or
         </div>
         <div className="space-y-6">
           <Gates detail={detail} />
+          {/* The five gates that need a person (09 §4) are asked for and answered here; the server shows each member only what they may do, and nothing at all to one who may not read approvals. */}
+          {draft && <OrgApprovals key={release.id} orgId={orgId} subject={{ kind: 'release', id: release.id }} onChanged={() => router.refresh()} />}
           <Delivery orgId={orgId} detail={detail} busy={busy} act={act} />
         </div>
       </div>

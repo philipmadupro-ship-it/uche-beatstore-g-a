@@ -147,11 +147,16 @@ export type SnapshotSong = {
 
 export type SnapshotItem = { songId: string; masterId: string };
 
+/** What one track carries to a distributor (09 §4 metadata gate): the master's ISRC, the explicit flag, the version title. */
+export type SnapshotDetail = { songId: string; isrc: string | null; explicit: boolean; versionTitle: string | null };
+
 /** What the store loaded about the subject. Gates read only the parts they name. */
 export type SnapshotFacts = {
   songs?: readonly SnapshotSong[];
   artworkAssetId?: string | null;
   items?: readonly SnapshotItem[];
+  /** Per tracklist item, in tracklist order (metadata gate). */
+  details?: readonly SnapshotDetail[];
   /** The metadata a distributor is sent (09 §4), as plain strings. */
   release?: Readonly<Record<string, string | null>>;
 };
@@ -176,14 +181,14 @@ export function songSnapshotFacts(
 
 export const SNAPSHOT_VERSION = 1;
 
-type PartName = 'songs' | 'artwork' | 'items' | 'release';
+type PartName = 'songs' | 'artwork' | 'items' | 'release' | 'details';
 
 /** Which parts of the facts a gate's approval covers. Marketing is a sign-off with nothing underneath it. */
 export const SNAPSHOT_PARTS: Readonly<Record<Gate, readonly PartName[]>> = {
   legal: ['songs'],
   artwork: ['artwork'],
   master: ['items'],
-  metadata: ['items', 'release'],
+  metadata: ['items', 'release', 'details'],
   marketing: [],
 };
 
@@ -213,6 +218,8 @@ export function buildSnapshot(gate: Gate, facts: SnapshotFacts): Snapshot {
     else if (name === 'items') {
       // Order matters: a reordered tracklist is a different release.
       parts.items = (facts.items ?? []).map((i) => ({ songId: i.songId, masterId: i.masterId }));
+    } else if (name === 'details') {
+      parts.details = (facts.details ?? []).map((d) => ({ songId: d.songId, isrc: d.isrc ?? null, explicit: d.explicit === true, versionTitle: d.versionTitle ?? null }));
     } else if (name === 'release') {
       parts.release = Object.fromEntries(Object.entries(facts.release ?? {}).sort(([a], [b]) => a.localeCompare(b)));
     }
@@ -254,6 +261,34 @@ export function changedParts(snapshot: unknown, current: Snapshot): string[] {
 export function isStale(snapshot: unknown, current: Snapshot): boolean {
   if (!isRecord(snapshot) || snapshot.v !== SNAPSHOT_VERSION || snapshot.gate !== current.gate || !isRecord(snapshot.parts)) return true;
   return changedParts(snapshot, current).length > 0;
+}
+
+function stableJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`;
+  if (isRecord(v)) return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableJson(v[k])}`).join(',')}}`;
+  return JSON.stringify(v) ?? 'null';
+}
+
+/**
+ * A short token for "the facts as an approver saw them": equal exactly when the
+ * snapshots are equal (keys in any order). The decide route compares the token
+ * the screen was drawn from (`seen`) with the facts as they are when the
+ * request arrives, so an approval records what the person looked at and not
+ * whatever a colleague changed in between. A change token, not a secret: any
+ * 53-bit hash will do (cyrb53).
+ */
+export function snapshotKey(snapshot: Snapshot): string {
+  const text = stableJson(snapshot);
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0');
 }
 
 /** Only an approval can be stale; a request and a change request say nothing about content. */

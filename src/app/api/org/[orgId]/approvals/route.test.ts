@@ -141,8 +141,8 @@ type GateJson = { gate: string; status: string; stale: boolean; changed: string[
 const legalOf = (body: { gates: { gate: string }[] }) => body.gates.find((g) => g.gate === 'legal') as GateJson;
 const request = (as: string, subject: unknown, gate: string, approver: string, note?: string) =>
   call('POST', as, { body: { subject, gate, approver_id: approver, ...(note ? { note } : {}) } });
-const decide = (as: string, subject: unknown, gate: string, decision: string, note?: string) =>
-  call('POST', as, { decide: true, body: { subject, gate, decision, ...(note ? { note } : {}) } });
+const decide = (as: string, subject: unknown, gate: string, decision: string, note?: string, seen?: string | null) =>
+  call('POST', as, { decide: true, body: { subject, gate, decision, ...(note ? { note } : {}), ...(seen !== undefined ? { seen } : {}) } });
 
 describe('GET — who sees approvals, and where a gate stands', () => {
   it('a song has the legal gate only; the approvers are the members who hold it and can open the song', async () => {
@@ -454,6 +454,70 @@ describe('stale detection — changing a split after approval', () => {
     expect(artwork(await state(OWN, `?release=${R1}`))).toMatchObject({ status: 'approved', stale: false });
     db.tables.releases[0].artwork_asset_id = ART2;
     expect(artwork(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['artwork'] });
+  });
+
+  it('a metadata approval goes stale when a track’s ISRC or explicit flag, or the primary artist’s name, changes afterwards', async () => {
+    const metadata = (b: { gates: { gate: string }[] }) => b.gates.find((g) => g.gate === 'metadata') as GateJson;
+    await request(AR, release(), 'metadata', OWN);
+    expect((await decide(OWN, release(), 'metadata', 'approved')).status).toBe(201);
+    expect(metadata(await state(OWN, `?release=${R1}`))).toMatchObject({ status: 'approved', stale: false });
+
+    const trackRow = db.tables.tracks.find((r) => r.id === S1) as Record<string, unknown>;
+    trackRow.isrc = 'USRC17607839';
+    expect(metadata(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['details'] });
+
+    // Renewing records the new facts; then each of the others stales it again.
+    await request(AR, release(), 'metadata', OWN);
+    expect((await decide(OWN, release(), 'metadata', 'approved')).status).toBe(201);
+    expect(metadata(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: false });
+    db.tables.release_items[0].explicit = true;
+    expect(metadata(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['details'] });
+
+    await request(AR, release(), 'metadata', OWN);
+    expect((await decide(OWN, release(), 'metadata', 'approved')).status).toBe(201);
+    (db.tables.contacts.find((c) => c.id === C1) as Record<string, unknown>).name = 'Renamed Artist';
+    expect(metadata(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['release'] });
+  });
+
+  describe('approve what you saw', () => {
+    const artwork = (b: { gates: { gate: string }[] }) => b.gates.find((g) => g.gate === 'artwork') as GateJson & { snapshotKey: string | null };
+
+    it('the gate state carries a token for the facts, only to someone who can decide it', async () => {
+      const mine = artwork(await state(MKT, `?release=${R1}`));
+      expect(mine.canDecide).toBe(true);
+      expect(mine.snapshotKey).toMatch(/^[0-9a-f]{14}$/);
+      const theirs = artwork(await state(AR, `?release=${R1}`));
+      expect(theirs.canDecide).toBe(false);
+      expect(theirs.snapshotKey).toBeNull();
+    });
+
+    it('approving with the token the screen was drawn from is recorded', async () => {
+      await request(AR, release(), 'artwork', MKT);
+      const seen = artwork(await state(MKT, `?release=${R1}`)).snapshotKey;
+      expect((await decide(MKT, release(), 'artwork', 'approved', undefined, seen)).status).toBe(201);
+      expect(db.tables.approvals.filter((r) => r.decision === 'approved')).toHaveLength(1);
+    });
+
+    it('if the artwork was replaced after the approver opened it, the approval is refused (409) and nothing is stored', async () => {
+      await request(AR, release(), 'artwork', MKT);
+      const seen = artwork(await state(MKT, `?release=${R1}`)).snapshotKey;
+      db.tables.releases[0].artwork_asset_id = ART2;
+      const before = db.tables.approvals.length;
+      const res = await decide(MKT, release(), 'artwork', 'approved', undefined, seen);
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe('changed_since_seen');
+      expect(db.tables.approvals).toHaveLength(before);
+      // Looking again gives a fresh token, and that one is accepted.
+      const fresh = artwork(await state(MKT, `?release=${R1}`)).snapshotKey;
+      expect(fresh).not.toBe(seen);
+      expect((await decide(MKT, release(), 'artwork', 'approved', undefined, fresh)).status).toBe(201);
+    });
+
+    it('asking for changes needs no token, and a caller that sends none is not held to one', async () => {
+      db.tables.releases[0].artwork_asset_id = ART2;
+      expect((await decide(MKT, release(), 'artwork', 'changes_requested', 'wrong crop', 'stale-token')).status).toBe(201);
+      expect((await decide(MKT, release(), 'artwork', 'approved')).status).toBe(201);
+    });
   });
 });
 
