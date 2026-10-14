@@ -13,6 +13,12 @@ import {
 } from './identifiers';
 
 describe('ISRC', () => {
+  it('upper-casing never turns a non-ASCII letter into a code letter (ß → SS, ı → I, ſ → S)', () => {
+    expect(normalizeIsrc('ßAAB2412345')).toBeNull();
+    expect(normalizeIsrc('USıAB2412345')).toBeNull();
+    expect(normalizeIsrc('USſAB2412345')).toBeNull();
+  });
+
   it('accepts the compact and the hyphenated form and normalises to compact upper case', () => {
     expect(normalizeIsrc('USRC17607839')).toBe('USRC17607839');
     expect(normalizeIsrc('US-RC1-76-07839')).toBe('USRC17607839');
