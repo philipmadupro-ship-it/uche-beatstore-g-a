@@ -47,6 +47,17 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('OrgSongView', () => {
+  it('renders its sections under distinct keys (four siblings shared the song id: React may drop or duplicate them)', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      open();
+      const keyWarnings = errors.mock.calls.filter((c) => String(c[0]).includes('same key'));
+      expect(keyWarnings).toEqual([]);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
   it('shows the song, its artist, stage and where it lives', () => {
     open();
     expect(screen.getByRole('heading', { level: 1, name: 'Midnight' })).toBeTruthy();
