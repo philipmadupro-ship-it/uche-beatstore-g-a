@@ -520,11 +520,16 @@ export async function loadOrgProject(access: ObjectAccessOk): Promise<OrgProject
   const projectRows = rows<OrgProjectRow>(await admin.from('projects').select(PROJECT_COLUMNS).eq('id', id).eq('org_id', org), 'project read');
   const project = projectRows[0];
   if (!project) return null;
-  const placements = rows<{ track_id: string }>(await admin.from('project_tracks').select('track_id').eq('project_id', id), 'project track read');
+  const placements = await pageAll<{ track_id: string }>(
+    (from, to) => admin.from('project_tracks').select('track_id').eq('project_id', id).order('track_id').range(from, to),
+    'project track read',
+  );
   const trackIds = [...new Set(placements.map((p) => p.track_id))];
-  const tracks = trackIds.length
-    ? rows<TrackRow>(await admin.from('tracks').select('id, title, type, song_stage, cover_url, created_at').in('id', trackIds).eq('org_id', org), 'track read')
-    : [];
+  const tracks = await inChunks<TrackRow>(
+    trackIds,
+    (part, from, to) => admin.from('tracks').select('id, title, type, song_stage, cover_url, created_at').in('id', part).eq('org_id', org).order('id').range(from, to),
+    'track read',
+  );
   const candidates = tracks.filter(isWorkspaceSong);
   const facts = await orgTrackFacts(admin, org, candidates.map((t) => t.id));
   const { visible, hidden } = partitionSongs(candidates, facts, access.capabilities);

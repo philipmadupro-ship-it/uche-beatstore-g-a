@@ -302,6 +302,21 @@ describe('GET …/songs/[trackId]', () => {
 });
 
 describe('GET …/projects/[id]', () => {
+  it('the org project page of a big Inbox lists every song (chunked ids, paged placements)', async () => {
+    db.maxRows = 1000;
+    db.maxInList = 200;
+    for (let n = 0; n < 1100; n++) {
+      const id = `51000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+      db.tables.tracks.push(track(id, L, 'song', `Demo ${n}`, 'inbox'));
+      db.tables.project_tracks.push({ project_id: LP2, track_id: id, position: n + 1 });
+    }
+    current = OWN;
+    const res = await project(LP2);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.songs).toHaveLength(1101);
+  });
+
   it('lists the project’s artists and visible songs; out of scope is 404', async () => {
     current = MKT;
     const d = await (await project(LP1)).json();
