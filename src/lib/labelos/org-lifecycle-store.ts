@@ -91,13 +91,19 @@ export async function softDeleteOrg(admin: Admin, orgId: string, now: Date = new
   return Array.isArray(data) && data.length > 0 ? stamp : null;
 }
 
-/** Clear `deleted_at` if it still holds `deletedAt` (compare-and-set). True when it was restored. */
-export async function restoreOrg(admin: Admin, orgId: string, deletedAt: string): Promise<boolean> {
+/**
+ * Clear `deleted_at` if it still holds `deletedAt` AND the grace period is not over (compare-and-set).
+ * The second condition is the database's own: the purge cron deletes an org's files BEFORE its row, so a
+ * restore that lands after the boundary (a request begun just before it) must not succeed on a row whose
+ * masters are already gone. True when it was restored.
+ */
+export async function restoreOrg(admin: Admin, orgId: string, deletedAt: string, now: Date = new Date()): Promise<boolean> {
   const { data, error } = await admin
     .from('organizations')
     .update({ deleted_at: null })
     .eq('id', orgId)
     .eq('deleted_at', deletedAt)
+    .gt('deleted_at', purgeCutoff(now).toISOString())
     .select('id');
   if (error) throw new Error(error.message);
   return Array.isArray(data) && data.length > 0;

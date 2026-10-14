@@ -124,6 +124,13 @@ describe('soft delete and restore', () => {
     expect(db.tables.organizations.find((o) => o.id === B)!.deleted_at).toBeNull();
   });
 
+  it('does not restore an org whose grace period is over, even though its row is still there', async () => {
+    // A is stamped 31 days ago: the purge cron may already have deleted its files. The database, not
+    // only the route's clock, must refuse (a request that straddles the boundary).
+    expect(await restoreOrg(mem.client as never, A, daysAgo(31), NOW)).toBe(false);
+    expect(db.tables.organizations.find((o) => o.id === A)!.deleted_at).toBe(daysAgo(31));
+  });
+
   it('touches nothing but the one org row', async () => {
     await softDeleteOrg(mem.client as never, B, NOW);
     expect(mem.writes.map((w) => w.table)).toEqual(['organizations']);
