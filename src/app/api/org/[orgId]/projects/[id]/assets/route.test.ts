@@ -264,12 +264,15 @@ describe('download', () => {
     });
   });
 
-  it('later Range chunks of the same download are not audited again', async () => {
-    expect((await download(LEG, L, LP1, A_CON, 'bytes=0-')).status).toBe(200);
-    expect((await download(LEG, L, LP1, A_CON, 'bytes=65536-')).status).toBe(200);
-    expect((await download(LEG, L, LP1, A_CON, 'bytes=131072-')).status).toBe(200);
-    expect(db.tables.activity_events).toHaveLength(1);
-    expect(storage.streamed).toHaveLength(3);
+  it('every request that moves bytes of a restricted file is audited, whatever its Range', async () => {
+    // "Once per download" cannot be told from a Range header: `bytes=1-` or a
+    // suffix range returns the file without starting at byte 0, and would
+    // have been a download nobody could account for.
+    for (const range of ['bytes=0-', 'bytes=1-', 'bytes=65536-', 'bytes=-1024']) {
+      expect((await download(LEG, L, LP1, A_CON, range)).status, range).toBe(200);
+    }
+    expect(db.tables.activity_events).toHaveLength(4);
+    expect(storage.streamed).toHaveLength(4);
   });
 
   it('if the audit event cannot be written, nothing is downloaded', async () => {

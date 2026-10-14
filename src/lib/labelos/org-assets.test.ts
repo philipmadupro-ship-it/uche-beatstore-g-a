@@ -9,7 +9,6 @@ import {
   LEGAL_ASSET_KINDS,
   assetReadClass,
   assignableOrgAssetKinds,
-  isDownloadStart,
   orgAssetPermissions,
   canReadOrgAsset,
   canWriteOrgAsset,
@@ -230,12 +229,5 @@ describe('what the Files section may offer', () => {
     expect(assignableOrgAssetKinds(orgAssetPermissions(AR))).toContain('session');
     expect(assignableOrgAssetKinds(orgAssetPermissions(LEGAL))).toEqual(['artwork', 'lyrics', 'photo', 'video', 'contract', 'split_sheet']);
     expect(assignableOrgAssetKinds(orgAssetPermissions(OWNER))).toEqual([...ORG_ASSET_KINDS]);
-  });
-
-  it('a download starts with no Range or a Range from byte 0', () => {
-    expect(isDownloadStart(null)).toBe(true);
-    expect(isDownloadStart('bytes=0-')).toBe(true);
-    expect(isDownloadStart('bytes=0-1023')).toBe(true);
-    expect(isDownloadStart('bytes=65536-')).toBe(false);
   });
 });

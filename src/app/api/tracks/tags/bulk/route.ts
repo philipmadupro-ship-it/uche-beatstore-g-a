@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, requireUser, query, getAll, insert, deleteRow } from '@/lib/db';
 import { safeSellerId } from '@/lib/auth/ownership';
+import { withoutOrgRows } from '@/lib/auth/producer-rows';
 import { readBody } from '@/lib/validate';
 import { errorMessage } from '@/lib/errors';
 import { ContactsBulkTagsBodySchema } from '@/lib/contracts';
@@ -36,11 +37,11 @@ export async function POST(req: NextRequest) {
       const safeId = safeSellerId(auth.userId);
       if (!safeId) return NextResponse.json({ updated: 0 });
       // Restrict to owned tracks.
-      const { data: owned } = await auth.admin
-        .from('tracks')
-        .select('id')
-        .in('id', ids)
-        .or(`user_id.eq.${safeId},user_id.is.null`);
+      // Never an org's track: those are ownerless too (see withoutOrgRows).
+      const { data: owned } = await withoutOrgRows((excludeOrg) => {
+        const q = auth.admin.from('tracks').select('id').in('id', ids).or(`user_id.eq.${safeId},user_id.is.null`);
+        return excludeOrg ? q.is('org_id', null) : q;
+      });
       const ownedIds = ((owned ?? []) as TrackIdRow[]).map((t) => t.id);
       if (ownedIds.length === 0) return NextResponse.json({ updated: 0 });
 
