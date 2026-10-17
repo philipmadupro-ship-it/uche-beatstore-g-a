@@ -40,6 +40,9 @@ export const fail = (status: number, error: string, extra: Record<string, unknow
 export const notReady = () =>
   fail(503, 'Releases need migration 144 applied on Supabase.', { migration: '144', schemaReady: false });
 
+const OFF_THE_STORE_FIRST = 'Take this release off the store to change its tracklist';
+const keepsItsTracklist = (state: string) => `A ${state} release keeps its tracklist`;
+
 export const conflict = () => fail(409, 'The tracklist changed at the same time; reload and try again');
 
 /**
@@ -63,9 +66,9 @@ export async function schemaAware(denied: OwnershipFail): Promise<OwnershipFail>
 export function tracklistLocked(release: ReleaseRow): OwnershipFail | null {
   if (release.state === 'draft') return null;
   if (release.imported_released && release.state === 'delivered') {
-    return release.store_listed ? fail(409, 'Take this release off the store to change its tracklist', { field: 'store_listed' }) : null;
+    return release.store_listed ? fail(409, OFF_THE_STORE_FIRST, { field: 'store_listed' }) : null;
   }
-  return fail(409, `A ${release.state} release keeps its tracklist`, { field: 'state' });
+  return fail(409, keepsItsTracklist(release.state), { field: 'state' });
 }
 
 /**
@@ -83,15 +86,31 @@ export function importedNeedsOwnerOrAdmin(release: Pick<ReleaseRow, 'imported_re
 /** A Postgres error from a write, as the member should see it. */
 export function writeError(error: { code?: string; message?: string }, fallback: string): OwnershipFail {
   if (isMissingSchema(error)) return notReady();
+  // Two tracklist writes that met on their locks (167 orders them, so this is
+  // a safety net): retry, never a 500.
+  if (error.code === '40P01' || error.code === '40001') return conflict();
   // The deferred position check: another edit of the tracklist got there
   // first (a race, not bad input), so it is a conflict to retry.
   if (error.code === '23514' && /no gap/.test(error.message ?? '')) return conflict();
+  // 158 / 167's release_items_store_lock: the release left draft (or went on
+  // the store) after this route read it — the answers tracklistLocked gives,
+  // as a 409, never the trigger's own wording.
+  if (error.code === '23514' && /^release_items: take the release off the store/.test(error.message ?? '')) {
+    return fail(409, OFF_THE_STORE_FIRST, { field: 'store_listed' });
+  }
+  const locked = error.code === '23514' ? /^release_items: a (delivered|cancelled) release keeps its tracklist/.exec(error.message ?? '') : null;
+  if (locked) return fail(409, keepsItsTracklist(locked[1]), { field: 'state' });
   // 144's other triggers and CHECKs: our own wording, naming no row.
   if (error.code === '23514') return fail(400, error.message ?? fallback);
   // The deferred (release, position) key: two edits of one tracklist at once.
   if (error.code === '23505') return conflict();
   if (error.code === '23503') return fail(409, 'Something this release points at no longer exists');
   return fail(500, fallback);
+}
+
+/** 167's labelos_release_item_update is not there yet (the migration is unapplied). */
+export function isMissingItemUpdate(error: { code?: string; message?: string }): boolean {
+  return /labelos_release_item_update/.test(error.message ?? '') && (error.code === 'PGRST202' || error.code === '42883');
 }
 
 export type ReleaseAccess = { ok: true; release: ReleaseRow };
