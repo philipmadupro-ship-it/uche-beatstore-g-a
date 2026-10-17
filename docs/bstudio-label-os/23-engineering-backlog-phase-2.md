@@ -81,7 +81,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Out of scope: any UI.
 
 ### LABEL-44 — Integrity migrations
-**Priority:** P1 · **Risk:** Medium · **Deps:** 43 · **Migrations:** 165, 166, 167 · **Status:** In Progress (session_012j7fJ6jDULUKjERyue5MW1)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 43 · **Migrations:** 165, 166, 167 · **Status:** Done — #131, squash `a45f185733a4dc28425c81f8f2eda0aa414d1aad` (2026-10-17)
 - **165** `playlist_tracks` same-owner / same-org trigger (G3). **166** partial unique index: one artist contact per artist-kind org (G2 D1). **167** `release_items`: extend `release_items_store_lock` (158) to refuse add/remove on a non-draft release (exempt `imported_released AND NOT store_listed`) and take `FOR SHARE` on the release (G4/G7/G10 amendments); `labelos_audit_member_update` compares expected old values (G4).
 - Acceptance: concurrent-add and tracklist-race checks in `supabase/local/checks/`; routes map the DB errors to 409s with a plain message.
 
@@ -267,6 +267,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 
 ### LABEL-73 — Atomic audit functions
 **Priority:** P1 · **Risk:** High · **Deps:** 44, 55 · **Migration:** 187 · **Status:** Not Started
+- **Also (from LABEL-44):** close the readiness-vs-claim window for deliver AND store listing (an item committed between the readiness check and the claim ships unchecked); remove the members route's six-argument fallback once 167 is applied (stale-cache window skips `p_expect`).
 - Implement `20-review-G7-atomic-deliver.md` with G10's amendments (raw `updated_at` string, fingerprint scope, one function family): `labelos_audit_release_deliver`, plus `release.imported`, `release.store_listed/unlisted`, org delete/restore/export, digest channel verbs. `AUDIT_RPCS` entry, `AuditRpcArgs` type, a check proving the four G7 cases, a rollback. Remove the compensating writes.
 
 ### LABEL-74 — Visibility decisions
