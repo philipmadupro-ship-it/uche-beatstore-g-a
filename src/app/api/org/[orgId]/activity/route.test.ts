@@ -417,7 +417,7 @@ describe('loadOverviewDigest', () => {
     expect(fresh.since).toBe('2026-09-29T12:00:00.000Z');
     expect(fresh.feed.events).toHaveLength(11);
 
-    db.tables.user_profiles.find((r) => r.user_id === OWN)!.last_seen_overview_at = '2026-10-05T10:08:30.000Z';
+    db.tables.org_overview_seen = [{ org_id: L, user_id: OWN, last_seen_at: '2026-10-05T10:08:30.000Z' }];
     const seen = await loadOverviewDigest(access, now);
     expect(seen.lastSeenAt).toBe('2026-10-05T10:08:30.000Z');
     expect(seen.feed.events.map((e) => Number(e.id.slice(-12)))).toEqual([12, 10, 9]);

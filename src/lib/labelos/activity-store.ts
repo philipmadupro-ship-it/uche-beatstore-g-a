@@ -292,7 +292,7 @@ export async function loadOverviewDigest(
   access: OrgAccessOk,
   now = new Date(),
 ): Promise<{ feed: ActivityFeed; since: string; lastSeenAt: string | null }> {
-  const lastSeenAt = await readLastSeenOverview(access.admin, access.userId);
+  const lastSeenAt = await readLastSeenOverview(access.admin, access.userId, access.orgId);
   const since = sinceWindow(lastSeenAt, now);
   const feed = await loadActivityFeed(access, { target: { kind: 'org' }, since, limit: 200 });
   return { feed, since, lastSeenAt };

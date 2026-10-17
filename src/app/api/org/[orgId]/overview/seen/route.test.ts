@@ -1,13 +1,14 @@
 /**
  * POST /api/org/[orgId]/overview/seen (LABEL-20): the member marks the
  * Overview digest seen through an instant. Only the SESSION's own
- * user_profiles row moves, only forward, never past now.
+ * (this org, session user) org_overview_seen row moves, only forward, never past now.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { memoryAdmin, type MemoryDb } from '@/lib/labelos/mocks/memory-db';
 
 const L = '10000000-0000-4000-8000-000000000001';
+const L2 = '10000000-0000-4000-8000-000000000002';
 const u = (n: number) => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const OWN = u(1);
 const AR = u(2);
@@ -35,14 +36,19 @@ beforeEach(() => {
   current = null;
   db = {
     tables: {
-      organizations: [{ id: L, kind: 'label', deleted_at: null }],
-      org_members: [member(OWN, 'owner'), member(AR, 'member', ['a_and_r']), member(NO_CAT, 'member', ['marketing'], ['catalog.read'])],
+      organizations: [{ id: L, kind: 'label', deleted_at: null }, { id: L2, kind: 'label', deleted_at: null }],
+      org_members: [member(OWN, 'owner'), member(AR, 'member', ['a_and_r']), member(NO_CAT, 'member', ['marketing'], ['catalog.read']), { ...member(AR, 'member', ['a_and_r']), org_id: L2 }],
       user_profiles: [
         { user_id: OWN, display_name: 'Olive', last_seen_overview_at: '2026-10-01T00:00:00.000Z' },
         { user_id: AR, display_name: 'Ana', last_seen_overview_at: '2026-10-02T00:00:00.000Z' },
       ],
+      org_overview_seen: [
+        { org_id: L, user_id: OWN, last_seen_at: '2026-10-01T00:00:00.000Z' },
+        { org_id: L, user_id: AR, last_seen_at: '2026-10-02T00:00:00.000Z' },
+        { org_id: L2, user_id: AR, last_seen_at: '2026-10-02T00:00:00.000Z' },
+      ],
     },
-    unique: { user_profiles: [['user_id']] },
+    unique: { user_profiles: [['user_id']], org_overview_seen: [['org_id', 'user_id']] },
   };
   mem = memoryAdmin(db);
 });
@@ -54,7 +60,7 @@ async function seen(body: unknown, org = L) {
     { params: Promise.resolve({ orgId: org }) },
   );
 }
-const stored = (user: string) => db.tables.user_profiles.find((r) => r.user_id === user)?.last_seen_overview_at;
+const stored = (user: string, org = L) => db.tables.org_overview_seen.find((r) => r.user_id === user && r.org_id === org)?.last_seen_at;
 
 describe('POST /api/org/[orgId]/overview/seen', () => {
   const through = new Date(Date.now() - 60_000).toISOString();
@@ -83,11 +89,24 @@ describe('POST /api/org/[orgId]/overview/seen', () => {
     expect(Date.parse(stored(AR) as string)).toBeLessThanOrEqual(Date.now());
   });
 
-  it('creates the profile row for a member who has none', async () => {
-    db.tables.user_profiles = [];
+  it('creates the (org, user) row for a member who has none', async () => {
+    db.tables.org_overview_seen = [];
     current = OWN;
     expect((await seen({ through })).status).toBe(200);
-    expect(db.tables.user_profiles).toEqual([expect.objectContaining({ user_id: OWN, last_seen_overview_at: through })]);
+    expect(db.tables.org_overview_seen).toEqual([expect.objectContaining({ org_id: L, user_id: OWN, last_seen_at: through })]);
+  });
+
+  it('visiting org A leaves the same member’s mark for org B, and the user-level value, untouched', async () => {
+    current = AR;
+    expect((await seen({ through })).status).toBe(200);
+    expect(stored(AR, L)).toBe(through);
+    expect(stored(AR, L2)).toBe('2026-10-02T00:00:00.000Z');
+    expect(db.tables.user_profiles.find((r) => r.user_id === AR)?.last_seen_overview_at).toBe('2026-10-02T00:00:00.000Z');
+    // And the other way round.
+    const later = new Date(Date.now() - 1000).toISOString();
+    expect((await seen({ through: later }, L2)).status).toBe(200);
+    expect(stored(AR, L2)).toBe(later);
+    expect(stored(AR, L)).toBe(through);
   });
 
   it('rejects a missing or malformed instant', async () => {
@@ -103,6 +122,6 @@ describe('POST /api/org/[orgId]/overview/seen', () => {
     expect((await seen({ through })).status).toBe(403);
     current = NO_CAT;
     expect((await seen({ through })).status).toBe(403);
-    expect(db.tables.user_profiles).toHaveLength(2);
+    expect(db.tables.org_overview_seen).toHaveLength(3);
   });
 });

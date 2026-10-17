@@ -187,11 +187,11 @@ test('4 · the owner’s Overview: ten uploads inside ten minutes are ONE line, 
   // The release made through the route is one line for the owner under Nova (project + release + rename).
   await expect(page.getByTestId('digest-line').filter({ hasText: /You created a project and created the release/ })).toHaveCount(1);
 
-  const profile = () => rest(request, 'GET', `user_profiles?select=last_seen_overview_at&user_id=eq.${PRODUCER_ID}`) as Promise<{ last_seen_overview_at: string | null }[]>;
-  expect((await profile())[0]?.last_seen_overview_at ?? null).toBeNull(); // opening it is not "seen"
+  const profile = () => rest(request, 'GET', `org_overview_seen?select=last_seen_at&org_id=eq.${ORG}&user_id=eq.${PRODUCER_ID}`) as Promise<{ last_seen_at: string | null }[]>;
+  expect((await profile())[0]?.last_seen_at ?? null).toBeNull(); // opening it is not "seen"
 
   await page.goto(`/o/${SLUG}/artists/${NOVA}`); // leaving the Overview
-  await expect.poll(async () => (await profile())[0]?.last_seen_overview_at ?? null, { timeout: 15_000 }).not.toBeNull();
+  await expect.poll(async () => (await profile())[0]?.last_seen_at ?? null, { timeout: 15_000 }).not.toBeNull();
 
   // Next visit: what was read is gone. (The mark trails the read by a 10 s margin, so an event written in
   // the last seconds before the first visit — the release made by test 1 — may show once more; the uploads
@@ -200,7 +200,7 @@ test('4 · the owner’s Overview: ten uploads inside ten minutes are ONE line, 
   await expect(page.getByTestId('overview-digest')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('digest-line').filter({ hasText: 'added 10 demos' })).toHaveCount(0);
   await expect(page.getByTestId(`digest-artist-${KILO}`)).toHaveCount(0);
-  const stored = ((await profile())[0]?.last_seen_overview_at ?? '') as string;
+  const stored = ((await profile())[0]?.last_seen_at ?? '') as string;
   expect(Date.parse(stored)).toBeLessThan(Date.now());
   await ctx.close();
 });
@@ -208,7 +208,7 @@ test('4 · the owner’s Overview: ten uploads inside ten minutes are ONE line, 
 for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
   test(`5 · the scoped member's Overview digest carries only Nova, at ${viewport.width}px`, async ({ browser, baseURL, request }) => {
     // Leaving the page marks the digest seen; start each width from "never looked".
-    await rest(request, 'PATCH', `user_profiles?user_id=eq.${BUYER_ID}`, { last_seen_overview_at: null });
+    await rest(request, 'DELETE', `org_overview_seen?org_id=eq.${ORG}&user_id=eq.${BUYER_ID}`);
     const ctx = await as(browser, baseURL!, BUYER_ID, 'buyer@local.test', viewport);
     const page = await ctx.newPage();
     await page.goto(`/o/${SLUG}`);
@@ -245,22 +245,22 @@ test('6 · the artist Activity tab lists the artist’s own day → actor lines;
   await member.close();
 });
 
-test('7 · last_seen_overview_at is the member’s own, written only by the route', async ({ browser, baseURL, request }) => {
-  // Through PostgREST nobody can write it: no write policy (migration 136, unchanged by 147).
-  const res = await request.patch(`${REST}/user_profiles?user_id=eq.${BUYER_ID}`, {
+test('7 · the Overview mark is the member’s own, per org, written only by the route', async ({ browser, baseURL, request }) => {
+  // Through PostgREST nobody can write it: SELECT-only for the API roles (migration 169).
+  const res = await request.patch(`${REST}/org_overview_seen?user_id=eq.${BUYER_ID}`, {
     headers: { apikey: SERVICE_KEY, authorization: `Bearer ${userToken(BUYER_ID, 'buyer@local.test')}`, 'content-type': 'application/json', prefer: 'return=representation' },
-    data: JSON.stringify({ last_seen_overview_at: new Date().toISOString() }),
+    data: JSON.stringify({ last_seen_at: new Date().toISOString() }),
   });
-  expect(await res.json()).toEqual([]);
+  expect(res.ok() ? await res.json() : []).toEqual([]);
 
-  // Through the route, the session's own row moves — the body cannot name another user.
+  // Through the route, the session's own row for THIS org moves — the body cannot name another user.
   const ctx = await as(browser, baseURL!, BUYER_ID, 'buyer@local.test');
   const through = new Date(Date.now() - 1000).toISOString();
   const ok = await ctx.request.post(`/api/org/${ORG}/overview/seen`, { data: { through } });
   expect(ok.status(), await ok.text()).toBe(200);
   expect((await ctx.request.post(`/api/org/${ORG}/overview/seen`, { data: { through, user_id: PRODUCER_ID } })).status()).toBe(400);
-  const rows = (await rest(request, 'GET', `user_profiles?select=user_id,last_seen_overview_at&user_id=in.(${PRODUCER_ID},${BUYER_ID})`)) as { user_id: string; last_seen_overview_at: string | null }[];
-  const seenOf = (id: string) => rows.find((r) => r.user_id === id)?.last_seen_overview_at;
+  const rows = (await rest(request, 'GET', `org_overview_seen?select=org_id,user_id,last_seen_at&org_id=eq.${ORG}&user_id=in.(${PRODUCER_ID},${BUYER_ID})`)) as { user_id: string; last_seen_at: string | null }[];
+  const seenOf = (id: string) => rows.find((r) => r.user_id === id)?.last_seen_at;
   expect(Date.parse(seenOf(BUYER_ID) as string)).toBe(Date.parse(through));
   expect(seenOf(PRODUCER_ID)).not.toBe(seenOf(BUYER_ID));
   await ctx.close();
