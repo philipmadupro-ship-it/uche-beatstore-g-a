@@ -654,6 +654,15 @@ describe('final RLS policy state', () => {
       expect(sql()).not.toMatch(/TO (anon|authenticated)\b/);
     });
 
+    it('the item edit locks the release before the item (144’s order), service_role only', () => {
+      const body = sql();
+      const fn = body.slice(body.indexOf('FUNCTION public.labelos_release_item_update('));
+      expect(fn.indexOf('FROM public.releases WHERE id = p_release AND org_id = p_org FOR UPDATE')).toBeGreaterThan(-1);
+      expect(fn.indexOf('FOR UPDATE')).toBeLessThan(fn.indexOf('UPDATE public.release_items'));
+      expect(body).toMatch(/REVOKE ALL ON FUNCTION public\.labelos_release_item_update\(uuid, uuid, uuid, jsonb\) FROM PUBLIC, anon, authenticated;/);
+      expect(body).toMatch(/GRANT EXECUTE ON FUNCTION public\.labelos_release_item_update\(uuid, uuid, uuid, jsonb\) TO service_role;/);
+    });
+
     it('changes no policy on releases, release_items or org_members', () => {
       const before = replay(realMigrations().filter((m) => m.name < '167')).policies;
       for (const [key, body] of policies) {

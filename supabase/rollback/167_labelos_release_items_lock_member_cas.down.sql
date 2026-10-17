@@ -10,8 +10,11 @@
 --      what it reads).
 --   2. 146's six-argument labelos_audit_member_update, with no p_expect: a
 --      stale plan overwrites a concurrent member change again. The members
---      route sends p_expect, so roll the route back with it (PostgREST finds
---      no seven-argument function and the route answers 503 "not set up").
+--      route keeps working: when PostgREST finds no seven-argument function
+--      it retries without p_expect (no comparison).
+--   3. labelos_release_item_update is dropped. PATCH …/items/[itemId] falls
+--      back to a plain UPDATE (the route does so when the function is
+--      missing), which with 158's trigger takes no release lock at all.
 
 CREATE OR REPLACE FUNCTION public.release_items_store_lock()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -37,6 +40,7 @@ DROP TRIGGER IF EXISTS release_items_store_lock ON public.release_items;
 CREATE TRIGGER release_items_store_lock BEFORE INSERT OR UPDATE OR DELETE ON public.release_items
   FOR EACH ROW EXECUTE FUNCTION public.release_items_store_lock();
 
+DROP FUNCTION IF EXISTS public.labelos_release_item_update(uuid, uuid, uuid, jsonb);
 DROP FUNCTION IF EXISTS public.labelos_audit_member_update(uuid, uuid, uuid, jsonb, text, jsonb, jsonb);
 
 CREATE OR REPLACE FUNCTION public.labelos_audit_member_update(

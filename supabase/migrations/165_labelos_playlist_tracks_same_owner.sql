@@ -5,7 +5,7 @@
 -- LABEL OS — NOT APPLIED. Apply at the final merge of the Label OS branch
 -- into main, after 136–164. Never part of supabase/apply/pending.sql.
 --
--- Why: a playlist is the producer's (playlists.user_id NOT NULL, no org_id),
+-- Why: a playlist is the producer's (owned by playlists.user_id; no org_id),
 -- and the public store reads a featured playlist's tracks by id. G3 found
 -- that POST /api/playlists/[id]/tracks accepted any track id, so an org song
 -- (ownerless since 142) could be put in a producer playlist and read back
@@ -13,12 +13,14 @@
 -- this makes it a database fact for every writer — the upload attach paths,
 -- a future route, a script with the service key.
 --
--- The rule: the track and the playlist have the same owner, and the track is
--- not an organization's. Playlists have no organization, so the org case of
--- 142 does not exist here: an org track never joins a playlist, and no two
--- producers' rows ever meet. That is exactly what the route already allows
--- (`tracks.user_id = caller`), so the producer's own playlists behave as
--- before.
+-- The rule: the track and the playlist have the same (non-null) owner, and
+-- the track is not an organization's. 002 dropped NOT NULL from
+-- playlists.user_id; an ownerless playlist (none since 053's reconcile)
+-- takes no track, since NULL never equals an owner. Playlists have no
+-- organization, so the org case of 142 does not exist here: an org track
+-- never joins a playlist, and no two producers' rows ever meet. That is
+-- exactly what the route already allows (`tracks.user_id = caller`), so the
+-- producer's own playlists behave as before.
 --
 -- Fires on INSERT and on an UPDATE that changes which playlist or track a
 -- row joins; a reorder (`position`) does not fire it. Existing rows are not

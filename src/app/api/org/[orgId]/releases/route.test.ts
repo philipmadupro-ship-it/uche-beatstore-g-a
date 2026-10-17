@@ -62,6 +62,8 @@ let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
 /** Tables PostgREST answers as missing (an unapplied migration). */
 let missing = new Set<string>();
+/** What labelos_release_item_update answers instead of updating (a lock failure). */
+let itemUpdateError: { code: string; message: string } | null = null;
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({
@@ -118,6 +120,19 @@ const RPC: MemoryDb['rpc'] = {
     ids.forEach((id, n) => { items.find((i) => i.id === id)!.position = n + 1; });
     return { data: null, error: null };
   },
+  // 167: the item edit, release locked first (in SQL; here it is just the update).
+  labelos_release_item_update: (args, tables) => {
+    if (missing.has('labelos_release_item_update')) {
+      return err('Could not find the function public.labelos_release_item_update(p_item, p_org, p_patch, p_release) in the schema cache', 'PGRST202');
+    }
+    if (itemUpdateError) return { data: null, error: itemUpdateError };
+    const rel = (tables.releases ?? []).find((r) => r.id === args.p_release && r.org_id === args.p_org);
+    if (!rel) return { data: null, error: null };
+    const it = (tables.release_items ?? []).find((i) => i.id === args.p_item && i.release_id === rel.id && i.org_id === args.p_org);
+    if (!it) return { data: null, error: null };
+    Object.assign(it, args.p_patch as Row);
+    return { data: { ...it }, error: null };
+  },
   labelos_release_item_remove: (args, tables) => {
     const rel = (tables.releases ?? []).find((r) => r.id === args.p_release && r.org_id === args.p_org);
     if (!rel) return { data: false, error: null };
@@ -136,6 +151,7 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'eyJtest';
   current = null;
   missing = new Set();
+  itemUpdateError = null;
   db = {
     rpc: RPC,
     tables: {
@@ -454,6 +470,29 @@ describe('tracklist: add, reorder, edit, remove', () => {
     expect((await anItem('DELETE', AR, L, R1, 'nope')).status).toBe(404);
     expect((await anItem('PATCH', AR, L, R1, I3, { explicit: true })).status).toBe(404);
     expect(tracklist(R1)).toEqual(['1:I1', '2:I2']);
+  });
+
+  it('167: an edit goes through labelos_release_item_update (release locked before the item), never a plain UPDATE', async () => {
+    const res = await anItem('PATCH', AR, L, R1, I1, { explicit: true });
+    expect(res.status).toBe(200);
+    expect(mem.writes.some((w) => w.table === 'rpc:labelos_release_item_update')).toBe(true);
+    expect(mem.writes.filter((w) => w.table === 'release_items' && w.op === 'update')).toEqual([]);
+  });
+
+  it('before 167 is applied the edit falls back to the plain update, as before', async () => {
+    missing.add('labelos_release_item_update');
+    const res = await anItem('PATCH', AR, L, R1, I1, { explicit: true });
+    expect(res.status).toBe(200);
+    expect((await res.json()).item).toMatchObject({ explicit: true });
+  });
+
+  it('a deadlock or serialization failure is a 409 to retry, never a 500', async () => {
+    for (const code of ['40P01', '40001']) {
+      itemUpdateError = { code, message: code === '40P01' ? 'deadlock detected' : 'could not serialize access' };
+      const res = await anItem('PATCH', AR, L, R1, I1, { explicit: true });
+      expect(res.status, code).toBe(409);
+      expect((await res.json()).error).toBe('The tracklist changed at the same time; reload and try again');
+    }
   });
 
   it('edits an item: a new master is checked like an added one', async () => {

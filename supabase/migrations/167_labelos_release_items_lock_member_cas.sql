@@ -1,6 +1,7 @@
 -- 167_labelos_release_items_lock_member_cas.sql
 -- Label OS (LABEL-44, reviews G4 / G7 / G10): two writes that a stale read
--- could get wrong are held in the database.
+-- could get wrong are held in the database, and every tracklist write takes
+-- its locks in one order.
 --
 -- LABEL OS — NOT APPLIED. Apply at the final merge of the Label OS branch
 -- into main, after 136–166. Never part of supabase/apply/pending.sql.
@@ -56,8 +57,20 @@
 -- (an overload would make PostgREST's choice ambiguous). EXECUTE stays
 -- service_role only.
 --
+-- ── 3. Every item write locks the release FIRST ───────────────────────────
+-- 144's reorder / remove functions (and a release DELETE cascading to its
+-- items) take FOR UPDATE on the release and then touch item rows. A plain
+-- UPDATE of an item locks the item row before section 1's trigger asks for
+-- the release, so `PATCH …/items/[itemId]` racing a reorder took the two
+-- locks in the opposite order and could deadlock (40P01). The PATCH now goes
+-- through labelos_release_item_update, which locks the release FOR UPDATE
+-- before it touches the item — the same order as 144's functions, so the
+-- two queue instead. (An INSERT holds no item lock when the trigger runs.)
+-- service_role only. Answers the updated row as jsonb, or NULL when the
+-- release or the item is not there (the route's 404).
+--
 -- Rollback: supabase/rollback/167_*.down.sql puts back 158's trigger body
--- and 146's six-argument function.
+-- and 146's six-argument function, and drops labelos_release_item_update.
 --
 -- Idempotent: CREATE OR REPLACE, DROP ... IF EXISTS first.
 
@@ -198,5 +211,48 @@ $fn$;
 ALTER FUNCTION public.labelos_audit_member_update(uuid, uuid, uuid, jsonb, text, jsonb, jsonb) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.labelos_audit_member_update(uuid, uuid, uuid, jsonb, text, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.labelos_audit_member_update(uuid, uuid, uuid, jsonb, text, jsonb, jsonb) TO service_role;
+
+-- ── 3 ────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.labelos_release_item_update(p_org uuid, p_release uuid, p_item uuid, p_patch jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_row public.release_items%ROWTYPE;
+  v_key text;
+BEGIN
+  IF p_patch IS NULL OR jsonb_typeof(p_patch) <> 'object' OR p_patch = '{}'::jsonb THEN
+    RAISE EXCEPTION 'empty item patch' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  FOR v_key IN SELECT jsonb_object_keys(p_patch) LOOP
+    IF v_key NOT IN ('master_track_id', 'version_title', 'explicit') THEN
+      RAISE EXCEPTION 'unknown item field %', v_key USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+  END LOOP;
+
+  -- The release first, as 144's reorder / remove do.
+  PERFORM 1 FROM public.releases WHERE id = p_release AND org_id = p_org FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  UPDATE public.release_items ri
+  SET master_track_id = CASE WHEN p_patch ? 'master_track_id' THEN (p_patch->>'master_track_id')::uuid ELSE ri.master_track_id END,
+      version_title   = CASE WHEN p_patch ? 'version_title' THEN p_patch->>'version_title' ELSE ri.version_title END,
+      explicit        = CASE WHEN p_patch ? 'explicit' THEN (p_patch->>'explicit')::boolean ELSE ri.explicit END
+  WHERE ri.id = p_item AND ri.release_id = p_release AND ri.org_id = p_org
+  RETURNING ri.* INTO v_row;
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+  RETURN to_jsonb(v_row);
+END;
+$$;
+
+ALTER FUNCTION public.labelos_release_item_update(uuid, uuid, uuid, jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_release_item_update(uuid, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_release_item_update(uuid, uuid, uuid, jsonb) TO service_role;
 
 NOTIFY pgrst, 'reload schema';

@@ -14,6 +14,9 @@
 --   2. an item add and a delivery are serialised: whichever commits first,
 --      the other sees it (two sessions, dblink) — without 167 the add lands
 --      on the delivered release;
+--   2c. an item edit (PATCH …/items/[itemId], through 167's
+--      labelos_release_item_update) racing 144's reorder queues behind it
+--      instead of deadlocking — the plain UPDATE it replaces does deadlock;
 --   3. labelos_audit_member_update compares p_expect under its row lock: a
 --      stale plan writes nothing (no change, no event), also when two admins
 --      call it at the same moment; EXECUTE is service_role only.
@@ -32,6 +35,9 @@
 \set RC  '''f1670000-0000-4000-8000-000000000003'''
 \set RI  '''f1670000-0000-4000-8000-000000000004'''
 \set RR  '''f1670000-0000-4000-8000-000000000005'''
+\set RP  '''f1670000-0000-4000-8000-000000000006'''
+\set IP1 '''a9670000-0000-4000-8000-000000000001'''
+\set IP2 '''a9670000-0000-4000-8000-000000000002'''
 
 INSERT INTO auth.users (id, email) VALUES (:OWN, 'o167@local.test'), (:ADM, 'a167@local.test'), (:MEM, 'm167@local.test');
 INSERT INTO public.organizations (id, name, slug, kind, created_by) VALUES (:L, 'Label 167', 'label-167', 'label', :OWN);
@@ -49,7 +55,8 @@ INSERT INTO public.releases (id, org_id, project_id, contact_id, title, created_
   (:RD, :L, :P, :C, 'Draft', :OWN),
   (:RX, :L, :P, :C, 'Delivered', :OWN),
   (:RC, :L, :P, :C, 'Cancelled', :OWN),
-  (:RR, :L, :P, :C, 'Race', :OWN);
+  (:RR, :L, :P, :C, 'Race', :OWN),
+  (:RP, :L, :P, :C, 'Lock order', :OWN);
 INSERT INTO public.releases (id, org_id, project_id, contact_id, title, created_by, state, imported_released, delivered_at)
   VALUES (:RI, :L, :P, :C, 'Imported', :OWN, 'delivered', true, now());
 
@@ -182,6 +189,67 @@ SELECT * FROM dblink_get_result('s2', false) AS t(r text);
 SELECT dblink_exec('s2', 'ROLLBACK');
 SELECT public.check_eq('the delivered tracklist has no late add',
   (SELECT count(*)::int FROM public.release_items WHERE release_id = :RR), 2);
+
+-- 2c. Lock order. A reorder (144) holds the release FOR UPDATE and then
+-- touches the items. The edit it races must not hold an item while it waits
+-- for the release.
+INSERT INTO public.release_items (id, release_id, org_id, position, song_track_id, master_track_id) VALUES
+  (:IP1, :RP, :L, 1, :S1, :S1), (:IP2, :RP, :L, 2, :S2, :S2);
+
+-- First, why: the plain UPDATE (what the route did before) locks the item,
+-- then waits on the release in 167's trigger; the reorder then waits on the
+-- item. Postgres breaks the cycle by killing one of them.
+SELECT dblink_exec('s1', 'BEGIN');
+SELECT * FROM dblink('s1', format('SELECT 1 FROM public.releases WHERE id = %L FOR UPDATE', :RP)) AS t(x int);
+SELECT dblink_send_query('s2', format('UPDATE public.release_items SET explicit = true WHERE id = %L', :IP1));
+SELECT pg_sleep(0.3);
+SELECT public.check_eq('the plain item UPDATE waits on the release while holding the item', dblink_is_busy('s2'), 1);
+SELECT dblink_send_query('s1', format('SELECT public.labelos_release_items_reorder(%L, %L, ARRAY[%L, %L]::uuid[])::text', :L, :RP, :IP2, :IP1));
+SELECT pg_sleep(1.5);
+SELECT * FROM dblink_get_result('s1', false) AS t(r text);
+SELECT * FROM dblink_get_result('s1', false) AS t(r text);
+SELECT * FROM dblink_get_result('s2', false) AS t(r text);
+SELECT public.check_eq('the old order deadlocks (one side is killed with 40P01)',
+  (dblink_error_message('s1') || dblink_error_message('s2')) ~ 'deadlock detected', true);
+SELECT * FROM dblink_get_result('s2', false) AS t(r text);
+SELECT dblink_exec('s1', 'ROLLBACK');
+UPDATE public.release_items SET explicit = false WHERE release_id = :RP;
+UPDATE public.release_items SET position = CASE id WHEN :IP1 THEN 1 ELSE 2 END WHERE release_id = :RP;
+
+-- Now the edit as the route sends it: it waits on the release BEFORE
+-- touching the item, so the reorder finishes, and the edit lands after it.
+SELECT dblink_exec('s1', 'BEGIN');
+SELECT * FROM dblink('s1', format('SELECT 1 FROM public.releases WHERE id = %L FOR UPDATE', :RP)) AS t(x int);
+SELECT dblink_send_query('s2', format('SELECT public.labelos_release_item_update(%L, %L, %L, %L)::text', :L, :RP, :IP1, '{"explicit":true}'));
+SELECT pg_sleep(0.3);
+SELECT public.check_eq('the edit waits on the release (holding no item)', dblink_is_busy('s2'), 1);
+SELECT * FROM dblink('s1', format('SELECT public.labelos_release_items_reorder(%L, %L, ARRAY[%L, %L]::uuid[])::text', :L, :RP, :IP2, :IP1)) AS t(x text);
+SELECT dblink_exec('s1', 'COMMIT');
+SELECT public.check_eq('the edit then succeeds, after the reorder',
+  ((SELECT r FROM dblink_get_result('s2', false) AS t(r text))::jsonb ->> 'explicit'), 'true');
+SELECT public.check_eq('no error on the editing side', dblink_error_message('s2'), 'OK');
+SELECT * FROM dblink_get_result('s2', false) AS t(r text);
+SELECT public.check_eq('both changes stand: the reorder and the edit',
+  (SELECT string_agg(id::text || ':' || position || ':' || explicit, ',' ORDER BY position) FROM public.release_items WHERE release_id = :RP),
+  'a9670000-0000-4000-8000-000000000002:1:false,a9670000-0000-4000-8000-000000000001:2:true');
+
+-- The function's own answers: NULL for another org's release or an unknown item; unknown keys refused; service_role only.
+SET ROLE service_role;
+SELECT public.check_eq('another org''s release is NULL',
+  public.labelos_release_item_update('b1670000-0000-4000-8000-0000000000ff', :RP, :IP1, '{"explicit":false}'), NULL::jsonb);
+SELECT public.check_eq('an item of another release is NULL',
+  public.labelos_release_item_update(:L, :RP, (SELECT id FROM public.release_items WHERE release_id = :RD LIMIT 1), '{"explicit":false}'), NULL::jsonb);
+SELECT public.check_raises('a field the route never sends is refused',
+  format('SELECT public.labelos_release_item_update(%L, %L, %L, %L)', :L, :RP, :IP1, '{"position":9}'),
+  'unknown item field');
+SELECT public.check_raises('it holds the same tracklist rule: a delivered release refuses the edit',
+  format('SELECT public.labelos_release_item_update(%L, %L, (SELECT id FROM public.release_items WHERE release_id = %L LIMIT 1), %L)', :L, :RX, :RX, '{"explicit":false}'),
+  'a delivered release keeps its tracklist');
+RESET ROLE;
+SELECT public.check_eq('EXECUTE on the item update: service_role only',
+  (SELECT (has_function_privilege('service_role', p.oid, 'EXECUTE'), has_function_privilege('authenticated', p.oid, 'EXECUTE'),
+           has_function_privilege('anon', p.oid, 'EXECUTE'))::text FROM pg_proc p WHERE p.proname = 'labelos_release_item_update'),
+  '(t,f,f)');
 
 -- ═══ 3. Member change compares what the plan was made from ════════════════
 SELECT public.check_eq('only the seven-argument function exists',

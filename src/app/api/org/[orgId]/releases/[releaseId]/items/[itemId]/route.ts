@@ -4,6 +4,8 @@
  *
  * LABEL-16, `release.write` on the release. The song of an item is fixed
  * (remove and add to change it). A new master is checked like an added one.
+ * The edit runs 167's labelos_release_item_update, which locks the release
+ * before the item (the lock order of the reorder / remove functions).
  * Removing runs one database function that deletes the item and moves every
  * later item up one, so positions stay 1..n.
  */
@@ -16,7 +18,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { RELEASE_ITEM_COLUMNS, releaseEventSubject, toReleaseItemView, type ReleaseItemRow } from '@/lib/labelos/releases';
-import { checkItemTracks, importedNeedsOwnerOrAdmin, itemsOf, releaseRow, schemaAware, tracklistLocked, writeError, type ObjectAccessOk } from '../../../access';
+import { checkItemTracks, importedNeedsOwnerOrAdmin, isMissingItemUpdate, itemsOf, releaseRow, schemaAware, tracklistLocked, writeError, type ObjectAccessOk } from '../../../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -62,15 +64,27 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       const tracks = await checkItemTracks(access, item.song_track_id, parsed.data.master_track_id);
       if (!tracks.ok) return tracks.res;
     }
-    const { data, error } = await access.admin
-      .from('release_items')
-      .update(parsed.data)
-      .eq('id', item.id)
-      .eq('release_id', found.release.id)
-      .eq('org_id', access.object.orgId)
-      .select(RELEASE_ITEM_COLUMNS)
-      .single();
-    if (error || !data) return writeError(error ?? {}, 'Could not save the item').res;
+    // 167: the release is locked before the item, the order 144's reorder /
+    // remove take, so an edit and a reorder queue instead of deadlocking.
+    let { data, error } = await access.admin.rpc('labelos_release_item_update', {
+      p_org: access.object.orgId,
+      p_release: found.release.id,
+      p_item: item.id,
+      p_patch: parsed.data,
+    });
+    if (error && isMissingItemUpdate(error)) {
+      // 167 not applied yet: the plain update, as before it.
+      ({ data, error } = await access.admin
+        .from('release_items')
+        .update(parsed.data)
+        .eq('id', item.id)
+        .eq('release_id', found.release.id)
+        .eq('org_id', access.object.orgId)
+        .select(RELEASE_ITEM_COLUMNS)
+        .maybeSingle());
+    }
+    if (error) return writeError(error, 'Could not save the item').res;
+    if (!data) return notFound();
     await recordEvent(
       access.admin,
       { orgId: access.object.orgId, userId: access.userId },

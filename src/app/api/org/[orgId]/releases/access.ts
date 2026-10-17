@@ -86,6 +86,9 @@ export function importedNeedsOwnerOrAdmin(release: Pick<ReleaseRow, 'imported_re
 /** A Postgres error from a write, as the member should see it. */
 export function writeError(error: { code?: string; message?: string }, fallback: string): OwnershipFail {
   if (isMissingSchema(error)) return notReady();
+  // Two tracklist writes that met on their locks (167 orders them, so this is
+  // a safety net): retry, never a 500.
+  if (error.code === '40P01' || error.code === '40001') return conflict();
   // The deferred position check: another edit of the tracklist got there
   // first (a race, not bad input), so it is a conflict to retry.
   if (error.code === '23514' && /no gap/.test(error.message ?? '')) return conflict();
@@ -103,6 +106,11 @@ export function writeError(error: { code?: string; message?: string }, fallback:
   if (error.code === '23505') return conflict();
   if (error.code === '23503') return fail(409, 'Something this release points at no longer exists');
   return fail(500, fallback);
+}
+
+/** 167's labelos_release_item_update is not there yet (the migration is unapplied). */
+export function isMissingItemUpdate(error: { code?: string; message?: string }): boolean {
+  return /labelos_release_item_update/.test(error.message ?? '') && (error.code === 'PGRST202' || error.code === '42883');
 }
 
 export type ReleaseAccess = { ok: true; release: ReleaseRow };
