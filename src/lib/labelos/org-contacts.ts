@@ -16,7 +16,7 @@ import type { AdminClient } from '@/lib/auth/ownership';
 import { normalizeEmail } from '@/lib/contacts/email';
 import { contactGroups, type RoleGroup } from '@/lib/contacts/roles';
 import { isUUID } from '@/lib/validate';
-import { isRosterContact, NO_WORKSPACE } from './roster';
+import { isRosterContact, isSecondArtistError, NO_WORKSPACE } from './roster';
 import { pageAll } from './paged-read';
 
 /**
@@ -76,6 +76,8 @@ export function toContactWrite<T extends { email?: string | null }>(body: T): T 
 
 /** The org directory's unique (org, email) index (139) refused the write. */
 export function isDuplicateEmail(error: { code?: string; message?: string } | null): boolean {
+  // 166's one-artist index is a unique violation too; it is not an email clash.
+  if (isSecondArtistError(error)) return false;
   return !!error && (error.code === '23505' || /contacts_org_email_uniq/.test(error.message ?? ''));
 }
 

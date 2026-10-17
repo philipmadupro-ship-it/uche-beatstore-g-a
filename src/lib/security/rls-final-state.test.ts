@@ -619,6 +619,72 @@ describe('final RLS policy state', () => {
     });
   });
 
+  describe('Label OS playlist_tracks same owner (mig 165, LABEL-44)', () => {
+    const sql = () => readFileSync(join(DIR, '165_labelos_playlist_tracks_same_owner.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('a BEFORE INSERT OR UPDATE OF playlist_id, track_id trigger joins only the playlist owner’s own producer tracks', () => {
+      expect(sql()).toMatch(/CREATE TRIGGER playlist_tracks_same_owner\s+BEFORE INSERT OR UPDATE OF playlist_id, track_id ON public\.playlist_tracks/);
+      expect(sql()).toMatch(/t\.user_id = p\.user_id AND t\.org_id IS NULL/);
+    });
+
+    it('changes no playlist policy (097’s owner_via_playlist stays the producer’s rule)', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '165')).policies;
+      expect(policies.get('playlist_tracks.owner_via_playlist')).toBe(before.get('playlist_tracks.owner_via_playlist'));
+      expect(policies.get('playlists.owner_only')).toBe(before.get('playlists.owner_only'));
+      expect(sql()).not.toMatch(/CREATE POLICY|GRANT /i);
+    });
+  });
+
+  describe('Label OS one artist per artist org (mig 166, LABEL-44)', () => {
+    const sql = () => readFileSync(join(DIR, '166_labelos_one_artist_per_artist_org.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('a partial unique index on the trigger-kept flag, and no policy or grant', () => {
+      expect(sql()).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS contacts_one_artist_per_artist_org\s+ON public\.contacts \(org_id\)\s+WHERE org_self_artist/);
+      // The flag is computed from the row and its org on every write; the writer's value is never kept.
+      expect(sql()).toMatch(/NEW\.org_self_artist := \(public\.labelos_is_artist_category/);
+      expect(sql()).not.toMatch(/CREATE POLICY|GRANT /i);
+    });
+
+    it('leaves every contacts policy as it was', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '166')).policies;
+      for (const [key, body] of policies) if (key.startsWith('contacts.')) expect(body, key).toBe(before.get(key));
+    });
+  });
+
+  describe('Label OS tracklist lock + member compare-and-set (mig 167, LABEL-44)', () => {
+    const sql = () => readFileSync(join(DIR, '167_labelos_release_items_lock_member_cas.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('the tracklist trigger takes FOR SHARE on the release and allows only a draft or an unlisted import', () => {
+      expect(sql()).toMatch(/FOR SHARE OF r;/);
+      expect(sql()).toMatch(/IF v_state = 'draft' OR \(v_imported AND v_state = 'delivered'\) THEN/);
+      expect(sql()).toMatch(/CREATE TRIGGER release_items_store_lock BEFORE INSERT OR UPDATE OR DELETE ON public\.release_items/);
+    });
+
+    it('the member update keeps service_role-only EXECUTE and drops the old signature', () => {
+      expect(sql()).toMatch(/DROP FUNCTION IF EXISTS public\.labelos_audit_member_update\(uuid, uuid, uuid, jsonb, text, jsonb\);/);
+      expect(sql()).toMatch(/REVOKE ALL ON FUNCTION public\.labelos_audit_member_update\(uuid, uuid, uuid, jsonb, text, jsonb, jsonb\) FROM PUBLIC, anon, authenticated;/);
+      expect(sql()).toMatch(/GRANT EXECUTE ON FUNCTION public\.labelos_audit_member_update\(uuid, uuid, uuid, jsonb, text, jsonb, jsonb\) TO service_role;/);
+      expect(sql()).not.toMatch(/TO (anon|authenticated)\b/);
+    });
+
+    it('the item edit locks the release before the item (144’s order), service_role only', () => {
+      const body = sql();
+      const fn = body.slice(body.indexOf('FUNCTION public.labelos_release_item_update('));
+      expect(fn.indexOf('FROM public.releases WHERE id = p_release AND org_id = p_org FOR UPDATE')).toBeGreaterThan(-1);
+      expect(fn.indexOf('FOR UPDATE')).toBeLessThan(fn.indexOf('UPDATE public.release_items'));
+      expect(body).toMatch(/REVOKE ALL ON FUNCTION public\.labelos_release_item_update\(uuid, uuid, uuid, jsonb\) FROM PUBLIC, anon, authenticated;/);
+      expect(body).toMatch(/GRANT EXECUTE ON FUNCTION public\.labelos_release_item_update\(uuid, uuid, uuid, jsonb\) TO service_role;/);
+    });
+
+    it('changes no policy on releases, release_items or org_members', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '167')).policies;
+      for (const [key, body] of policies) {
+        if (/^(releases|release_items|org_members)\./.test(key)) expect(body, key).toBe(before.get(key));
+      }
+      expect(sql()).not.toMatch(/CREATE POLICY/i);
+    });
+  });
+
   describe('Label OS approvals (mig 157, LABEL-30)', () => {
     const onApprovals = () => [...policies].filter(([k]) => k.startsWith('approvals.'));
 
