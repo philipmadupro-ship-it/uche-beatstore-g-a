@@ -15,6 +15,9 @@
  *  - 32 random bytes; only their sha-256 is stored. The token leaves this
  *    route in exactly one place, the email, and is never logged or returned.
  *  - 7-day expiry. Rate-limited per org and per address (rate_limits, 074).
+ *  - The licence's seat cap (LABEL-47): with `max_seats` set, an invitation
+ *    for a role that takes a seat is 409 once members + pending invitations
+ *    fill it. Joining re-checks it in the database.
  *  - `invitation.created` is an audit event, written by the database function
  *    that inserts the invitation (LABEL-19, migration 146): one transaction,
  *    and the same function enforces one pending invitation per address under
@@ -30,6 +33,8 @@ import { AUDIT_RPC_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/
 import { inviterDisplayName, sendInvitationEmail } from '@/lib/labelos/invitation-email';
 import { INVITATION_TTL_MS, newInvitationToken, validateInvitationGrant } from '@/lib/labelos/invitations';
 import { missingRosterContacts } from '@/lib/labelos/org-contacts';
+import { seatLimitError, takesSeat } from '@/lib/labelos/entitlements';
+import { seatsInUse } from '@/lib/labelos/entitlements-store';
 import { createLogger } from '@/lib/log';
 import { rateLimitDurable } from '@/lib/security/rate-limit';
 import { readBody } from '@/lib/validate';
@@ -135,6 +140,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     if (orgRes.error) throw new Error(orgRes.error.message);
     const pending = (pendingRes.data ?? []) as unknown as { id: string }[];
     if (pending.length > 0) return conflict(pending[0].id);
+    // The licence's seat cap (LABEL-47; null = unlimited). A roster artist does not take a seat.
+    if (takesSeat(grant.role) && access.entitlements?.maxSeats != null) {
+      const full = seatLimitError(await seatsInUse(admin, access.orgId), access.entitlements.maxSeats);
+      if (full) return NextResponse.json({ error: full, code: 'seat_limit' }, { status: 409 });
+    }
     const orgName = (orgRes.data as { name?: string } | null)?.name ?? 'your organization';
 
     // Counted only for invitations that will actually be written, so a 400

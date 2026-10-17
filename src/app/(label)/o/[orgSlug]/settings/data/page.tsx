@@ -30,7 +30,7 @@ export default function OrgDataPage() {
         <h1 className="font-heading text-[28px] font-bold leading-[1.05] tracking-tight text-white sm:text-[32px] md:text-[40px]">Export &amp; deletion</h1>
         <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-white/70">Take a copy of {org.name}, or close it down.</p>
       </header>
-      <OrgDataPanel org={org} isOwner={shell.role === 'owner'} />
+      <OrgDataPanel org={org} isOwner={shell.role === 'owner'} exportable={!shell.modules || shell.modules.includes('export')} />
     </PageContainer>
   );
 }

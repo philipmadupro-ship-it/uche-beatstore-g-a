@@ -21,6 +21,8 @@
  *   creditDecide             credit.confirmed | credit.disputed (153, LABEL-27)
  *   splitCirculate           split_sheet.circulated (+ .superseded for the version it replaces) (155, LABEL-28)
  *   splitSign                split_sheet.signed (155, LABEL-28)
+ *   platformCreateLicensee   org.created + org.entitlements_changed in the new org (170, LABEL-47)
+ *   platformSetEntitlements  org.entitlements_changed in the licensee org (170, LABEL-47)
  *
  * Accepting an invitation (`member.joined`) is 138's
  * `labelos_accept_invitation` (lib/labelos/invitations.ts), which already
@@ -31,7 +33,7 @@
  * `auditRpc` is the one caller. The route does the authorisation and the
  * planning (requireOrgCapability, planMemberChange); the function does only
  * what the database can know for itself, and the route reads its answer:
- * `{ error: 'not_found' | 'not_scoped' | 'pending' | 'not_pending' }` for the expected
+ * `{ error: 'not_found' | 'not_scoped' | 'pending' | 'not_pending' | 'changed' }` for the expected
  * refusals, a thrown error for everything else.
  *
  * `src/app/api/org/coverage.test.ts` requires every mutating org handler to
@@ -39,6 +41,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { EventPayload } from './activity';
+import type { MemberExpectation } from './members';
 
 export const AUDIT_RPCS = {
   memberUpdate: 'labelos_audit_member_update',
@@ -63,6 +66,9 @@ export const AUDIT_RPCS = {
   // Migration 157 (LABEL-30): an approval is requested of one member, or decided, with its event.
   approvalRequest: 'labelos_audit_approval_request',
   approvalDecide: 'labelos_audit_approval_decide',
+  // Migration 170 (LABEL-47): the platform console. The event lands in the AFFECTED org, the operator as actor.
+  platformCreateLicensee: 'labelos_platform_create_licensee',
+  platformSetEntitlements: 'labelos_platform_set_entitlements',
 } as const;
 export type AuditRpcKey = keyof typeof AUDIT_RPCS;
 
@@ -75,6 +81,13 @@ export type AuditRpcArgs = {
     p_patch: Record<string, unknown>;
     p_verb: 'member.role_changed' | 'member.capabilities_changed' | 'member.scope_changed';
     p_payload: EventPayload;
+    /**
+     * Migration 167: the row the plan was made from (lib/labelos/members
+     * `memberExpectation`). The function compares it under its row lock and
+     * answers `{ error: 'changed' }`, writing nothing, when it moved. Left
+     * out only by the members route's fallback while 167 is unapplied.
+     */
+    p_expect?: MemberExpectation;
   };
   memberRemove: { p_org: string; p_actor: string; p_user: string; p_payload: EventPayload };
   memberArtistsSet: { p_org: string; p_actor: string; p_user: string; p_contact_ids: string[]; p_payload: EventPayload };
@@ -193,6 +206,26 @@ export type AuditRpcArgs = {
     /** Owner or admin, from the live membership: the one exception to "a requester does not approve their own request". */
     p_may_self_approve: boolean;
     p_ctx: { artist_id: string | null; project_id: string | null; song_id: string | null; release_id: string | null };
+    p_payload: EventPayload;
+  };
+  /** A new licensee org + its licence: `org.created` and `org.entitlements_changed` in the new org. */
+  platformCreateLicensee: {
+    p_actor: string;
+    p_name: string;
+    p_slug: string;
+    p_kind: 'artist' | 'label';
+    p_modules: string[];
+    p_max_seats: number | null;
+    p_max_artists: number | null;
+    p_payload: EventPayload;
+  };
+  /** Replace a licensee's licence: `org.entitlements_changed` in that org. */
+  platformSetEntitlements: {
+    p_actor: string;
+    p_org: string;
+    p_modules: string[];
+    p_max_seats: number | null;
+    p_max_artists: number | null;
     p_payload: EventPayload;
   };
 };

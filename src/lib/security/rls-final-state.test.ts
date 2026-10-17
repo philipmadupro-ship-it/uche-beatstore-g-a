@@ -120,6 +120,9 @@ function labelOsTables(): string[] {
     'org_digest_channels',
     // 169_labelos_overview_seen_per_org.sql (LABEL-46)
     'org_overview_seen',
+    // 170_labelos_entitlements_platform.sql (LABEL-47)
+    'org_entitlements',
+    'platform_admins',
   ];
 }
 
@@ -147,6 +150,10 @@ const ORG_HELPERS = [
   'labelos_scoped_parties',
   // 155 (LABEL-28): the caller's own split lines, one uncorrelated call, for split_sheets / split_lines.
   'labelos_my_split_lines',
+  // 164 (LABEL-43): the (org, member) pairs the caller may see, one uncorrelated call, for org_members / user_profiles.
+  'labelos_visible_members',
+  // 164 (LABEL-43): the caller's own live orgs, the own-row fast path of org_members_member_read.
+  'labelos_my_live_orgs',
 ];
 const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 
@@ -169,6 +176,15 @@ function keysOnOrg(body: string): boolean {
   return /\borg_id\b/i.test(body) && /\bauth\.uid\s*\(/i.test(body);
 }
 
+/**
+ * Platform tables (LABEL-47) are not org-tenant: `platform_admins` says who
+ * operates the whole platform, so the right key is the caller's own row and
+ * nothing else. Only these tables may key on `user_id = auth.uid()`, and only
+ * in a SELECT policy (the 'platform_admins is self-read only' test pins it).
+ */
+const PLATFORM_SELF_TABLES = new Set(['platform_admins']);
+const SELF_ROW = /\buser_id\s*=\s*\(\s*SELECT\s+auth\.uid\s*\(\s*\)\s*\)/i;
+
 const DENY_ALL = /\bUSING\s*\(\s*false\s*\)(?![\s\S]*\bWITH CHECK\s*\(\s*(?!false\s*\)))/i;
 // `USING (true)` and its disguises: a helper call OR-ed with a constant is still open to everyone, and the
 // "keys on a helper" check below would pass it because the helper IS named in the body.
@@ -186,7 +202,8 @@ function labelOsViolations(state: ReplayState, tables: string[]): string[] {
     for (const [key, body] of state.policies) {
       if (!key.startsWith(`${table}.`)) continue;
       if (OPEN_PREDICATE.test(body)) out.push(`${key}: USING (true) / WITH CHECK (true)`);
-      if (!keysOnOrg(body)) out.push(`${key}: no org_id, membership helper or parent-EXISTS predicate`);
+      const platformSelf = PLATFORM_SELF_TABLES.has(table) && /FOR\s+SELECT/i.test(body) && SELF_ROW.test(body);
+      if (!keysOnOrg(body) && !platformSelf) out.push(`${key}: no org_id, membership helper or parent-EXISTS predicate`);
     }
   }
   return out;
@@ -520,6 +537,154 @@ describe('final RLS policy state', () => {
     });
   });
 
+  describe('Label OS split sheet column grants (mig 162, LABEL-43)', () => {
+    const sql = () => readFileSync(join(DIR, '162_labelos_split_sheets_column_grants.sql'), 'utf8').replace(/--[^\n]*/g, '');
+    // The columns an own-line reader (D2) may see; never the negotiation note or who did what.
+    const GRANTED = ['id', 'org_id', 'track_id', 'kind', 'version', 'status', 'circulated_at', 'signed_at', 'superseded_at', 'created_at'];
+    const HIDDEN = ['note', 'created_by', 'circulated_by', 'document_asset_id', 'superseded_by', 'updated_at'];
+
+    it('revokes the table-wide SELECT from the API roles and grants back only the listed columns', () => {
+      expect(sql()).toMatch(/REVOKE SELECT ON public\.split_sheets FROM anon, authenticated/);
+      for (const role of ['authenticated', 'anon']) {
+        const grant = sql().match(new RegExp(`GRANT SELECT \\(([^)]*)\\)\\s+ON public\\.split_sheets TO ${role};`));
+        expect(grant, `column grant to ${role}`).not.toBeNull();
+        const cols = grant![1].split(',').map((c) => c.trim());
+        expect(cols.sort(), role).toEqual([...GRANTED].sort());
+        for (const hidden of HIDDEN) expect(cols, `${role}: ${hidden}`).not.toContain(hidden);
+      }
+      // No table-wide grant comes back — here or in any later migration (a re-grant would reopen the note).
+      const later = realMigrations().filter((m) => m.name >= '162');
+      for (const m of later) {
+        const body = readFileSync(join(DIR, m.name), 'utf8').replace(/--[^\n]*/g, '');
+        expect(body, m.name).not.toMatch(/GRANT\s+(SELECT|ALL)(\s+PRIVILEGES)?\s+ON\s+(TABLE\s+)?(public\.)?split_sheets\b/i);
+        expect(body, m.name).not.toMatch(/GRANT\s+(SELECT|ALL)(\s+PRIVILEGES)?\s+ON\s+ALL\s+TABLES\s+IN\s+SCHEMA\s+public\s+TO[^;]*\b(anon|authenticated)\b/i);
+      }
+    });
+
+    it('changes no policy: the row rule stays 155’s, only the columns narrow', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '162')).policies;
+      expect(policies.get('split_sheets.split_sheets_member_read')).toBe(before.get('split_sheets.split_sheets_member_read'));
+    });
+  });
+
+  describe('Label OS audit rows are immutable (mig 163, LABEL-43)', () => {
+    const sql = () => readFileSync(join(DIR, '163_labelos_audit_events_immutable.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('a BEFORE UPDATE OR DELETE row trigger guards activity_events, for every role (a trigger, not a policy or a grant)', () => {
+      expect(sql()).toMatch(/CREATE TRIGGER activity_events_audit_immutable\s+BEFORE UPDATE OR DELETE ON public\.activity_events\s+FOR EACH ROW EXECUTE FUNCTION public\.activity_events_audit_immutable\(\)/);
+    });
+
+    it('lets through only the cascade from a deleted organization and the actor FK being nulled', () => {
+      const body = sql();
+      expect(body).toMatch(/OLD\.audit/);
+      expect(body).toMatch(/NOT EXISTS \(SELECT 1 FROM public\.organizations o WHERE o\.id = OLD\.org_id\)/);
+      expect(body).toMatch(/NOT EXISTS \(SELECT 1 FROM auth\.users u WHERE u\.id = OLD\.actor_id\)/);
+      // No session switch can turn it off: nothing reads a GUC or the role name.
+      expect(body).not.toMatch(/current_setting|current_user|session_user|auth\.role\(/i);
+    });
+
+    it('changes no activity_events policy', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '163')).policies;
+      expect(policies.get('activity_events.activity_events_member_read')).toBe(before.get('activity_events.activity_events_member_read'));
+    });
+  });
+
+  describe('Label OS member and profile reads (mig 164, LABEL-43)', () => {
+    it('org_members_member_read and user_profiles_self_or_co_member_read both read the one uncorrelated helper', () => {
+      const members = policies.get('org_members.org_members_member_read') ?? '';
+      const profiles = policies.get('user_profiles.user_profiles_self_or_co_member_read') ?? '';
+      expect(members).toMatch(/^\s*FOR SELECT\s+USING\b/i);
+      expect(members).toMatch(/\(org_id, user_id\) IN \(\s*SELECT v\.org_id, v\.user_id FROM public\.labelos_visible_members\(\) v\s*\)/);
+      // The own-row fast path still requires a LIVE org (a soft-deleted org's row is hidden from its own member).
+      expect(members).toMatch(/user_id = \(SELECT auth\.uid\(\)\) AND org_id IN \(SELECT lo\.org_id FROM public\.labelos_my_live_orgs\(\) lo\)/);
+      expect(profiles).toMatch(/^\s*FOR SELECT\s+USING\b/i);
+      expect(profiles).toMatch(/user_id = \(SELECT auth\.uid\(\)\)/);
+      expect(profiles).toMatch(/user_id IN \(\s*SELECT v\.user_id FROM public\.labelos_visible_members\(\) v\s*\)/);
+    });
+
+    it('neither policy calls a helper keyed on the row (R-08): no org_role(org_id), no correlated EXISTS', () => {
+      for (const key of ['org_members.org_members_member_read', 'user_profiles.user_profiles_self_or_co_member_read']) {
+        const body = policies.get(key) ?? '';
+        expect(body, key).not.toMatch(/org_role\(|has_org_cap\(|can_see_/);
+        expect(body, key).not.toMatch(/EXISTS/i);
+        expect(body, key).not.toMatch(/WITH CHECK/i);
+      }
+    });
+
+    it('the write policies on org_members are 136’s, untouched', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '164')).policies;
+      for (const key of ['org_members.org_members_manage_update', 'org_members.org_members_manage_delete']) {
+        expect(policies.get(key), key).toBe(before.get(key));
+      }
+    });
+  });
+
+  describe('Label OS playlist_tracks same owner (mig 165, LABEL-44)', () => {
+    const sql = () => readFileSync(join(DIR, '165_labelos_playlist_tracks_same_owner.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('a BEFORE INSERT OR UPDATE OF playlist_id, track_id trigger joins only the playlist owner’s own producer tracks', () => {
+      expect(sql()).toMatch(/CREATE TRIGGER playlist_tracks_same_owner\s+BEFORE INSERT OR UPDATE OF playlist_id, track_id ON public\.playlist_tracks/);
+      expect(sql()).toMatch(/t\.user_id = p\.user_id AND t\.org_id IS NULL/);
+    });
+
+    it('changes no playlist policy (097’s owner_via_playlist stays the producer’s rule)', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '165')).policies;
+      expect(policies.get('playlist_tracks.owner_via_playlist')).toBe(before.get('playlist_tracks.owner_via_playlist'));
+      expect(policies.get('playlists.owner_only')).toBe(before.get('playlists.owner_only'));
+      expect(sql()).not.toMatch(/CREATE POLICY|GRANT /i);
+    });
+  });
+
+  describe('Label OS one artist per artist org (mig 166, LABEL-44)', () => {
+    const sql = () => readFileSync(join(DIR, '166_labelos_one_artist_per_artist_org.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('a partial unique index on the trigger-kept flag, and no policy or grant', () => {
+      expect(sql()).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS contacts_one_artist_per_artist_org\s+ON public\.contacts \(org_id\)\s+WHERE org_self_artist/);
+      // The flag is computed from the row and its org on every write; the writer's value is never kept.
+      expect(sql()).toMatch(/NEW\.org_self_artist := \(public\.labelos_is_artist_category/);
+      expect(sql()).not.toMatch(/CREATE POLICY|GRANT /i);
+    });
+
+    it('leaves every contacts policy as it was', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '166')).policies;
+      for (const [key, body] of policies) if (key.startsWith('contacts.')) expect(body, key).toBe(before.get(key));
+    });
+  });
+
+  describe('Label OS tracklist lock + member compare-and-set (mig 167, LABEL-44)', () => {
+    const sql = () => readFileSync(join(DIR, '167_labelos_release_items_lock_member_cas.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('the tracklist trigger takes FOR SHARE on the release and allows only a draft or an unlisted import', () => {
+      expect(sql()).toMatch(/FOR SHARE OF r;/);
+      expect(sql()).toMatch(/IF v_state = 'draft' OR \(v_imported AND v_state = 'delivered'\) THEN/);
+      expect(sql()).toMatch(/CREATE TRIGGER release_items_store_lock BEFORE INSERT OR UPDATE OR DELETE ON public\.release_items/);
+    });
+
+    it('the member update keeps service_role-only EXECUTE and drops the old signature', () => {
+      expect(sql()).toMatch(/DROP FUNCTION IF EXISTS public\.labelos_audit_member_update\(uuid, uuid, uuid, jsonb, text, jsonb\);/);
+      expect(sql()).toMatch(/REVOKE ALL ON FUNCTION public\.labelos_audit_member_update\(uuid, uuid, uuid, jsonb, text, jsonb, jsonb\) FROM PUBLIC, anon, authenticated;/);
+      expect(sql()).toMatch(/GRANT EXECUTE ON FUNCTION public\.labelos_audit_member_update\(uuid, uuid, uuid, jsonb, text, jsonb, jsonb\) TO service_role;/);
+      expect(sql()).not.toMatch(/TO (anon|authenticated)\b/);
+    });
+
+    it('the item edit locks the release before the item (144’s order), service_role only', () => {
+      const body = sql();
+      const fn = body.slice(body.indexOf('FUNCTION public.labelos_release_item_update('));
+      expect(fn.indexOf('FROM public.releases WHERE id = p_release AND org_id = p_org FOR UPDATE')).toBeGreaterThan(-1);
+      expect(fn.indexOf('FOR UPDATE')).toBeLessThan(fn.indexOf('UPDATE public.release_items'));
+      expect(body).toMatch(/REVOKE ALL ON FUNCTION public\.labelos_release_item_update\(uuid, uuid, uuid, jsonb\) FROM PUBLIC, anon, authenticated;/);
+      expect(body).toMatch(/GRANT EXECUTE ON FUNCTION public\.labelos_release_item_update\(uuid, uuid, uuid, jsonb\) TO service_role;/);
+    });
+
+    it('changes no policy on releases, release_items or org_members', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '167')).policies;
+      for (const [key, body] of policies) {
+        if (/^(releases|release_items|org_members)\./.test(key)) expect(body, key).toBe(before.get(key));
+      }
+      expect(sql()).not.toMatch(/CREATE POLICY/i);
+    });
+  });
+
   describe('Label OS approvals (mig 157, LABEL-30)', () => {
     const onApprovals = () => [...policies].filter(([k]) => k.startsWith('approvals.'));
 
@@ -677,6 +842,23 @@ describe('Label OS RLS guards (LABEL-04)', () => {
 
   it('the real migrations pass every Label OS guard', () => {
     expect(labelOsViolations(realState, labelOsTables())).toEqual([]);
+  });
+
+  it('platform_admins is self-read only, and org_entitlements is read by members only (170)', () => {
+    const admins = [...realState.policies].filter(([k]) => k.startsWith('platform_admins.'));
+    expect(admins.map(([k]) => k)).toEqual(['platform_admins.platform_admins_self_read']);
+    expect(admins[0][1]).toMatch(/FOR\s+SELECT/i);
+    expect(admins[0][1]).toMatch(SELF_ROW);
+    const ent = [...realState.policies].filter(([k]) => k.startsWith('org_entitlements.'));
+    expect(ent.map(([k]) => k)).toEqual(['org_entitlements.org_entitlements_member_read']);
+    expect(ent[0][1]).toMatch(/FOR\s+SELECT/i);
+    expect(ent[0][1]).toMatch(/org_role\s*\(\s*org_id\s*\)/i);
+  });
+
+  it('a self-row policy is accepted only on a platform table', () => {
+    const body = 'CREATE POLICY x ON public.org_members FOR SELECT TO authenticated USING (user_id = (SELECT auth.uid()));';
+    const state = { ...realState, policies: new Map([...realState.policies, ['org_members.self_only', body]]) };
+    expect(labelOsViolations(state as typeof realState, ['org_members'])).toContain('org_members.self_only: no org_id, membership helper or parent-EXISTS predicate');
   });
 
   it('the replay sees the real RLS switches (sanity)', () => {

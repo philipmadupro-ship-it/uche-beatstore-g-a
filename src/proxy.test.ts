@@ -124,7 +124,8 @@ describe('proxy login redirect', () => {
 const API_DIR = path.join(process.cwd(), 'src', 'app', 'api');
 const EXISTING_API_FOLDERS = fs
   .readdirSync(API_DIR, { withFileTypes: true })
-  .filter((d) => d.isDirectory() && d.name !== 'org')
+  // `org` and `platform` (LABEL-47) are the Label OS namespaces, tested on their own below.
+  .filter((d) => d.isDirectory() && d.name !== 'org' && d.name !== 'platform')
   .map((d) => d.name)
   .sort();
 
@@ -341,6 +342,46 @@ describe('Label OS gate: flag on', () => {
 // `/api/org/join` (and the `/join/<token>` page): any signed-in caller
 // reaches the route, which does all of the authorisation. Nothing else moves:
 // the table tests above still pass unchanged for every existing path.
+
+describe('Platform console paths (LABEL-47)', () => {
+  const PATHS = ['/api/platform/licensees', '/api/platform/licensees/abc', '/platform'];
+
+  it('do not exist while the flag is off, for anyone', async () => {
+    for (const id of [null, 'buyer-1', 'producer-1', 'member-1']) {
+      currentUser = id ? { id } : null;
+      for (const p of PATHS) expect((await run(p)).status, `${id} ${p}`).toBe(404);
+    }
+  });
+
+  it('flag on: reach the route or page, which decides (404 for non-operators); membership is never read', async () => {
+    vi.stubEnv('LABEL_OS_ENABLED', 'true');
+    memberIds.add('member-1');
+    for (const id of [null, 'buyer-1', 'producer-1', 'member-1']) {
+      currentUser = id ? { id } : null;
+      for (const p of PATHS) {
+        const res = await run(p);
+        expect(res.status, `${id} ${p}`).toBe(200);
+        expect(res.headers.get('location'), `${id} ${p}: no login or membership redirect`).toBeNull();
+      }
+    }
+    expect(membershipReads).toBe(0);
+  });
+
+  it('flag on: answer 503 without a database', async () => {
+    vi.stubEnv('LABEL_OS_ENABLED', 'true');
+    vi.stubEnv('ENABLE_LOCAL_STORE', 'true');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '');
+    for (const p of PATHS) expect((await run(p)).status, p).toBe(503);
+  });
+
+  it('look-alikes are ordinary producer paths', async () => {
+    vi.stubEnv('LABEL_OS_ENABLED', 'true');
+    currentUser = { id: 'member-1' };
+    expect((await run('/api/platforms')).status).toBe(403);
+    expect((await run('/api/platform-x')).status).toBe(403);
+  });
+});
 
 describe('Label OS join admission (flag on)', () => {
   beforeEach(() => vi.stubEnv('LABEL_OS_ENABLED', 'true'));

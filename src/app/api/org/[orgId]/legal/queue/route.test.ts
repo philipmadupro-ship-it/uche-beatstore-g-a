@@ -192,3 +192,32 @@ describe('who may open it', () => {
     expect([403, 404]).toContain((await get(EDITOR)).status);
   });
 });
+
+describe('licensed modules (LABEL-47): the queue is part of `contracts`', () => {
+  const licence = (org: string, modules: string[]) => ({ org_id: org, modules, max_seats: null, max_artists: null, setup_done: true });
+
+  it('no licence row: unchanged, every module', async () => {
+    expect((await get(LG)).status).toBe(200);
+    expect((await get(OWN)).status).toBe(200);
+  });
+
+  it('an org licensed without contracts: 404 for everyone in it, the owner included, never 403', async () => {
+    db.tables.org_entitlements = [licence(L, ['export', 'digest'])];
+    for (const who of [OWN, LG, LGK, AR, PRD]) expect((await get(who)).status, who).toBe(404);
+  });
+
+  it('another org’s licence changes nothing here, and this one nothing there', async () => {
+    db.tables.org_entitlements = [licence(L2, [])];
+    expect((await get(LG)).status).toBe(200);
+    db.tables.org_entitlements = [licence(L, [])];
+    // L2's owner is still refused as a non-member (403), exactly as before: a licence never widens anything.
+    expect((await get(X)).status).toBe(403);
+    expect((await get(X, L2)).status).toBe(200);
+  });
+
+  it('licensed with contracts: back as before', async () => {
+    db.tables.org_entitlements = [licence(L, ['contracts'])];
+    expect((await get(LG)).status).toBe(200);
+    expect((await get(AR)).status).toBe(403);
+  });
+});

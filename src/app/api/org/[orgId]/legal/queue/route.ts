@@ -9,7 +9,7 @@
  * never reach it (requireOrgMember answers "not a member").
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireOrgMember } from '@/lib/auth/org-access';
+import { requireOrgModule } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -32,7 +32,8 @@ const json = (status: number, body: Record<string, unknown>) => NextResponse.jso
 export async function GET(_req: NextRequest, { params }: Params) {
   const { orgId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'The legal queue needs Supabase.' });
-  const access = await requireOrgMember(orgId);
+  // The legal queue is part of the contracts module (LABEL-47): 404 for an org not licensed for it.
+  const access = await requireOrgModule(orgId, 'contracts');
   if (!access.ok) return access.res;
   if (!canSeeLegalQueue(access.capabilities)) return json(403, { error: 'Forbidden' });
   try {

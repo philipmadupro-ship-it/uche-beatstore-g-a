@@ -28,6 +28,9 @@ let auditFails = false;
 let emailResult: { sent: boolean; reason?: string } = { sent: true };
 let revokeRow: { accepted_at: string | null; revoked_at: string | null } | null = null;
 let admin: ReturnType<typeof fakeAdmin>;
+/** LABEL-47: the org's licence on the access context (undefined = the default), and the seats the counts report. */
+let entitlements: { modules: Set<string>; maxSeats: number | null; maxArtists: number | null; setupDone: boolean; licensed: boolean } | undefined;
+let seatCounts = { members: 0, pending: 0 };
 const events: unknown[][] = [];
 const emails: Record<string, unknown>[] = [];
 const logged: unknown[] = [];
@@ -41,6 +44,7 @@ const accessOk = () => ({
   role: 'admin',
   scope: 'org',
   capabilities: new Set(['members.manage']),
+  ...(entitlements ? { entitlements } : {}),
 });
 
 vi.mock('@/lib/auth/org-access', () => ({
@@ -90,6 +94,16 @@ function answer(chain: Chain): Answer {
     return { data: asked.filter((id) => orgContacts.includes(id)).map((id) => ({ id, category: 'artist', secondary_category: null })), error: null };
   }
   if (chain.table === 'organizations') return { data: { name: 'Night Shift' }, error: null };
+  if (chain.table === 'org_members') {
+    // The seat count (LABEL-47): this org's members whose role takes a seat.
+    expect(eqs(chain)).toEqual({ org_id: ORG });
+    expect(opOf(chain, 'neq')?.args).toEqual(['role', 'artist']);
+    return { data: null, error: null, count: seatCounts.members } as Answer;
+  }
+  if (chain.table === 'org_invitations' && opOf(chain, 'neq')) {
+    expect(eqs(chain)).toEqual({ org_id: ORG });
+    return { data: null, error: null, count: seatCounts.pending } as Answer;
+  }
   if (chain.table === 'org_invitations') {
     // The route never writes the table itself any more: only reads.
     expect(opOf(chain, 'insert') ?? opOf(chain, 'update') ?? opOf(chain, 'delete')).toBeUndefined();
@@ -115,6 +129,8 @@ function rpc(name: string, args: Record<string, unknown>): Answer {
 }
 
 beforeEach(() => {
+  entitlements = undefined;
+  seatCounts = { members: 0, pending: 0 };
   orgContacts = [C1];
   denied = null;
   orgKind = 'label';
@@ -361,5 +377,36 @@ describe('GET invitations (LABEL-09)', () => {
     const { GET } = await import('./route');
     const res = await GET(new NextRequest(`https://app.test/api/org/${ORG}/invitations`), { params: Promise.resolve({ orgId: ORG }) });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('POST invitations: the seat cap (LABEL-47)', () => {
+  const licence = (maxSeats: number | null) => ({ modules: new Set<string>(), maxSeats, maxArtists: null, setupDone: true, licensed: true });
+
+  it('no cap: no count is even read', async () => {
+    expect((await create({ email: 'a@b.test', role: 'member', functions: ['a_and_r'] })).status).toBe(201);
+    expect(admin.chains.some((c) => c.table === 'org_members')).toBe(false);
+  });
+
+  it('members + pending invitations fill the cap: 409 with a plain message, nothing written, no email', async () => {
+    entitlements = licence(3);
+    seatCounts = { members: 2, pending: 1 };
+    const res = await create({ email: 'a@b.test', role: 'member', functions: ['a_and_r'] });
+    expect(res.status).toBe(409);
+    expect(res.json).toEqual({ error: expect.stringMatching(/used all 3 of its seats/), code: 'seat_limit' });
+    expect(admin.rpcs).toEqual([]);
+    expect(emails).toEqual([]);
+  });
+
+  it('a free seat is used normally', async () => {
+    entitlements = licence(3);
+    seatCounts = { members: 2, pending: 0 };
+    expect((await create({ email: 'a@b.test', role: 'admin' })).status).toBe(201);
+  });
+
+  it('a roster artist does not take a seat, so a full org can still invite one', async () => {
+    entitlements = licence(1);
+    seatCounts = { members: 5, pending: 0 };
+    expect((await create({ email: 'a@b.test', role: 'artist', contact_ids: [C1] })).status).toBe(201);
   });
 });

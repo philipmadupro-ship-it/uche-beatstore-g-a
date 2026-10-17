@@ -20,7 +20,7 @@ export function fakeAdmin(handlers: {
     chains.push(chain);
     const settle = () => Promise.resolve(handlers.answer(chain));
     const builder: Record<string, unknown> = {};
-    for (const op of ['select', 'insert', 'update', 'delete', 'upsert', 'eq', 'is', 'gt', 'lt', 'in', 'limit', 'order']) {
+    for (const op of ['select', 'insert', 'update', 'delete', 'upsert', 'eq', 'neq', 'is', 'gt', 'lt', 'in', 'limit', 'order']) {
       builder[op] = (...args: unknown[]) => {
         chain.ops.push({ op, args });
         return builder;

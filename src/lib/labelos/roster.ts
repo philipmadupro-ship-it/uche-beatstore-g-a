@@ -10,18 +10,21 @@
  * with no owner), so routes pass `NO_WORKSPACE` and the artist role decides.
  *
  * D1: an artist org's roster is the artist themselves — one contact,
- * created with the org (migration 139). The routes keep it that way.
+ * created with the org (migration 139). The routes keep it that way, and
+ * migration 166's index refuses a second one that races past them.
  */
 import { summarizeArtist, type ArtistSummary } from '@/lib/contacts/artist-summary';
 import { isWorkspaceMode } from '@/lib/contacts/relationship';
 import { groupOfCategory, type RoleInput } from '@/lib/contacts/roles';
 import type { OrgKind } from './capabilities';
+import { artistLimitError } from './entitlements';
 
 export type WorkspaceInput = { linkedProjects: number; hasPortal: boolean };
 
 export const NO_WORKSPACE: WorkspaceInput = Object.freeze({ linkedProjects: 0, hasPortal: false });
 
-function hasArtistRole(c: RoleInput): boolean {
+/** Has an artist role, main or extra. The roster rule, shared with the platform console's artist count. */
+export function hasArtistRole(c: RoleInput): boolean {
   return groupOfCategory(c.category) === 'artist' || groupOfCategory(c.secondary_category) === 'artist';
 }
 
@@ -29,7 +32,18 @@ export function isRosterContact(c: RoleInput, workspace: WorkspaceInput): boolea
   return isWorkspaceMode(workspace) || hasArtistRole(c);
 }
 
-const ONE_ARTIST = 'An artist organization has exactly one artist: the artist themselves.';
+export const ONE_ARTIST = 'An artist organization has exactly one artist: the artist themselves.';
+
+/**
+ * Migration 166's partial unique index: at most one artist contact per
+ * artist-kind org, so two requests that both passed `artistOrgRosterError`
+ * cannot both land. The second write is a unique violation naming it.
+ */
+export const ONE_ARTIST_INDEX = 'contacts_one_artist_per_artist_org';
+
+export function isSecondArtistError(error: { code?: string; message?: string } | null | undefined): boolean {
+  return !!error && error.code === '23505' && (error.message ?? '').includes(ONE_ARTIST_INDEX);
+}
 
 /**
  * Would writing `candidate` (an edit when it carries an `id`, else a new
@@ -47,6 +61,24 @@ export function artistOrgRosterError(
   if (hasArtistRole(candidate)) return others.length > 0 ? ONE_ARTIST : null;
   if (was && hasArtistRole(was) && others.length === 0) return ONE_ARTIST;
   return null;
+}
+
+/**
+ * The licence's artist cap (LABEL-47): would writing `candidate` add one more
+ * roster artist than `maxArtists` allows? Only a write that MAKES someone a
+ * roster artist counts (a new artist, or an edit giving an artist role); an
+ * edit of someone who already is one never does. Null cap = unlimited. Null =
+ * fine, else the 409's plain message. `existing` is the whole org.
+ */
+export function rosterCapError(
+  existing: readonly (RoleInput & { id: string })[],
+  candidate: RoleInput & { id?: string },
+  maxArtists: number | null,
+): string | null {
+  if (maxArtists === null || !hasArtistRole(candidate)) return null;
+  const was = candidate.id ? existing.find((c) => c.id === candidate.id) : undefined;
+  if (was && hasArtistRole(was)) return null;
+  return artistLimitError(existing.filter((c) => c.id !== candidate.id && hasArtistRole(c)).length, maxArtists);
 }
 
 /** Deleting the artist org's one artist is refused; anyone else may go. */

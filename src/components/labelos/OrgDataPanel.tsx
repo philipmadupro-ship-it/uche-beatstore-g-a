@@ -36,7 +36,8 @@ const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-5 sm:p-6';
 
 type Org = { id: string; name: string; slug: string; kind: string };
 
-export function OrgDataPanel({ org, isOwner }: { org: Org; isOwner: boolean }) {
+/** `exportable`: the org is licensed for the export module (LABEL-47); without it the export section is not drawn. */
+export function OrgDataPanel({ org, isOwner, exportable = true }: { org: Org; isOwner: boolean; exportable?: boolean }) {
   const [email, setEmail] = useState<string | null>(null);
   const [needsReauth, setNeedsReauth] = useState(false);
   const [linkSent, setLinkSent] = useState(false);
@@ -181,7 +182,7 @@ export function OrgDataPanel({ org, isOwner }: { org: Org; isOwner: boolean }) {
         </p>
       )}
 
-      <section className={CARD} aria-labelledby="org-export-heading">
+      {exportable && <section className={CARD} aria-labelledby="org-export-heading">
         <p id="org-export-heading" className={LABEL}>Export</p>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
           A copy of everything {org.name} holds: members, people, projects, songs, comments, tasks, releases and the activity history. Audio and files are not inside it; a manifest lists
@@ -197,7 +198,7 @@ export function OrgDataPanel({ org, isOwner }: { org: Org; isOwner: boolean }) {
             Download CSV (zip)
           </Button>
         </div>
-      </section>
+      </section>}
 
       <section className="rounded-xl border border-[#5a241c] bg-[#0D0D0A] p-5 sm:p-6" aria-labelledby="org-danger-heading">
         <p id="org-danger-heading" className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--error-text)]">

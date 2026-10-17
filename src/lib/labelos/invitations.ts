@@ -168,6 +168,7 @@ export type AcceptErrorCode =
   | 'expired'
   | 'used'
   | 'unsupported'
+  | 'seat_limit'
   | 'schema_missing'
   | 'failed';
 
@@ -196,6 +197,8 @@ const ACCEPT_ERRORS: Readonly<Record<Exclude<AcceptErrorCode, 'schema_missing' |
   revoked: { status: 410, message: 'This invitation was withdrawn' },
   expired: { status: 410, message: 'This invitation has expired. Ask for a new one.' },
   used: { status: 409, message: 'This invitation has already been used' },
+  // 170 (LABEL-47): the org's licence caps its staff seats, and they are all taken. The invitation stays pending.
+  seat_limit: { status: 409, message: 'This organization has no free seat right now. Ask the person who invited you to make room, then accept again.' },
 };
 
 type RpcError = { code?: string; message?: string } | null;

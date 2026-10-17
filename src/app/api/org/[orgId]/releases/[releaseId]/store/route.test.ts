@@ -507,3 +507,35 @@ describe('round 3 (LABEL-42)', () => {
     expect(events('release.store_listed')).toHaveLength(0);
   });
 });
+
+describe('the store module withdrawn (LABEL-47)', () => {
+  const withdraw = () => {
+    db.tables.org_entitlements = [{ org_id: P, modules: ['contracts', 'export'], max_seats: null, max_artists: null, setup_done: true }];
+  };
+
+  it('listing is 404, as if the route did not exist: nothing written, promoted or recorded', async () => {
+    withdraw();
+    expect((await put(PU, P, RP, { listed: true })).status).toBe(404);
+    expect((await call('GET', PU, P, RP)).status).toBe(404);
+    expect(row(RP).store_listed).toBe(false);
+    expect(promote).not.toHaveBeenCalled();
+    expect(events('release.store_listed')).toHaveLength(0);
+  });
+
+  it('a release listed before the withdrawal can still be read and taken off (200, audited)', async () => {
+    Object.assign(row(RP), { store_listed: true, store_listed_at: '2026-10-10T00:00:00Z' });
+    withdraw();
+    expect((await call('GET', PU, P, RP)).status).toBe(200);
+    // Changing the listing (here, its playback) still needs the module.
+    expect((await put(PU, P, RP, { listed: true, playback: 'full' })).status).toBe(404);
+    const res = await put(PU, P, RP, { listed: false });
+    expect(res.status).toBe(200);
+    expect(row(RP)).toMatchObject({ store_listed: false, store_listed_at: null });
+    expect(events('release.store_unlisted')).toHaveLength(1);
+  });
+
+  it('another org keeps its own licence: the withdrawal there changes nothing here', async () => {
+    db.tables.org_entitlements = [{ org_id: L, modules: [], max_seats: null, max_artists: null, setup_done: true }];
+    expect((await put(PU, P, RP, { listed: true })).status).toBe(200);
+  });
+});

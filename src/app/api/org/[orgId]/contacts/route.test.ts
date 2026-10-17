@@ -263,6 +263,29 @@ describe('POST /contacts', () => {
     expect((await call(AOWN, 'POST', A, undefined, { name: 'Twin', category: 'artist' })).status).toBe(409);
     expect((await call(AOWN, 'POST', A, undefined, { name: 'Eng', category: 'engineer' })).status).toBe(201);
   });
+
+  it('a second artist that raced past the check (166’s index refuses it) is the same 409, not a duplicate-email one or a 500', async () => {
+    // Both requests read zero other artists; the database is what stops the second.
+    db.tables.contacts = db.tables.contacts.filter((c) => c.id !== ASELF);
+    const realFrom = mem.client.from.bind(mem.client);
+    mem.client.from = ((table: string) => {
+      const builder = realFrom(table);
+      if (table !== 'contacts') return builder;
+      return Object.assign(Object.create(builder), {
+        insert: () => ({
+          select: () => ({
+            single: async () => ({
+              data: null,
+              error: { code: '23505', message: 'duplicate key value violates unique constraint "contacts_one_artist_per_artist_org"' },
+            }),
+          }),
+        }),
+      });
+    }) as typeof mem.client.from;
+    const res = await call(AOWN, 'POST', A, undefined, { name: 'Twin', category: 'artist' });
+    expect(res.status).toBe(409);
+    expect(res.json.error).toBe('An artist organization has exactly one artist: the artist themselves.');
+  });
 });
 
 describe('PATCH /contacts/[id]', () => {
@@ -373,5 +396,35 @@ describe('/members/artists: the roster picker', () => {
     expect((await artists(SC, 'GET', L, undefined, `?user_id=${AR}`)).status).toBe(403);
     expect((await artists(OWN, 'GET', L, undefined, `?user_id=${ART}`)).json).toEqual({ user_id: ART, scoped: true, contact_ids: [] });
     expect((await artists(OWN, 'GET', L, undefined, `?user_id=${AR}`)).json).toEqual({ user_id: AR, scoped: false, contact_ids: [] });
+  });
+});
+
+describe('the licence’s artist cap (LABEL-47)', () => {
+  // L has two roster artists (Nova, Kilo); L2 has none.
+  const licence = (org: string, maxArtists: number | null) => ({ org_id: org, modules: [], max_seats: null, max_artists: maxArtists, setup_done: true });
+
+  it('no cap: unchanged', async () => {
+    expect((await call(AR, 'POST', L, undefined, { name: 'Third', category: 'artist' })).status).toBe(201);
+  });
+
+  it('at the cap, a new artist is 409 with a plain message; a non-artist is fine', async () => {
+    db.tables.org_entitlements = [licence(L, 2)];
+    const r = await call(AR, 'POST', L, undefined, { name: 'Third', category: 'rapper' });
+    expect(r).toEqual({ status: 409, json: { error: expect.stringMatching(/already has 2 artists/) } });
+    expect(db.tables.contacts.some((c) => c.name === 'Third')).toBe(false);
+    expect((await call(AR, 'POST', L, undefined, { name: 'Press', category: 'press' })).status).toBe(201);
+  });
+
+  it('making an existing contact an artist counts; editing an artist does not', async () => {
+    db.tables.org_entitlements = [licence(L, 2)];
+    const press = await call(AR, 'POST', L, undefined, { name: 'Press', category: 'press' });
+    const id = (press.json.contact as { id: string }).id;
+    expect((await call(AR, 'PATCH', L, id, { category: 'artist' })).status).toBe(409);
+    expect((await call(AR, 'PATCH', L, C1, { category: 'singer' })).status).toBe(200);
+  });
+
+  it('one org’s cap is not another’s', async () => {
+    db.tables.org_entitlements = [licence(L, 0)];
+    expect((await call(X, 'POST', L2, undefined, { name: 'Free', category: 'artist' })).status).toBe(201);
   });
 });

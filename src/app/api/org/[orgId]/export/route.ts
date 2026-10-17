@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { strToU8, zipSync } from 'fflate';
 import { requireOrgOwner } from '@/lib/auth/org-access';
+import { loadEntitlements } from '@/lib/labelos/entitlements-store';
 import { errorMessage } from '@/lib/errors';
 import { recordEvent } from '@/lib/labelos/activity';
 import { buildManifest, exportFileName, toCsv, type StoredObject } from '@/lib/labelos/org-export';
@@ -32,6 +33,16 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
+  // Data export is a licensed module (LABEL-47): an org without it has no export route. Asked of the owner
+  // BEFORE the fresh sign-in, so nobody is sent a magic link for a route that is not there.
+  const ownerOnly = await requireOrgOwner(orgId, { state: 'live', freshSignIn: false });
+  if (!ownerOnly.ok) return ownerOnly.res;
+  try {
+    if (!(await loadEntitlements(ownerOnly.admin, ownerOnly.org)).modules.has('export')) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  } catch (err) {
+    log.error('entitlements read failed', { orgId: ownerOnly.org.id, error: errorMessage(err) });
+    return NextResponse.json({ error: 'Could not check organization access' }, { status: 500 });
+  }
   const owner = await requireOrgOwner(orgId, { state: 'live', freshSignIn: true });
   if (!owner.ok) return owner.res;
   const { admin, org } = owner;

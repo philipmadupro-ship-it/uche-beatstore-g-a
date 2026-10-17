@@ -27,7 +27,7 @@ import {
   toOrgContactView,
   type OrgContactRow,
 } from '@/lib/labelos/org-contacts';
-import { artistOrgRemovalError, artistOrgRosterError } from '@/lib/labelos/roster';
+import { artistOrgRemovalError, artistOrgRosterError, isSecondArtistError, ONE_ARTIST, rosterCapError } from '@/lib/labelos/roster';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
 
@@ -74,14 +74,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const before = await readContact(access);
     if (!before) return NOT_FOUND();
 
-    if (access.orgKind === 'artist' && (patch.category !== undefined || patch.secondary_category !== undefined)) {
+    const maxArtists = access.entitlements?.maxArtists ?? null;
+    if ((access.orgKind === 'artist' || maxArtists !== null) && (patch.category !== undefined || patch.secondary_category !== undefined)) {
       // The whole org, not the caller's scoped view (orgContactRoles).
       const existing = await orgContactRoles(admin, access);
-      const refused = artistOrgRosterError(access.orgKind, existing, {
+      const candidate = {
         id: before.id,
         category: patch.category !== undefined ? patch.category : before.category,
         secondary_category: patch.secondary_category !== undefined ? patch.secondary_category : before.secondary_category,
-      });
+      };
+      // D1 (one artist in an artist org), then the licence's artist cap (LABEL-47).
+      const refused = artistOrgRosterError(access.orgKind, existing, candidate) ?? rosterCapError(existing, candidate, maxArtists);
       if (refused) return NextResponse.json({ error: refused }, { status: 409 });
     }
 
@@ -91,6 +94,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .eq('org_id', access.orgId)
       .eq('id', before.id)
       .select(ORG_CONTACT_COLUMNS);
+    // 166: a second artist that raced past the check above.
+    if (isSecondArtistError(updateErr)) return NextResponse.json({ error: ONE_ARTIST }, { status: 409 });
     if (isDuplicateEmail(updateErr)) return NextResponse.json({ error: DUPLICATE_EMAIL }, { status: 409 });
     if (updateErr) throw new Error(updateErr.message);
     const row = (Array.isArray(updated) ? updated[0] : null) as unknown as OrgContactRow | null;

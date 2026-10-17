@@ -73,7 +73,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## A. Hardening (from the independent review; small, no UI)
 
 ### LABEL-43 — Security hardening migrations
-**Priority:** P0 · **Risk:** High · **Deps:** none · **Migrations:** 162, 163, 164 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** none · **Migrations:** 162, 163, 164 · **Status:** Done — #129, squash `b7ec46d321911a69564c32d8b340995405b53460` (2026-10-17)
 - **162** `split_sheets`: `REVOKE SELECT … FROM anon, authenticated`; column-level `GRANT SELECT (id, org_id, track_id, kind, version, status, circulated_at, signed_at, superseded_at, created_at)`. Check asserts `note`, `created_by`, `circulated_by`, `document_asset_id` are unreadable for an own-line reader on their own JWT (doc 21 / G6 F1, the D2 breach).
 - **163** trigger refusing UPDATE and non-cascade DELETE of `activity_events` rows with `audit = true`, service role included (G1 F6).
 - **164** replace `org_members_member_read` and `user_profiles_self_or_co_member_read`: a caller whose org role is `artist` reads only their own row and rows with `role <> 'artist'`; staff limited to some artists do not read artists outside their list; uncorrelated (R-08), proved with `EXPLAIN` (G1 F1).
@@ -81,17 +81,17 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Out of scope: any UI.
 
 ### LABEL-44 — Integrity migrations
-**Priority:** P1 · **Risk:** Medium · **Deps:** 43 · **Migrations:** 165, 166, 167 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 43 · **Migrations:** 165, 166, 167 · **Status:** Done — #131, squash `a45f185733a4dc28425c81f8f2eda0aa414d1aad` (2026-10-17)
 - **165** `playlist_tracks` same-owner / same-org trigger (G3). **166** partial unique index: one artist contact per artist-kind org (G2 D1). **167** `release_items`: extend `release_items_store_lock` (158) to refuse add/remove on a non-draft release (exempt `imported_released AND NOT store_listed`) and take `FOR SHARE` on the release (G4/G7/G10 amendments); `labelos_audit_member_update` compares expected old values (G4).
 - Acceptance: concurrent-add and tracklist-race checks in `supabase/local/checks/`; routes map the DB errors to 409s with a plain message.
 
 ### LABEL-45 — Search tokenization
-**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 168 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 168 · **Status:** Done — #127, squash `7b899221bd4000d7cd291c04cc881fff51031bcf` (2026-10-17)
 - `translate(file_name, '_.-@/', '     ')` in the generated tsvector columns; `[\p{L}\p{M}\p{N}]+` in `org-search.ts` `WORD`; apply D4 in the query (or page until 6 visible hits) so common words do not starve scoped members (G8 F2, F3).
 - Acceptance: `mix` finds `final_mix.wav`, `x com` finds `a@x.com`, Hindi/Thai words match; tests for each.
 
 ### LABEL-46 — Per-org "since your last visit"
-**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 169 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 169 · **Status:** Done — #128, squash `3451405d7284236229a73c2491c5c2fdc6095429` (2026-10-17)
 - `last_seen_overview_at` per (user, org), written only by `POST /api/org/[orgId]/overview/seen`; backfill from the user-level value (G5).
 - Acceptance: visiting org A does not clear org B's feed; two-org test.
 
@@ -100,7 +100,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## B. Accounts, licensing, setup
 
 ### LABEL-47 — Account faces, entitlements, platform console
-**Priority:** P0 · **Risk:** High · **Deps:** 43 · **Migration:** 170 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** 43 · **Migration:** 170 · **Status:** Done — #132, squash `e03a073ebf996649ae268011c11ade7b8182d634` (2026-10-17)
 **Objective:** the owner can license the software to an independent artist/producer or to a label, and decide what each licensee gets.
 - Two faces map to existing kinds: **independent** = org kind `artist` (one person, functions `producer`/`engineer` allowed, no roster); **label** = org kind `label`. Do not rename kinds; add a derived `accountFace(org)` in `lib/labelos/account.ts`. The `producer`-kind org stays the studio's personal org for the producer dashboard.
 - `org_entitlements(org_id, modules text[], max_seats int null, max_artists int null, setup_done bool, granted_by, granted_at)`; `lib/labelos/entitlements.ts#orgEntitlements(org)` returns the module set (`contracts, finance, marketing, pr, executive, artistic, store, search, digest, export`…). **Default = everything the face allows**; plans later narrow it. `requireOrgCapability` ANDs it in; `navGroupsFor` reads it.
@@ -115,7 +115,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: Playwright journeys for both faces at 1440 and 390 px; wizard is resumable; leaving mid-way creates nothing half-done (one transaction via audit RPC); `org.created` event.
 
 ### LABEL-49 — Departments and capabilities
-**Priority:** P0 · **Risk:** High · **Deps:** 47 · **Migration:** 171 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** 47 · **Migration:** 171 · **Status:** In Progress (session_01Aj5ecD2rnQ5pVQCtWZaq45)
 - Add org functions and capabilities for the departments that do not exist: `finance` (`finance.read`, `finance.write`, `finance.approve`), `pr` (`pr.read`, `pr.write`), `executive` (`exec.read`, read-only across the org, no audio unless D4 allows), `artistic_director` (`creative.read`, `creative.approve`), `contracts` (`contract.read`, `contract.write`, `contract.sign`). Re-derive the matrix in `capabilities.test.ts` independently; mirror in SQL `has_org_cap`; keep the roster `artist` role unable to hold any of them.
 - Acceptance: parity test green; a table of role×function×capability in the PR; mutation check on `NEVER_GRANTABLE`.
 - Out of scope: the modules themselves.
@@ -267,6 +267,8 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 
 ### LABEL-73 — Atomic audit functions
 **Priority:** P1 · **Risk:** High · **Deps:** 44, 55 · **Migration:** 187 · **Status:** Not Started
+- **Also (from LABEL-47):** the caps are check-then-write: an artist→staff role change (seat cap) and contact create/edit (artist cap) can both pass at cap−1 under concurrency (only the invitation accept is enforced under a lock); 154's connection accept inserts a roster artist into the label without checking `max_artists`. Enforce both caps atomically in SQL.
+- **Also (from LABEL-44):** close the readiness-vs-claim window for deliver AND store listing (an item committed between the readiness check and the claim ships unchecked); remove the members route's six-argument fallback once 167 is applied (stale-cache window skips `p_expect`).
 - Implement `20-review-G7-atomic-deliver.md` with G10's amendments (raw `updated_at` string, fingerprint scope, one function family): `labelos_audit_release_deliver`, plus `release.imported`, `release.store_listed/unlisted`, org delete/restore/export, digest channel verbs. `AUDIT_RPCS` entry, `AuditRpcArgs` type, a check proving the four G7 cases, a rollback. Remove the compensating writes.
 
 ### LABEL-74 — Visibility decisions
@@ -275,7 +277,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 
 ### LABEL-75 — Lifecycle decisions
 **Priority:** P2 · **Risk:** Low · **Deps:** none · **Status:** Not Started
-- `org.created` becomes audit-class (never pruned); purge cron gets a 45–60 s budget; sole-owner account deletion blocked with "transfer ownership or delete the organization first"; throttle `/api/store/releases/*`; doc drift (`artist_org_id` is SET NULL; AGENTS.md `team_members`).
+- `org.created` becomes audit-class (never pruned); purge cron gets a 45–60 s budget; sole-owner account deletion blocked with "transfer ownership or delete the organization first"; throttle `/api/store/releases/*`; doc drift (`artist_org_id` is SET NULL; AGENTS.md `team_members`). **Added from LABEL-43's "Found, not fixed" (orchestrator, 2026-10-17):** column grant on `split_lines` so an own-line reader cannot read `signature_asset_id` / `signed_by`; a statement-level `BEFORE TRUNCATE` guard on `activity_events`; replace 147's per-row `has_org_cap` in `activity_events_member_read` with uncorrelated helpers (R-08); a trigger on `organizations` refusing DELETE unless `deleted_at` is older than the 30-day grace period (audit history can only be erased by the purge).
 
 ### LABEL-76 — UI polish
 **Priority:** P2 · **Risk:** Low · **Deps:** 70 · **Status:** Not Started

@@ -27,6 +27,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { liveMembership, liveProjectMembership, sessionIdentity } from '@/lib/auth/org-access';
+import { isPlatformAdmin } from '@/lib/auth/platform-access';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { normalizeEmailOrNull } from '@/lib/contacts/email';
 import { OrgJoinBodySchema } from '@/lib/contracts';
@@ -89,7 +90,11 @@ export async function POST(req: NextRequest) {
       if (error) throw new Error(error.message);
       const row = data as PreviewRow | null;
       const org = row ? (Array.isArray(row.organizations) ? row.organizations[0] : row.organizations) : null;
-      if (!row || !org || org.deleted_at || row.role === 'owner') return NOT_FOUND();
+      if (!row || !org || org.deleted_at) return NOT_FOUND();
+      // An owner invitation exists only from the platform console (LABEL-47), and only while its sender is
+      // still an operator — the same rule as 170's labelos_accept_invitation. Any other one does not exist.
+      const ownerInvite = row.role === 'owner';
+      if (ownerInvite && (row.project_id || !row.invited_by || !(await isPlatformAdmin(admin, row.invited_by)))) return NOT_FOUND();
 
       // A project invitation (LABEL-21) is about ONE project: whether the
       // caller is already on it, and the inviter's authority, are asked of
@@ -110,7 +115,7 @@ export async function POST(req: NextRequest) {
       // no longer holds members.manage (an org invitation) or share.external
       // (a project invitation) reads as withdrawn.
       let state = invitationState(row);
-      if (state === 'pending') {
+      if (state === 'pending' && !ownerInvite) {
         const inviter = row.invited_by ? await liveMembership(admin, row.org_id, row.invited_by) : null;
         if (!inviter?.capabilities.has(projectId ? 'share.external' : 'members.manage')) state = 'revoked';
       }

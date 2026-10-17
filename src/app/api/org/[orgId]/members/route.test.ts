@@ -287,6 +287,8 @@ describe('PATCH members', () => {
           p_patch: { functions: ['marketing'] },
           p_verb: 'member.capabilities_changed',
           p_payload: { functions: { from: ['a_and_r'], to: ['marketing'] } },
+          // 167: the row the plan was made from, compared under the function's lock.
+          p_expect: { role: 'member', functions: ['a_and_r'], scope: 'org', cap_grants: [], cap_revokes: [] },
         },
       },
     ]);
@@ -388,6 +390,52 @@ describe('PATCH members', () => {
       rpc: () => ({ data: { error: 'not_found' }, error: null }),
     });
     expect((await patch({ user_id: THEM, role: 'admin' })).status).toBe(404);
+  });
+
+  it('a stale plan is a 409 with a plain message: the function saw the row change under its lock (167)', async () => {
+    // A second admin changed the member between this route's read and its call.
+    admin = fakeAdmin({ answer, rpc: () => ({ data: { error: 'changed' }, error: null }) });
+    const res = await patch({ user_id: THEM, functions: ['marketing'] });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/changed this member at the same time/);
+    expect(body.error).not.toMatch(/labelos_|postgres|sql/i);
+  });
+
+  it('before 167 is applied (no seven-argument function), the change still goes through 146’s function, without the comparison', async () => {
+    const calls: Record<string, unknown>[] = [];
+    admin = fakeAdmin({
+      answer,
+      rpc: (name, args) => {
+        calls.push(args);
+        if ('p_expect' in args) {
+          return { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.labelos_audit_member_update(p_actor, p_expect, p_org, p_patch, p_payload, p_user, p_verb) in the schema cache' } };
+        }
+        return rpc(name, args);
+      },
+    });
+    const res = await patch({ user_id: THEM, functions: ['marketing'] });
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(2);
+    expect('p_expect' in calls[1]).toBe(false);
+  });
+
+  it('146 itself missing is still the 503 (the retry without p_expect finds nothing either)', async () => {
+    updateError = { code: 'PGRST202', message: 'Could not find the function public.labelos_audit_member_update(p_actor, p_expect, p_org, p_patch, p_payload, p_user, p_verb) in the schema cache' };
+    const res = await patch({ user_id: THEM, functions: ['marketing'] });
+    expect(res.status).toBe(503);
+  });
+
+  it('the expectation is the row as read, not as planned (a role change still expects the old role)', async () => {
+    target = row({ functions: ['marketing', 'a_and_r'], cap_revokes: ['catalog.write'] });
+    await patch({ user_id: THEM, role: 'admin' });
+    expect(admin.rpcs[0].args.p_expect).toEqual({
+      role: 'member',
+      functions: ['marketing', 'a_and_r'],
+      scope: 'org',
+      cap_grants: [],
+      cap_revokes: ['catalog.write'],
+    });
   });
 });
 

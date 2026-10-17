@@ -56,7 +56,8 @@ export default async function OrgShellLayout({
       <WidgetErrorBoundary name="UploadsTray"><UploadsTray /></WidgetErrorBoundary>
       <WidgetErrorBoundary name="MediaSessionBridge"><MediaSessionBridge /></WidgetErrorBoundary>
       {/* LABEL-36: the org's own ⌘K search; the dashboard palette steps aside under /o/*. */}
-      <WidgetErrorBoundary name="OrgCommandPalette"><OrgCommandPalette /></WidgetErrorBoundary>
+      {/* Search is a licensed module (LABEL-47): without it the palette, which only searches, is not mounted. */}
+      {shell.modules.includes('search') && <WidgetErrorBoundary name="OrgCommandPalette"><OrgCommandPalette /></WidgetErrorBoundary>}
     </div>
   );
 
