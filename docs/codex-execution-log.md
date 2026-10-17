@@ -9334,3 +9334,6 @@ Orchestrator: session_01U1hEgSEMBP1MAk65kDjAcW. Backlog: `docs/bstudio-label-os/
 
 - 2026-10-14 23:33 UTC — #125 (docs 21–24) squash-merged into the Label OS branch, `e8ee54ab303691ad131eed7356e83df8894ca6fe`.
 - 2026-10-14 23:34 UTC — LABEL-43 (migrations 162–164) started, session_01XomWvrxzd67FGQzax9EyM4. LABEL-45 (migration 168, disjoint files) started in parallel, session_011ULZD1PDrEVrwr2TKj2iDr.
+- 2026-10-15 — both children stopped on the weekly usage limit (LABEL-43 before opening its PR; LABEL-45 with PR #127 green). Restarted with send_message on 2026-10-17 08:22 UTC after the reset.
+- 2026-10-17 08:23 UTC — **LABEL-45 Done**: #127 squash-merged, `7b899221bd4000d7cd291c04cc881fff51031bcf`. Migration 168 regenerates the six `search_tsv` columns (`_ . - @ /` become spaces, NFKC); query words keep combining marks; search pages past hidden rows (up to 5 extra pages) so scoped members are not starved. Gate: 3 checks green on `a588f63`, scope = search store/route/tests + 168 migration/check/rollback + MIGRATIONS row.
+- 2026-10-17 08:23 UTC — LABEL-46 (migration 169) started, session_016m8GmEqNtNDD9vyoWvzEkA, in parallel with LABEL-43.

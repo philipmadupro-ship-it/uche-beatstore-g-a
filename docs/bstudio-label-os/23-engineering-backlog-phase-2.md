@@ -86,12 +86,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: concurrent-add and tracklist-race checks in `supabase/local/checks/`; routes map the DB errors to 409s with a plain message.
 
 ### LABEL-45 — Search tokenization
-**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 168 · **Status:** In Progress (session_011ULZD1PDrEVrwr2TKj2iDr)
+**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 168 · **Status:** Done — #127, squash `7b899221bd4000d7cd291c04cc881fff51031bcf` (2026-10-17)
 - `translate(file_name, '_.-@/', '     ')` in the generated tsvector columns; `[\p{L}\p{M}\p{N}]+` in `org-search.ts` `WORD`; apply D4 in the query (or page until 6 visible hits) so common words do not starve scoped members (G8 F2, F3).
 - Acceptance: `mix` finds `final_mix.wav`, `x com` finds `a@x.com`, Hindi/Thai words match; tests for each.
 
 ### LABEL-46 — Per-org "since your last visit"
-**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 169 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 169 · **Status:** In Progress (session_016m8GmEqNtNDD9vyoWvzEkA)
 - `last_seen_overview_at` per (user, org), written only by `POST /api/org/[orgId]/overview/seen`; backfill from the user-level value (G5).
 - Acceptance: visiting org A does not clear org B's feed; two-org test.
 
