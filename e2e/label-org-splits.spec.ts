@@ -247,6 +247,17 @@ test('4 · D2: a member with an own line, an external member and marketing — t
   // With their own JWT straight from PostgREST: RLS shows the sheet and their line only.
   expect(await readAs(own.request, ownLine, `split_lines?select=party_id,share`)).toEqual([{ party_id: P_ARTIST_A, share: 33.3333 }]);
   expect((await readAs(own.request, ownLine, `split_sheets?select=id,status`)).map((s) => s.status)).toEqual(['circulated']);
+  // 162 (LABEL-43): the negotiation note, who wrote and circulated the sheet, and its document are closed to their
+  // own JWT by a column grant — and so is `*`. PostgREST answers a permission error, never the value.
+  for (const column of ['note', 'created_by', 'circulated_by', 'document_asset_id', '*']) {
+    const res = await own.request.fetch(`${REST}/split_sheets?select=${column}`, {
+      headers: { apikey: ANON_KEY, authorization: `Bearer ${userToken(ownLine.id, ownLine.email)}` },
+    });
+    expect(res.ok(), column).toBeFalsy();
+    const text = await res.text();
+    expect(text, column).toMatch(/permission denied/);
+    expect(text, column).not.toContain('first cut');
+  }
 
   // Marketing: 403 from the route, nothing from the database.
   const mk = await as(browser, baseURL!, marketing.id, marketing.email);
