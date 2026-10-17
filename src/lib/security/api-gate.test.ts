@@ -7,6 +7,8 @@ import {
   isLabelOsPagePath,
   isLabelOsRestoreApiPath,
   isLabelOsRestorePagePath,
+  isLabelOsSetupApiPath,
+  isLabelOsSetupPagePath,
   isPublicApiPath,
   requiresProducerForApi,
 } from './api-gate';
@@ -59,6 +61,22 @@ describe('isLabelOsPagePath', () => {
   it.each(['/offline', '/orders', '/org', '/oo/x', '/store/orders', '/', '/api/org', '/share/abc', '/shares', '/sharedx', '/projects/shared', '/api/shared'])('is not: %s', (p) =>
     expect(isLabelOsPagePath(p)).toBe(false),
   );
+});
+
+describe('the setup exception (LABEL-48)', () => {
+  it('is exactly /api/org/setup, gate session', () => {
+    expect(isLabelOsSetupApiPath('/api/org/setup')).toBe(true);
+    expect(apiGateFor('/api/org/setup', true)).toBe('session');
+    for (const p of ['/api/org/setup/', '/api/org/setup/x', '/api/org/setups', '/api/org/x/setup', '/api/setup']) {
+      expect(isLabelOsSetupApiPath(p), p).toBe(false);
+    }
+    expect(apiGateFor('/api/org/x/setup', true)).toBe('member');
+  });
+
+  it('the setup page is /setup only', () => {
+    for (const p of ['/setup', '/setup/']) expect(isLabelOsSetupPagePath(p), p).toBe(true);
+    for (const p of ['/setup/x', '/setups', '/o/setup', '/store/setup']) expect(isLabelOsSetupPagePath(p), p).toBe(false);
+  });
 });
 
 describe('the join exception (LABEL-08)', () => {

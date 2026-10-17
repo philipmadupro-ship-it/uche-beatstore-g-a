@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { NextRequest } from 'next/server';
 
-let currentUser: { id: string } | null = null;
+let currentUser: { id: string; user_metadata?: Record<string, unknown> } | null = null;
 let producerIds = new Set<string>();
 let memberIds = new Set<string>();
 let membershipReads = 0;
@@ -417,10 +417,26 @@ describe('Label OS landing for a signed-in member who is not the producer (flag 
     }
   });
 
-  it('a buyer with no membership still goes to the buyer account', async () => {
+  it('an account with no membership goes to /setup to create its organization (LABEL-48)', async () => {
     currentUser = { id: 'buyer-1' };
-    expect(where(await run('/login?next=%2Fo%2Facme')).pathname).toBe('/store/account/me');
-    expect(where(await run('/library')).pathname).toBe('/store/account/me');
+    expect(where(await run('/login?next=%2Fo%2Facme')).pathname).toBe('/setup');
+    expect(where(await run('/library')).pathname).toBe('/setup');
+  });
+
+  it('the face picked at sign-up rides along to /setup', async () => {
+    currentUser = { id: 'buyer-1', user_metadata: { account_type: 'label' } };
+    const res = where(await run('/login'));
+    expect(res.pathname).toBe('/setup');
+    expect(res.searchParams.get('type')).toBe('label');
+    currentUser = { id: 'buyer-1', user_metadata: { account_type: 'producer' } };
+    expect(where(await run('/library')).search).toBe('');
+  });
+
+  it('/setup itself is reachable without any membership', async () => {
+    currentUser = { id: 'buyer-1' };
+    expect((await run('/setup')).status).toBe(200);
+    currentUser = null;
+    expect((await run('/setup')).status).toBe(200);
   });
 
   it('the producer is untouched', async () => {
@@ -434,5 +450,11 @@ describe('Label OS landing: flag off changes nothing', () => {
     currentUser = { id: 'member-1' };
     expect(new URL((await run('/login?next=%2Fo%2Facme')).headers.get('location')!).pathname).toBe('/store/account/me');
     expect(membershipReads).toBe(0);
+  });
+
+  it('a non-member goes to the buyer account as before, and /setup does not exist', async () => {
+    currentUser = { id: 'buyer-1', user_metadata: { account_type: 'label' } };
+    expect(new URL((await run('/login')).headers.get('location')!).pathname).toBe('/store/account/me');
+    expect((await run('/setup')).status).toBe(404);
   });
 });
