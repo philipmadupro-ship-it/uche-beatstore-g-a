@@ -2,8 +2,8 @@
  * /api/org/[orgId]/members (LABEL-09, 07 §2.6, 06 §2):
  *
  *  GET     every member of the org (a roster artist: the staff and themselves,
- *          not the other artists). Any member may read the list (136's RLS
- *          lets members read co-members); emails only for callers who manage
+ *          not the other artists). Any member may read the list (164's RLS
+ *          is the same rule on the member's own JWT); emails only for callers who manage
  *          members. `contact_ids` (LABEL-10) is an artists-scoped member's
  *          roster list, shown to managers for everyone and to each member
  *          for themselves (139's RLS on member_artist_scopes: the same rule).
