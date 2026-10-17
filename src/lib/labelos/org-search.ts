@@ -5,7 +5,8 @@
  * filtering are `org-search-store.ts`; the route is `GET /api/org/[orgId]/search`.
  *
  * The query never reaches PostgREST or Postgres as typed. It is reduced to
- * words (letters and digits of any script — nothing else survives, so no
+ * words (letters, combining marks and digits of any script — nothing else
+ * survives, so no
  * tsquery operator, quote, comma or parenthesis can be smuggled in), each
  * word becomes a prefix term, and the terms are ANDed: `runn hom` is
  * `runn:* & hom:*`, the shape that makes search-as-you-type work with the
@@ -26,6 +27,13 @@ export const MAX_TERM_CHARS = 40;
 export const HITS_PER_GROUP = 6;
 /** Rows read per table before the scope / D4 filter runs; never raised by a request. */
 export const CANDIDATES_PER_TABLE = 40;
+/**
+ * Further pages read per table when a page held too few rows the caller may
+ * see (LABEL-45, G8 F3). Every source's first page is always read; this caps
+ * what comes after, so a query is at most `1 + MAX_EXTRA_PAGES` reads of
+ * `CANDIDATES_PER_TABLE` rows per source however much of the table is hidden.
+ */
+export const MAX_EXTRA_PAGES = 5;
 
 /** Group order = display order (08 §A3: Artists · Songs · Releases · People · Projects; Files last). */
 export const SEARCH_GROUPS = ['artists', 'songs', 'releases', 'people', 'projects', 'files'] as const;
@@ -71,7 +79,15 @@ export type ParsedQuery = {
   tsquery: string | null;
 };
 
-const WORD = /[\p{L}\p{N}]+/gu;
+/**
+ * A word is letters, digits and the combining marks that belong to them: Hindi
+ * vowel signs and the virama, Thai tone and vowel marks, an accent written as
+ * a separate code point (\p{M}). A word starts on a letter or digit, so a stray
+ * mark is not one. Without \p{M} 'हिन्दी' broke into 'हिन' + 'दी'.
+ * The index side is the same rule: migration 168 turns `_ . - @ /` into spaces
+ * and Postgres' `simple` parser keeps the rest of a word together.
+ */
+const WORD = /[\p{L}\p{N}][\p{L}\p{M}\p{N}]*/gu;
 
 export function parseSearchQuery(raw: unknown): ParsedQuery {
   const text = typeof raw === 'string' ? raw.normalize('NFKC').slice(0, MAX_QUERY_CHARS) : '';
@@ -84,6 +100,49 @@ export function parseSearchQuery(raw: unknown): ParsedQuery {
     // Every term is letters / digits only, so this string holds no operator but ours.
     tsquery: terms.length > 0 ? terms.map((t) => `${t}:*`).join(' & ') : null,
   };
+}
+
+// ── Paging past hidden rows (LABEL-45, G8 F3) ───────────────────────────
+
+/** One page of candidate rows, `from`..`to` inclusive, in a stable order (the caller orders by a unique key). */
+export type PageSource<Row> = (from: number, to: number) => Promise<Row[]>;
+
+/**
+ * Collect the hits a caller may see, paging a source until `enough` or it runs
+ * out. Reading a fixed 40 candidates and filtering afterwards starved a
+ * member who may see few of a common word's matches (the other 40 sorted
+ * first and were all hidden); here a page that yields too little just asks
+ * for the next one.
+ *
+ * Bounded, and nothing a caller could rely on is skipped: the FIRST page of
+ * every source is always read (a scope split into id chunks loses no chunk,
+ * and a single source's first page is ranked whole, as before); a source goes
+ * on to further pages only while `enough` does not hold and `maxExtraPages`
+ * lasts in total; a short page ends its source. `keep` is the scope / D4
+ * filter; whatever it drops is dropped without trace (no count of the hidden
+ * anywhere).
+ */
+export async function collectVisible<Row, Hit>(
+  sources: readonly PageSource<Row>[],
+  keep: (rows: Row[]) => Promise<Hit[]>,
+  enough: (hits: readonly Hit[]) => boolean,
+  opts: { pageSize?: number; maxExtraPages?: number } = {},
+): Promise<Hit[]> {
+  const pageSize = opts.pageSize ?? CANDIDATES_PER_TABLE;
+  let extra = opts.maxExtraPages ?? MAX_EXTRA_PAGES;
+  const hits: Hit[] = [];
+  for (const read of sources) {
+    for (let page = 0; ; page += 1) {
+      if (page > 0) {
+        if (enough(hits) || extra <= 0) break;
+        extra -= 1;
+      }
+      const rows = await read(page * pageSize, page * pageSize + pageSize - 1);
+      hits.push(...(await keep(rows)));
+      if (rows.length < pageSize) break;
+    }
+  }
+  return hits;
 }
 
 // ── Identifiers (R1: identifiers.ts is the one place that knows their shape) ──

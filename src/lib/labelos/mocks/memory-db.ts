@@ -55,7 +55,7 @@ function matchesTsquery(table: string, row: Record<string, unknown>, tsquery: st
   const spec = SEARCH_FIELDS[table];
   if (!spec) throw new Error(`memory-db: no search_tsv on ${table}`);
   if (spec.orgOnly && (row.org_id ?? null) === null) return false;
-  const words = spec.fields.map((f) => String(row[f] ?? '')).join(' ').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const words = spec.fields.map((f) => String(row[f] ?? '')).join(' ').normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{M}\p{N}]*/gu) ?? [];
   return tsquery.split('&').every((term) => {
     const t = term.trim();
     const prefix = t.endsWith(':*');
