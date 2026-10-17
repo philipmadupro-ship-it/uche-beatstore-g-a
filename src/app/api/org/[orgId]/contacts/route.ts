@@ -28,7 +28,7 @@ import {
   toOrgContactView,
   type OrgContactRow,
 } from '@/lib/labelos/org-contacts';
-import { artistOrgRosterError, isSecondArtistError, ONE_ARTIST } from '@/lib/labelos/roster';
+import { artistOrgRosterError, isSecondArtistError, ONE_ARTIST, rosterCapError } from '@/lib/labelos/roster';
 import { connectedRoster } from '@/lib/labelos/connections-store';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
@@ -81,10 +81,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   const { admin } = access;
 
   try {
-    if (access.orgKind === 'artist') {
+    const maxArtists = access.entitlements?.maxArtists ?? null;
+    if (access.orgKind === 'artist' || maxArtists !== null) {
       // The whole org, not the caller's scoped view (orgContactRoles).
       const existing = await orgContactRoles(admin, access);
-      const refused = artistOrgRosterError(access.orgKind, existing, fields);
+      // D1 (one artist in an artist org), then the licence's artist cap (LABEL-47).
+      const refused = artistOrgRosterError(access.orgKind, existing, fields) ?? rosterCapError(existing, fields, maxArtists);
       if (refused) return NextResponse.json({ error: refused }, { status: 409 });
     }
 

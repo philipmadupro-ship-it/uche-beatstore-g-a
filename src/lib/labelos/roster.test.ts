@@ -11,6 +11,7 @@ import {
   NO_WORKSPACE,
   ONE_ARTIST,
   ONE_ARTIST_INDEX,
+  rosterCapError,
   rosterSummary,
 } from './roster';
 
@@ -61,6 +62,31 @@ describe('artistOrgRosterError (D1: an artist org has one roster entry, itself)'
 
   it('an artist org with no artist yet may add one', () => {
     expect(artistOrgRosterError('artist', [engineer], { category: 'artist' })).toBeNull();
+  });
+});
+
+describe('rosterCapError (LABEL-47: the licence caps roster artists)', () => {
+  const org = [
+    { id: 'a', category: 'artist' },
+    { id: 'b', category: 'producer' },
+    { id: 'c', category: 'label', secondary_category: 'artist' },
+  ];
+  it('no cap: anything goes', () => {
+    expect(rosterCapError(org, { category: 'artist' }, null)).toBeNull();
+  });
+  it('a new artist past the cap is refused, at the cap is fine', () => {
+    expect(rosterCapError(org, { category: 'artist' }, 3)).toBeNull();
+    expect(rosterCapError(org, { category: 'artist' }, 2)).toMatch(/already has 2 artists/);
+    expect(rosterCapError(org, { category: 'rapper' }, 2)).toMatch(/already has 2 artists/);
+  });
+  it('someone who is not an artist is never counted against it', () => {
+    expect(rosterCapError(org, { category: 'producer' }, 0)).toBeNull();
+    expect(rosterCapError(org, { id: 'b', category: 'manager' }, 0)).toBeNull();
+  });
+  it('editing an existing artist never trips it; making a non-artist one does', () => {
+    expect(rosterCapError(org, { id: 'a', category: 'artist' }, 1)).toBeNull();
+    expect(rosterCapError(org, { id: 'b', category: 'artist' }, 2)).toMatch(/already has 2/);
+    expect(rosterCapError(org, { id: 'b', category: 'artist' }, 3)).toBeNull();
   });
 });
 

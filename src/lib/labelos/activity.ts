@@ -44,6 +44,8 @@ export const VERBS = [
   'org.exported',
   'org.deletion_scheduled',
   'org.restored',
+  // The platform operator's licence for the org (LABEL-47): modules and caps.
+  'org.entitlements_changed',
   'member.joined',
   'member.removed',
   'member.role_changed',
@@ -142,6 +144,7 @@ export type Verb = (typeof VERBS)[number];
 /** 06 §6 + 14 (LABEL-13, LABEL-41): kept for the life of the org, never best effort. */
 export const AUDIT_VERBS: readonly Verb[] = [
   'org.exported',
+  'org.entitlements_changed',
   'org.deletion_scheduled',
   'org.restored',
   'member.joined',
@@ -210,6 +213,7 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'org.exported': 'internal',
   'org.deletion_scheduled': 'internal',
   'org.restored': 'internal',
+  'org.entitlements_changed': 'internal',
   'member.joined': 'internal',
   'member.removed': 'internal',
   'member.role_changed': 'internal',

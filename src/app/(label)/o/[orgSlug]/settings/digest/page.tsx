@@ -6,6 +6,7 @@
  * who may do what; the panel only shows what the server says is allowed.
  */
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { OrgDigestPanel } from '@/components/labelos/OrgDigestPanel';
@@ -15,6 +16,8 @@ import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
 export default function OrgDigestPage() {
   const shell = useOrgShell();
   if (!shell) return null;
+  // The digest is a licensed module (LABEL-47): an org without it has no digest page.
+  if (shell.modules && !shell.modules.includes('digest')) notFound();
   const { org } = shell;
   return (
     <PageContainer>

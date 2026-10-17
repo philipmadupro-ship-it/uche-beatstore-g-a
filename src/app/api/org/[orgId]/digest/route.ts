@@ -14,7 +14,7 @@
  * project member is not a member of the org and is refused by the helper.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireOrgCapability } from '@/lib/auth/org-access';
+import { requireOrgModule } from '@/lib/auth/org-access';
 import { DigestPreferenceBodySchema } from '@/lib/contracts';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
@@ -37,7 +37,7 @@ const NOT_READY = { error: 'The weekly digest is not available yet.', schemaRead
 export async function GET(_req: NextRequest, { params }: Params) {
   const { orgId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'The weekly digest needs Supabase.' });
-  const access = await requireOrgCapability(orgId, 'catalog.read');
+  const access = await requireOrgModule(orgId, 'digest', 'catalog.read');
   if (!access.ok) return access.res;
   const canManage = access.capabilities.has('org.manage');
   try {
@@ -54,7 +54,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function PUT(req: NextRequest, { params }: Params) {
   const { orgId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'The weekly digest needs Supabase.' });
-  const access = await requireOrgCapability(orgId, 'catalog.read');
+  const access = await requireOrgModule(orgId, 'digest', 'catalog.read');
   if (!access.ok) return access.res;
   if (!(await rateLimitDurable(`org-digest-pref:${access.orgId}:${access.userId}`, 30, 60 * 60 * 1000))) {
     return json(429, { error: 'Too many changes. Try again later.' });

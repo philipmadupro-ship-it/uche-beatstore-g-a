@@ -2,7 +2,8 @@
  * `/o/<slug>/rights/legal` — the legal queue (LABEL-31, 09 §3.3, 07 §2).
  * The page is the shell around `LegalQueueView`, which loads
  * `GET /api/org/[orgId]/legal/queue` itself. A member who does not work the
- * queue (the legal gate or the contracts, plus the catalogue) gets a real 404.
+ * queue (the legal gate or the contracts, plus the catalogue) gets a real 404,
+ * and so does everyone in an org not licensed for the contracts module.
  */
 import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
@@ -16,7 +17,8 @@ export const dynamic = 'force-dynamic';
 export default async function LegalQueuePage({ params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
   const shell = await orgShellFor(orgSlug);
-  if (!shell || shell.org.kind === 'producer' || !canSeeLegalQueue(new Set(shell.capabilities))) notFound();
+  // The queue is part of the contracts module (LABEL-47): not licensed, not there.
+  if (!shell || shell.org.kind === 'producer' || !shell.modules.includes('contracts') || !canSeeLegalQueue(new Set(shell.capabilities))) notFound();
   return (
     <PageContainer>
       <header className="mb-6 sm:mb-8">

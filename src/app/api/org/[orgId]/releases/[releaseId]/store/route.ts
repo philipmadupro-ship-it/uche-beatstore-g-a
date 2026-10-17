@@ -24,7 +24,7 @@
  * `full` answers 503 naming it.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireObjectAccess } from '@/lib/auth/org-access';
+import { orgHasModule, requireObjectAccess } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { OrgReleaseStoreBodySchema } from '@/lib/contracts';
@@ -69,6 +69,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const release = await loadListingRelease(access.admin, org, access.object.id);
     if (!release) return json(404, { error: 'Not found' });
+    // Store listing is a licensed module (LABEL-47): absent for an org without it — except a release that is
+    // still listed from before the module was withdrawn, which must stay readable so it can be taken off.
+    if (!orgHasModule(access, 'store') && !release.store_listed) return json(404, { error: 'Not found' });
     const [owner, items, { playback, schemaReady }] = await Promise.all([
       loadStoreOwnerOrgs(access.admin),
       loadListingItems(access.admin, org, release.id),
@@ -95,6 +98,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const parsed = await readBody(req, OrgReleaseStoreBodySchema);
   if (!parsed.ok) return parsed.res;
   const body = parsed.data;
+  // Store listing is a licensed module (LABEL-47): listing or changing a listing needs it. Taking a release
+  // OFF the store does not — once the module is withdrawn, an earlier listing must still be removable
+  // (the same rule as removing a saved Slack webhook).
+  if (body.listed && !orgHasModule(access, 'store')) return json(404, { error: 'Not found' });
   const { admin } = access;
   const org = access.object.orgId;
   const actor = { orgId: org, userId: access.userId };

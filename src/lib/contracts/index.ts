@@ -28,6 +28,8 @@ import { SONG_STAGES } from '@/lib/labelos/song-stage';
 import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
 import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
 import { SPLIT_KINDS, SPLIT_ROLES } from '@/lib/labelos/splits';
+import { ACCOUNT_FACES } from '@/lib/labelos/account';
+import { MODULES } from '@/lib/labelos/entitlements';
 import {
   DIRECTION_KEYWORDS_MAX,
   DIRECTION_KEYWORD_MAX,
@@ -1628,3 +1630,36 @@ export const OrgViewPatchBodySchema = z.object({
   shared: z.boolean().optional(),
 }).strict().refine((b) => b.name !== undefined || b.definition !== undefined || b.shared !== undefined, { message: 'Nothing to update' });
 export type OrgViewPatchBody = z.infer<typeof OrgViewPatchBodySchema>;
+
+// ── Label OS platform console (LABEL-47) ─────────────────────────────────
+
+const PLATFORM_MODULES = z.array(z.enum(MODULES)).max(MODULES.length * 2);
+const SEAT_CAP = z.number().int().min(1, 'At least one seat').max(100_000).nullable();
+const ARTIST_CAP = z.number().int().min(0).max(100_000).nullable();
+
+/**
+ * POST /api/platform/licensees — a new licensee org with its face, licence
+ * and (optionally) the owner to invite. `modules` omitted = everything the
+ * face allows. Caps omitted or null = unlimited.
+ */
+export const PlatformLicenseeCreateBodySchema = z.object({
+  name: z.string().trim().min(1, 'Name the organization').max(80),
+  slug: z.string().trim().toLowerCase().min(2).max(60).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Lowercase letters, numbers and single hyphens'),
+  face: z.enum(ACCOUNT_FACES),
+  modules: PLATFORM_MODULES.optional(),
+  max_seats: SEAT_CAP.optional(),
+  max_artists: ARTIST_CAP.optional(),
+  owner_email: z.string().trim().email('Not a valid email').max(254).optional(),
+}).strict();
+
+/** PATCH /api/platform/licensees/[orgId] — replace the licence (all three fields). */
+export const PlatformEntitlementsBodySchema = z.object({
+  modules: PLATFORM_MODULES,
+  max_seats: SEAT_CAP,
+  max_artists: ARTIST_CAP,
+}).strict();
+
+/** POST /api/platform/licensees/[orgId]/invitations — invite the licensee's owner. */
+export const PlatformOwnerInviteBodySchema = z.object({
+  email: z.string().trim().email('Not a valid email').max(254),
+}).strict();

@@ -22,6 +22,8 @@ let allowed = true;
 let rpcAnswer: Answer = { data: null, error: null };
 let previewRow: Record<string, unknown> | null = null;
 let admin: ReturnType<typeof fakeAdmin>;
+/** LABEL-47: users in platform_admins. */
+let operators = new Set<string>();
 const logged: unknown[] = [];
 
 const INVITER = '44444444-4444-4444-8444-444444444444';
@@ -49,6 +51,10 @@ vi.mock('@/lib/log', () => ({
 }));
 
 function answer(chain: Chain): Answer {
+  if (chain.table === 'platform_admins') {
+    const id = chain.ops.find((o) => o.op === 'eq')?.args[1] as string;
+    return { data: operators.has(id) ? { user_id: id } : null, error: null };
+  }
   if (chain.table === 'org_invitations') return { data: previewRow, error: null };
   if (chain.table === 'organizations') return { data: { name: 'Night Shift', slug: 'night-shift', kind: 'label' }, error: null };
   if (chain.table === 'projects') return { data: projectRow, error: null };
@@ -65,6 +71,7 @@ beforeEach(() => {
   allowed = true;
   rpcAnswer = { data: null, error: null };
   previewRow = null;
+  operators = new Set();
   logged.length = 0;
   admin = fakeAdmin({ answer, rpc: () => rpcAnswer });
 });
@@ -118,6 +125,7 @@ describe('accept', () => {
     ['expired', 410],
     ['revoked', 410],
     ['used', 409],
+    ['seat_limit', 409],
     ['not_found', 404],
     ['email_mismatch', 403],
   ])('%s → %i', async (code, status) => {
@@ -230,6 +238,38 @@ describe('preview', () => {
   ])('404 for %s', async (_label, r) => {
     previewRow = r;
     expect((await post({ token, action: 'preview' })).status).toBe(404);
+  });
+});
+
+describe('an owner invitation from the platform console (LABEL-47)', () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    org_id: ORG, email: 'invitee@local.test', role: 'member', functions: ['a_and_r'], project_id: null, invited_by: INVITER,
+    expires_at: new Date(Date.now() + 86_400_000).toISOString(), accepted_at: null, revoked_at: null,
+    organizations: { name: 'Night Shift', slug: 'night-shift', kind: 'label', deleted_at: null },
+    ...over,
+  });
+  it('previews when its sender is a platform operator — no org membership asked of them', async () => {
+    operators = new Set([INVITER]);
+    inviterCanManage = false;
+    previewRow = row({ role: 'owner', functions: [] });
+    const r = await post({ token, action: 'preview' });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ role: 'owner', state: 'pending' });
+  });
+
+  it('is 404 once its sender is no longer an operator, and for any owner invitation of a project', async () => {
+    previewRow = row({ role: 'owner', functions: [] });
+    expect((await post({ token, action: 'preview' })).status).toBe(404);
+    operators = new Set([INVITER]);
+    previewRow = row({ role: 'owner', functions: [], project_id: PROJECT });
+    expect((await post({ token, action: 'preview' })).status).toBe(404);
+  });
+
+  it('a full org answers seat_limit with a plain message', async () => {
+    session = { userId: USER, email: 'invitee@local.test' };
+    rpcAnswer = { data: { error: 'seat_limit' }, error: null };
+    const r = await post({ token, action: 'accept' });
+    expect(r).toEqual({ status: 409, json: { error: expect.stringMatching(/no free seat/), code: 'seat_limit' } });
   });
 });
 

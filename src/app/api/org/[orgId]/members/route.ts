@@ -45,6 +45,8 @@ import { MEMBER_CHANGED, memberExpectation, planMemberChange, planMemberRemoval,
 import { mayListMember, toArtistScope } from '@/lib/labelos/artist-scope';
 import { createLogger } from '@/lib/log';
 import { isUUID, readBody } from '@/lib/validate';
+import { seatLimitError, takesSeat } from '@/lib/labelos/entitlements';
+import { seatsInUse } from '@/lib/labelos/entitlements-store';
 
 const log = createLogger('api.org.members');
 
@@ -202,6 +204,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ or
     );
     if (!plan.ok) return NextResponse.json({ error: plan.error }, { status: plan.status });
     if (plan.noop) return NextResponse.json({ member: toView(before, access.userId) });
+
+    // The licence's seat cap (LABEL-47): a roster artist made staff takes a seat it did not hold.
+    const nextRole = typeof plan.patch.role === 'string' ? plan.patch.role : before.role;
+    if (!takesSeat(before.role) && takesSeat(nextRole) && access.entitlements?.maxSeats != null) {
+      const full = seatLimitError(await seatsInUse(admin, access.orgId), access.entitlements.maxSeats);
+      if (full) return NextResponse.json({ error: full, code: 'seat_limit' }, { status: 409 });
+    }
 
     // The change, the cleared artist list (a member now seeing the whole org
     // starts a later limit from none; the function decides that from the row

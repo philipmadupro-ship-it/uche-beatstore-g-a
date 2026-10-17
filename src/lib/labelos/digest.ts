@@ -376,6 +376,7 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'org.exported': { one: 'exported the organization’s data', many: 'exported the organization’s data {n} times' },
   'org.deletion_scheduled': { one: 'scheduled the organization for deletion', many: 'scheduled the organization for deletion' },
   'org.restored': { one: 'restored the organization', many: 'restored the organization' },
+  'org.entitlements_changed': { one: 'changed the organization’s licence', many: 'changed the organization’s licence {n} times' },
   'member.joined': { one: 'joined the organization', many: 'joined the organization' },
   'member.removed': { one: 'removed a member', many: 'removed {n} members' },
   'member.role_changed': { one: 'changed a member’s role', many: 'changed {n} members’ roles' },

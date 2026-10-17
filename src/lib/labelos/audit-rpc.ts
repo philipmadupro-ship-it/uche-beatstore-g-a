@@ -21,6 +21,8 @@
  *   creditDecide             credit.confirmed | credit.disputed (153, LABEL-27)
  *   splitCirculate           split_sheet.circulated (+ .superseded for the version it replaces) (155, LABEL-28)
  *   splitSign                split_sheet.signed (155, LABEL-28)
+ *   platformCreateLicensee   org.created + org.entitlements_changed in the new org (170, LABEL-47)
+ *   platformSetEntitlements  org.entitlements_changed in the licensee org (170, LABEL-47)
  *
  * Accepting an invitation (`member.joined`) is 138's
  * `labelos_accept_invitation` (lib/labelos/invitations.ts), which already
@@ -64,6 +66,9 @@ export const AUDIT_RPCS = {
   // Migration 157 (LABEL-30): an approval is requested of one member, or decided, with its event.
   approvalRequest: 'labelos_audit_approval_request',
   approvalDecide: 'labelos_audit_approval_decide',
+  // Migration 170 (LABEL-47): the platform console. The event lands in the AFFECTED org, the operator as actor.
+  platformCreateLicensee: 'labelos_platform_create_licensee',
+  platformSetEntitlements: 'labelos_platform_set_entitlements',
 } as const;
 export type AuditRpcKey = keyof typeof AUDIT_RPCS;
 
@@ -201,6 +206,26 @@ export type AuditRpcArgs = {
     /** Owner or admin, from the live membership: the one exception to "a requester does not approve their own request". */
     p_may_self_approve: boolean;
     p_ctx: { artist_id: string | null; project_id: string | null; song_id: string | null; release_id: string | null };
+    p_payload: EventPayload;
+  };
+  /** A new licensee org + its licence: `org.created` and `org.entitlements_changed` in the new org. */
+  platformCreateLicensee: {
+    p_actor: string;
+    p_name: string;
+    p_slug: string;
+    p_kind: 'artist' | 'label';
+    p_modules: string[];
+    p_max_seats: number | null;
+    p_max_artists: number | null;
+    p_payload: EventPayload;
+  };
+  /** Replace a licensee's licence: `org.entitlements_changed` in that org. */
+  platformSetEntitlements: {
+    p_actor: string;
+    p_org: string;
+    p_modules: string[];
+    p_max_seats: number | null;
+    p_max_artists: number | null;
     p_payload: EventPayload;
   };
 };
