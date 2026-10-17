@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildCsp, cspHeaderName as cspHeaderNameFor } from '@/lib/security/csp';
-import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath, isLabelOsRestorePagePath } from '@/lib/security/api-gate';
+import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath, isLabelOsRestorePagePath, isPlatformApiPath, isPlatformPagePath } from '@/lib/security/api-gate';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
 import { memberLanding } from '@/lib/labelos/member-landing';
@@ -63,10 +63,15 @@ export async function proxy(request: NextRequest) {
   // `/join/<token>` (LABEL-08) is a Label OS page too, so it shares the flag
   // and the database check, but not the membership redirect below: an
   // invitee is not a member until the page has accepted for them.
-  const labelOsApi = isLabelOsApiPath(request.nextUrl.pathname);
+  // The platform console (LABEL-47, `/platform`, `/api/platform/*`) is behind the same flag and needs the
+  // same database, but takes no membership redirect: it answers 404 itself to anyone who is not an operator.
+  const labelOsApi = isLabelOsApiPath(request.nextUrl.pathname) || isPlatformApiPath(request.nextUrl.pathname);
   const labelOsPage = isLabelOsPagePath(request.nextUrl.pathname);
   // `/restore/<org id>` (LABEL-39) likewise: the org it brings back is not live, so no live membership is required.
-  const labelOsJoinPage = isLabelOsJoinPagePath(request.nextUrl.pathname) || isLabelOsRestorePagePath(request.nextUrl.pathname);
+  const labelOsJoinPage =
+    isLabelOsJoinPagePath(request.nextUrl.pathname) ||
+    isLabelOsRestorePagePath(request.nextUrl.pathname) ||
+    isPlatformPagePath(request.nextUrl.pathname);
   if (labelOsApi || labelOsPage || labelOsJoinPage) {
     if (!isLabelOsEnabled()) {
       return labelOsApi
@@ -228,9 +233,9 @@ export const config = {
   // `share` must be a whole segment: as a bare prefix it also skipped
   // `/shared` (LABEL-21, "Shared with me"), which needs the flag check, the
   // session refresh and the membership gate like every Label OS page.
-  // The static-extension skip excludes the Label OS namespaces: `/api/org/…/x.png`
+  // The static-extension skip excludes the Label OS namespaces (and the platform console's, LABEL-47): `/api/org/…/x.png`
   // would otherwise run with no LABEL_OS_ENABLED check and no membership gate.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|share(?:/|$)|(?!api/org/|o/|shared/|join/|restore/).*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|share(?:/|$)|(?!api/org/|api/platform/|o/|platform/|shared/|join/|restore/).*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)',
   ],
 };

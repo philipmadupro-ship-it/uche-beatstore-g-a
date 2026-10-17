@@ -11,7 +11,7 @@
  * event cannot be written the change is put back and the request fails.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireOrgCapability } from '@/lib/auth/org-access';
+import { requireOrgModule } from '@/lib/auth/org-access';
 import { DigestSlackBodySchema } from '@/lib/contracts';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
@@ -52,7 +52,7 @@ async function rolledBack(admin: Parameters<typeof undoChannelChange>[0], orgId:
 export async function PUT(req: NextRequest, { params }: Params) {
   const { orgId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'The weekly digest needs Supabase.' });
-  const access = await requireOrgCapability(orgId, 'org.manage');
+  const access = await requireOrgModule(orgId, 'digest', 'org.manage');
   if (!access.ok) return access.res;
   if (!(await rateLimitDurable(`org-digest-slack:${access.orgId}:${access.userId}`, 20, 60 * 60 * 1000))) {
     return json(429, { error: 'Too many changes. Try again later.' });
@@ -82,7 +82,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const { orgId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'The weekly digest needs Supabase.' });
-  const access = await requireOrgCapability(orgId, 'org.manage');
+  const access = await requireOrgModule(orgId, 'digest', 'org.manage');
   if (!access.ok) return access.res;
   let change: Awaited<ReturnType<typeof clearChannel>>;
   try {

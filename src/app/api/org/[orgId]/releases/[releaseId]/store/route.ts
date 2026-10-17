@@ -24,7 +24,7 @@
  * `full` answers 503 naming it.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireObjectAccess } from '@/lib/auth/org-access';
+import { orgHasModule, requireObjectAccess } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { OrgReleaseStoreBodySchema } from '@/lib/contracts';
@@ -65,6 +65,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!isSupabaseConfigured()) return json(501, { error: 'Releases need Supabase.' });
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
   if (!access.ok) return (await schemaAware(access)).res;
+  // Store listing is a licensed module (LABEL-47): absent for an org without it.
+  if (!orgHasModule(access, 'store')) return json(404, { error: 'Not found' });
   const org = access.object.orgId;
   try {
     const release = await loadListingRelease(access.admin, org, access.object.id);
@@ -92,6 +94,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!isSupabaseConfigured()) return json(501, { error: 'Releases need Supabase.' });
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'release.write', orgId });
   if (!access.ok) return (await schemaAware(access)).res;
+  // Store listing is a licensed module (LABEL-47): absent for an org without it.
+  if (!orgHasModule(access, 'store')) return json(404, { error: 'Not found' });
   const parsed = await readBody(req, OrgReleaseStoreBodySchema);
   if (!parsed.ok) return parsed.res;
   const body = parsed.data;

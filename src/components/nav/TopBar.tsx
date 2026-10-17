@@ -99,6 +99,7 @@ export function TopBar() {
     ? navGroupsFor(shell.org.kind, new Set(shell.capabilities), {
         slug: shell.org.slug,
         viewerIsProducer: shell.viewerIsProducer && shell.role === 'owner',
+        modules: shell.modules,
       })
     : navGroupsFor('producer', null);
   const drawerGroups = !shell ? ALL_GROUPS : producerChrome ? [...hubs, ACCOUNT_GROUP] : hubs;

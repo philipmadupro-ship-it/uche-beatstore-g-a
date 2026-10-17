@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { strToU8, zipSync } from 'fflate';
 import { requireOrgOwner } from '@/lib/auth/org-access';
+import { loadEntitlements } from '@/lib/labelos/entitlements-store';
 import { errorMessage } from '@/lib/errors';
 import { recordEvent } from '@/lib/labelos/activity';
 import { buildManifest, exportFileName, toCsv, type StoredObject } from '@/lib/labelos/org-export';
@@ -35,6 +36,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ orgI
   const owner = await requireOrgOwner(orgId, { state: 'live', freshSignIn: true });
   if (!owner.ok) return owner.res;
   const { admin, org } = owner;
+  // Data export is a licensed module (LABEL-47): an org without it has no export route.
+  try {
+    if (!(await loadEntitlements(admin, org)).modules.has('export')) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  } catch (err) {
+    log.error('entitlements read failed', { orgId: org.id, error: errorMessage(err) });
+    return NextResponse.json({ error: 'Could not check organization access' }, { status: 500 });
+  }
 
   const format = req.nextUrl.searchParams.get('format') ?? 'json';
   if (format !== 'json' && format !== 'csv') {

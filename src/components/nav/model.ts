@@ -98,6 +98,18 @@ export interface OrgNavContext {
    * a producer org who is not the producer is never shown links that bounce.
    */
   viewerIsProducer: boolean;
+  /**
+   * The modules the org is licensed for (LABEL-47, lib/labelos/entitlements).
+   * A hub or entry that belongs to a module the org lacks is not drawn, since
+   * its pages answer 404. Absent = the default licence (every module).
+   */
+  modules?: ReadonlySet<string> | readonly string[];
+}
+
+/** Is the module in the org's licence? No list = the default (yes). */
+function licensed(org: OrgNavContext, module: string): boolean {
+  if (!org.modules) return true;
+  return Array.isArray(org.modules) ? org.modules.includes(module) : (org.modules as ReadonlySet<string>).has(module);
 }
 
 /**
@@ -177,6 +189,7 @@ export function navGroupsFor(
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
   const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps)] : [];
   const releases = orgKind !== 'producer' && caps?.has('catalog.read') ? [releasesGroup(org.slug)] : [];
-  const rights = orgKind !== 'producer' && caps && canSeeLegalQueue(caps) ? [rightsGroup(org.slug)] : [];
+  // The legal queue belongs to the contracts module (LABEL-47).
+  const rights = orgKind !== 'producer' && caps && canSeeLegalQueue(caps) && licensed(org, 'contracts') ? [rightsGroup(org.slug)] : [];
   return [...producerHubs, ...roster, ...releases, ...rights, orgGroup(org.slug, orgKind, caps)];
 }

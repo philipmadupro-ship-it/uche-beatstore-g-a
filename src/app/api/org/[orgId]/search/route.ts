@@ -14,7 +14,7 @@
  * which is the default for any org route not in lib/labelos/external-routes.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireOrgCapability } from '@/lib/auth/org-access';
+import { requireOrgModule } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -33,7 +33,7 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 export async function GET(req: NextRequest, { params }: Params) {
   const { orgId } = await params;
   if (!isSupabaseConfigured()) return NextResponse.json({ error: 'Search needs Supabase.' }, { status: 501, headers: NO_STORE });
-  const access = await requireOrgCapability(orgId, 'catalog.read');
+  const access = await requireOrgModule(orgId, 'search', 'catalog.read');
   if (!access.ok) return access.res;
   // A query past the cap is read up to it; nothing else is accepted from the URL.
   const q = (req.nextUrl.searchParams.get('q') ?? '').slice(0, MAX_QUERY_CHARS * 2);

@@ -120,6 +120,9 @@ function labelOsTables(): string[] {
     'org_digest_channels',
     // 169_labelos_overview_seen_per_org.sql (LABEL-46)
     'org_overview_seen',
+    // 170_labelos_entitlements_platform.sql (LABEL-47)
+    'org_entitlements',
+    'platform_admins',
   ];
 }
 
@@ -173,6 +176,15 @@ function keysOnOrg(body: string): boolean {
   return /\borg_id\b/i.test(body) && /\bauth\.uid\s*\(/i.test(body);
 }
 
+/**
+ * Platform tables (LABEL-47) are not org-tenant: `platform_admins` says who
+ * operates the whole platform, so the right key is the caller's own row and
+ * nothing else. Only these tables may key on `user_id = auth.uid()`, and only
+ * in a SELECT policy (the 'platform_admins is self-read only' test pins it).
+ */
+const PLATFORM_SELF_TABLES = new Set(['platform_admins']);
+const SELF_ROW = /\buser_id\s*=\s*\(\s*SELECT\s+auth\.uid\s*\(\s*\)\s*\)/i;
+
 const DENY_ALL = /\bUSING\s*\(\s*false\s*\)(?![\s\S]*\bWITH CHECK\s*\(\s*(?!false\s*\)))/i;
 // `USING (true)` and its disguises: a helper call OR-ed with a constant is still open to everyone, and the
 // "keys on a helper" check below would pass it because the helper IS named in the body.
@@ -190,7 +202,8 @@ function labelOsViolations(state: ReplayState, tables: string[]): string[] {
     for (const [key, body] of state.policies) {
       if (!key.startsWith(`${table}.`)) continue;
       if (OPEN_PREDICATE.test(body)) out.push(`${key}: USING (true) / WITH CHECK (true)`);
-      if (!keysOnOrg(body)) out.push(`${key}: no org_id, membership helper or parent-EXISTS predicate`);
+      const platformSelf = PLATFORM_SELF_TABLES.has(table) && /FOR\s+SELECT/i.test(body) && SELF_ROW.test(body);
+      if (!keysOnOrg(body) && !platformSelf) out.push(`${key}: no org_id, membership helper or parent-EXISTS predicate`);
     }
   }
   return out;
@@ -763,6 +776,23 @@ describe('Label OS RLS guards (LABEL-04)', () => {
 
   it('the real migrations pass every Label OS guard', () => {
     expect(labelOsViolations(realState, labelOsTables())).toEqual([]);
+  });
+
+  it('platform_admins is self-read only, and org_entitlements is read by members only (170)', () => {
+    const admins = [...realState.policies].filter(([k]) => k.startsWith('platform_admins.'));
+    expect(admins.map(([k]) => k)).toEqual(['platform_admins.platform_admins_self_read']);
+    expect(admins[0][1]).toMatch(/FOR\s+SELECT/i);
+    expect(admins[0][1]).toMatch(SELF_ROW);
+    const ent = [...realState.policies].filter(([k]) => k.startsWith('org_entitlements.'));
+    expect(ent.map(([k]) => k)).toEqual(['org_entitlements.org_entitlements_member_read']);
+    expect(ent[0][1]).toMatch(/FOR\s+SELECT/i);
+    expect(ent[0][1]).toMatch(/org_role\s*\(\s*org_id\s*\)/i);
+  });
+
+  it('a self-row policy is accepted only on a platform table', () => {
+    const body = 'CREATE POLICY x ON public.org_members FOR SELECT TO authenticated USING (user_id = (SELECT auth.uid()));';
+    const state = { ...realState, policies: new Map([...realState.policies, ['org_members.self_only', body]]) };
+    expect(labelOsViolations(state as typeof realState, ['org_members'])).toContain('org_members.self_only: no org_id, membership helper or parent-EXISTS predicate');
   });
 
   it('the replay sees the real RLS switches (sanity)', () => {

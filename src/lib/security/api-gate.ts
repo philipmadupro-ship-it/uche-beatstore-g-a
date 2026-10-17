@@ -87,6 +87,27 @@ export function isLabelOsRestorePagePath(pathname: string): boolean {
 }
 
 /**
+ * The platform console's API (LABEL-47): `/api/platform` and everything under
+ * `/api/platform/`. Behind LABEL_OS_ENABLED like `/api/org/*`, but NOT an org
+ * namespace: org membership neither admits to it nor is needed. Gate
+ * `session`: the route itself answers 404 to anyone who is not a platform
+ * operator (lib/auth/platform-access), org owners included. Look-alikes
+ * (`/api/platforms`, `/api/platform-x`) are not in it.
+ */
+export function isPlatformApiPath(pathname: string): boolean {
+  return pathname === '/api/platform' || pathname.startsWith('/api/platform/');
+}
+
+/**
+ * The platform console page, `/platform` and below (LABEL-47): behind the
+ * flag, no membership redirect — the page answers 404 to anyone who is not
+ * an operator. Exact segment match (`/platforms`, `/platformer` are not it).
+ */
+export function isPlatformPagePath(pathname: string): boolean {
+  return pathname === '/platform' || pathname.startsWith('/platform/');
+}
+
+/**
  * The invitation page, `/join/<token>`: behind the flag like `/o/*`, but
  * open to signed-out visitors (it signs them in itself) and to non-members.
  */
@@ -110,8 +131,8 @@ export function isLabelOsPagePath(pathname: string): boolean {
  *  - `member`   a Label OS path: the caller must belong to some org or (LABEL-21)
  *               some project. This is coarse admission only; the
  *               routes check org and capability (lib/auth/org-access.ts);
- *  - `session`  `/api/org/join` and `/api/org/<id>/restore` only: being signed in is enough to reach the
- *               route, which does all of the authorisation itself;
+ *  - `session`  `/api/org/join`, `/api/org/<id>/restore` and `/api/platform/*` (LABEL-47) only: being
+ *               signed in is enough to reach the route, which does all of the authorisation itself;
  *  - `producer` everything else: the caller must be the producer.
  *
  * Membership NEVER admits anyone to a `producer` path. That isolation is the
@@ -123,6 +144,7 @@ export function apiGateFor(pathname: string, signedIn: boolean): ApiGate {
   if (!signedIn || !pathname.startsWith('/api/')) return 'none';
   if (isLabelOsJoinApiPath(pathname)) return 'session';
   if (isLabelOsRestoreApiPath(pathname)) return 'session';
+  if (isPlatformApiPath(pathname)) return 'session';
   if (isLabelOsApiPath(pathname)) return 'member';
   if (isPublicApiPath(pathname)) return 'none';
   return 'producer';

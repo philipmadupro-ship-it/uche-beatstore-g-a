@@ -52,6 +52,13 @@
  * is not theirs to learn. Ending the connection, narrowing the share or
  * soft-deleting either org takes effect on the next request (read live).
  *
+ * Entitlements (LABEL-47, migration 170): what the platform operator licensed
+ * the org (lib/labelos/entitlements). Read LIVE with the membership. A
+ * capability a module owns is removed from the member's set when the org
+ * lacks the module, and asking for it — or for a module directly with
+ * `requireOrgModule` — answers 404, not 403: a module the org was not
+ * licensed does not exist for it. No row = everything the face allows.
+ *
  * Artist scope (06 §2.5, LABEL-10): a member with `scope = 'artists'` (role
  * `artist` always) sees only the roster contacts in `member_artist_scopes`,
  * read live with the membership. requireObjectAccess answers 404 for an
@@ -73,6 +80,8 @@ import {
 } from '@/lib/labelos/capabilities';
 import { artistScopeFilter, scopeAllowsAnyContact, scopeAllowsContact, toArtistScope, type ArtistScope } from '@/lib/labelos/artist-scope';
 import { orgProjectScopeContacts } from '@/lib/labelos/org-read';
+import { capabilityEntitled, entitledCapabilities, orgEntitlements, type Entitlements, type Module } from '@/lib/labelos/entitlements';
+import { readEntitlementRow } from '@/lib/labelos/entitlements-store';
 import {
   CONNECTED_CAPABILITY,
   CONNECTION_COLUMNS,
@@ -103,6 +112,12 @@ export type OrgAccessOk = {
   /** The roster contacts this member sees: null = the whole org (lib/labelos/artist-scope). */
   artistScope: ArtistScope;
   capabilities: ReadonlySet<Capability>;
+  /**
+   * What the org is licensed for (LABEL-47). Always set by the helpers here;
+   * optional only so hand-built contexts in tests keep compiling — absent
+   * reads as the default (everything), exactly like an org without a row.
+   */
+  entitlements?: Entitlements;
 };
 export type OrgAccessResult = OrgAccessOk | OwnershipFail;
 
@@ -164,7 +179,7 @@ async function readMembership(
   admin: AdminClient,
   orgId: string,
   userId: string,
-): Promise<Omit<OrgAccessOk, 'ok' | 'admin' | 'userId' | 'orgId' | 'artistScope'> | null> {
+): Promise<(Omit<OrgAccessOk, 'ok' | 'admin' | 'userId' | 'orgId' | 'artistScope' | 'entitlements'> & { entitlements: Entitlements }) | null> {
   const { data, error } = await admin
     .from('org_members')
     .select('role, functions, scope, cap_grants, cap_revokes, organizations!inner(kind, deleted_at)')
@@ -185,14 +200,16 @@ async function readMembership(
   const role = ROLES.find((r) => r === row.role);
   if (!kind || !role || !ROLES_BY_ORG_KIND[kind].includes(role)) return null;
 
-  const capabilities = capabilitiesFor(kind, role, row.functions, {
-    grant: row.cap_grants,
-    revoke: row.cap_revokes,
-  });
+  const entitlements = orgEntitlements({ kind }, await readEntitlementRow(admin, orgId));
+  const capabilities = entitledCapabilities(
+    capabilitiesFor(kind, role, row.functions, { grant: row.cap_grants, revoke: row.cap_revokes }),
+    entitlements.modules,
+  );
 
   return {
     orgKind: kind,
     role,
+    entitlements,
     // The CHECK constraint allows only these two; anything else is narrowest.
     scope: row.scope === 'org' && role !== 'artist' ? 'org' : 'artists',
     capabilities,
@@ -309,11 +326,37 @@ export async function memberAccessFor(
   return joinedAt ? { ...context, joinedAt } : { ok: false, reason: 'none' };
 }
 
-/** requireOrgMember, plus the capability. 403 when the member lacks it. */
+/** Does the org of this context have the module? No entitlements on the context = the default (yes). */
+export function orgHasModule(ctx: Pick<OrgAccessOk, 'entitlements'>, module: Module): boolean {
+  return !ctx.entitlements || ctx.entitlements.modules.has(module);
+}
+
+/** 404 when `cap` belongs to a module the org is not licensed for, else 403. */
+function refuseCapability(ctx: Pick<OrgAccessOk, 'entitlements'>, cap: Capability): OwnershipFail {
+  return ctx.entitlements && !capabilityEntitled(cap, ctx.entitlements.modules) ? NOT_FOUND() : FORBIDDEN();
+}
+
+/**
+ * requireOrgMember, plus the capability. 403 when the member lacks it; 404
+ * when the capability belongs to a module the org is not licensed for.
+ */
 export async function requireOrgCapability(orgId: string, cap: Capability): Promise<OrgAccessResult> {
   const access = await requireOrgMember(orgId);
   if (!access.ok) return access;
-  if (!access.capabilities.has(cap)) return FORBIDDEN();
+  if (!access.capabilities.has(cap)) return refuseCapability(access, cap);
+  return access;
+}
+
+/**
+ * requireOrgMember for a route that belongs to a module (LABEL-47): 404 when
+ * the org is not licensed for it, whoever asks, before any capability is
+ * looked at. With `cap`, then the capability (403 / 404 as requireOrgCapability).
+ */
+export async function requireOrgModule(orgId: string, module: Module, cap?: Capability): Promise<OrgAccessResult> {
+  const access = await requireOrgMember(orgId);
+  if (!access.ok) return access;
+  if (!orgHasModule(access, module)) return NOT_FOUND();
+  if (cap && !access.capabilities.has(cap)) return refuseCapability(access, cap);
   return access;
 }
 
@@ -599,7 +642,7 @@ export async function objectAccessFor(
   } else if (!artistScopeAllows(access, object)) {
     return NOT_FOUND();
   }
-  if (!access.capabilities.has(cap)) return FORBIDDEN();
+  if (!access.capabilities.has(cap)) return refuseCapability(access, cap);
   return { ...access, object };
 }
 
@@ -812,6 +855,8 @@ export type OrgShell = {
   role: Role;
   scope: 'org' | 'artists';
   capabilities: Capability[];
+  /** The modules the org is licensed for (LABEL-47); the nav hides the rest. */
+  modules: Module[];
   viewerIsProducer: boolean;
 };
 
@@ -848,6 +893,7 @@ export async function orgShellFor(slug: string): Promise<OrgShell | null> {
       role: membership.role,
       scope: membership.scope,
       capabilities: [...membership.capabilities],
+      modules: [...membership.entitlements.modules],
       viewerIsProducer,
     };
   } catch (err) {

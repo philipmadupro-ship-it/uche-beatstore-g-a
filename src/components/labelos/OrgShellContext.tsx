@@ -14,6 +14,8 @@ export type OrgShellValue = {
   role: Role;
   scope: 'org' | 'artists';
   capabilities: Capability[];
+  /** What the org is licensed for (LABEL-47); absent = every module. */
+  modules?: string[];
   viewerIsProducer: boolean;
 };
 

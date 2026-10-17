@@ -9,7 +9,7 @@
  * `schemaReady: false` by the settings routes.
  */
 import type { AdminClient } from '@/lib/auth/ownership';
-import { memberAccessFor } from '@/lib/auth/org-access';
+import { memberAccessFor, orgHasModule } from '@/lib/auth/org-access';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { createLogger } from '@/lib/log';
 import { loadActivityFeed } from './activity-store';
@@ -193,6 +193,8 @@ export function databasePorts(admin: AdminClient, baseUrl: string): DigestPorts 
         return null;
       }
       if (!access.capabilities.has('catalog.read')) return null;
+      // An org not licensed for the digest module (LABEL-47) gets no digest, by email or Slack.
+      if (!orgHasModule(access, 'digest')) return null;
       return { userId, orgId, role: access.role };
     },
 

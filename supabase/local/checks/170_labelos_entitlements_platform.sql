@@ -32,13 +32,15 @@
 \set Z  '''a1700000-0000-4000-8000-000000000007'''
 \set L1 '''b1700000-0000-4000-8000-000000000001'''
 \set L2 '''b1700000-0000-4000-8000-000000000002'''
+\set P  '''b1700000-0000-4000-8000-000000000003'''
 
 INSERT INTO auth.users (id, email) VALUES
   (:OP, 'op170@local.test'), (:OW, 'ow170@local.test'), (:M, 'm170@local.test'),
   (:X, 'x170@local.test'), (:N, 'n170@local.test'), (:S, 's170@local.test'), (:Z, 'z170@local.test');
 INSERT INTO public.organizations (id, name, slug, kind, created_by) VALUES
   (:L1, 'Label One', 'label-one-170', 'label', :OW),
-  (:L2, 'Label Two', 'label-two-170', 'label', :X);
+  (:L2, 'Label Two', 'label-two-170', 'label', :X),
+  (:P, 'Studio', 'studio-own-170', 'producer', :X);
 INSERT INTO public.org_members (org_id, user_id, role, functions, scope) VALUES
   (:L1, :OW, 'owner', '{}', 'org'),
   (:L1, :M, 'member', '{a_and_r}', 'org'),
@@ -124,8 +126,7 @@ SELECT public.check_eq('the change is an audit event in L1, by the operator',
   (SELECT count(*) FROM public.activity_events WHERE org_id = :L1 AND verb = 'org.entitlements_changed' AND audit AND actor_id = :OP AND visibility = 'internal'), 1::bigint);
 SELECT public.check_eq('and nothing in L2', (SELECT count(*) FROM public.activity_events WHERE org_id = :L2), 0::bigint);
 SELECT public.check_eq('the producer''s own org is not a licensee',
-  public.labelos_platform_set_entitlements(:OP, (SELECT id FROM public.organizations WHERE kind = 'producer' LIMIT 1), '{}', NULL, NULL, '{}') ->> 'error',
-  CASE WHEN EXISTS (SELECT 1 FROM public.organizations WHERE kind = 'producer') THEN 'not_found' ELSE NULL END);
+  public.labelos_platform_set_entitlements(:OP, :P, '{}', NULL, NULL, '{}') ->> 'error', 'not_found');
 SELECT public.check_eq('an unknown org is not found',
   public.labelos_platform_set_entitlements(:OP, 'b1700000-0000-4000-8000-0000000000ff', '{}', NULL, NULL, '{}') ->> 'error', 'not_found');
 SELECT public.check_raises('a cap of zero seats is refused',
