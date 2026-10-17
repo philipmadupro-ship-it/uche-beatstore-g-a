@@ -10,6 +10,9 @@
  * unknown one is asked of has_org_cap as that member. The file raises if any
  * answer differs. capabilities.sql.test.ts checks the same mapping in CI
  * without Postgres; this is the half that executes the plpgsql itself.
+ *
+ * LABEL-47 (170): each fixture also runs under an org_entitlements row (or
+ * none), compared with `entitledCapabilities(capabilitiesFor(…), orgEntitlements(…))`.
  */
 import { writeFileSync } from 'node:fs';
 import {
@@ -20,6 +23,7 @@ import {
   capabilitiesFor,
   type CapabilityOverrides,
 } from '../../src/lib/labelos/capabilities';
+import { MODULES, entitledCapabilities, orgEntitlements } from '../../src/lib/labelos/entitlements';
 
 const out = process.argv[2];
 if (!out) throw new Error('usage: capability-parity.ts <out.sql>');
@@ -41,6 +45,8 @@ const FUNCTION_SETS: string[][] = [
   [...ORG_FUNCTIONS],
 ];
 const CAPS = [...ALL_CAPABILITIES, 'bogus.cap'];
+// null = no org_entitlements row (the default: everything the face allows).
+const ENTITLED: (string[] | null)[] = [null, [], ['contracts'], ['finance', 'bogus'], [...MODULES]];
 
 const lit = (s: string) => `'${s.replace(/'/g, "''")}'`;
 const arr = (xs: readonly string[] = []) => `ARRAY[${xs.map(lit).join(',')}]::text[]`;
@@ -53,20 +59,26 @@ for (const kind of ORG_KINDS) {
   for (const role of ROLES) {
     for (const functions of FUNCTION_SETS) {
       for (const overrides of OVERRIDES) {
-        n++;
-        const org = uuid('0a000000', n);
-        const user = uuid('0b000000', n);
-        setup.push(
-          `INSERT INTO auth.users (id) VALUES ('${user}');`,
-          `INSERT INTO public.organizations (id, name, slug, kind) VALUES ('${org}', 'parity', 'parity-${n}', ${lit(kind)});`,
-          // role `artist` must be artist-scoped (org_members_artist_is_scoped)
-          `INSERT INTO public.org_members (org_id, user_id, role, functions, scope, cap_grants, cap_revokes) VALUES ` +
-            `('${org}', '${user}', ${lit(role)}, ${arr(functions)}, ${lit(role === 'artist' ? 'artists' : 'org')}, ` +
-            `${arr(overrides.grant ?? [])}, ${arr(overrides.revoke ?? [])});`,
-        );
-        const caps = capabilitiesFor(kind, role, functions, overrides);
-        for (const cap of CAPS) {
-          expected.push(`('${user}', '${org}', ${lit(cap)}, ${caps.has(cap as never)})`);
+        for (const entitled of ENTITLED) {
+          n++;
+          const org = uuid('0a000000', n);
+          const user = uuid('0b000000', n);
+          setup.push(
+            `INSERT INTO auth.users (id) VALUES ('${user}');`,
+            `INSERT INTO public.organizations (id, name, slug, kind) VALUES ('${org}', 'parity', 'parity-${n}', ${lit(kind)});`,
+            // role `artist` must be artist-scoped (org_members_artist_is_scoped)
+            `INSERT INTO public.org_members (org_id, user_id, role, functions, scope, cap_grants, cap_revokes) VALUES ` +
+              `('${org}', '${user}', ${lit(role)}, ${arr(functions)}, ${lit(role === 'artist' ? 'artists' : 'org')}, ` +
+              `${arr(overrides.grant ?? [])}, ${arr(overrides.revoke ?? [])});`,
+          );
+          if (entitled !== null) {
+            setup.push(`INSERT INTO public.org_entitlements (org_id, modules) VALUES ('${org}', ${arr(entitled)});`);
+          }
+          const row = entitled === null ? null : { modules: entitled, max_seats: null, max_artists: null, setup_done: true };
+          const caps = entitledCapabilities(capabilitiesFor(kind, role, functions, overrides), orgEntitlements({ kind }, row).modules);
+          for (const cap of CAPS) {
+            expected.push(`('${user}', '${org}', ${lit(cap)}, ${caps.has(cap as never)})`);
+          }
         }
       }
     }

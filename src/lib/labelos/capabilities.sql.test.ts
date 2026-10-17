@@ -1,6 +1,10 @@
 /**
- * Parity between the SQL helper `public.has_org_cap` (migration 136) and the
- * capability model in ./capabilities.ts, which is the source of truth.
+ * Parity between the SQL helper `public.has_org_cap` (migration 136, last
+ * redefined by 170 to add entitlements) and the capability model in
+ * ./capabilities.ts + ./entitlements.ts, which are the source of truth.
+ * The LATEST migration that defines the function is the one parsed: replaying
+ * every file leaves that definition in place. Every earlier definition must
+ * still agree with it on the data they share.
  *
  * Two halves:
  *  1. DATA — the constants between `labelos:mapping:start` / `:end` in the
@@ -16,6 +20,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { FACE_KIND, ACCOUNT_FACES } from './account';
+import { CAPABILITY_MODULE, FACE_MODULES, MODULES, entitledCapabilities, orgEntitlements } from './entitlements';
 import {
   ALL_CAPABILITIES,
   FUNCTION_PRESETS,
@@ -35,7 +41,12 @@ import {
 } from './capabilities';
 
 const MIGRATIONS = join(process.cwd(), 'supabase/migrations');
-const FILE = readdirSync(MIGRATIONS).find((f) => /^\d+_labelos_org_core\.sql$/.test(f));
+const DEFINES = /CREATE OR REPLACE FUNCTION public\.has_org_cap\(/;
+/** Every migration that (re)defines has_org_cap, oldest first. */
+const DEFINING = readdirSync(MIGRATIONS)
+  .filter((f) => /^\d+_.*\.sql$/.test(f) && DEFINES.test(readFileSync(join(MIGRATIONS, f), 'utf8')))
+  .sort((a, b) => parseInt(a, 10) - parseInt(b, 10) || a.localeCompare(b));
+const FILE = DEFINING[DEFINING.length - 1];
 
 type Pair = [string, string];
 type Mapping = {
@@ -51,6 +62,11 @@ type Mapping = {
   function_presets: Pair[];
   implies: Pair[];
   never_grantable: Pair[];
+  // 170 (LABEL-47): entitlements. Absent from 136's definition.
+  capability_modules: Pair[];
+  modules: string[];
+  kind_faces: Pair[];
+  face_modules: Pair[];
 };
 const LISTS = [
   'all_capabilities',
@@ -59,6 +75,7 @@ const LISTS = [
   'roles_granted_everything',
   'roles_using_functions',
   'roles_taking_overrides',
+  'modules',
 ] as const;
 const PAIRS = [
   'roles_by_org_kind',
@@ -67,10 +84,14 @@ const PAIRS = [
   'function_presets',
   'implies',
   'never_grantable',
+  'capability_modules',
+  'kind_faces',
+  'face_modules',
 ] as const;
+const ENTITLEMENT_KEYS = ['capability_modules', 'modules', 'kind_faces', 'face_modules'] as const;
 
-/** Parse the `name constant text[] := ARRAY[...];` constants of has_org_cap. */
-function parseMapping(sql: string): Mapping {
+/** Parse the `name constant text[] := ARRAY[...];` constants of has_org_cap. `legacy`: a definition from before 170. */
+function parseMapping(sql: string, legacy = false): Mapping {
   const block = /--\s*labelos:mapping:start([\s\S]*?)--\s*labelos:mapping:end/.exec(sql);
   if (!block) throw new Error('labelos:mapping markers not found');
   const body = block[1].replace(/--[^\n]*/g, '');
@@ -81,6 +102,7 @@ function parseMapping(sql: string): Mapping {
     out[name] = pairs.length ? pairs : [...inner.matchAll(/'([^']*)'/g)].map((s) => s[1]);
   }
   for (const name of [...LISTS, ...PAIRS]) {
+    if (legacy && (ENTITLEMENT_KEYS as readonly string[]).includes(name)) continue;
     if (!Array.isArray(out[name])) throw new Error(`constant ${name} not found in has_org_cap`);
   }
   return out as Mapping;
@@ -98,6 +120,8 @@ type SqlMember = {
   functions: readonly string[];
   capGrants: readonly string[];
   capRevokes: readonly string[];
+  /** The org's org_entitlements.modules, or null when it has no row. */
+  entitled?: readonly string[] | null;
 };
 
 /** Mirror of the plpgsql body of has_org_cap, step for step. */
@@ -153,15 +177,53 @@ function sqlHasOrgCap(map: Mapping, m: SqlMember, cap: string): boolean {
   // 5.
   if (!granted.includes(cap) || !map.kinds_with_full_ceiling.includes(m.kind)) return false;
   if (map.never_grantable.some(([r, c]) => r === m.role && c === cap)) return false;
-  return !revoked.includes(cap);
+  if (revoked.includes(cap)) return false;
+
+  // 6. (170)
+  let module: string | null = null;
+  for (const [c, mod] of map.capability_modules) if (c === cap) module = mod;
+  if (module === null) return true;
+  let face: string | null = null;
+  for (const [k, f] of map.kind_faces) if (k === m.kind) face = f;
+  const inCeiling = face === null ? map.modules.includes(module) : map.face_modules.some(([f, mod]) => f === face && mod === module);
+  if (!inCeiling) return false;
+  if (m.entitled === null || m.entitled === undefined) return true;
+  return m.entitled.includes(module);
 }
 
-describe('has_org_cap mapping (migration 136) equals capabilities.ts', () => {
-  it('finds exactly one org-core migration', () => {
-    expect(FILE).toBeDefined();
+describe('has_org_cap mapping (latest definition) equals capabilities.ts + entitlements.ts', () => {
+  it('finds the definitions: 136 first, 170 the latest', () => {
+    expect(DEFINING[0]).toMatch(/^136_labelos_org_core\.sql$/);
+    expect(FILE).toMatch(/^170_/);
   });
 
   const map = parseMapping(readFileSync(join(MIGRATIONS, FILE!), 'utf8'));
+
+  it('every earlier definition agrees with the latest on the data it has', () => {
+    for (const file of DEFINING.slice(0, -1)) {
+      const old = parseMapping(readFileSync(join(MIGRATIONS, file), 'utf8'), true);
+      for (const key of [...LISTS, ...PAIRS]) {
+        if ((ENTITLEMENT_KEYS as readonly string[]).includes(key)) continue;
+        expect(old[key], `${file}: ${key}`).toEqual(map[key]);
+      }
+    }
+  });
+
+  it('CAPABILITY_MODULE', () => {
+    expect(sortPairs(map.capability_modules)).toEqual(sortPairs(Object.entries(CAPABILITY_MODULE).map(([c, m]) => [c, m!] as Pair)));
+  });
+
+  it('MODULES', () => {
+    expect(map.modules).toEqual([...MODULES]);
+  });
+
+  it('FACE_KIND, as [kind, face]', () => {
+    expect(sortPairs(map.kind_faces)).toEqual(sortPairs(ACCOUNT_FACES.map((f) => [FACE_KIND[f], f] as Pair)));
+  });
+
+  it('FACE_MODULES', () => {
+    expect(sortPairs(map.face_modules)).toEqual(sortPairs(pairsOf(FACE_MODULES)));
+  });
 
   it('capability vocabulary', () => {
     expect(map.all_capabilities).toEqual([...ALL_CAPABILITIES]);
@@ -241,6 +303,8 @@ describe('has_org_cap mapping (migration 136) equals capabilities.ts', () => {
   const KINDS = [...ORG_KINDS, 'studio'];
   const ROLE_INPUTS = [...ROLES, 'superuser'];
   const CAPS = [...ALL_CAPABILITIES, 'bogus.cap'];
+  // An org_entitlements row's modules, or null = no row (the default).
+  const ENTITLED: (string[] | null)[] = [null, [], ['contracts'], ['finance', 'export'], [...MODULES], ['bogus', 'Contracts']];
 
   it('SQL mirror and capabilitiesFor agree on every fixture', () => {
     let checked = 0;
@@ -249,19 +313,23 @@ describe('has_org_cap mapping (migration 136) equals capabilities.ts', () => {
       for (const role of ROLE_INPUTS) {
         for (const functions of FUNCTION_SETS) {
           for (const overrides of OVERRIDES) {
-            const ts = capabilitiesFor(kind, role, functions, overrides);
-            const member: SqlMember = {
-              kind,
-              role,
-              functions,
-              capGrants: overrides.grant ?? [],
-              capRevokes: overrides.revoke ?? [],
-            };
-            for (const cap of CAPS) {
-              checked++;
-              const sql = sqlHasOrgCap(map, member, cap);
-              if (sql !== ts.has(cap as never)) {
-                mismatches.push(`${kind}/${role}/${functions.join('+')}/${JSON.stringify(overrides)}: ${cap} sql=${sql}`);
+            for (const entitled of ENTITLED) {
+              const row = entitled === null ? null : { modules: entitled, max_seats: null, max_artists: null, setup_done: true };
+              const ts = entitledCapabilities(capabilitiesFor(kind, role, functions, overrides), orgEntitlements({ kind }, row).modules);
+              const member: SqlMember = {
+                kind,
+                role,
+                functions,
+                capGrants: overrides.grant ?? [],
+                capRevokes: overrides.revoke ?? [],
+                entitled,
+              };
+              for (const cap of CAPS) {
+                checked++;
+                const sql = sqlHasOrgCap(map, member, cap);
+                if (sql !== ts.has(cap as never)) {
+                  mismatches.push(`${kind}/${role}/${functions.join('+')}/${JSON.stringify(overrides)}/${JSON.stringify(entitled)}: ${cap} sql=${sql}`);
+                }
               }
             }
           }
@@ -283,5 +351,10 @@ describe('has_org_cap mapping (migration 136) equals capabilities.ts', () => {
     // a roster artist can never be granted contracts
     const artist = { kind: 'label', role: 'artist', functions: [], capGrants: ['contracts.read'], capRevokes: [] };
     expect(sqlHasOrgCap(map, artist, 'contracts.read')).toBe(false);
+    // an owner of a licensee without contracts does not hold contracts.read, and keeps the catalogue
+    expect(sqlHasOrgCap(map, { ...owner, entitled: ['export'] }, 'contracts.read')).toBe(false);
+    expect(sqlHasOrgCap(map, { ...owner, entitled: ['export'] }, 'catalog.read')).toBe(true);
+    expect(sqlHasOrgCap(map, { ...owner, entitled: null }, 'contracts.read')).toBe(true);
+    expect(sqlHasOrgCap(map, { ...owner, entitled: ['contracts'] }, 'contracts.read')).toBe(true);
   });
 });
