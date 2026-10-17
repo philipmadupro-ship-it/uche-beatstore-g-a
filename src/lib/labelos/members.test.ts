@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   CAPABILITY_LABELS,
+  MEMBER_CHANGED,
   assignableRoles,
+  memberExpectation,
   planMemberChange,
   planMemberRemoval,
   switchableCapabilities,
@@ -216,5 +218,34 @@ describe('assignableRoles', () => {
     // The last owner looking at themselves: nothing to change to.
     expect(assignableRoles('label', owner, member({ userId: OWNER, role: 'owner', functions: [] }), 1)).toEqual(['owner']);
     expect(assignableRoles('label', owner, member({ userId: OWNER, role: 'owner', functions: [] }), 2)).toEqual(['owner', 'admin', 'member', 'artist']);
+  });
+});
+
+describe('memberExpectation (migration 167: the plan’s view of the row)', () => {
+  it('carries every field planMemberChange read, in the row’s own order', () => {
+    const state = member({ role: 'member', functions: ['marketing', 'a_and_r'], scope: 'artists', capGrants: ['b'], capRevokes: ['a'] });
+    expect(memberExpectation(state)).toEqual({
+      role: 'member',
+      functions: ['marketing', 'a_and_r'],
+      scope: 'artists',
+      cap_grants: ['b'],
+      cap_revokes: ['a'],
+    });
+  });
+
+  it('is a copy: changing the state afterwards does not change what was expected', () => {
+    const fns = ['a_and_r'];
+    const expected = memberExpectation(member({ functions: fns }));
+    fns.push('finance');
+    expect(expected.functions).toEqual(['a_and_r']);
+  });
+
+  it('names exactly the five columns the database function compares', () => {
+    expect(Object.keys(memberExpectation(member())).sort()).toEqual(['cap_grants', 'cap_revokes', 'functions', 'role', 'scope']);
+  });
+
+  it('has a plain message for a stale plan', () => {
+    expect(MEMBER_CHANGED).toMatch(/changed/i);
+    expect(MEMBER_CHANGED).not.toMatch(/postgres|sql|function|labelos_/i);
   });
 });

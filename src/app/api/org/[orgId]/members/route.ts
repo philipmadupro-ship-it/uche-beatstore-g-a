@@ -39,9 +39,9 @@ import {
 } from '@/lib/auth/org-access';
 import { OrgMemberPatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
-import { AUDIT_RPC_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
+import { AUDIT_RPC_NOT_READY, auditRpc, isMissingAuditRpc, type AuditRpcArgs } from '@/lib/labelos/audit-rpc';
 import { memberIdentities, type IdentityAdmin } from '@/lib/labelos/member-identity';
-import { planMemberChange, planMemberRemoval, type MemberState } from '@/lib/labelos/members';
+import { MEMBER_CHANGED, memberExpectation, planMemberChange, planMemberRemoval, type MemberState } from '@/lib/labelos/members';
 import { mayListMember, toArtistScope } from '@/lib/labelos/artist-scope';
 import { createLogger } from '@/lib/log';
 import { isUUID, readBody } from '@/lib/validate';
@@ -205,19 +205,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ or
 
     // The change, the cleared artist list (a member now seeing the whole org
     // starts a later limit from none; the function decides that from the row
-    // under its lock) and the audit event: one transaction.
-    const { data: result, error: rpcErr } = await auditRpc(admin, 'memberUpdate', {
+    // under its lock) and the audit event: one transaction. `p_expect` is the
+    // row the plan was made from (167): if another change landed since our
+    // read, the function writes nothing and answers `changed`.
+    const args = {
       p_org: access.orgId,
       p_actor: access.userId,
       p_user: userId,
       p_patch: plan.patch,
       p_verb: plan.event!.verb,
       p_payload: plan.event!.payload,
-    });
+      p_expect: memberExpectation(toState(before)),
+    };
+    let { data: result, error: rpcErr } = await auditRpc(admin, 'memberUpdate', args);
+    if (isMissingAuditRpc(rpcErr) && /p_expect/.test(rpcErr?.message ?? '')) {
+      // 167 not applied yet: 146's six-argument function, as before it (no comparison).
+      log.warn('member update without p_expect: migration 167 is not applied', { orgId: access.orgId });
+      const withoutExpect: AuditRpcArgs['memberUpdate'] = { ...args };
+      delete withoutExpect.p_expect;
+      ({ data: result, error: rpcErr } = await auditRpc(admin, 'memberUpdate', withoutExpect));
+    }
     if (isMissingAuditRpc(rpcErr)) return NextResponse.json({ error: AUDIT_RPC_NOT_READY }, { status: 503 });
     if (isLastOwnerError(rpcErr)) return NextResponse.json({ error: LAST_OWNER }, { status: 409 });
     if (rpcErr) throw new Error(rpcErr.message);
     if (result?.error === 'not_found') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (result?.error === 'changed') return NextResponse.json({ error: MEMBER_CHANGED }, { status: 409 });
     const after = (result?.member ?? null) as MemberRow | null;
     if (!after) throw new Error('member update returned no row');
     return NextResponse.json({ member: toView(after, access.userId) });

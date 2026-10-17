@@ -571,6 +571,24 @@ describe('write errors as the member sees them', () => {
     expect(writeError({ code: '23514', message: 'releases_upc_format' }, 'x').res.status).toBe(400);
     expect(writeError({ code: 'XX000', message: 'boom' }, 'Could not').res.status).toBe(500);
   });
+
+  it('167: the database refusing a tracklist change on a release that left draft is a plain 409, never the raw error', async () => {
+    const { writeError } = await import('./access');
+    for (const state of ['delivered', 'cancelled']) {
+      const locked = writeError({ code: '23514', message: `release_items: a ${state} release keeps its tracklist` }, 'x');
+      expect(locked.res.status, state).toBe(409);
+      const body = await locked.res.json();
+      // The same sentence tracklistLocked gives when the route itself sees the state.
+      expect(body.error).toBe(`A ${state} release keeps its tracklist`);
+      expect(body.field).toBe('state');
+      expect(JSON.stringify(body)).not.toMatch(/release_items/);
+    }
+    // 158's store hold, raised by the same trigger, is a 409 too (it was a 400 echoing the trigger).
+    const listed = writeError({ code: '23514', message: 'release_items: take the release off the store to change its tracklist' }, 'x');
+    expect(listed.res.status).toBe(409);
+    const body = await listed.res.json();
+    expect(body).toEqual({ error: 'Take this release off the store to change its tracklist', field: 'store_listed' });
+  });
 });
 
 describe('the producer is untouched', () => {

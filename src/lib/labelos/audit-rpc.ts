@@ -31,7 +31,7 @@
  * `auditRpc` is the one caller. The route does the authorisation and the
  * planning (requireOrgCapability, planMemberChange); the function does only
  * what the database can know for itself, and the route reads its answer:
- * `{ error: 'not_found' | 'not_scoped' | 'pending' | 'not_pending' }` for the expected
+ * `{ error: 'not_found' | 'not_scoped' | 'pending' | 'not_pending' | 'changed' }` for the expected
  * refusals, a thrown error for everything else.
  *
  * `src/app/api/org/coverage.test.ts` requires every mutating org handler to
@@ -39,6 +39,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { EventPayload } from './activity';
+import type { MemberExpectation } from './members';
 
 export const AUDIT_RPCS = {
   memberUpdate: 'labelos_audit_member_update',
@@ -75,6 +76,13 @@ export type AuditRpcArgs = {
     p_patch: Record<string, unknown>;
     p_verb: 'member.role_changed' | 'member.capabilities_changed' | 'member.scope_changed';
     p_payload: EventPayload;
+    /**
+     * Migration 167: the row the plan was made from (lib/labelos/members
+     * `memberExpectation`). The function compares it under its row lock and
+     * answers `{ error: 'changed' }`, writing nothing, when it moved. Left
+     * out only by the members route's fallback while 167 is unapplied.
+     */
+    p_expect?: MemberExpectation;
   };
   memberRemove: { p_org: string; p_actor: string; p_user: string; p_payload: EventPayload };
   memberArtistsSet: { p_org: string; p_actor: string; p_user: string; p_contact_ids: string[]; p_payload: EventPayload };
