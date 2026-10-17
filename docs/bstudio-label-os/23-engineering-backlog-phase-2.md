@@ -91,7 +91,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: `mix` finds `final_mix.wav`, `x com` finds `a@x.com`, Hindi/Thai words match; tests for each.
 
 ### LABEL-46 — Per-org "since your last visit"
-**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 169 · **Status:** In Progress (session_016m8GmEqNtNDD9vyoWvzEkA)
+**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 169 · **Status:** Done — #128, squash `3451405d7284236229a73c2491c5c2fdc6095429` (2026-10-17)
 - `last_seen_overview_at` per (user, org), written only by `POST /api/org/[orgId]/overview/seen`; backfill from the user-level value (G5).
 - Acceptance: visiting org A does not clear org B's feed; two-org test.
 
