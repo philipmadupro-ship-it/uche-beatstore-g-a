@@ -98,9 +98,33 @@ That split is expressed by separating finished audio from working audio.
 | members.manage | ✓ | ✓ | — | — | — | — | — | — | — |
 | business.read.internal | ✓ | ✓ | — | ✓ | ✓ | ✓ | — | — | — |
 
-**D4 decided:** no per-org customisation of this table in the MVP. **Amended 2026-09-30 (`15`, "LABEL-02 follow-up"):** the columns are *presets*; an owner or admin can switch single abilities on or off for one member (never for owner/admin, and never business-internal notes or contracts for a roster artist). Every function column also has `tasks.write`; `finance` and `operations` start empty.
+**D4 decided:** no per-org customisation of this table in the MVP. **Amended 2026-09-30 (`15`, "LABEL-02 follow-up"):** the columns are *presets*; an owner or admin can switch single abilities on or off for one member (never for owner/admin, and never business-internal notes or contracts for a roster artist). Every function column also has `tasks.write`; `operations` starts empty (`finance` had no preset until LABEL-49, §2.4a; the read-only `executive` has no `tasks.write`).
 
 **D5 decided:** an artist sees **everything about their own songs** — stage, every reviewer's rating and verdict, and A&R comments. They still never see other artists, contracts, business-internal notes, or other people's split lines beyond their own songs.
+
+### 2.4a Departments (LABEL-49, migration 171)
+
+Doc 22 §8 (5): finance, PR, the CEO, artistic direction and contracts exist on day one. Functions `pr`, `executive`, `artistic_director` and `contracts` are added; `finance` gets a preset. Each capability below is owned by a module (`CAPABILITY_MODULE`, LABEL-47), so an org not licensed for the module holds none of them. The contracts department **reuses `contracts.read`** and adds `contracts.write` / `contracts.sign` — the backlog's `contract.*` names mean these.
+
+| | owner / admin | finance | pr | executive | artistic_director | contracts | legal | other functions | artist |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| catalog | R W | R | R | R | R W | R | R | (§2.4) | R W (own) |
+| audio.finished / .working | ✓ / ✓ | — / — | ✓ / — | ✓ / — | ✓ / ✓ | — / — | ✓ / — | (§2.4) | ✓ / ✓ (own) |
+| review.write | ✓ | — | — | — | ✓ | — | — | (§2.4) | comment only |
+| rights | R W | — | — | R | — | R | R W | (§2.4) | R (own songs) |
+| finance.read / .write / .approve | ✓ ✓ ✓ | ✓ ✓ — | — | ✓ — — | — | — | — | — | **never** |
+| pr.read / .write | ✓ ✓ | — | ✓ ✓ | ✓ — | — | — | — | — | **never** |
+| exec.read | ✓ | — | — | ✓ | — | — | — | — | **never** |
+| creative.read / .approve | ✓ ✓ | — | — | ✓ — | ✓ ✓ | — | — | — | **never** |
+| contracts.read / .write / .sign | ✓ ✓ ✓ | — | — | ✓ — — | — | ✓ ✓ — | ✓ ✓ — | — | **never** |
+| business.read.internal | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | (§2.4) | never |
+| tasks.write | ✓ | ✓ | ✓ | **—** | ✓ | ✓ | ✓ | ✓ | — |
+
+- **Approving money and signing for the org are in no preset**: owner/admin, or switched on for one member, so the person who drafts is not by default the person who approves.
+- **The executive is read-only**: it reads every department, hears finished music only (D4), and holds no write, approve, release, share or task capability.
+- **The roster artist can hold none of these** (`NEVER_GRANTABLE`, also 136's `finance.read`). What an artist sees of their own contracts or statements (LABEL-57, LABEL-63) is an own-row read those tasks build, not one of these capabilities.
+- Every department read implies `catalog.read` (136's `finance.read` too, since 171).
+- Artist orgs offer `finance`, `pr` and `contracts`; the producer org offers none of the new functions.
 
 ### 2.4b Org kinds (D1 decided: artists get their own ecosystem)
 

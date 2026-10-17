@@ -5,7 +5,7 @@
 -- Cast (seed: producer P with a creator_profiles row, buyer B):
 --   label L : owner O; AR (A&R, scope org); MKT (marketing: catalog.read +
 --             audio.finished, no working audio); SC (A&R, scope artists, sees
---             C1); ART (roster artist, scoped to C1); FIN (finance: no
+--             C1); ART (roster artist, scoped to C1); FIN (operations: no
 --             catalog.read)
 --   label L2: owner X; P is an A&R member of L2
 --   another producer Q owns producer rows of their own (org_id NULL)
@@ -71,7 +71,7 @@ INSERT INTO public.org_members (org_id, user_id, role, functions, scope) VALUES
   (:L, :MKT, 'member', '{marketing}', 'org'),
   (:L, :SC, 'member', '{a_and_r}', 'artists'),
   (:L, :ART, 'artist', '{}', 'artists'),
-  (:L, :FIN, 'member', '{finance}', 'org'),
+  (:L, :FIN, 'member', '{operations}', 'org'),
   (:L2, :X, 'owner', '{}', 'org'),
   (:L2, :P, 'member', '{a_and_r}', 'org');
 

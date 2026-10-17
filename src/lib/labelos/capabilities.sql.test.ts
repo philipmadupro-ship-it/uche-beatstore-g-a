@@ -192,20 +192,31 @@ function sqlHasOrgCap(map: Mapping, m: SqlMember, cap: string): boolean {
 }
 
 describe('has_org_cap mapping (latest definition) equals capabilities.ts + entitlements.ts', () => {
-  it('finds the definitions: 136 first, 170 the latest', () => {
+  it('finds the definitions: 136 first, 171 the latest', () => {
     expect(DEFINING[0]).toMatch(/^136_labelos_org_core\.sql$/);
-    expect(FILE).toMatch(/^170_/);
+    expect(FILE).toMatch(/^171_/);
   });
 
   const map = parseMapping(readFileSync(join(MIGRATIONS, FILE!), 'utf8'));
 
-  it('every earlier definition agrees with the latest on the data it has', () => {
+  it('every earlier definition is contained in the latest: the vocabulary only grows', () => {
+    // 171 (LABEL-49) added capabilities, functions, presets, implications and
+    // hard limits; nothing an earlier definition listed was taken out.
+    const key = (v: string | Pair) => (Array.isArray(v) ? v.join(' → ') : v);
     for (const file of DEFINING.slice(0, -1)) {
       const old = parseMapping(readFileSync(join(MIGRATIONS, file), 'utf8'), true);
-      for (const key of [...LISTS, ...PAIRS]) {
-        if ((ENTITLEMENT_KEYS as readonly string[]).includes(key)) continue;
-        expect(old[key], `${file}: ${key}`).toEqual(map[key]);
+      for (const name of [...LISTS, ...PAIRS]) {
+        const before = old[name] as (string | Pair)[] | undefined;
+        if (!before) continue;
+        const now = new Set((map[name] as (string | Pair)[]).map(key));
+        expect(before.map(key).filter((v) => !now.has(v)), `${file}: ${name}`).toEqual([]);
       }
+    }
+    // 170 changed only the entitlement data; its capability data is 136's.
+    const [first, second] = DEFINING.map((f) => parseMapping(readFileSync(join(MIGRATIONS, f), 'utf8'), true));
+    for (const name of [...LISTS, ...PAIRS]) {
+      if ((ENTITLEMENT_KEYS as readonly string[]).includes(name)) continue;
+      expect(second[name], name).toEqual(first[name]);
     }
   });
 
@@ -290,6 +301,10 @@ describe('has_org_cap mapping (latest definition) equals capabilities.ts + entit
     { grant: ['finance.read', 'share.external'], revoke: ['audio.working'] },
     { grant: ['not.a.cap', '__proto__'], revoke: ['toString'] },
     { grant: [...ALL_CAPABILITIES] },
+    // LABEL-49 department capabilities
+    { grant: ['finance.approve', 'contracts.sign', 'exec.read', 'creative.approve', 'pr.write'] },
+    { grant: ['finance.write'], revoke: ['finance.read'] },
+    { revoke: ['contracts.read'] },
   ];
   const FUNCTION_SETS: string[][] = [
     [],
@@ -298,13 +313,16 @@ describe('has_org_cap mapping (latest definition) equals capabilities.ts + entit
     ['a_and_r', 'legal'],
     ['marketing', 'project_manager'],
     ['producer', 'engineer', 'operations'],
+    ['finance', 'executive', 'contracts'],
     [...ORG_FUNCTIONS],
   ];
   const KINDS = [...ORG_KINDS, 'studio'];
   const ROLE_INPUTS = [...ROLES, 'superuser'];
   const CAPS = [...ALL_CAPABILITIES, 'bogus.cap'];
   // An org_entitlements row's modules, or null = no row (the default).
-  const ENTITLED: (string[] | null)[] = [null, [], ['contracts'], ['finance', 'export'], [...MODULES], ['bogus', 'Contracts']];
+  const ENTITLED: (string[] | null)[] = [
+    null, [], ['contracts'], ['finance', 'export'], [...MODULES], ['bogus', 'Contracts'], ['pr', 'executive', 'artistic'],
+  ];
 
   it('SQL mirror and capabilitiesFor agree on every fixture', () => {
     let checked = 0;
@@ -356,5 +374,39 @@ describe('has_org_cap mapping (latest definition) equals capabilities.ts + entit
     expect(sqlHasOrgCap(map, { ...owner, entitled: ['export'] }, 'catalog.read')).toBe(true);
     expect(sqlHasOrgCap(map, { ...owner, entitled: null }, 'contracts.read')).toBe(true);
     expect(sqlHasOrgCap(map, { ...owner, entitled: ['contracts'] }, 'contracts.read')).toBe(true);
+  });
+
+  // ── LABEL-49: the roster artist and the department capabilities ───────
+
+  const DEPARTMENT = ['finance.read', 'finance.write', 'finance.approve', 'pr.read', 'pr.write', 'exec.read',
+    'creative.read', 'creative.approve', 'contracts.read', 'contracts.write', 'contracts.sign'];
+  const rosterArtist = (m: Mapping) => {
+    const artist = { kind: 'label', role: 'artist', functions: ['finance', 'executive'], capGrants: [...m.all_capabilities], capRevokes: [] };
+    return DEPARTMENT.filter((c) => sqlHasOrgCap(m, artist, c));
+  };
+
+  it('has_org_cap knows every department capability and gives a roster artist none of them', () => {
+    for (const cap of DEPARTMENT) expect(map.all_capabilities).toContain(cap);
+    expect(rosterArtist(map)).toEqual([]);
+  });
+
+  it('mutation check: dropping any artist pair from never_grantable lets the SQL grant it', () => {
+    for (const cap of DEPARTMENT) {
+      const mutated = { ...map, never_grantable: map.never_grantable.filter(([r, c]) => !(r === 'artist' && c === cap)) };
+      expect(mutated.never_grantable.length).toBe(map.never_grantable.length - 1);
+      expect(rosterArtist(mutated)).toEqual([cap]);
+    }
+  });
+
+  it('each department capability is owned by its module, in SQL as in TS', () => {
+    const owned = Object.fromEntries(map.capability_modules);
+    expect(owned).toMatchObject({
+      'finance.read': 'finance', 'finance.write': 'finance', 'finance.approve': 'finance',
+      'pr.read': 'pr', 'pr.write': 'pr', 'exec.read': 'executive',
+      'creative.read': 'artistic', 'creative.approve': 'artistic',
+      'contracts.read': 'contracts', 'contracts.write': 'contracts', 'contracts.sign': 'contracts',
+    });
+    const owner = { kind: 'label', role: 'owner', functions: [], capGrants: [], capRevokes: [], entitled: ['contracts'] };
+    expect(DEPARTMENT.filter((c) => sqlHasOrgCap(map, owner, c))).toEqual(['contracts.read', 'contracts.write', 'contracts.sign']);
   });
 });

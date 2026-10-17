@@ -114,13 +114,25 @@ describe('orgEntitlements', () => {
 describe('entitledCapabilities', () => {
   const ownerCaps = () => capabilitiesFor('label', 'owner', []);
 
-  it('an owner without contracts loses contracts.read and nothing else', () => {
+  it('an owner without contracts loses the contracts.* capabilities and nothing else', () => {
     const modules = new Set(MODULES.filter((m) => m !== 'contracts'));
     const caps = entitledCapabilities(ownerCaps(), modules);
     expect(caps.has('contracts.read')).toBe(false);
+    expect(caps.has('contracts.write')).toBe(false);
+    expect(caps.has('contracts.sign')).toBe(false);
     expect(caps.has('catalog.read')).toBe(true);
     expect(caps.has('release.approve.legal')).toBe(true);
-    expect(caps.size).toBe(ALL_CAPABILITIES.length - 1);
+    expect(caps.size).toBe(ALL_CAPABILITIES.length - 3);
+  });
+
+  it('LABEL-49: each department module owns exactly its capabilities', () => {
+    const owned = (m: string) => ALL_CAPABILITIES.filter((c) => CAPABILITY_MODULE[c] === m).sort();
+    expect(owned('finance')).toEqual(['finance.approve', 'finance.read', 'finance.write']);
+    expect(owned('pr')).toEqual(['pr.read', 'pr.write']);
+    expect(owned('executive')).toEqual(['exec.read']);
+    expect(owned('artistic')).toEqual(['creative.approve', 'creative.read']);
+    expect(owned('contracts')).toEqual(['contracts.read', 'contracts.sign', 'contracts.write']);
+    for (const m of ['marketing', 'store', 'search', 'digest', 'export']) expect(owned(m)).toEqual([]);
   });
 
   it('with every module, nothing changes', () => {

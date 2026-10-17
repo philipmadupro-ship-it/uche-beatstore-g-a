@@ -669,7 +669,7 @@ describe('projects, tracks and project-keyed rows reach their artist through pro
     signedIn();
     projectsTable({ org_id: ORG_A, id: PROJECT, inbox_for_contact_id: null });
     answers.project_contacts = { data: [], error: null };
-    memberships({ [ORG_A]: member({ functions: ['finance'], scope: 'artists' }) });
+    memberships({ [ORG_A]: member({ functions: ['operations'], scope: 'artists' }) });
     scoped([CONTACT]);
     const { requireObjectAccess } = await load();
     const r = await requireObjectAccess({ table: 'projects', id: PROJECT, cap: 'catalog.write' });
@@ -739,7 +739,7 @@ describe('scopedOrgQuery', () => {
 describe('membership edge cases', () => {
   it('a member whose functions grant nothing is still a member', async () => {
     signedIn();
-    memberships({ [ORG_A]: member({ functions: ['finance'] }) });
+    memberships({ [ORG_A]: member({ functions: ['operations'] }) });
     const { requireOrgMember, requireOrgCapability } = await load();
     const r = await requireOrgMember(ORG_A);
     expect(r.ok).toBe(true);

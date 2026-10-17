@@ -364,6 +364,15 @@ export const CAPABILITY_LABELS: Readonly<Record<Capability, string>> = {
   'org.manage': 'Organization settings',
   'finance.read': 'See finance',
   'business.read.internal': 'Business-internal notes',
+  'finance.write': 'Edit finance',
+  'finance.approve': 'Approve statements',
+  'pr.read': 'See PR',
+  'pr.write': 'Run PR',
+  'exec.read': 'Executive overview',
+  'creative.read': 'See creative direction',
+  'creative.approve': 'Approve creative direction',
+  'contracts.write': 'Draft contracts',
+  'contracts.sign': 'Sign contracts',
 };
 
 export function isOrgKind(v: unknown): v is OrgKind {
