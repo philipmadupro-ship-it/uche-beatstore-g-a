@@ -10,7 +10,8 @@
  * with no owner), so routes pass `NO_WORKSPACE` and the artist role decides.
  *
  * D1: an artist org's roster is the artist themselves — one contact,
- * created with the org (migration 139). The routes keep it that way.
+ * created with the org (migration 139). The routes keep it that way, and
+ * migration 166's index refuses a second one that races past them.
  */
 import { summarizeArtist, type ArtistSummary } from '@/lib/contacts/artist-summary';
 import { isWorkspaceMode } from '@/lib/contacts/relationship';
@@ -29,7 +30,18 @@ export function isRosterContact(c: RoleInput, workspace: WorkspaceInput): boolea
   return isWorkspaceMode(workspace) || hasArtistRole(c);
 }
 
-const ONE_ARTIST = 'An artist organization has exactly one artist: the artist themselves.';
+export const ONE_ARTIST = 'An artist organization has exactly one artist: the artist themselves.';
+
+/**
+ * Migration 166's partial unique index: at most one artist contact per
+ * artist-kind org, so two requests that both passed `artistOrgRosterError`
+ * cannot both land. The second write is a unique violation naming it.
+ */
+export const ONE_ARTIST_INDEX = 'contacts_one_artist_per_artist_org';
+
+export function isSecondArtistError(error: { code?: string; message?: string } | null | undefined): boolean {
+  return !!error && error.code === '23505' && (error.message ?? '').includes(ONE_ARTIST_INDEX);
+}
 
 /**
  * Would writing `candidate` (an edit when it carries an `id`, else a new

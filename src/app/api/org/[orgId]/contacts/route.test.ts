@@ -263,6 +263,29 @@ describe('POST /contacts', () => {
     expect((await call(AOWN, 'POST', A, undefined, { name: 'Twin', category: 'artist' })).status).toBe(409);
     expect((await call(AOWN, 'POST', A, undefined, { name: 'Eng', category: 'engineer' })).status).toBe(201);
   });
+
+  it('a second artist that raced past the check (166’s index refuses it) is the same 409, not a duplicate-email one or a 500', async () => {
+    // Both requests read zero other artists; the database is what stops the second.
+    db.tables.contacts = db.tables.contacts.filter((c) => c.id !== ASELF);
+    const realFrom = mem.client.from.bind(mem.client);
+    mem.client.from = ((table: string) => {
+      const builder = realFrom(table);
+      if (table !== 'contacts') return builder;
+      return Object.assign(Object.create(builder), {
+        insert: () => ({
+          select: () => ({
+            single: async () => ({
+              data: null,
+              error: { code: '23505', message: 'duplicate key value violates unique constraint "contacts_one_artist_per_artist_org"' },
+            }),
+          }),
+        }),
+      });
+    }) as typeof mem.client.from;
+    const res = await call(AOWN, 'POST', A, undefined, { name: 'Twin', category: 'artist' });
+    expect(res.status).toBe(409);
+    expect(res.json.error).toBe('An artist organization has exactly one artist: the artist themselves.');
+  });
 });
 
 describe('PATCH /contacts/[id]', () => {

@@ -249,6 +249,33 @@ export function planMemberChange(
   return { ok: true, noop: verb === null, patch, event: verb ? { verb, payload: changes } : null };
 }
 
+/**
+ * The row a plan was made from, as `labelos_audit_member_update` (migration
+ * 167) compares it under its row lock: every field planMemberChange read. If
+ * any of them moved between the route's read and the call — a second admin's
+ * change landed first — the function answers `{ error: 'changed' }` and
+ * writes nothing, so a stale plan never overwrites a concurrent change.
+ */
+export type MemberExpectation = {
+  role: string;
+  functions: string[];
+  scope: string;
+  cap_grants: string[];
+  cap_revokes: string[];
+};
+
+export function memberExpectation(state: MemberState): MemberExpectation {
+  return {
+    role: state.role,
+    functions: [...state.functions],
+    scope: state.scope,
+    cap_grants: [...state.capGrants],
+    cap_revokes: [...state.capRevokes],
+  };
+}
+
+export const MEMBER_CHANGED = 'Someone else changed this member at the same time. Reload the page and try again.';
+
 export function planMemberRemoval(
   actor: MemberActor,
   target: Pick<MemberState, 'userId' | 'role'>,
