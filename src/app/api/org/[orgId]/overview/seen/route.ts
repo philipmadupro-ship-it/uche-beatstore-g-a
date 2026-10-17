@@ -1,10 +1,10 @@
 /**
  * POST /api/org/[orgId]/overview/seen (LABEL-20) — the member has looked at
  * the Overview's digest through `through` (the `asOf` it was served with).
- * Moves `user_profiles.last_seen_overview_at` forward, never back and never
- * past now, for the SESSION's user: the body names no one, so no member can
- * move another's mark. The column is one per user, not per org
- * (lib/labelos/last-seen). Capability `catalog.read`, the one the digest needs.
+ * Moves the (this org, session user) row of `org_overview_seen` forward, never
+ * back and never past now: the body names no one and no other org, so no member
+ * can move another's mark and visiting one org leaves every other org's feed
+ * alone (LABEL-46, lib/labelos/last-seen). Capability `catalog.read`, the one the digest needs.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOrgCapability } from '@/lib/auth/org-access';
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   const parsed = await readBody(req, OrgOverviewSeenBodySchema);
   if (!parsed.ok) return parsed.res;
 
-  const result = await markOverviewSeen(access.admin, access.userId, parsed.data.through);
+  const result = await markOverviewSeen(access.admin, access.userId, access.orgId, parsed.data.through);
   if (!result.ok) {
     log.error('mark seen failed', { orgId: access.orgId, error: result.error });
     return NextResponse.json({ error: 'Could not save that' }, { status: 500 });
