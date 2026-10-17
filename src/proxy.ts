@@ -1,10 +1,11 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildCsp, cspHeaderName as cspHeaderNameFor } from '@/lib/security/csp';
-import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath, isLabelOsRestorePagePath } from '@/lib/security/api-gate';
+import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath, isLabelOsRestorePagePath, isLabelOsSetupPagePath } from '@/lib/security/api-gate';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
 import { memberLanding } from '@/lib/labelos/member-landing';
+import { nonMemberLanding } from '@/lib/labelos/setup';
 import { isSupabaseConfigured } from '@/lib/local-store';
 
 /**
@@ -66,7 +67,11 @@ export async function proxy(request: NextRequest) {
   const labelOsApi = isLabelOsApiPath(request.nextUrl.pathname);
   const labelOsPage = isLabelOsPagePath(request.nextUrl.pathname);
   // `/restore/<org id>` (LABEL-39) likewise: the org it brings back is not live, so no live membership is required.
-  const labelOsJoinPage = isLabelOsJoinPagePath(request.nextUrl.pathname) || isLabelOsRestorePagePath(request.nextUrl.pathname);
+  // `/setup` (LABEL-48) too: a new account sets up its first org there, so it has no membership yet.
+  const labelOsJoinPage =
+    isLabelOsJoinPagePath(request.nextUrl.pathname) ||
+    isLabelOsRestorePagePath(request.nextUrl.pathname) ||
+    isLabelOsSetupPagePath(request.nextUrl.pathname);
   if (labelOsApi || labelOsPage || labelOsJoinPage) {
     if (!isLabelOsEnabled()) {
       return labelOsApi
@@ -206,9 +211,11 @@ export async function proxy(request: NextRequest) {
         const target = memberLanding(path, request.nextUrl.searchParams.get('next'));
         return NextResponse.redirect(new URL(target, request.url));
       }
-      const url = request.nextUrl.clone();
-      url.pathname = '/store/account/me';
-      return NextResponse.redirect(url);
+      // Neither the producer nor a member: with Label OS on, /setup, where a
+      // new artist or label creates its org (lib/labelos/setup.ts
+      // #nonMemberLanding). Flag off: the buyer account, as before.
+      const target = nonMemberLanding({ labelOsEnabled: isLabelOsEnabled(), metadata: user.user_metadata });
+      return NextResponse.redirect(new URL(target, request.url));
     }
   }
 

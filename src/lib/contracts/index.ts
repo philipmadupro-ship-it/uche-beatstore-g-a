@@ -904,6 +904,16 @@ export const OrgJoinBodySchema = z.object({
 }).strict();
 export type OrgJoinBody = z.infer<typeof OrgJoinBodySchema>;
 
+/**
+ * POST /api/org/setup (LABEL-48, first slice). What the new account is and
+ * what its organization is called (src/lib/labelos/setup.ts).
+ */
+export const OrgSetupBodySchema = z.object({
+  face: z.enum(['independent', 'label']),
+  name: z.string().min(1).max(200),
+}).strict();
+export type OrgSetupBody = z.infer<typeof OrgSetupBodySchema>;
+
 // ── Label OS org settings + members (LABEL-09) ───────────────────────────
 
 /** PATCH /api/org/[orgId]. The name only: the slug never changes. */
