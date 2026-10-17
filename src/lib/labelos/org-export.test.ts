@@ -119,6 +119,7 @@ describe('the export covers every table that carries an org_id', () => {
     notifications: "a person's inbox, not the organization's",
     org_digest_members: 'a member’s own opt-in switch',
     org_digest_channels: 'holds the encrypted Slack webhook secret',
+    org_overview_seen: 'a member’s own read marker, not the organization’s data',
   };
 
   function orgScopedTablesInMigrations(): string[] {

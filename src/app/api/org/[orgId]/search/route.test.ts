@@ -177,6 +177,52 @@ describe('GET /api/org/[orgId]/search — text', () => {
   });
 });
 
+describe('LABEL-45 — tokenization and starvation', () => {
+  it('a word inside a file name or an address is found: "mix" finds final_mix.wav, "x com" finds a@x.com', async () => {
+    db.tables.project_assets.push({ id: 'f-mix', org_id: L, project_id: LP1, kind: 'artwork', sensitivity: 'normal', label: null, file_name: 'final_mix.wav' });
+    db.tables.contacts.push({ id: 'c-mail', org_id: L, user_id: null, name: 'Ops', category: 'manager', email: 'a@x.com', label: null, role: null });
+    expect(ids((await search(AR, 'mix')).body, 'files')).toEqual(['f-mix']);
+    expect(ids((await search(AR, 'x com')).body, 'people')).toEqual(['c-mail']);
+  });
+
+  it('a file name stored decomposed (macOS) is found by the composed word a person types', async () => {
+    db.tables.project_assets.push({ id: 'f-cafe', org_id: L, project_id: LP1, kind: 'artwork', sensitivity: 'normal', label: '', file_name: 'Cafe\u0301_Mix.wav' });
+    expect(ids((await search(AR, 'café')).body, 'files')).toEqual(['f-cafe']);
+  });
+
+  it('finds a Hindi title and a Thai title by their own words', async () => {
+    db.tables.tracks.push(track(t(300), 'हिन्दी गाना'), track(t(301), 'สวัสดี ชาวโลก'));
+    expect(ids((await search(AR, 'हिन्दी')).body, 'songs')).toEqual([t(300)]);
+    expect(ids((await search(AR, 'गाना')).body, 'songs')).toEqual([t(300)]);
+    expect(ids((await search(AR, 'สวัสดี')).body, 'songs')).toEqual([t(301)]);
+  });
+
+  it('a common word does not starve a member who may see only a few of its matches (D4 inside the paging)', async () => {
+    for (let i = 0; i < 90; i++) db.tables.tracks.push(track(t(400 + i), `Alpha mix ${String(i).padStart(2, '0')}`));
+    db.tables.tracks.push(track(t(600), 'Zed mix one', { song_stage: 'selected' }), track(t(601), 'Zed mix two', { song_stage: 'selected' }));
+    const { body } = await search(MKT, 'mix');
+    expect(ids(body, 'songs').sort()).toEqual([t(600), t(601)].sort());
+    const text = JSON.stringify(body);
+    expect(text).not.toContain('Alpha');
+    expect(text).not.toMatch(/count|total|hidden|restricted|more/i);
+  });
+
+  it('...and an artist-scoped member whose matches are buried under another artist\'s', async () => {
+    for (let i = 0; i < 90; i++) db.tables.tracks.push(track(t(700 + i), `Alpha mix ${String(i).padStart(2, '0')}`));
+    for (let i = 0; i < 90; i++) db.tables.project_tracks.push({ project_id: LP1, track_id: t(700 + i), position: 10 + i });
+    db.tables.tracks.push(track(t(900), 'Zed mix kilo'));
+    db.tables.project_tracks.push({ project_id: LP2, track_id: t(900), position: 5 });
+    const { body } = await search(AR_C2, 'mix');
+    expect(ids(body, 'songs')).toEqual([t(900)]);
+  });
+
+  it('when every match is hidden the answer is an empty result, not a hint', async () => {
+    for (let i = 0; i < 50; i++) db.tables.tracks.push(track(t(1000 + i), `Beta mix ${i}`));
+    const { body } = await search(MKT, 'beta mix');
+    expect(body.groups).toEqual([]);
+  });
+});
+
 describe('artist scope', () => {
   it('a member scoped to Kilo never finds Nova\'s songs, files, project, release or artist', async () => {
     const { body } = await search(AR_C2, 'runnin');

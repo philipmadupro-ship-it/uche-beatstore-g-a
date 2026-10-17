@@ -118,6 +118,8 @@ function labelOsTables(): string[] {
     // 160_labelos_weekly_digest.sql (LABEL-38)
     'org_digest_members',
     'org_digest_channels',
+    // 169_labelos_overview_seen_per_org.sql (LABEL-46)
+    'org_overview_seen',
   ];
 }
 

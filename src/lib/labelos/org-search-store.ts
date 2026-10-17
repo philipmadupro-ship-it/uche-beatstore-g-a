@@ -28,16 +28,19 @@ import { ORG_ASSET_KIND_LABEL, canReadOrgAsset, isOrgAssetKind } from './org-ass
 import { orgTrackFacts } from './org-workspace-store';
 import { memberSeesTrackRow, songStageLabel } from './org-workspace';
 import { scopedPartyIds } from './credits-store';
+import { inChunks } from './paged-read';
 import { NO_WORKSPACE, isRosterContact } from './roster';
 import {
-  CANDIDATES_PER_TABLE,
   EMPTY_SEARCH,
+  HITS_PER_GROUP,
+  collectVisible,
   detectIdentifier,
   groupHits,
   parseSearchQuery,
   rankHits,
   type IdentifierQuery,
   type OrgSearchResult,
+  type PageSource,
   type ParsedQuery,
   type SearchHit,
 } from './org-search';
@@ -76,13 +79,13 @@ async function tracksInScope(admin: AdminClient, scope: Scope, trackIds: readonl
   if (scope.projects.length === 0 || trackIds.length === 0) return new Set();
   const inScope = new Set(scope.projects);
   const ok = new Set<string>();
-  for (const part of chunks([...new Set(trackIds)])) {
-    const links = rowsOf<{ project_id: string; track_id: string }>(
-      await admin.from('project_tracks').select('project_id, track_id').in('track_id', part),
-      'search placement read',
-    );
-    for (const l of links) if (inScope.has(l.project_id)) ok.add(l.track_id);
-  }
+  // Paged: PostgREST cuts a response at max-rows without an error (paged-read.ts).
+  const links = await inChunks<{ project_id: string; track_id: string }>(
+    trackIds,
+    (part, from, to) => admin.from('project_tracks').select('project_id, track_id').in('track_id', part).order('track_id').order('project_id').range(from, to),
+    'search placement read',
+  );
+  for (const l of links) if (inScope.has(l.project_id)) ok.add(l.track_id);
   return ok;
 }
 
@@ -104,59 +107,81 @@ async function visibleSongs(access: OrgAccessOk, scope: Scope, rows: readonly So
 
 const songHit = (s: SongRow): SearchHit => ({ group: 'songs', id: s.id, title: s.title ?? 'Untitled', sub: songStageLabel(s.song_stage) });
 
-// ── Text search, one read per table ─────────────────────────────────────
+// ── Text search, paged per table ─────────────────────────────────────────
+//
+// Each table is read in a stable order (the text first, the id to break ties)
+// a page of CANDIDATES_PER_TABLE at a time, and each page goes through the
+// member's scope / D4 filter before it counts. `collectVisible` asks for the
+// next page while fewer than HITS_PER_GROUP rows survived, up to MAX_EXTRA_PAGES
+// more per table (G8 F2, F3): a common word can no longer fill the window with
+// rows the member may not see. The alternative, pushing D4 into the query, would
+// restate `memberSeesTrackRow` and the link rules in PostgREST filters; paging
+// reuses the one rule that already decides, and stays bounded.
+
+const enoughHits = (hits: readonly SearchHit[]) => hits.length >= HITS_PER_GROUP;
+// Contacts split into two groups from one read; a page of all-artists must not leave People empty.
+const enoughOfEachGroup = (hits: readonly SearchHit[]) =>
+  (['artists', 'people'] as const).every((g) => hits.filter((h) => h.group === g).length >= HITS_PER_GROUP);
+
+/** A page read, with the tie-breaking order PostgREST needs for `range` to be stable. */
+type Paged = { range(from: number, to: number): PromiseLike<unknown> };
+const pageOf = <Row,>(what: string, make: () => Paged, opts: { searchColumn?: boolean } = {}): PageSource<Row> =>
+  async (from, to) => rowsOf<Row>((await make().range(from, to)) as Res, what, opts);
 
 async function searchSongs(access: OrgAccessOk, scope: Scope, q: ParsedQuery): Promise<SearchHit[]> {
   const { admin, orgId } = access;
   const base = () => admin.from('tracks').select('id, title, type, song_stage').eq('org_id', orgId).eq('type', 'song')
-    .not('song_stage', 'is', null).textSearch('search_tsv', q.tsquery!, { config: 'simple' }).limit(CANDIDATES_PER_TABLE);
-  let rows: SongRow[];
+    .not('song_stage', 'is', null).textSearch('search_tsv', q.tsquery!, { config: 'simple' });
+  const ordered = <B extends { order(c: string): B }>(b: B) => b.order('title').order('id');
+  const sources: PageSource<SongRow>[] = [];
   if (scope.projects === null) {
-    rows = rowsOf<SongRow>(await base(), 'song search', { searchColumn: true });
+    sources.push(pageOf<SongRow>('song search', () => ordered(base()), { searchColumn: true }));
   } else {
     // Inside the scope: the scoped projects' tracks are the only ones searched.
-    const placed = new Set<string>();
-    for (const part of chunks(scope.projects)) {
-      for (const l of rowsOf<{ track_id: string }>(await admin.from('project_tracks').select('track_id').in('project_id', part), 'search placement read')) placed.add(l.track_id);
-    }
-    rows = [];
-    for (const part of chunks([...placed])) {
-      rows.push(...rowsOf<SongRow>(await base().in('id', part), 'song search', { searchColumn: true }));
-    }
+    const placements = await inChunks<{ track_id: string }>(
+      scope.projects,
+      (part, from, to) => admin.from('project_tracks').select('track_id').in('project_id', part).order('track_id').order('project_id').range(from, to),
+      'search placement read',
+    );
+    const placed = new Set(placements.map((l) => l.track_id));
+    for (const part of chunks([...placed])) sources.push(pageOf<SongRow>('song search', () => ordered(base().in('id', part)), { searchColumn: true }));
   }
-  return (await visibleSongs(access, scope, rows)).map(songHit);
+  return collectVisible(sources, async (rows) => (await visibleSongs(access, scope, rows)).map(songHit), enoughHits);
 }
 
 async function searchContacts(access: OrgAccessOk, q: ParsedQuery): Promise<SearchHit[]> {
+  type Row = { id: string; name: string; category: string | null; secondary_category: string | null; role: string | null };
   // scopedOrgQuery narrows a scoped member to their own contacts (none → none).
-  const res = await scopedOrgQuery(access.admin, 'contacts', access, 'id, name, category, secondary_category, role')
-    .textSearch('search_tsv', q.tsquery!, { config: 'simple' })
-    .limit(CANDIDATES_PER_TABLE);
-  const rows = rowsOf<{ id: string; name: string; category: string | null; secondary_category: string | null; role: string | null }>(res as Res, 'contact search', { searchColumn: true });
-  return rows.map((c) =>
+  const source = pageOf<Row>('contact search', () =>
+    scopedOrgQuery(access.admin, 'contacts', access, 'id, name, category, secondary_category, role')
+      .textSearch('search_tsv', q.tsquery!, { config: 'simple' })
+      .order('name').order('id'), { searchColumn: true });
+  return collectVisible([source], async (rows) => rows.map((c) =>
     isRosterContact(c, NO_WORKSPACE)
       ? { group: 'artists' as const, id: c.id, title: c.name, sub: null }
       : { group: 'people' as const, id: c.id, title: c.name, sub: c.role || c.category || null },
-  );
+  ), enoughOfEachGroup);
 }
 
 async function searchProjects(access: OrgAccessOk, scope: Scope, q: ParsedQuery): Promise<SearchHit[]> {
+  type Row = { id: string; name: string };
   const base = () => access.admin.from('projects').select('id, name').eq('org_id', access.orgId)
-    .textSearch('search_tsv', q.tsquery!, { config: 'simple' }).limit(CANDIDATES_PER_TABLE);
-  let rows: { id: string; name: string }[] = [];
-  if (scope.projects === null) rows = rowsOf(await base(), 'project search', { searchColumn: true });
-  else for (const part of chunks(scope.projects)) rows.push(...rowsOf<{ id: string; name: string }>(await base().in('id', part), 'project search', { searchColumn: true }));
-  return rows.map((p) => ({ group: 'projects' as const, id: p.id, title: p.name, sub: null }));
+    .textSearch('search_tsv', q.tsquery!, { config: 'simple' }).order('name').order('id');
+  const sources = scope.projects === null
+    ? [pageOf<Row>('project search', base, { searchColumn: true })]
+    : chunks(scope.projects).map((part) => pageOf<Row>('project search', () => base().in('id', part), { searchColumn: true }));
+  return collectVisible(sources, async (rows) => rows.map((p) => ({ group: 'projects' as const, id: p.id, title: p.name, sub: null })), enoughHits);
 }
 
 async function searchFiles(access: OrgAccessOk, scope: Scope, q: ParsedQuery): Promise<SearchHit[]> {
-  const base = () => access.admin.from('project_assets').select('id, project_id, kind, sensitivity, label, file_name').eq('org_id', access.orgId)
-    .textSearch('search_tsv', q.tsquery!, { config: 'simple' }).limit(CANDIDATES_PER_TABLE);
   type Row = { id: string; project_id: string; kind: string; sensitivity: string; label: string | null; file_name: string | null };
-  const rows: Row[] = [];
-  if (scope.projects === null) rows.push(...rowsOf<Row>(await base(), 'file search', { searchColumn: true }));
-  else for (const part of chunks(scope.projects)) rows.push(...rowsOf<Row>(await base().in('project_id', part), 'file search', { searchColumn: true }));
-  return rows
+  const base = () => access.admin.from('project_assets').select('id, project_id, kind, sensitivity, label, file_name').eq('org_id', access.orgId)
+    .textSearch('search_tsv', q.tsquery!, { config: 'simple' }).order('file_name').order('id');
+  const sources = scope.projects === null
+    ? [pageOf<Row>('file search', base, { searchColumn: true })]
+    : chunks(scope.projects).map((part) => pageOf<Row>('file search', () => base().in('project_id', part), { searchColumn: true }));
+  // canReadOrgAsset is the D4 rule for a file: restricted and working kinds need their capabilities.
+  return collectVisible(sources, async (rows) => rows
     .filter((r) => canReadOrgAsset(access.capabilities, r))
     .map((r) => ({
       group: 'files' as const,
@@ -164,30 +189,35 @@ async function searchFiles(access: OrgAccessOk, scope: Scope, q: ParsedQuery): P
       title: r.label || r.file_name || 'File',
       sub: isOrgAssetKind(r.kind) ? ORG_ASSET_KIND_LABEL[r.kind] : null,
       projectId: r.project_id,
-    }));
+    })), enoughHits);
 }
 
 async function searchReleases(access: OrgAccessOk, scope: Scope, q: ParsedQuery): Promise<SearchHit[]> {
-  const base = () => access.admin.from('releases').select('id, title, state, project_id').eq('org_id', access.orgId)
-    .textSearch('search_tsv', q.tsquery!, { config: 'simple' }).limit(CANDIDATES_PER_TABLE);
   type Row = { id: string; title: string; state: string };
-  const rows: Row[] = [];
-  if (scope.projects === null) rows.push(...rowsOf<Row>(await base(), 'release search', { searchColumn: false }));
-  else for (const part of chunks(scope.projects)) rows.push(...rowsOf<Row>(await base().in('project_id', part), 'release search', { searchColumn: false }));
-  return rows.map((r) => ({ group: 'releases' as const, id: r.id, title: r.title, sub: r.state }));
+  const base = () => access.admin.from('releases').select('id, title, state, project_id').eq('org_id', access.orgId)
+    .textSearch('search_tsv', q.tsquery!, { config: 'simple' }).order('title').order('id');
+  const sources = scope.projects === null
+    ? [pageOf<Row>('release search', base)]
+    : chunks(scope.projects).map((part) => pageOf<Row>('release search', () => base().in('project_id', part)));
+  return collectVisible(sources, async (rows) => rows.map((r) => ({ group: 'releases' as const, id: r.id, title: r.title, sub: r.state })), enoughHits);
 }
 
 async function searchParties(access: OrgAccessOk, q: ParsedQuery): Promise<SearchHit[]> {
   // Parties carry legal names and IPI numbers: only a member who reads rights data searches them.
   if (!access.capabilities.has('rights.read')) return [];
-  const res = await access.admin.from('parties').select('id, display_name, kind').eq('org_id', access.orgId)
-    .textSearch('search_tsv', q.tsquery!, { config: 'simple' }).limit(CANDIDATES_PER_TABLE);
-  let rows = rowsOf<{ id: string; display_name: string; kind: string }>(res as Res, 'party search');
-  if (access.artistScope !== null && rows.length > 0) {
-    const visible = new Set(await scopedPartyIds(access.admin, access));
-    rows = rows.filter((p) => visible.has(p.id));
-  }
-  return rows.map((p) => ({ group: 'people' as const, id: p.id, title: p.display_name, sub: p.kind }));
+  type Row = { id: string; display_name: string; kind: string };
+  const source = pageOf<Row>('party search', () => access.admin.from('parties').select('id, display_name, kind').eq('org_id', access.orgId)
+    .textSearch('search_tsv', q.tsquery!, { config: 'simple' }).order('display_name').order('id'));
+  // The parties credited on songs of a scoped member's artists, read once and only if a page has rows.
+  let visible: Set<string> | null = null;
+  return collectVisible([source], async (rows) => {
+    let list = rows;
+    if (access.artistScope !== null && list.length > 0) {
+      visible ??= new Set(await scopedPartyIds(access.admin, access));
+      list = list.filter((p) => visible!.has(p.id));
+    }
+    return list.map((p) => ({ group: 'people' as const, id: p.id, title: p.display_name, sub: p.kind }));
+  }, enoughHits);
 }
 
 // ── Identifier jump ─────────────────────────────────────────────────────
