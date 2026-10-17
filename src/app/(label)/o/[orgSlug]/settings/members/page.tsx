@@ -30,6 +30,7 @@ import { Popover } from '@/components/ui/Popover';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
 import { InviteMemberModal } from '@/components/labelos/InviteMemberModal';
 import { useOrgShell } from '@/components/labelos/OrgShellContext';
+import { capabilityEntitled } from '@/lib/labelos/entitlements';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import {
@@ -326,12 +327,12 @@ export default function OrgMembersPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Link
+          {(!shell?.modules || shell.modules.includes('digest')) && <Link
             href={`/o/${org.slug}/settings/digest`}
             className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 underline-offset-4 hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
           >
             Weekly digest
-          </Link>
+          </Link>}
           {shell?.role === 'owner' && (
             <Link
               href={`/o/${org.slug}/settings/data`}
@@ -457,7 +458,11 @@ function MemberRow({
   const roles = manage && role ? assignableRoles(orgKind, actor, state, ownerCount) : [];
   const removable = manage && planMemberRemoval(actor, state, ownerCount).ok;
   const usesFunctions = !!role && ROLE_USES_FUNCTIONS[role];
-  const switchable = manage && role && ROLE_TAKES_OVERRIDES[role] ? switchableCapabilities(orgKind, role) : [];
+  // A capability of a module the org is not licensed for (LABEL-47) is not offered: the server would strip it.
+  const modules = useOrgShell()?.modules;
+  const switchable = manage && role && ROLE_TAKES_OVERRIDES[role]
+    ? switchableCapabilities(orgKind, role).filter((c) => !modules || capabilityEntitled(c, new Set(modules)))
+    : [];
   const limited = m.scope === 'artists' || role === 'artist';
   // Only a plain member chooses between the two: an artist is always
   // limited, an owner/admin never (planMemberChange holds the same rule).

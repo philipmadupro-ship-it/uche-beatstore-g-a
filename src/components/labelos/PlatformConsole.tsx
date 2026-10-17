@@ -341,7 +341,7 @@ export function PlatformConsole() {
     <div className="grid gap-8 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:items-start">
       <CreateLicensee onCreated={refresh} />
       <section aria-labelledby="licensees-heading">
-        <h2 id="licensees-heading" className={`${LABEL} mb-3`}>Licensees</h2>
+        <h2 id="licensees-heading" className={`${LABEL} mb-3`}>All licensees</h2>
         {load.state === 'loading' && <p role="status" className="text-[11px] text-white/60">Loading licensees…</p>}
         {load.state === 'failed' && <p role="alert" className="text-[11px] text-[var(--error-text)]">{load.message}</p>}
         {load.state === 'ready' && load.licensees.length === 0 && <p className="text-[11px] text-white/60">No licensees yet.</p>}
