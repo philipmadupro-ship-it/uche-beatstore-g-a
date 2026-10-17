@@ -62,7 +62,7 @@ export function OrgSetupForm({ initialFace, email }: { initialFace: SetupFace | 
       <header>
         <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Set up your account</p>
         <h1 className="font-heading text-[28px] font-bold leading-[1.05] tracking-tight text-white sm:text-[32px]">Who are you?</h1>
-        {email ? <p className="mt-2 text-[12px] text-white/60">Signed in as {email}</p> : null}
+        {email ? <p className="mt-2 text-[11px] text-white/60">Signed in as {email}</p> : null}
       </header>
 
       <AccountFacePicker value={face} onChange={setFace} disabled={busy} legend="Account type" />
@@ -91,7 +91,7 @@ export function OrgSetupForm({ initialFace, email }: { initialFace: SetupFace | 
       </div>
 
       {error ? (
-        <p role="alert" className="flex items-center gap-2 rounded-lg border border-[#8d3a2f]/60 bg-[#8d3a2f]/15 px-3 py-2 text-[12px] text-[#ffb7a8]">
+        <p role="alert" className="flex items-center gap-2 rounded-lg border border-[#8d3a2f]/60 bg-[#8d3a2f]/15 px-3 py-2 text-[11px] text-[#ffb7a8]">
           <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
           {error}
         </p>
@@ -100,7 +100,7 @@ export function OrgSetupForm({ initialFace, email }: { initialFace: SetupFace | 
       <button
         type="submit"
         disabled={busy}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-3 text-[12px] font-semibold uppercase tracking-widest text-black transition-colors hover:bg-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-40"
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-3 text-[11px] font-semibold uppercase tracking-widest text-black transition-colors hover:bg-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:opacity-40"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
         {busy ? 'Creating…' : face === 'label' ? 'Create label' : 'Create workspace'}

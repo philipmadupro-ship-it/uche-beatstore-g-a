@@ -56,7 +56,9 @@ test('a member who is not the producer lands in their label, not on the buyer ac
   await ctx.close();
 });
 
-test('a signed-in buyer with no membership still goes to the buyer account', async ({ browser, baseURL, request }) => {
+// LABEL-48: with Label OS on, an account with no membership goes to /setup
+// (which offers the buyer account) instead of straight to the buyer page.
+test('a signed-in account with no membership goes to setup', async ({ browser, baseURL, request }) => {
   await rest(request, 'DELETE', `org_members?org_id=eq.${ORG}&user_id=eq.${BUYER_ID}`);
   // Other specs may have left the buyer in an org of their own: only assert when this is the buyer's only membership.
   const others = await (await request.get(`${REST}/org_members?user_id=eq.${BUYER_ID}&select=org_id`, { headers: { apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}` } })).json();
@@ -66,6 +68,7 @@ test('a signed-in buyer with no membership still goes to the buyer account', asy
   await ctx.addCookies([{ name: c.name, value: c.value, url: baseURL! }]);
   const page = await ctx.newPage();
   await page.goto(`/login?next=${encodeURIComponent(`/o/${SLUG}`)}`);
-  await expect(page).toHaveURL(/\/store\/account\/me/);
+  await expect(page).toHaveURL(/\/setup$/);
+  await expect(page.getByRole('link', { name: 'Go to your buyer account' })).toHaveAttribute('href', '/store/account/me');
   await ctx.close();
 });
