@@ -77,7 +77,9 @@ REVOKE ALL ON public.org_entitlements FROM PUBLIC, anon, authenticated, service_
 GRANT SELECT ON public.org_entitlements TO authenticated, service_role;
 
 -- Members of a live org read its licence (the shell hides what it does not
--- include). Uncorrelated, one initplan per query (R-08).
+-- include). `org_role(org_id)` takes the row's column, so it is evaluated per
+-- row, not once per query; the table holds one row per org, so a member's read
+-- touches only the rows of their orgs and the cost stays trivial.
 DROP POLICY IF EXISTS org_entitlements_member_read ON public.org_entitlements;
 CREATE POLICY org_entitlements_member_read ON public.org_entitlements
   FOR SELECT TO authenticated
