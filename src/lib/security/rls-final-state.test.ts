@@ -145,6 +145,10 @@ const ORG_HELPERS = [
   'labelos_scoped_parties',
   // 155 (LABEL-28): the caller's own split lines, one uncorrelated call, for split_sheets / split_lines.
   'labelos_my_split_lines',
+  // 164 (LABEL-43): the (org, member) pairs the caller may see, one uncorrelated call, for org_members / user_profiles.
+  'labelos_visible_members',
+  // 164 (LABEL-43): the caller's own live orgs, the own-row fast path of org_members_member_read.
+  'labelos_my_live_orgs',
 ];
 const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 
@@ -515,6 +519,88 @@ describe('final RLS policy state', () => {
     it('no policy on either table writes', () => {
       const writes = onSplit().filter(([, body]) => /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body)).map(([k]) => k);
       expect(writes).toEqual([]);
+    });
+  });
+
+  describe('Label OS split sheet column grants (mig 162, LABEL-43)', () => {
+    const sql = () => readFileSync(join(DIR, '162_labelos_split_sheets_column_grants.sql'), 'utf8').replace(/--[^\n]*/g, '');
+    // The columns an own-line reader (D2) may see; never the negotiation note or who did what.
+    const GRANTED = ['id', 'org_id', 'track_id', 'kind', 'version', 'status', 'circulated_at', 'signed_at', 'superseded_at', 'created_at'];
+    const HIDDEN = ['note', 'created_by', 'circulated_by', 'document_asset_id', 'superseded_by', 'updated_at'];
+
+    it('revokes the table-wide SELECT from the API roles and grants back only the listed columns', () => {
+      expect(sql()).toMatch(/REVOKE SELECT ON public\.split_sheets FROM anon, authenticated/);
+      for (const role of ['authenticated', 'anon']) {
+        const grant = sql().match(new RegExp(`GRANT SELECT \\(([^)]*)\\)\\s+ON public\\.split_sheets TO ${role};`));
+        expect(grant, `column grant to ${role}`).not.toBeNull();
+        const cols = grant![1].split(',').map((c) => c.trim());
+        expect(cols.sort(), role).toEqual([...GRANTED].sort());
+        for (const hidden of HIDDEN) expect(cols, `${role}: ${hidden}`).not.toContain(hidden);
+      }
+      // No table-wide grant comes back — here or in any later migration (a re-grant would reopen the note).
+      const later = realMigrations().filter((m) => m.name >= '162');
+      for (const m of later) {
+        const body = readFileSync(join(DIR, m.name), 'utf8').replace(/--[^\n]*/g, '');
+        expect(body, m.name).not.toMatch(/GRANT\s+(SELECT|ALL)(\s+PRIVILEGES)?\s+ON\s+(TABLE\s+)?(public\.)?split_sheets\b/i);
+        expect(body, m.name).not.toMatch(/GRANT\s+(SELECT|ALL)(\s+PRIVILEGES)?\s+ON\s+ALL\s+TABLES\s+IN\s+SCHEMA\s+public\s+TO[^;]*\b(anon|authenticated)\b/i);
+      }
+    });
+
+    it('changes no policy: the row rule stays 155’s, only the columns narrow', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '162')).policies;
+      expect(policies.get('split_sheets.split_sheets_member_read')).toBe(before.get('split_sheets.split_sheets_member_read'));
+    });
+  });
+
+  describe('Label OS audit rows are immutable (mig 163, LABEL-43)', () => {
+    const sql = () => readFileSync(join(DIR, '163_labelos_audit_events_immutable.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('a BEFORE UPDATE OR DELETE row trigger guards activity_events, for every role (a trigger, not a policy or a grant)', () => {
+      expect(sql()).toMatch(/CREATE TRIGGER activity_events_audit_immutable\s+BEFORE UPDATE OR DELETE ON public\.activity_events\s+FOR EACH ROW EXECUTE FUNCTION public\.activity_events_audit_immutable\(\)/);
+    });
+
+    it('lets through only the cascade from a deleted organization and the actor FK being nulled', () => {
+      const body = sql();
+      expect(body).toMatch(/OLD\.audit/);
+      expect(body).toMatch(/NOT EXISTS \(SELECT 1 FROM public\.organizations o WHERE o\.id = OLD\.org_id\)/);
+      expect(body).toMatch(/NOT EXISTS \(SELECT 1 FROM auth\.users u WHERE u\.id = OLD\.actor_id\)/);
+      // No session switch can turn it off: nothing reads a GUC or the role name.
+      expect(body).not.toMatch(/current_setting|current_user|session_user|auth\.role\(/i);
+    });
+
+    it('changes no activity_events policy', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '163')).policies;
+      expect(policies.get('activity_events.activity_events_member_read')).toBe(before.get('activity_events.activity_events_member_read'));
+    });
+  });
+
+  describe('Label OS member and profile reads (mig 164, LABEL-43)', () => {
+    it('org_members_member_read and user_profiles_self_or_co_member_read both read the one uncorrelated helper', () => {
+      const members = policies.get('org_members.org_members_member_read') ?? '';
+      const profiles = policies.get('user_profiles.user_profiles_self_or_co_member_read') ?? '';
+      expect(members).toMatch(/^\s*FOR SELECT\s+USING\b/i);
+      expect(members).toMatch(/\(org_id, user_id\) IN \(\s*SELECT v\.org_id, v\.user_id FROM public\.labelos_visible_members\(\) v\s*\)/);
+      // The own-row fast path still requires a LIVE org (a soft-deleted org's row is hidden from its own member).
+      expect(members).toMatch(/user_id = \(SELECT auth\.uid\(\)\) AND org_id IN \(SELECT lo\.org_id FROM public\.labelos_my_live_orgs\(\) lo\)/);
+      expect(profiles).toMatch(/^\s*FOR SELECT\s+USING\b/i);
+      expect(profiles).toMatch(/user_id = \(SELECT auth\.uid\(\)\)/);
+      expect(profiles).toMatch(/user_id IN \(\s*SELECT v\.user_id FROM public\.labelos_visible_members\(\) v\s*\)/);
+    });
+
+    it('neither policy calls a helper keyed on the row (R-08): no org_role(org_id), no correlated EXISTS', () => {
+      for (const key of ['org_members.org_members_member_read', 'user_profiles.user_profiles_self_or_co_member_read']) {
+        const body = policies.get(key) ?? '';
+        expect(body, key).not.toMatch(/org_role\(|has_org_cap\(|can_see_/);
+        expect(body, key).not.toMatch(/EXISTS/i);
+        expect(body, key).not.toMatch(/WITH CHECK/i);
+      }
+    });
+
+    it('the write policies on org_members are 136’s, untouched', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '164')).policies;
+      for (const key of ['org_members.org_members_manage_update', 'org_members.org_members_manage_delete']) {
+        expect(policies.get(key), key).toBe(before.get(key));
+      }
     });
   });
 

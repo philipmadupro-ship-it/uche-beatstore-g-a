@@ -12,8 +12,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  *
  * It runs on the caller's own session (the anon client), so RLS decides what
  * it can see: `org_members_member_read` shows a user their rows only in orgs
- * that are not soft-deleted (`org_role`), which is exactly "a usable
- * membership". Any error (including migration 136 not being applied) reads
+ * that are not soft-deleted (`labelos_visible_members`, migration 164), which
+ * is exactly "a usable membership". Any error (including migration 136 not being applied) reads
  * as "no membership" — the gate fails closed.
  *
  * LABEL-21: an outside collaborator belongs to a PROJECT, not an org, so a
