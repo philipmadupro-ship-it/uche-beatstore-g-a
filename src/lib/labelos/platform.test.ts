@@ -76,3 +76,17 @@ describe('licenseeViews', () => {
     expect(a).toMatchObject({ seatsUsed: 1, artists: 1, owners: 1, pendingOwnerInvites: [{ email: 'n@x.test', expiresAt: '2026-10-10' }] });
   });
 });
+
+describe('console form helpers', () => {
+  it('parseCapInput: blank is unlimited, numbers above the floor, everything else refused', async () => {
+    const { parseCapInput, usageLabel } = await import('./platform');
+    expect(parseCapInput('', 1)).toEqual({ ok: true, value: null });
+    expect(parseCapInput('  ', 0)).toEqual({ ok: true, value: null });
+    expect(parseCapInput(' 12 ', 1)).toEqual({ ok: true, value: 12 });
+    expect(parseCapInput('0', 0)).toEqual({ ok: true, value: 0 });
+    expect(parseCapInput('0', 1).ok).toBe(false);
+    for (const bad of ['-1', '1.5', 'ten', '1e3', '9999999']) expect(parseCapInput(bad, 0).ok, bad).toBe(false);
+    expect(usageLabel(3, 5)).toBe('3 of 5');
+    expect(usageLabel(3, null)).toBe('3 · no limit');
+  });
+});

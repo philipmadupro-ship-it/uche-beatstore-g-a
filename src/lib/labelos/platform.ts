@@ -132,3 +132,24 @@ export function licenseeViews(input: {
 }
 
 export { ACCOUNT_FACES };
+
+// ── Console form helpers ────────────────────────────────────────────────
+
+/**
+ * A cap field as typed: blank = unlimited (null), a whole number ≥ `min`
+ * otherwise. Anything else is an error the form shows; "0 seats" is not
+ * unlimited (an org needs its owner's seat), so seats use `min` 1.
+ */
+export function parseCapInput(text: string, min: number): { ok: true; value: number | null } | { ok: false; error: string } {
+  const t = text.trim();
+  if (t === '') return { ok: true, value: null };
+  if (!/^\d{1,6}$/.test(t)) return { ok: false, error: 'A whole number, or blank for unlimited' };
+  const n = Number(t);
+  if (n < min) return { ok: false, error: `At least ${min}, or blank for unlimited` };
+  return { ok: true, value: n };
+}
+
+/** "3 of 5" / "3 · unlimited". */
+export function usageLabel(used: number, cap: number | null): string {
+  return cap === null ? `${used} · no limit` : `${used} of ${cap}`;
+}

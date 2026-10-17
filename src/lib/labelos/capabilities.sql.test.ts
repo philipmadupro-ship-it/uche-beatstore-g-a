@@ -180,15 +180,15 @@ function sqlHasOrgCap(map: Mapping, m: SqlMember, cap: string): boolean {
   if (revoked.includes(cap)) return false;
 
   // 6. (170)
-  let module: string | null = null;
-  for (const [c, mod] of map.capability_modules) if (c === cap) module = mod;
-  if (module === null) return true;
+  let owner: string | null = null;
+  for (const [c, mod] of map.capability_modules) if (c === cap) owner = mod;
+  if (owner === null) return true;
   let face: string | null = null;
   for (const [k, f] of map.kind_faces) if (k === m.kind) face = f;
-  const inCeiling = face === null ? map.modules.includes(module) : map.face_modules.some(([f, mod]) => f === face && mod === module);
+  const inCeiling = face === null ? map.modules.includes(owner) : map.face_modules.some(([f, mod]) => f === face && mod === owner);
   if (!inCeiling) return false;
   if (m.entitled === null || m.entitled === undefined) return true;
-  return m.entitled.includes(module);
+  return m.entitled.includes(owner);
 }
 
 describe('has_org_cap mapping (latest definition) equals capabilities.ts + entitlements.ts', () => {

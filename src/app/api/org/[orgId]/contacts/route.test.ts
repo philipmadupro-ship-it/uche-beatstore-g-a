@@ -375,3 +375,33 @@ describe('/members/artists: the roster picker', () => {
     expect((await artists(OWN, 'GET', L, undefined, `?user_id=${AR}`)).json).toEqual({ user_id: AR, scoped: false, contact_ids: [] });
   });
 });
+
+describe('the licence’s artist cap (LABEL-47)', () => {
+  // L has two roster artists (Nova, Kilo); L2 has none.
+  const licence = (org: string, maxArtists: number | null) => ({ org_id: org, modules: [], max_seats: null, max_artists: maxArtists, setup_done: true });
+
+  it('no cap: unchanged', async () => {
+    expect((await call(AR, 'POST', L, undefined, { name: 'Third', category: 'artist' })).status).toBe(201);
+  });
+
+  it('at the cap, a new artist is 409 with a plain message; a non-artist is fine', async () => {
+    db.tables.org_entitlements = [licence(L, 2)];
+    const r = await call(AR, 'POST', L, undefined, { name: 'Third', category: 'rapper' });
+    expect(r).toEqual({ status: 409, json: { error: expect.stringMatching(/already has 2 artists/) } });
+    expect(db.tables.contacts.some((c) => c.name === 'Third')).toBe(false);
+    expect((await call(AR, 'POST', L, undefined, { name: 'Press', category: 'press' })).status).toBe(201);
+  });
+
+  it('making an existing contact an artist counts; editing an artist does not', async () => {
+    db.tables.org_entitlements = [licence(L, 2)];
+    const press = await call(AR, 'POST', L, undefined, { name: 'Press', category: 'press' });
+    const id = (press.json.contact as { id: string }).id;
+    expect((await call(AR, 'PATCH', L, id, { category: 'artist' })).status).toBe(409);
+    expect((await call(AR, 'PATCH', L, C1, { category: 'singer' })).status).toBe(200);
+  });
+
+  it('one org’s cap is not another’s', async () => {
+    db.tables.org_entitlements = [licence(L, 0)];
+    expect((await call(X, 'POST', L2, undefined, { name: 'Free', category: 'artist' })).status).toBe(201);
+  });
+});

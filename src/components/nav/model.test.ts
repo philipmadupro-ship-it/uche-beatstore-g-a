@@ -122,6 +122,19 @@ describe('navGroupsFor', () => {
     expect(activeGroupIn(navGroupsFor('label', new Set(['catalog.read']), { slug: 's', viewerIsProducer: false }), '/o/s/releases/abc')?.key).toBe('releases');
   });
 
+  it('a hub of a module the org is not licensed for is not drawn (LABEL-47); no list = the default licence', () => {
+    const caps = new Set(['catalog.read', 'release.approve.legal', 'contracts.read', 'org.manage']);
+    const keys = (modules?: string[]) => navGroupsFor('label', caps, { slug: 'ns', viewerIsProducer: false, modules }).map((g) => g.key);
+    expect(keys()).toContain('rights');
+    expect(keys(['contracts'])).toContain('rights');
+    expect(keys(['export', 'digest'])).not.toContain('rights');
+    expect(keys([])).toEqual(['roster', 'releases', 'org']);
+    // A Set works too, and nothing else moves.
+    expect(navGroupsFor('label', caps, { slug: 'ns', viewerIsProducer: false, modules: new Set(['store']) }).map((g) => g.key)).toEqual(['roster', 'releases', 'org']);
+    // The producer's dashboard is unchanged whatever the list.
+    expect(navGroupsFor('producer', null)).toBe(NAV_GROUPS);
+  });
+
   it('the Rights hub (legal queue, LABEL-31) is for members who work the queue, in label and artist orgs only', () => {
     const keys = (kind: string, caps: string[]) => navGroupsFor(kind, new Set(caps), { slug: 'ns', viewerIsProducer: false }).map((g) => g.key);
     expect(keys('label', ['catalog.read', 'release.approve.legal'])).toEqual(['roster', 'releases', 'rights', 'org']);
