@@ -33,16 +33,19 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
+  // Data export is a licensed module (LABEL-47): an org without it has no export route. Asked of the owner
+  // BEFORE the fresh sign-in, so nobody is sent a magic link for a route that is not there.
+  const ownerOnly = await requireOrgOwner(orgId, { state: 'live', freshSignIn: false });
+  if (!ownerOnly.ok) return ownerOnly.res;
+  try {
+    if (!(await loadEntitlements(ownerOnly.admin, ownerOnly.org)).modules.has('export')) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  } catch (err) {
+    log.error('entitlements read failed', { orgId: ownerOnly.org.id, error: errorMessage(err) });
+    return NextResponse.json({ error: 'Could not check organization access' }, { status: 500 });
+  }
   const owner = await requireOrgOwner(orgId, { state: 'live', freshSignIn: true });
   if (!owner.ok) return owner.res;
   const { admin, org } = owner;
-  // Data export is a licensed module (LABEL-47): an org without it has no export route.
-  try {
-    if (!(await loadEntitlements(admin, org)).modules.has('export')) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  } catch (err) {
-    log.error('entitlements read failed', { orgId: org.id, error: errorMessage(err) });
-    return NextResponse.json({ error: 'Could not check organization access' }, { status: 500 });
-  }
 
   const format = req.nextUrl.searchParams.get('format') ?? 'json';
   if (format !== 'json' && format !== 'csv') {

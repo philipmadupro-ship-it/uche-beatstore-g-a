@@ -22,7 +22,8 @@ export type WorkspaceInput = { linkedProjects: number; hasPortal: boolean };
 
 export const NO_WORKSPACE: WorkspaceInput = Object.freeze({ linkedProjects: 0, hasPortal: false });
 
-function hasArtistRole(c: RoleInput): boolean {
+/** Has an artist role, main or extra. The roster rule, shared with the platform console's artist count. */
+export function hasArtistRole(c: RoleInput): boolean {
   return groupOfCategory(c.category) === 'artist' || groupOfCategory(c.secondary_category) === 'artist';
 }
 

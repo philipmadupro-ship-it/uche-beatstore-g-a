@@ -98,7 +98,7 @@ SELECT public.check_raises('anon cannot read entitlements', 'SELECT count(*) FRO
 RESET ROLE;
 
 SET ROLE service_role;
-SELECT public.check_eq('service_role reads operators (the console gate)', (SELECT count(*) FROM public.platform_admins), 1::bigint);
+SELECT public.check_eq('service_role reads operators (the console gate)', (SELECT count(*) FROM public.platform_admins WHERE user_id = :OP), 1::bigint);
 SELECT public.check_raises('service_role cannot add an operator (never self-service)',
   $$INSERT INTO public.platform_admins (user_id) VALUES ('a1700000-0000-4000-8000-000000000006')$$, 'permission denied');
 SELECT public.check_raises('service_role cannot remove an operator',

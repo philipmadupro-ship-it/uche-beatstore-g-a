@@ -8,8 +8,8 @@
  * names or emails, no catalogue. The one email shown is a pending OWNER
  * invitation's, which the operator typed themself.
  */
-import { groupOfCategory } from '@/lib/contacts/roles';
 import { ACCOUNT_FACES, FACE_KIND, accountFace, type AccountFace } from './account';
+import { hasArtistRole } from './roster';
 import { MODULES, normalizeModules, orgEntitlements, takesSeat, type EntitlementRow, type Module } from './entitlements';
 
 export const LICENSEE_KINDS = ['artist', 'label'] as const;
@@ -89,9 +89,6 @@ export type LicenseeView = {
   pendingOwnerInvites: { email: string; expiresAt: string }[];
 };
 
-function isRosterArtist(c: LicenseeContactRow): boolean {
-  return groupOfCategory(c.category) === 'artist' || groupOfCategory(c.secondary_category) === 'artist';
-}
 
 /** One row per licensee, newest first. Orgs without a face (the producer's own) are left out. */
 export function licenseeViews(input: {
@@ -102,12 +99,21 @@ export function licenseeViews(input: {
   ownerInvites: readonly LicenseeInviteRow[];
 }): LicenseeView[] {
   const ent = new Map(input.entitlements.map((e) => [e.org_id, e]));
+  // Grouped once by org, not filtered once per org.
+  const group = <T extends { org_id: string }>(rows: readonly T[]) => {
+    const by = new Map<string, T[]>();
+    for (const r of rows) by.set(r.org_id, [...(by.get(r.org_id) ?? []), r]);
+    return by;
+  };
+  const membersBy = group(input.members);
+  const contactsBy = group(input.contacts);
+  const invitesBy = group(input.ownerInvites);
   const out: LicenseeView[] = [];
   for (const org of input.orgs) {
     const face = accountFace(org);
     if (!face) continue;
     const e = orgEntitlements(org, ent.get(org.id) ?? null);
-    const members = input.members.filter((m) => m.org_id === org.id);
+    const members = membersBy.get(org.id) ?? [];
     out.push({
       id: org.id,
       name: org.name,
@@ -120,10 +126,9 @@ export function licenseeViews(input: {
       maxArtists: e.maxArtists,
       setupDone: e.setupDone,
       seatsUsed: members.filter((m) => takesSeat(m.role)).length,
-      artists: input.contacts.filter((c) => c.org_id === org.id && isRosterArtist(c)).length,
+      artists: (contactsBy.get(org.id) ?? []).filter(hasArtistRole).length,
       owners: members.filter((m) => m.role === 'owner').length,
-      pendingOwnerInvites: input.ownerInvites
-        .filter((i) => i.org_id === org.id)
+      pendingOwnerInvites: (invitesBy.get(org.id) ?? [])
         .map((i) => ({ email: i.email, expiresAt: i.expires_at }))
         .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt)),
     });

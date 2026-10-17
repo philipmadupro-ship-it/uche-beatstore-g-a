@@ -17,6 +17,7 @@ import { normalizeEmail } from '@/lib/contacts/email';
 import { contactGroups, type RoleGroup } from '@/lib/contacts/roles';
 import { isUUID } from '@/lib/validate';
 import { isRosterContact, NO_WORKSPACE } from './roster';
+import { pageAll } from './paged-read';
 
 /**
  * Everything a member sees of an org contact. Never `user_id` (always null),
@@ -110,7 +111,9 @@ export async function orgContactRoles(
   admin: AdminClient,
   ctx: OrgContext,
 ): Promise<{ id: string; category: string | null; secondary_category: string | null }[]> {
-  const { data, error } = await admin.from('contacts').select('id, category, secondary_category').eq('org_id', ctx.orgId);
-  if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as { id: string; category: string | null; secondary_category: string | null }[];
+  // Paged: the artist cap (LABEL-47) runs this on any org, and a directory can pass PostgREST's max-rows.
+  return pageAll<{ id: string; category: string | null; secondary_category: string | null }>(
+    (from, to) => admin.from('contacts').select('id, category, secondary_category').eq('org_id', ctx.orgId).order('id').range(from, to),
+    'org contact roles',
+  );
 }

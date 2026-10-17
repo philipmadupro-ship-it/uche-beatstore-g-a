@@ -22,7 +22,7 @@ import { parseCapInput, usageLabel, type LicenseeView } from '@/lib/labelos/plat
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
 const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-5 sm:p-6';
 const INPUT =
-  'min-h-11 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 text-[12px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none';
+  'min-h-11 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 text-[11px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none';
 const CHIP = 'min-h-9 rounded-lg border px-3 text-[11px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40';
 const chip = (on: boolean) =>
   `${CHIP} ${on ? 'border-white/30 bg-white/[0.14] text-white' : 'border-white/10 bg-white/[0.06] text-white/70 hover:border-white/20 hover:bg-white/[0.10]'}`;
@@ -44,7 +44,7 @@ function ModulePicker({ value, onChange, idPrefix }: { value: Set<Module>; onCha
       <legend className={`${LABEL} mb-2`}>Modules</legend>
       <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
         {MODULES.map((m) => (
-          <label key={m} htmlFor={`${idPrefix}-${m}`} className="flex min-h-9 cursor-pointer items-center gap-3 text-[12px] text-white/80">
+          <label key={m} htmlFor={`${idPrefix}-${m}`} className="flex min-h-9 cursor-pointer items-center gap-3 text-[11px] text-white/80">
             <Checkbox
               id={`${idPrefix}-${m}`}
               checked={value.has(m)}
@@ -120,7 +120,7 @@ function CreateLicensee({ onCreated }: { onCreated: () => void }) {
 
   return (
     <section className={CARD} aria-labelledby="new-licensee">
-      <h2 id="new-licensee" className="text-[15px] font-medium text-white/90">New licensee</h2>
+      <h2 id="new-licensee" className="text-[16px] font-medium text-white/90">New licensee</h2>
       <form
         className="mt-5 flex flex-col gap-5"
         onSubmit={(e) => {
@@ -227,7 +227,7 @@ function LicenseeCard({ licensee, onChanged }: { licensee: LicenseeView; onChang
     <li className={CARD} aria-labelledby={`${idBase}-name`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 id={`${idBase}-name`} className="truncate text-[15px] font-medium text-white/90">{licensee.name}</h3>
+          <h3 id={`${idBase}-name`} className="truncate text-[16px] font-medium text-white/90">{licensee.name}</h3>
           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
             {FACE_LABELS[licensee.face]} · /o/{licensee.slug}
           </p>
@@ -238,7 +238,7 @@ function LicenseeCard({ licensee, onChanged }: { licensee: LicenseeView; onChang
         </div>
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-[12px] sm:grid-cols-4">
+      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-[11px] sm:grid-cols-4">
         <div>
           <dt className={LABEL}>Seats</dt>
           <dd className="mt-1 text-white/80">{usageLabel(licensee.seatsUsed, licensee.maxSeats)}</dd>

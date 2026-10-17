@@ -180,12 +180,16 @@ async function readMembership(
   orgId: string,
   userId: string,
 ): Promise<(Omit<OrgAccessOk, 'ok' | 'admin' | 'userId' | 'orgId' | 'artistScope' | 'entitlements'> & { entitlements: Entitlements }) | null> {
-  const { data, error } = await admin
-    .from('org_members')
-    .select('role, functions, scope, cap_grants, cap_revokes, organizations!inner(kind, deleted_at)')
-    .eq('org_id', orgId)
-    .eq('user_id', userId)
-    .maybeSingle();
+  // The licence depends only on the org, so it is read alongside the membership, not after it.
+  const [{ data, error }, entitlementRow] = await Promise.all([
+    admin
+      .from('org_members')
+      .select('role, functions, scope, cap_grants, cap_revokes, organizations!inner(kind, deleted_at)')
+      .eq('org_id', orgId)
+      .eq('user_id', userId)
+      .maybeSingle(),
+    readEntitlementRow(admin, orgId),
+  ]);
   if (error) throw new Error(error.message);
   const row = data as MembershipRow | null;
   if (!row) return null;
@@ -200,7 +204,7 @@ async function readMembership(
   const role = ROLES.find((r) => r === row.role);
   if (!kind || !role || !ROLES_BY_ORG_KIND[kind].includes(role)) return null;
 
-  const entitlements = orgEntitlements({ kind }, await readEntitlementRow(admin, orgId));
+  const entitlements = orgEntitlements({ kind }, entitlementRow);
   const capabilities = entitledCapabilities(
     capabilitiesFor(kind, role, row.functions, { grant: row.cap_grants, revoke: row.cap_revokes }),
     entitlements.modules,

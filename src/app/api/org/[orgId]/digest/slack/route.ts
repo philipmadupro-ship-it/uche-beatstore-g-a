@@ -11,7 +11,7 @@
  * event cannot be written the change is put back and the request fails.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireOrgModule } from '@/lib/auth/org-access';
+import { requireOrgCapability, requireOrgModule } from '@/lib/auth/org-access';
 import { DigestSlackBodySchema } from '@/lib/contracts';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
@@ -82,7 +82,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const { orgId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'The weekly digest needs Supabase.' });
-  const access = await requireOrgModule(orgId, 'digest', 'org.manage');
+  // Removing the saved webhook stays possible after the digest module is withdrawn (LABEL-47):
+  // a secret the org saved must never become undeletable. Only setting one needs the module.
+  const access = await requireOrgCapability(orgId, 'org.manage');
   if (!access.ok) return access.res;
   let change: Awaited<ReturnType<typeof clearChannel>>;
   try {
