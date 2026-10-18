@@ -143,6 +143,7 @@ export type Verb = (typeof VERBS)[number];
 
 /** 06 §6 + 14 (LABEL-13, LABEL-41): kept for the life of the org, never best effort. */
 export const AUDIT_VERBS: readonly Verb[] = [
+  'org.settings_changed',
   'org.exported',
   'org.entitlements_changed',
   'org.deletion_scheduled',

@@ -82,6 +82,7 @@ import { artistScopeFilter, scopeAllowsAnyContact, scopeAllowsContact, toArtistS
 import { orgProjectScopeContacts } from '@/lib/labelos/org-read';
 import { capabilityEntitled, entitledCapabilities, orgEntitlements, type Entitlements, type Module } from '@/lib/labelos/entitlements';
 import { readEntitlementRow } from '@/lib/labelos/entitlements-store';
+import { effectiveModules, parseDepartmentsOff } from '@/lib/labelos/org-settings';
 import {
   CONNECTED_CAPABILITY,
   CONNECTION_COLUMNS,
@@ -161,13 +162,15 @@ async function sessionUserId(): Promise<string | null> {
   return (await sessionIdentity())?.userId ?? null;
 }
 
+type OrgJoin = { kind: string; deleted_at: string | null; settings?: { departments_off?: unknown } | null };
+
 type MembershipRow = {
   role: string;
   functions: string[] | null;
   scope: string;
   cap_grants: string[] | null;
   cap_revokes: string[] | null;
-  organizations: { kind: string; deleted_at: string | null } | { kind: string; deleted_at: string | null }[] | null;
+  organizations: OrgJoin | OrgJoin[] | null;
 };
 
 /**
@@ -184,7 +187,7 @@ async function readMembership(
   const [{ data, error }, entitlementRow] = await Promise.all([
     admin
       .from('org_members')
-      .select('role, functions, scope, cap_grants, cap_revokes, organizations!inner(kind, deleted_at)')
+      .select('role, functions, scope, cap_grants, cap_revokes, organizations!inner(kind, deleted_at, settings)')
       .eq('org_id', orgId)
       .eq('user_id', userId)
       .maybeSingle(),
@@ -204,7 +207,13 @@ async function readMembership(
   const role = ROLES.find((r) => r === row.role);
   if (!kind || !role || !ROLES_BY_ORG_KIND[kind].includes(role)) return null;
 
-  const entitlements = orgEntitlements({ kind }, entitlementRow);
+  // The licence, narrowed by the departments the owner switched off (LABEL-51):
+  // never wider than what the platform operator granted.
+  const licence = orgEntitlements({ kind }, entitlementRow);
+  const entitlements: Entitlements = {
+    ...licence,
+    modules: effectiveModules(licence.modules, parseDepartmentsOff(org.settings?.departments_off)),
+  };
   const capabilities = entitledCapabilities(
     capabilitiesFor(kind, role, row.functions, { grant: row.cap_grants, revoke: row.cap_revokes }),
     entitlements.modules,
