@@ -16,9 +16,11 @@ import { ApprovalsNotReadyError, currentSnapshot, isMissingApprovalsSchema, list
 import { CreditsNotReadyError } from './credits-store';
 import { SplitsNotReadyError } from './splits-store';
 import { currentDecision, GATES, type Gate } from './approvals';
+import { openProjectAsset } from '@/lib/storage/project-assets';
 import { evaluateLegalReadiness, type LegalReadiness } from './legal-readiness';
 import { LegalReadinessNotReadyError, loadLegalFacts, readReadinessSong } from './legal-readiness-store';
-import type { MasterRelation, ReadinessApproval, ReadinessItem, ReleaseReadinessFacts } from './release-readiness';
+import { IMAGE_HEAD_BYTES, readImageInfo, type ImageInfo } from './image-size';
+import { ARTWORK_MIME, type MasterRelation, type ReadinessApproval, type ReadinessItem, type ReleaseReadinessFacts } from './release-readiness';
 import { RELEASE_ITEM_COLUMNS, type ReleaseItemRow } from './releases';
 
 export class ReleaseReadinessNotReadyError extends Error {
@@ -40,6 +42,51 @@ export async function readReadinessSettings(admin: AdminClient, org: string): Pr
   const res = await admin.from('organizations').select('settings').eq('id', org).maybeSingle();
   check('org settings read', res.error);
   return parseReadinessSettings((res.data as { settings?: unknown } | null)?.settings);
+}
+
+/**
+ * What the artwork file's own header says (09 §4 size rule): the first
+ * `IMAGE_HEAD_BYTES` of the stored object, never the whole file and never a
+ * URL. Null when the object is gone, outside the allowed buckets, or its
+ * header does not read as a PNG / JPEG — the readiness rule treats all three
+ * as "could not be checked".
+ */
+export async function readArtworkInfo(ref: string | null | undefined): Promise<ImageInfo | null> {
+  if (!ref) return null;
+  try {
+    const body = await openProjectAsset(ref);
+    if (!body) return null;
+    if (body instanceof Uint8Array) return readImageInfo(body.subarray(0, IMAGE_HEAD_BYTES));
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      while (total < IMAGE_HEAD_BYTES) {
+        const { done, value } = await reader.read();
+        if (done || !value) break;
+        chunks.push(value);
+        total += value.length;
+        // A header is usually in the first chunk: stop as soon as it reads.
+        const so_far = readImageInfo(concat(chunks, total));
+        if (so_far) return so_far;
+      }
+    } finally {
+      void reader.cancel().catch(() => undefined);
+    }
+    return readImageInfo(concat(chunks, total).subarray(0, IMAGE_HEAD_BYTES));
+  } catch {
+    return null;
+  }
+}
+
+function concat(chunks: Uint8Array[], total: number): Uint8Array {
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return out;
 }
 
 const RELATIONS: readonly MasterRelation[] = ['master', 'instrumental', 'version'];
@@ -73,9 +120,14 @@ export async function loadReleaseReadinessFacts(admin: AdminClient, org: string,
 
   let artwork: ReleaseReadinessFacts['artwork'] = null;
   if (base.artworkAssetId) {
-    const a = await admin.from('project_assets').select('mime').eq('id', base.artworkAssetId).eq('org_id', org).eq('project_id', base.projectId).maybeSingle();
+    const a = await admin.from('project_assets').select('mime, url').eq('id', base.artworkAssetId).eq('org_id', org).eq('project_id', base.projectId).maybeSingle();
     check('artwork read', a.error);
-    if (a.data) artwork = { mime: (a.data as { mime: string | null }).mime ?? null };
+    if (a.data) {
+      const row = a.data as { mime: string | null; url: string | null };
+      // The size rule runs only on a type the type rule let through; read nothing for the rest.
+      const typeOk = !!row.mime && (ARTWORK_MIME as readonly string[]).includes(row.mime.toLowerCase());
+      artwork = { mime: row.mime ?? null, info: typeOk ? await readArtworkInfo(row.url) : null };
+    }
   }
 
   // Songs, masters and the link that makes a recording a master.

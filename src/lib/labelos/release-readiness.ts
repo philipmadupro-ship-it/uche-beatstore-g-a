@@ -18,8 +18,10 @@
  *    skipped if off"). Songs with legal blockers still hold the release back.
  *  - A recording is a master when the song links it as `master` or
  *    `instrumental`, or as `version` (the clean cut); the song's own mix is not.
- *  - The artwork "size rule" cannot be checked: no width / height is stored.
- *    The file type (JPEG / PNG, what distributors take) is checked instead.
+ *  - The artwork rule of 09 §4 (JPEG or PNG, square, RGB, at least
+ *    `settings.artwork_min_px`, default 3000) is checked on the file's own
+ *    header (`image-size.ts`; no dimension is stored). A file whose header
+ *    cannot be read is a blocker: a gate that cannot check does not pass.
  *  - The explicit flag is a NOT NULL boolean, so it is always "set".
  *  - A cancelled release gates nothing (`not_required`); a delivered one still
  *    shows its gates but is never "ready to deliver" again.
@@ -27,6 +29,7 @@
 import { approvalIsStale, changedParts, gateCapability, type CurrentApproval, type Gate, type Snapshot } from './approvals';
 import type { Capability } from './capabilities';
 import { isReady, type LegalReadiness } from './legal-readiness';
+import { artworkSizeProblems, type ImageInfo } from './image-size';
 import { positionsContiguous } from './releases';
 import type { OrgReadinessSettings } from '@/lib/contracts';
 
@@ -94,8 +97,8 @@ export type ReleaseReadinessFacts = {
     upc: string | null;
     artworkAssetId: string | null;
   };
-  /** The artwork file when one is set and was found. */
-  artwork: { mime: string | null } | null;
+  /** The artwork file when one is set and was found; `info` is what its header says (null = could not be read). */
+  artwork: { mime: string | null; info: ImageInfo | null } | null;
   items: readonly ReadinessItem[];
   /** Legal readiness of each distinct song on the tracklist. */
   legal: ReadonlyMap<string, LegalReadiness>;
@@ -287,6 +290,8 @@ export function evaluateReleaseReadiness(facts: ReleaseReadinessFacts): ReleaseR
   else if (!facts.artwork) ab.push(art('artwork_missing', 'The artwork file no longer exists.'));
   else if (!facts.artwork.mime || !(ARTWORK_MIME as readonly string[]).includes(facts.artwork.mime.toLowerCase())) {
     ab.push(art('artwork_type', 'The artwork must be a JPEG or PNG.'));
+  } else {
+    for (const p of artworkSizeProblems(facts.artwork.info, settings.artwork_min_px)) ab.push(art(p.code, p.message));
   }
   const artwork = approvalGate('artwork', 'artwork', facts.approvals.artwork, ab, []);
 

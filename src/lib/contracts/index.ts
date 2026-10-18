@@ -944,6 +944,8 @@ export const OrgReadinessSettingsSchema = z.object({
   legal_gate: z.enum(['on', 'off']).catch('on'),
   marketing_gate: z.enum(['on', 'off']).catch('on'),
   require_signed_master_split: z.boolean().catch(false),
+  /** The shorter side of cover art, in pixels (09 §4: 3000 is the common DSP minimum). Whole numbers 600-10000; anything else reads as 3000. */
+  artwork_min_px: z.number().int().min(600).max(10000).catch(3000),
 });
 export type OrgReadinessSettings = z.infer<typeof OrgReadinessSettingsSchema>;
 
