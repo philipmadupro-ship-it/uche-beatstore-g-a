@@ -15,6 +15,7 @@ import { requireObjectAccess } from '@/lib/auth/org-access';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { canReadOrgAsset } from './org-assets';
 import { loadOrgArtistWorkspace } from './org-workspace-store';
+import { skippedGates } from './org-settings';
 import { evaluateReleaseReadiness, releaseReadinessView, type ReleaseReadinessView } from './release-readiness';
 import { loadReleaseReadinessFacts, ReleaseReadinessNotReadyError } from './release-readiness-store';
 import { RELEASE_COLUMNS, RELEASE_ITEM_COLUMNS, toReleaseView, type ReleaseItemRow, type ReleaseRow, type ReleaseView } from './releases';
@@ -44,6 +45,8 @@ export type ReleaseDetail = {
   candidates: { id: string; title: string }[];
   /** Null before migrations 153 / 155 / 157 or when the gates could not be worked out. */
   readiness: ReleaseReadinessView | null;
+  /** Approval gates the owner switched off (LABEL-51); shown as a banner on this release. */
+  gatesSkipped: ('legal' | 'marketing')[];
   artwork: { current: ArtworkOption | null; options: ArtworkOption[] };
   me: { canWrite: boolean; isOwner: boolean; /** owner or admin: the public-facing side of a release (LABEL-42) */ canManagePublic: boolean; mayReadRights: boolean };
 };
@@ -89,8 +92,10 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
 
   // Gates, as this member may read them.
   let readiness: ReleaseReadinessView | null = null;
+  let gatesSkipped: ('legal' | 'marketing')[] = [];
   try {
     const facts = await loadReleaseReadinessFacts(admin, org, id);
+    if (facts) gatesSkipped = skippedGates(facts.settings);
     if (facts) readiness = releaseReadinessView(evaluateReleaseReadiness(facts), access.capabilities.has('rights.read'));
   } catch (err) {
     if (!(err instanceof ReleaseReadinessNotReadyError)) throw err;
@@ -115,6 +120,7 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
     items,
     candidates,
     readiness,
+    gatesSkipped,
     artwork: { current, options },
     me: {
       canWrite: access.capabilities.has('release.write'),

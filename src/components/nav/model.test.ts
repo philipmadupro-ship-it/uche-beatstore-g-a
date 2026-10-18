@@ -55,6 +55,16 @@ const PRODUCER_HUBS = [
   },
 ];
 
+describe('navGroupsFor: owner settings (LABEL-51)', () => {
+  const orgItems = (groups: NavGroup[]) => groups.find((g) => g.key === 'org')!.items.map((i) => i.label);
+  it('draws Settings only for the owner', () => {
+    const caps = new Set(ALL_CAPABILITIES);
+    expect(orgItems(navGroupsFor('label', caps, { slug: 'nsh', viewerIsProducer: false, isOwner: true }))).toContain('Settings');
+    expect(orgItems(navGroupsFor('label', caps, { slug: 'nsh', viewerIsProducer: false, isOwner: false }))).not.toContain('Settings');
+    expect(orgItems(navGroupsFor('label', caps, { slug: 'nsh', viewerIsProducer: false }))).not.toContain('Settings');
+  });
+});
+
 describe('navGroupsFor', () => {
   it('the producer dashboard renders exactly the hubs it always had', () => {
     expect(shape(NAV_GROUPS)).toEqual(PRODUCER_HUBS);

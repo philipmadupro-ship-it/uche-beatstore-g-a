@@ -123,3 +123,38 @@ export function planSettingsChange(input: {
   }
   return { ok: true, patch, keys, payload: { keys, changes } };
 }
+
+/** The keys of `draft` that differ from `saved`: the body the screen PATCHes. */
+export function patchFromDraft(saved: OrgSettingsView, draft: OrgSettingsView): SettingsPatch {
+  const out: Record<string, unknown> = {};
+  for (const key of SETTING_KEYS) {
+    const a = key === 'departments_off' ? parseDepartmentsOff(saved[key]) : saved[key];
+    const b = key === 'departments_off' ? parseDepartmentsOff(draft[key]) : draft[key];
+    if (!sameValue(a, b)) out[key] = b;
+  }
+  return out as SettingsPatch;
+}
+
+/** The approval gates the owner has switched off (shown on every release they skip). */
+export function skippedGates(settings: Pick<OrgSettingsView, 'legal_gate' | 'marketing_gate'>): ('legal' | 'marketing')[] {
+  const out: ('legal' | 'marketing')[] = [];
+  if (settings.legal_gate === 'off') out.push('legal');
+  if (settings.marketing_gate === 'off') out.push('marketing');
+  return out;
+}
+
+const GATE_WORDS = { legal: 'Legal approval', marketing: 'Marketing approval' } as const;
+
+/**
+ * The banner a release carries when the owner switched an approval off
+ * (decision 5: shown on every release it affects). A cancelled release
+ * requires nothing, so it carries none. Null when nothing was skipped.
+ */
+export function gateSkipNotice(skipped: readonly ('legal' | 'marketing')[], releaseState: string): string | null {
+  if (skipped.length === 0 || releaseState === 'cancelled') return null;
+  const names = skipped.map((g) => GATE_WORDS[g]).join(' and ');
+  const verb = skipped.length === 1 ? 'is' : 'are';
+  return releaseState === 'delivered'
+    ? `${names} ${verb} switched off for this organization, so it was not required for this release. Credits & splits still gate.`
+    : `${names} ${verb} switched off for this organization, so this release does not need it. Credits & splits still gate. The owner can switch it back on in settings.`;
+}

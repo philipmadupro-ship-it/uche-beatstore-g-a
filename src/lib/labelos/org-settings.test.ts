@@ -6,6 +6,9 @@ import {
   parseDepartmentsOff,
   parseOrgSettings,
   planSettingsChange,
+  patchFromDraft,
+  skippedGates,
+  gateSkipNotice,
 } from './org-settings';
 
 const LICENSED = new Set<Module>(['contracts', 'finance', 'marketing', 'store', 'export']);
@@ -80,5 +83,36 @@ describe('planSettingsChange', () => {
     const r = plan({}, { attention_release_days: 14, attention_stalled_days: 60 });
     expect(r).toMatchObject({ ok: true, keys: ['attention_release_days', 'attention_stalled_days'] });
     if (r.ok) expect(JSON.stringify(r.payload)).not.toMatch(/note/i);
+  });
+});
+
+describe('patchFromDraft (what the screen sends)', () => {
+  const saved = parseOrgSettings({});
+  it('is empty when nothing moved, and carries only the keys that did', () => {
+    expect(patchFromDraft(saved, { ...saved })).toEqual({});
+    expect(patchFromDraft(saved, { ...saved, legal_gate: 'off', departments_off: ['finance'] })).toEqual({ legal_gate: 'off', departments_off: ['finance'] });
+  });
+  it('compares departments as sets', () => {
+    const a = { ...saved, departments_off: ['store', 'finance'] as Module[] };
+    expect(patchFromDraft(a, { ...a, departments_off: ['finance', 'store'] })).toEqual({});
+  });
+});
+
+describe('skippedGates (the banner on a release)', () => {
+  it('names the gate switched off, only the ones that are', () => {
+    expect(skippedGates(parseOrgSettings({}))).toEqual([]);
+    expect(skippedGates(parseOrgSettings({ legal_gate: 'off' }))).toEqual(['legal']);
+    expect(skippedGates(parseOrgSettings({ legal_gate: 'off', marketing_gate: 'off' }))).toEqual(['legal', 'marketing']);
+  });
+});
+
+describe('gateSkipNotice', () => {
+  it('is null when nothing is skipped or the release is cancelled', () => {
+    expect(gateSkipNotice([], 'draft')).toBeNull();
+    expect(gateSkipNotice(['legal'], 'cancelled')).toBeNull();
+  });
+  it('names the gate and says credits & splits still gate, in draft and delivered wording', () => {
+    expect(gateSkipNotice(['legal'], 'draft')).toMatch(/^Legal approval is switched off.*does not need it.*Credits & splits still gate/);
+    expect(gateSkipNotice(['legal', 'marketing'], 'delivered')).toMatch(/^Legal approval and Marketing approval are switched off.*was not required/);
   });
 });

@@ -2,6 +2,7 @@ import {
   Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
   CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
   Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
@@ -104,6 +105,8 @@ export interface OrgNavContext {
    * its pages answer 404. Absent = the default licence (every module).
    */
   modules?: ReadonlySet<string> | readonly string[];
+  /** The viewer's role is `owner` (LABEL-51): the owner-only settings entry is drawn. */
+  isOwner?: boolean;
 }
 
 /** Is the module in the org's licence? No list = the default (yes). */
@@ -116,13 +119,15 @@ function licensed(org: OrgNavContext, module: string): boolean {
  * The pages every org has, under its slug. Every member can see who is in
  * their org (136's RLS lets them read co-members), so Members is not gated.
  */
-function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | string> | null): NavGroup {
+function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | string> | null, isOwner = false): NavGroup {
   const base = `/o/${slug}`;
   const items: NavGroup['items'] = [{ label: 'Members', href: `${base}/settings/members`, icon: UsersRound }];
   // LABEL-41: label and artist orgs connect to each other; the people who run the org manage it.
   if ((orgKind === 'label' || orgKind === 'artist') && caps?.has('org.manage')) {
     items.push({ label: 'Connections', href: `${base}/settings/connections`, icon: Link2 });
   }
+  // LABEL-51: the owner's settings (gates, thresholds, departments).
+  if (isOwner) items.push({ label: 'Settings', href: `${base}/settings/organization`, icon: SlidersHorizontal });
   return { key: 'org', label: 'Organization', icon: Building2, items };
 }
 
@@ -191,5 +196,5 @@ export function navGroupsFor(
   const releases = orgKind !== 'producer' && caps?.has('catalog.read') ? [releasesGroup(org.slug)] : [];
   // The legal queue belongs to the contracts module (LABEL-47).
   const rights = orgKind !== 'producer' && caps && canSeeLegalQueue(caps) && licensed(org, 'contracts') ? [rightsGroup(org.slug)] : [];
-  return [...producerHubs, ...roster, ...releases, ...rights, orgGroup(org.slug, orgKind, caps)];
+  return [...producerHubs, ...roster, ...releases, ...rights, orgGroup(org.slug, orgKind, caps, org.isOwner === true)];
 }
