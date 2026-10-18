@@ -29,7 +29,7 @@ function ToggleRow({ id, label, hint, checked, disabled, onChange }: { id: strin
     <div className="flex items-start gap-3 py-3">
       <Checkbox id={id} checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="mt-0.5" />
       <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer">
-        <span className="block text-[12px] text-white/80">{label}</span>
+        <span className="block text-[13px] text-white/80">{label}</span>
         <span className="mt-0.5 block text-[11px] leading-relaxed text-white/60">{hint}</span>
       </label>
     </div>
