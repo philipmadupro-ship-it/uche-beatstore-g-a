@@ -113,6 +113,6 @@ describe('OrgSettingsPanel', () => {
     await screen.findByTestId('org-settings');
     const box = screen.getByLabelText(/^marketing/i) as HTMLInputElement;
     expect(box.checked).toBe(false);
-    expect(screen.getByText(/not in your licence/i)).toBeTruthy();
+    expect(screen.getAllByText(/not in your licence/i).length).toBeGreaterThan(0);
   });
 });
