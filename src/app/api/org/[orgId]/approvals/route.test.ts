@@ -134,6 +134,12 @@ async function call(method: 'GET' | 'POST', as: string | null, opts: { org?: str
   return mod[method](req, { params: Promise.resolve({ orgId: org }) });
 }
 
+/** S1 sits on release R1 in the seed; a song's own legal approval is withdrawn while it is (doc 21 #13). Tests that approve at the song take it off (a cancelled release does not count). */
+const offRelease = () => {
+  db.tables.releases[0].state = 'cancelled';
+  // Off a release a song is finished music (so legal can open it) only once selected (D4, lib/labelos/org-read).
+  (db.tables.tracks.find((r) => r.id === S1) as Record<string, unknown>).song_stage = 'selected';
+};
 const song = (id = S1) => ({ kind: 'song' as const, id });
 const release = (id = R1) => ({ kind: 'release' as const, id });
 const state = (as: string, q: string) => call('GET', as, { query: q }).then((r) => r.json());
@@ -141,8 +147,13 @@ type GateJson = { gate: string; status: string; stale: boolean; changed: string[
 const legalOf = (body: { gates: { gate: string }[] }) => body.gates.find((g) => g.gate === 'legal') as GateJson;
 const request = (as: string, subject: unknown, gate: string, approver: string, note?: string) =>
   call('POST', as, { body: { subject, gate, approver_id: approver, ...(note ? { note } : {}) } });
-const decide = (as: string, subject: unknown, gate: string, decision: string, note?: string, seen?: string | null) =>
-  call('POST', as, { decide: true, body: { subject, gate, decision, ...(note ? { note } : {}), ...(seen !== undefined ? { seen } : {}) } });
+/** Like the screen: approving sends the key the gate state handed out, unless the test passes its own (`null` = none at all). */
+const keyOf = async (as: string, subject: { kind: 'song' | 'release'; id: string }, gate: string) =>
+  (((await state(as, `?${subject.kind}=${subject.id}`)).gates ?? []) as { gate: string; snapshotKey: string | null }[]).find((g) => g.gate === gate)?.snapshotKey ?? null;
+const decide = async (as: string, subject: { kind: 'song' | 'release'; id: string }, gate: string, decision: string, note?: string, seen?: string | null) => {
+  const key = seen === undefined && decision === 'approved' ? await keyOf(as, subject, gate) : seen;
+  return call('POST', as, { decide: true, body: { subject, gate, decision, ...(note ? { note } : {}), ...(key !== undefined && key !== null ? { seen: key } : {}) } });
+};
 
 describe('GET — who sees approvals, and where a gate stands', () => {
   it('a song has the legal gate only; the approvers are the members who hold it and can open the song', async () => {
@@ -312,6 +323,8 @@ describe('POST — asking one member', () => {
 
 describe('POST /decide — Approved / Changes requested', () => {
   it('needs the gate capability: 403 for A&R, marketing and the producer function on legal; 401 signed out', async () => {
+    offRelease();
+    await request(AR, song(), 'legal', LG);
     for (const who of [AR, MKT]) expect((await decide(who, song(), 'legal', 'approved')).status).toBe(403);
     expect((await decide(PRD, song(), 'legal', 'approved')).status).toBe(403);
     expect((await decide(LG, song(), 'legal', 'approved')).status).not.toBe(403);
@@ -339,6 +352,7 @@ describe('POST /decide — Approved / Changes requested', () => {
   });
 
   it('legal is approved only while there are no blockers; changes can be requested regardless', async () => {
+    offRelease();
     await request(AR, song(), 'legal', LG);
     const blocked = await decide(LG, song(), 'legal', 'approved');
     expect(blocked.status).toBe(422);
@@ -349,6 +363,7 @@ describe('POST /decide — Approved / Changes requested', () => {
   });
 
   it('a requester cannot approve their own request', async () => {
+    offRelease();
     readiness = { ready: true, blockers: 0, codes: [] };
     // LG holds the legal ability and asks OWN; LG then tries to approve LG's own request.
     await request(LG, song(), 'legal', OWN);
@@ -363,6 +378,7 @@ describe('POST /decide — Approved / Changes requested', () => {
   });
 
   it('… except an owner or admin, who may approve a request they made themselves', async () => {
+    offRelease();
     readiness = { ready: true, blockers: 0, codes: [] };
     await request(OWN, song(), 'legal', OWN);
     expect((await decide(OWN, song(), 'legal', 'approved')).status).toBe(201);
@@ -384,6 +400,7 @@ describe('POST /decide — Approved / Changes requested', () => {
   });
 
   it('approving what is approved and unchanged is a 409', async () => {
+    offRelease();
     readiness = { ready: true, blockers: 0, codes: [] };
     await request(AR, song(), 'legal', LG);
     expect((await decide(LG, song(), 'legal', 'approved')).status).toBe(201);
@@ -401,8 +418,76 @@ describe('POST /decide — Approved / Changes requested', () => {
   });
 });
 
+describe('doc 21 #15 — approving needs a request addressed to the decider (owner and admin exempt)', () => {
+  beforeEach(() => {
+    offRelease();
+    readiness = { ready: true, blockers: 0, codes: [] };
+  });
+
+  it('no request at all: 403 no_request, nothing stored; the gate state says why before the button is pressed', async () => {
+    const g = legalOf(await state(LG, `?song=${S1}`));
+    expect(g.canDecide).toBe(true);
+    expect((g as unknown as { approveBlockedReason: string }).approveBlockedReason).toContain('request addressed to you');
+    const res = await decide(LG, song(), 'legal', 'approved');
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('no_request');
+    expect(db.tables.approvals).toHaveLength(0);
+  });
+
+  it('a request addressed to someone else does not open the gate to a third holder', async () => {
+    await request(AR, song(), 'legal', OWN);
+    const res = await decide(LG, song(), 'legal', 'approved');
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('no_request');
+  });
+
+  it('the person asked can approve; a request answered is closed, so a second approval needs a second request', async () => {
+    await request(AR, song(), 'legal', LG);
+    expect((legalOf(await state(LG, `?song=${S1}`)) as unknown as { approveBlockedReason: string | null }).approveBlockedReason).toBeNull();
+    expect((await decide(LG, song(), 'legal', 'approved')).status).toBe(201);
+    db.tables.split_sheets[0].status = 'superseded';
+    db.tables.split_sheets.push(sheet({ id: '80000000-0000-4000-8000-0000000000f2', version: 2, status: 'circulated' }));
+    expect((await decide(LG, song(), 'legal', 'approved')).status).toBe(403);
+  });
+
+  it('the owner approves without any request', async () => {
+    expect((await decide(OWN, song(), 'legal', 'approved')).status).toBe(201);
+  });
+});
+
+describe('doc 21 #13 — a song on a release is approved at the release', () => {
+  beforeEach(() => {
+    readiness = { ready: true, blockers: 0, codes: [] };
+  });
+
+  it('the song’s gate state names the release, and its own Approve is refused (409) even for the owner', async () => {
+    await request(AR, song(), 'legal', LG);
+    const g = legalOf(await state(LG, `?song=${S1}`)) as unknown as { onReleases: { id: string; title: string }[] };
+    expect(g.onReleases).toEqual([{ id: R1, title: 'Nova EP' }]);
+    for (const who of [LG, OWN]) {
+      const res = await decide(who, song(), 'legal', 'approved');
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe('decided_on_release');
+    }
+    expect(db.tables.approvals.filter((a) => a.decision === 'approved')).toHaveLength(0);
+    // Changes can still be asked of it, and the release's own legal gate is decided normally.
+    expect((await decide(LG, song(), 'legal', 'changes_requested', 'splits')).status).toBe(201);
+    await request(AR, release(), 'legal', LG);
+    expect((await decide(LG, release(), 'legal', 'approved')).status).toBe(201);
+  });
+
+  it('a cancelled release no longer counts; a release gate state carries no list', async () => {
+    db.tables.releases[0].state = 'cancelled';
+    expect((legalOf(await state(OWN, `?song=${S1}`)) as unknown as { onReleases: unknown[] }).onReleases).toEqual([]);
+    db.tables.releases[0].state = 'draft';
+    const rel = (await state(OWN, `?release=${R1}`)).gates as { gate: string; onReleases: unknown[] }[];
+    expect(rel.every((g) => g.onReleases.length === 0)).toBe(true);
+  });
+});
+
 describe('stale detection — changing a split after approval', () => {
   async function approveLegal() {
+    offRelease();
     readiness = { ready: true, blockers: 0, codes: [] };
     await request(AR, song(), 'legal', LG);
     expect((await decide(LG, song(), 'legal', 'approved')).status).toBe(201);
@@ -436,8 +521,11 @@ describe('stale detection — changing a split after approval', () => {
     await approveLegal();
     db.tables.split_sheets[0].status = 'superseded';
     db.tables.split_sheets.push(sheet({ id: '80000000-0000-4000-8000-000000000002', version: 2, status: 'circulated' }));
+    // The earlier request was answered; renewing it needs a new one.
+    expect((await decide(LG, song(), 'legal', 'approved')).status).toBe(403);
+    expect((await request(AR, song(), 'legal', LG)).status).toBe(201);
     expect((await decide(LG, song(), 'legal', 'approved')).status).toBe(201);
-    expect(db.tables.approvals).toHaveLength(3);
+    expect(db.tables.approvals).toHaveLength(4);
     expect(legalOf(await state(AR, `?song=${S1}`))).toMatchObject({ status: 'approved', stale: false });
   });
 
@@ -513,9 +601,14 @@ describe('stale detection — changing a split after approval', () => {
       expect((await decide(MKT, release(), 'artwork', 'approved', undefined, fresh)).status).toBe(201);
     });
 
-    it('asking for changes needs no token, and a caller that sends none is not held to one', async () => {
+    it('asking for changes needs no token; approving needs one (doc 21 #14), from API callers too', async () => {
       db.tables.releases[0].artwork_asset_id = ART2;
       expect((await decide(MKT, release(), 'artwork', 'changes_requested', 'wrong crop', 'stale-token')).status).toBe(201);
+      expect((await request(AR, release(), 'artwork', MKT)).status).toBe(201);
+      const none = await decide(MKT, release(), 'artwork', 'approved', undefined, null);
+      expect(none.status).toBe(400);
+      expect((await none.json()).code).toBe('seen_required');
+      expect(db.tables.approvals.filter((r) => r.decision === 'approved')).toHaveLength(0);
       expect((await decide(MKT, release(), 'artwork', 'approved')).status).toBe(201);
     });
   });
@@ -529,6 +622,7 @@ describe('append-only', () => {
   });
 
   it('a whole request → changes → request → approval history only ever adds rows, never touches an earlier one', async () => {
+    offRelease();
     readiness = { ready: true, blockers: 0, codes: [] };
     const seen: string[] = [];
     const snap = () => db.tables.approvals.map((a) => JSON.stringify(a));

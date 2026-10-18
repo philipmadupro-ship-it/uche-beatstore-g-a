@@ -22,6 +22,7 @@ import {
   GATE_LABEL,
   approvalChip,
   approvalIsStale,
+  approveBlocker,
   snapshotKey,
   changedParts,
   currentDecision,
@@ -35,7 +36,7 @@ import {
   type Gate,
   type SubjectKind,
 } from './approvals';
-import { approverCandidates, currentSnapshot, listApprovals, namesOf, readReleaseFacts, approvalView, type ApprovalView, type Subject } from './approvals-store';
+import { approverCandidates, currentSnapshot, listApprovals, namesOf, readReleaseFacts, releasesOfSong, approvalView, type ApprovalView, type Subject } from './approvals-store';
 import { readReadinessSong } from './legal-readiness-store';
 import { memberMayReadSongRow } from './song-stage-store';
 
@@ -95,6 +96,10 @@ export type GateState = {
   canDecide: boolean;
   /** The viewer asked for the open request themselves and is not owner/admin: they cannot approve it. */
   selfApprovalBlocked: boolean;
+  /** Why "Approved" is not available to this viewer right now (`approveBlocker`: no request addressed to them, or their own), else null. */
+  approveBlockedReason: string | null;
+  /** A song's legal gate only: the live releases the song is on. Non-empty = the release's legal approval is the authority and Approve is withdrawn here. */
+  onReleases: { id: string; title: string }[];
   canRequest: boolean;
   /** The viewer may also hand the person asked a task ("Send to legal", LABEL-31): `tasks.write`. */
   canTask: boolean;
@@ -117,6 +122,7 @@ export async function gateStates(admin: AdminClient, access: OrgAccessOk, resolv
   const release = subject.kind === 'release' ? await readReleaseFacts(admin, org, subject.id) : null;
   const actor = actorOf(access);
   const out: GateState[] = [];
+  const onReleases = subject.kind === 'song' ? await releasesOfSong(admin, org, subject.id) : [];
   for (const gate of gatesFor(subject.kind)) {
     const current = currentDecision(all.filter((r) => r.gate === gate));
     let stale = false;
@@ -142,6 +148,8 @@ export async function gateStates(admin: AdminClient, access: OrgAccessOk, resolv
       canDecide,
       snapshotKey: key,
       selfApprovalBlocked: !!current.pending && current.pending.actor_id === access.userId && !isOwnerOrAdmin(access.role),
+      approveBlockedReason: canDecide ? (approveBlocker(actor, current.pending)?.message ?? null) : null,
+      onReleases: subject.kind === 'song' && gate === 'legal' ? onReleases : [],
       canRequest,
       canTask: access.capabilities.has('tasks.write'),
       approvers: canRequest ? await approverCandidates(admin, org, subject, gate, { table, id: subject.id }) : [],

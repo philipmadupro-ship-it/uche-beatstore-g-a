@@ -1546,7 +1546,11 @@ export const OrgApprovalDecideBodySchema = z.object({
   gate: z.enum(APPROVAL_GATES),
   decision: z.enum(APPROVAL_DECISIONS),
   note: z.string().max(APPROVAL_NOTE_MAX).nullable().optional(),
-  /** `snapshotKey` of the gate as the screen drew it. When given with "approved" and the facts moved since, 409 `changed_since_seen`. */
+  /**
+   * `snapshotKey` of the gate as the screen drew it. REQUIRED with "approved" (doc 21 #14; absent = 400 `seen_required`
+   * from `planDecide`, which says it in words); when the facts moved since, 409 `changed_since_seen`. Optional here so
+   * the refusal is that plain-spoken one, not a schema error.
+   */
   seen: z.string().max(64).nullable().optional(),
 }).strict();
 export type OrgApprovalDecideBody = z.infer<typeof OrgApprovalDecideBodySchema>;
