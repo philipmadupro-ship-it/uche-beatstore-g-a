@@ -109,13 +109,13 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Out of scope: billing, plans, payment.
 
 ### LABEL-48 — Create organization + setup wizard
-**Priority:** P0 · **Risk:** Medium · **Deps:** 47 · **Status:** Not Started
+**Priority:** P0 · **Risk:** Medium · **Deps:** 47 · **Status:** On hold — overlaps PR #130 (sign-up, org setup, team accounts); waiting on the owner
 - `POST /api/org` (platform-licensed accounts only; independent creates kind `artist` + the owner's own artist contact, label creates kind `label`). First sign-in of a licensee with `setup_done = false` is redirected to `/setup`.
 - Wizard steps (each skippable except 1): **1 Who are you** (the faces the licensee is entitled to) → **2 How you work** (pick the contract types you use; every type has a template, LABEL-57) → **3 Team and roster** (LABEL-50 window embedded) → **4 Departments** (toggle finance, marketing/PR, legal, A&R, executive, artistic direction, producers, collaborators; preset per face) → **5 Review and create** (creates org, roster, default gates from LABEL-52, optional first draft release).
 - Acceptance: Playwright journeys for both faces at 1440 and 390 px; wizard is resumable; leaving mid-way creates nothing half-done (one transaction via audit RPC); `org.created` event.
 
 ### LABEL-49 — Departments and capabilities
-**Priority:** P0 · **Risk:** High · **Deps:** 47 · **Migration:** 171 · **Status:** In Progress (session_01Aj5ecD2rnQ5pVQCtWZaq45)
+**Priority:** P0 · **Risk:** High · **Deps:** 47 · **Migration:** 171 · **Status:** Done — #134, squash `e56f4f7f70cf639b47d6d66dc1e9738ec0cf1269` (2026-10-18)
 - Add org functions and capabilities for the departments that do not exist: `finance` (`finance.read`, `finance.write`, `finance.approve`), `pr` (`pr.read`, `pr.write`), `executive` (`exec.read`, read-only across the org, no audio unless D4 allows), `artistic_director` (`creative.read`, `creative.approve`), `contracts` (`contract.read`, `contract.write`, `contract.sign`). Re-derive the matrix in `capabilities.test.ts` independently; mirror in SQL `has_org_cap`; keep the roster `artist` role unable to hold any of them.
 - Acceptance: parity test green; a table of role×function×capability in the PR; mutation check on `NEVER_GRANTABLE`.
 - Out of scope: the modules themselves.
@@ -127,7 +127,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: add/remove for each role in e2e; scoped member sees only their artists; independent face shows "Your collaborators" instead of roster wording.
 
 ### LABEL-51 — Organization settings screen
-**Priority:** P1 · **Risk:** Medium · **Deps:** 49 · **Migration:** 172 (audit function for settings) · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 49 · **Migration:** 172 (audit function for settings) · **Status:** In Progress (session_01XUukitVZqRKtu4UX1W4myN)
 - Owner-only screen and route for `legal_gate`, `marketing_gate`, `require_signed_master_split`, `attention_*`, departments on/off (within entitlements). Change and audit event in one transaction. `legal_gate = off` is an explicit, audited skip shown on every release it affects (decision 5).
 - Acceptance: only owner can write; non-owner 403; event `org.settings_changed` names the keys, not values of notes; gate-off banner on the release page.
 
@@ -294,3 +294,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ### LABEL-78 — Final integration and review
 **Priority:** P0 · **Risk:** Medium · **Deps:** all · **Status:** Not Started
 - Migration apply-order document for 136…N (never applied until the owner says), update `18-test-roadmap.md` (new screens, both faces, departments), update `19-independent-review-prompt.md` with groups G11+ for phase 2, update CLAUDE.md/AGENTS.md product text, run the review fleet on phase 2 (4–5 tasks each) and a G10-style cross-cutting pass, write `docs/bstudio-label-os/25-phase-2-report.md`.
+
+### LABEL-79 — Link-only project access with upload (owner idea, PROPOSED)
+**Priority:** — · **Risk:** Medium · **Deps:** none · **Status:** Proposed — being planned in PR #135 (PORTAL-UP, another session, migration 191)
+- A contact gets access to one project through a link (optional password, no account) and can upload their material into it. PR #135 builds it on the artist portal (`project_contacts.can_upload`), not on project shares.
