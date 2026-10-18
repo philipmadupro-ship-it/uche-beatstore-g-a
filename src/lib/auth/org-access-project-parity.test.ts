@@ -32,7 +32,7 @@ const EXT1 = u(1); // live on P1, expired on P3
 const EXT2 = u(2); // live on P2 (org A) and P6 (org B)
 const ORGM = u(3); // whole-org A&R of A
 const SCOPED = u(4); // A&R of A limited to artist C1
-const FIN = u(5); // finance of A: no catalog.read
+const FIN = u(5); // operations member of A: no catalog.read
 const STRANGER = u(6);
 const GONE = u(7); // live external member in a soft-deleted org
 const BOTH = u(8); // scoped org member AND external member of P2
@@ -90,7 +90,7 @@ beforeEach(() => {
       org_members: [
         ORG_MEMBERS(ORGM, ['a_and_r'], 'org'),
         ORG_MEMBERS(SCOPED, ['a_and_r'], 'artists'),
-        ORG_MEMBERS(FIN, ['finance'], 'org'),
+        ORG_MEMBERS(FIN, ['operations'], 'org'),
         ORG_MEMBERS(BOTH, ['a_and_r'], 'artists'),
       ],
       member_artist_scopes: [
@@ -121,7 +121,7 @@ function sees(user: string, project: Row): boolean {
   if (external) return true;
   const member = db.tables.org_members.find((m) => m.org_id === org && m.user_id === user);
   if (!member) return false;
-  const catalogRead = !(member.functions as string[]).includes('finance') || (member.functions as string[]).length > 1;
+  const catalogRead = !(member.functions as string[]).includes('operations') || (member.functions as string[]).length > 1;
   if (!catalogRead) return false;
   if (member.scope === 'org') return true;
   const scope = db.tables.member_artist_scopes.filter((s) => s.org_id === org && s.user_id === user).map((s) => s.contact_id);

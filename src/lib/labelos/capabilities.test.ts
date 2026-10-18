@@ -5,6 +5,7 @@ import {
   EXTERNAL_PROJECT_ROLES,
   EXTERNAL_PROJECT_ROLE_TABLE,
   FUNCTION_PRESETS,
+  NEVER_GRANTABLE,
   FUNCTIONS_BY_ORG_KIND,
   ORG_FUNCTIONS,
   ORG_KINDS,
@@ -41,6 +42,11 @@ type Column =
   | 'artist_manager'
   | 'producer'
   | 'engineer'
+  | 'finance'
+  | 'pr'
+  | 'executive'
+  | 'artistic_director'
+  | 'contracts'
   | 'artist';
 
 const R = true;
@@ -48,32 +54,47 @@ const _ = false;
 
 // One row per §2.4 cell group; every column is filled.
 const TABLE_2_4: Array<{ row: string; caps: Capability[]; cells: Record<Column, boolean> }> = [
-  { row: 'catalog R', caps: ['catalog.read'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: R, legal: R, artist_manager: R, producer: R, engineer: R, artist: R } },
-  { row: 'catalog W', caps: ['catalog.write'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: R, producer: R, engineer: R, artist: R } },
-  { row: 'audio.finished', caps: ['audio.finished'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: R, legal: R, artist_manager: R, producer: R, engineer: R, artist: R } },
-  { row: 'audio.working', caps: ['audio.working'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: R, producer: R, engineer: R, artist: R } },
-  { row: 'review.write', caps: ['review.write'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: R, producer: _, engineer: _, artist: _ } },
+  { row: 'catalog R', caps: ['catalog.read'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: R, legal: R, artist_manager: R, producer: R, engineer: R, finance: R, pr: R, executive: R, artistic_director: R, contracts: R, artist: R } },
+  { row: 'catalog W', caps: ['catalog.write'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: R, producer: R, engineer: R, finance: _, pr: _, executive: _, artistic_director: R, contracts: _, artist: R } },
+  { row: 'audio.finished', caps: ['audio.finished'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: R, legal: R, artist_manager: R, producer: R, engineer: R, finance: _, pr: R, executive: R, artistic_director: R, contracts: _, artist: R } },
+  { row: 'audio.working', caps: ['audio.working'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: R, producer: R, engineer: R, finance: _, pr: _, executive: _, artistic_director: R, contracts: _, artist: R } },
+  { row: 'review.write', caps: ['review.write'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: R, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: R, contracts: _, artist: _ } },
   // "comment only" for the artist; everyone with review.write can comment too.
-  { row: 'review comment', caps: ['review.comment'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: R, producer: _, engineer: _, artist: R } },
+  { row: 'review comment', caps: ['review.comment'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: R, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: R, contracts: _, artist: R } },
   // rights R: A&R "all collaborators", artist "own songs" (scope does the
   // narrowing — role artist is always artist-scoped), producer/engineer
   // "own line" (a narrower capability, below).
-  { row: 'rights R', caps: ['rights.read'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: R, artist_manager: R, producer: _, engineer: _, artist: R } },
-  { row: 'rights R (own line)', caps: ['rights.read.own_line'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: R, artist_manager: R, producer: R, engineer: R, artist: R } },
-  { row: 'rights W', caps: ['rights.write'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: R, artist_manager: _, producer: _, engineer: _, artist: _ } },
-  { row: 'contracts.read', caps: ['contracts.read'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: R, artist_manager: _, producer: _, engineer: _, artist: _ } },
-  { row: 'release.write', caps: ['release.write'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, artist: _ } },
-  { row: 'approve master', caps: ['release.approve.master'], cells: { owner: R, admin: R, a_and_r: R, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, artist: _ } },
-  { row: 'approve artwork', caps: ['release.approve.artwork'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: R, legal: _, artist_manager: _, producer: _, engineer: _, artist: _ } },
-  { row: 'approve legal', caps: ['release.approve.legal'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: R, artist_manager: _, producer: _, engineer: _, artist: _ } },
-  { row: 'approve marketing', caps: ['release.approve.marketing'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: R, legal: _, artist_manager: _, producer: _, engineer: _, artist: _ } },
-  { row: 'approve metadata', caps: ['release.approve.metadata'], cells: { owner: R, admin: R, a_and_r: _, project_manager: R, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, artist: _ } },
-  { row: 'share.external', caps: ['share.external'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, artist: _ } },
-  { row: 'members.manage', caps: ['members.manage'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, artist: _ } },
+  { row: 'rights R', caps: ['rights.read'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: R, artist_manager: R, producer: _, engineer: _, finance: _, pr: _, executive: R, artistic_director: _, contracts: R, artist: R } },
+  { row: 'rights R (own line)', caps: ['rights.read.own_line'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: R, artist_manager: R, producer: R, engineer: R, finance: _, pr: _, executive: R, artistic_director: _, contracts: R, artist: R } },
+  { row: 'rights W', caps: ['rights.write'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: R, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'contracts.read', caps: ['contracts.read'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: R, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: R, artistic_director: _, contracts: R, artist: _ } },
+  { row: 'release.write', caps: ['release.write'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'approve master', caps: ['release.approve.master'], cells: { owner: R, admin: R, a_and_r: R, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'approve artwork', caps: ['release.approve.artwork'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: R, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'approve legal', caps: ['release.approve.legal'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: R, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'approve marketing', caps: ['release.approve.marketing'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: R, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'approve metadata', caps: ['release.approve.metadata'], cells: { owner: R, admin: R, a_and_r: _, project_manager: R, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'share.external', caps: ['share.external'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'members.manage', caps: ['members.manage'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
   // Decided 2026-09-30 (15, "LABEL-02 follow-up"): every function with a
   // column can create tasks, each side its own. The artist role cannot.
-  { row: 'tasks.write', caps: ['tasks.write'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: R, legal: R, artist_manager: R, producer: R, engineer: R, artist: _ } },
-  { row: 'business.read.internal', caps: ['business.read.internal'], cells: { owner: R, admin: R, a_and_r: _, project_manager: R, marketing: R, legal: R, artist_manager: _, producer: _, engineer: _, artist: _ } },
+  { row: 'tasks.write', caps: ['tasks.write'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: R, legal: R, artist_manager: R, producer: R, engineer: R, finance: R, pr: R, executive: _, artistic_director: R, contracts: R, artist: _ } },
+  { row: 'business.read.internal', caps: ['business.read.internal'], cells: { owner: R, admin: R, a_and_r: _, project_manager: R, marketing: R, legal: R, artist_manager: _, producer: _, engineer: _, finance: R, pr: R, executive: R, artistic_director: _, contracts: R, artist: _ } },
+  // LABEL-49 departments (re-derived from 23 §LABEL-49, not from the module):
+  // drafting and approving money / signing for the org are never one preset;
+  // the executive reads every department and writes nothing; the roster
+  // artist holds none of them (NEVER_GRANTABLE).
+  { row: 'contracts.write', caps: ['contracts.write'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: R, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: R, artist: _ } },
+  { row: 'contracts.sign', caps: ['contracts.sign'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'finance.read', caps: ['finance.read'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: R, pr: _, executive: R, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'finance.write', caps: ['finance.write'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: R, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'finance.approve', caps: ['finance.approve'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'pr.read', caps: ['pr.read'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: R, executive: R, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'pr.write', caps: ['pr.write'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: R, executive: _, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'exec.read', caps: ['exec.read'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: R, artistic_director: _, contracts: _, artist: _ } },
+  { row: 'creative.read', caps: ['creative.read'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: R, artistic_director: R, contracts: _, artist: _ } },
+  { row: 'creative.approve', caps: ['creative.approve'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: R, contracts: _, artist: _ } },
+  { row: 'org.manage', caps: ['org.manage'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, finance: _, pr: _, executive: _, artistic_director: _, contracts: _, artist: _ } },
 ];
 
 /** Capabilities for one §2.4 column, in a label org (every role/function offered). */
@@ -82,7 +103,10 @@ function labelColumn(col: Column): ReadonlySet<Capability> {
   return capabilitiesFor('label', 'member', [col]);
 }
 
-const COLUMNS: Column[] = ['owner', 'admin', 'a_and_r', 'project_manager', 'marketing', 'legal', 'artist_manager', 'producer', 'engineer', 'artist'];
+const COLUMNS: Column[] = [
+  'owner', 'admin', 'a_and_r', 'project_manager', 'marketing', 'legal', 'artist_manager', 'producer', 'engineer',
+  'finance', 'pr', 'executive', 'artistic_director', 'contracts', 'artist',
+];
 
 describe('capabilitiesFor — §2.4 label org, every cell', () => {
   for (const { row, caps, cells } of TABLE_2_4) {
@@ -118,21 +142,38 @@ describe('capabilitiesFor — §2.4 label org, every cell', () => {
 });
 
 describe('capabilitiesFor — untabulated grants stay closed', () => {
-  it('finance and operations grant nothing (deferred, "not for now")', () => {
-    expect(capabilitiesFor('label', 'member', ['finance']).size).toBe(0);
+  it('operations grants nothing (deferred, "not for now"); finance has a preset since LABEL-49', () => {
     expect(capabilitiesFor('label', 'member', ['operations']).size).toBe(0);
+    expect(capabilitiesFor('label', 'member', ['finance']).size).toBeGreaterThan(0);
   });
 
   it('a member with no functions grants nothing', () => {
     expect(capabilitiesFor('label', 'member', []).size).toBe(0);
   });
 
-  it('no function grants org.manage or finance.read', () => {
+  it('no function grants org.manage; only finance and executive read finance', () => {
     for (const fn of ORG_FUNCTIONS) {
       const caps = capabilitiesFor('label', 'member', [fn]);
       expect(caps.has('org.manage')).toBe(false);
-      expect(caps.has('finance.read')).toBe(false);
+      expect(caps.has('finance.read')).toBe(fn === 'finance' || fn === 'executive');
     }
+  });
+
+  it('no preset approves money or signs for the org (owner/admin, or one switched-on member)', () => {
+    for (const fn of ORG_FUNCTIONS) {
+      const caps = capabilitiesFor('label', 'member', [fn]);
+      expect(caps.has('finance.approve')).toBe(false);
+      expect(caps.has('contracts.sign')).toBe(false);
+    }
+    expect(capabilitiesFor('label', 'member', [...ORG_FUNCTIONS]).has('finance.approve')).toBe(false);
+    expect(capabilitiesFor('label', 'member', ['finance'], { grant: ['finance.approve'] }).has('finance.approve')).toBe(true);
+  });
+
+  it('the executive is read-only: no write, approve, sign, share or task capability', () => {
+    const exec = capabilitiesFor('label', 'member', ['executive']);
+    const writes = [...exec].filter((c) => /\.(write|approve|sign|manage)$|^release\.|^share\./.test(c));
+    expect(writes).toEqual([]);
+    expect(exec.has('audio.working')).toBe(false);
   });
 
   it('the artist role ignores functions', () => {
@@ -179,7 +220,9 @@ describe('capabilitiesFor — §2.4b org kinds', () => {
   });
 
   it('offers the functions in §2.4b', () => {
-    expect([...FUNCTIONS_BY_ORG_KIND.artist].sort()).toEqual(['artist_manager', 'engineer', 'legal', 'marketing', 'operations', 'producer']);
+    expect([...FUNCTIONS_BY_ORG_KIND.artist].sort()).toEqual(
+      ['artist_manager', 'contracts', 'engineer', 'finance', 'legal', 'marketing', 'operations', 'pr', 'producer'],
+    );
     expect([...FUNCTIONS_BY_ORG_KIND.producer].sort()).toEqual(['artist_manager', 'engineer', 'operations', 'producer']);
     expect([...FUNCTIONS_BY_ORG_KIND.label].sort()).toEqual([...ORG_FUNCTIONS].sort());
   });
@@ -325,7 +368,7 @@ describe('per-member overrides — presets + tweaks (decided 2026-09-30)', () =>
   });
 
   it('a member with no function can be built entirely from grants', () => {
-    const caps = capabilitiesFor('label', 'member', ['finance'], { grant: ['finance.read', 'catalog.read'] });
+    const caps = capabilitiesFor('label', 'member', ['operations'], { grant: ['finance.read', 'catalog.read'] });
     expect([...caps].sort()).toEqual(['catalog.read', 'finance.read']);
   });
 
@@ -399,7 +442,7 @@ describe('per-member overrides — presets + tweaks (decided 2026-09-30)', () =>
       const caps = capabilitiesFor('label', 'member', [fn]);
       for (const c of FUNCTION_PRESETS[fn]) expect(caps.has(c)).toBe(true);
     }
-    expect(FUNCTION_PRESETS.finance).toEqual([]);
+    expect(FUNCTION_PRESETS.operations).toEqual([]);
   });
 });
 
@@ -536,7 +579,10 @@ describe('external project roles — §2.6, every cell', () => {
 describe('vocabulary', () => {
   it('lists the §2.2 functions and §2.1 roles', () => {
     expect([...ORG_FUNCTIONS].sort()).toEqual(
-      ['a_and_r', 'project_manager', 'marketing', 'legal', 'finance', 'artist_manager', 'producer', 'engineer', 'operations'].sort() as OrgFunction[],
+      [
+        'a_and_r', 'project_manager', 'marketing', 'legal', 'finance', 'artist_manager', 'producer', 'engineer', 'operations',
+        'pr', 'executive', 'artistic_director', 'contracts',
+      ].sort() as OrgFunction[],
     );
     expect([...ROLES].sort()).toEqual(['admin', 'artist', 'member', 'owner']);
     expect([...ORG_KINDS].sort()).toEqual(['artist', 'label', 'producer']);
@@ -550,7 +596,64 @@ describe('vocabulary', () => {
         'release.approve.master', 'release.approve.artwork', 'release.approve.legal', 'release.approve.marketing',
         'release.approve.metadata', 'tasks.write', 'share.external', 'members.manage', 'org.manage',
         'finance.read', 'business.read.internal',
+        // LABEL-49
+        'finance.write', 'finance.approve', 'pr.read', 'pr.write', 'exec.read', 'creative.read', 'creative.approve',
+        'contracts.write', 'contracts.sign',
       ].sort(),
     );
+  });
+});
+
+// ── LABEL-49: the roster artist holds no department capability ──────────
+
+/** Re-derived from 23 §LABEL-49, not imported: every department capability. */
+const DEPARTMENT_CAPABILITIES = [
+  'finance.read', 'finance.write', 'finance.approve',
+  'pr.read', 'pr.write',
+  'exec.read',
+  'creative.read', 'creative.approve',
+  'contracts.read', 'contracts.write', 'contracts.sign',
+] as const satisfies readonly Capability[];
+
+/** What a roster artist ends up holding when every capability is switched on for them. */
+function rosterArtistDepartmentCaps(): Capability[] {
+  const caps = capabilitiesFor('label', 'artist', ['finance', 'executive', 'contracts'], { grant: [...ALL_CAPABILITIES] });
+  return DEPARTMENT_CAPABILITIES.filter((c) => caps.has(c));
+}
+
+describe('LABEL-49 — roster artist ceiling', () => {
+  it('a roster artist can hold none of them, whatever is granted', () => {
+    expect(rosterArtistDepartmentCaps()).toEqual([]);
+    for (const cap of DEPARTMENT_CAPABILITIES) {
+      expect(can({ orgKind: 'label', role: 'artist', functions: [], overrides: { grant: [cap] } }, cap)).toBe(false);
+    }
+  });
+
+  it('each one is a hard limit for role artist, so no override can lift it', () => {
+    for (const cap of DEPARTMENT_CAPABILITIES) expect(NEVER_GRANTABLE.artist).toContain(cap);
+  });
+
+  it('mutation check: dropping any one from NEVER_GRANTABLE.artist lets a roster artist hold it', () => {
+    const list = NEVER_GRANTABLE.artist as Capability[];
+    for (const cap of DEPARTMENT_CAPABILITIES) {
+      const at = list.indexOf(cap);
+      list.splice(at, 1);
+      try {
+        expect(rosterArtistDepartmentCaps()).toContain(cap);
+      } finally {
+        list.splice(at, 0, cap);
+      }
+    }
+    expect(rosterArtistDepartmentCaps()).toEqual([]);
+  });
+
+  it('every department capability needs the catalogue, so revoking catalog.read removes them all', () => {
+    const owner = capabilitiesFor('label', 'member', [...ORG_FUNCTIONS], { grant: [...DEPARTMENT_CAPABILITIES], revoke: ['catalog.read'] });
+    expect(owner.size).toBe(0);
+  });
+
+  it('an owner of an artist org (the independent face) holds every one', () => {
+    const owner = capabilitiesFor('artist', 'owner', []);
+    for (const cap of DEPARTMENT_CAPABILITIES) expect(owner.has(cap)).toBe(true);
   });
 });

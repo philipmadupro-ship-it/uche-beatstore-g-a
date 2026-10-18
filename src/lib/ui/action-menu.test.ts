@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  placeMenu,
   resolveSections,
   flattenActions,
   nextEnabledIndex,
@@ -91,5 +92,42 @@ describe('indexForShortcutKey', () => {
   it('ignores unbound keys and disabled rows', () => {
     expect(indexForShortcutKey(items, 'z')).toBe(-1);
     expect(indexForShortcutKey([item('x', { shortcutKey: 'x', disabled: true })], 'x')).toBe(-1);
+  });
+});
+
+describe('placeMenu — a tall menu must stay inside the window', () => {
+  const view = { width: 1440, height: 900 };
+  const trigger = (top: number) => ({ top, bottom: top + 36 });
+
+  it('opens below and keeps the old 70vh cap when it fits', () => {
+    const p = placeMenu({ trigger: trigger(100), menuHeight: 300, view });
+    expect(p).toEqual({ top: 142, openUp: false, maxHeight: 630 });
+  });
+
+  it('flips up when below is too short and above is roomier', () => {
+    const p = placeMenu({ trigger: trigger(700), menuHeight: 300, view });
+    expect(p.openUp).toBe(true);
+    expect(p.top).toBe(700 - 300 - 6);
+  });
+
+  it('a menu taller than the space on either side is capped to the roomier side, so it scrolls instead of leaving the window', () => {
+    // The members page: trigger at y=330, a 595px menu, 534px below.
+    const p = placeMenu({ trigger: trigger(330), menuHeight: 595, view });
+    expect(p.openUp).toBe(false);
+    expect(p.top).toBe(372);
+    expect(p.maxHeight).toBeLessThanOrEqual(900 - 372 - 8);
+    expect(p.top + p.maxHeight).toBeLessThanOrEqual(900 - 8);
+  });
+
+  it('flipped and capped: stays below the top edge of the window', () => {
+    const p = placeMenu({ trigger: trigger(600), menuHeight: 800, view });
+    expect(p.openUp).toBe(true);
+    expect(p.top).toBeGreaterThanOrEqual(8);
+    expect(p.top + Math.min(800, p.maxHeight)).toBeLessThanOrEqual(600 - 6);
+  });
+
+  it('never caps below a usable height', () => {
+    const p = placeMenu({ trigger: trigger(400), menuHeight: 500, view: { width: 400, height: 420 } });
+    expect(p.maxHeight).toBeGreaterThanOrEqual(160);
   });
 });

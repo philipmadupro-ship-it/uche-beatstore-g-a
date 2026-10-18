@@ -79,7 +79,7 @@ beforeEach(() => {
         member(L, AR, 'member', ['a_and_r']),
         member(L, SC, 'member', ['a_and_r'], 'artists'),
         member(L, ART, 'artist', [], 'artists'),
-        member(L, FIN, 'member', ['finance']),
+        member(L, FIN, 'member', ['operations']),
         member(L, MK, 'member', ['marketing'], 'artists'),
         member(L2, X, 'owner'),
         member(A, AOWN, 'owner'),

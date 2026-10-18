@@ -71,7 +71,8 @@ SELECT public.check_eq('all five functions exist',
      AND proname NOT LIKE 'labelos\_audit\_split\_%'
      -- 157 (LABEL-30) adds approval request / decision; checked in 157's own file.
      AND proname NOT LIKE 'labelos\_audit\_approval\_%'
-     -- 190 (doc 25) adds the team-account family; checked in 190's own file.
+     -- 172 (LABEL-51) adds the organization settings write; 190 (doc 25) the team-account family; each checked in its own file.
+     AND proname <> 'labelos_audit_org_settings'
      AND proname NOT LIKE 'labelos\_audit\_team\_account\_%'), 5);
 SELECT public.check_eq('the private event helper has no caller but its owner',
   (SELECT (has_function_privilege('service_role', p.oid, 'EXECUTE'), has_function_privilege('authenticated', p.oid, 'EXECUTE'))::text

@@ -36,6 +36,8 @@ const OVERRIDES: CapabilityOverrides[] = [
   { revoke: ['rights.read.own_line'] },
   { grant: ['release.write'], revoke: ['release.write'] },
   { grant: ['not.a.cap'], revoke: ['review.comment'] },
+  // LABEL-49 department capabilities (a roster artist must still hold none)
+  { grant: ['finance.approve', 'contracts.sign', 'exec.read', 'creative.approve', 'pr.write'], revoke: ['finance.read'] },
 ];
 const FUNCTION_SETS: string[][] = [
   [],
@@ -46,7 +48,7 @@ const FUNCTION_SETS: string[][] = [
 ];
 const CAPS = [...ALL_CAPABILITIES, 'bogus.cap'];
 // null = no org_entitlements row (the default: everything the face allows).
-const ENTITLED: (string[] | null)[] = [null, [], ['contracts'], ['finance', 'bogus'], [...MODULES]];
+const ENTITLED: (string[] | null)[] = [null, [], ['contracts'], ['finance', 'bogus'], ['pr', 'executive', 'artistic'], [...MODULES]];
 
 const lit = (s: string) => `'${s.replace(/'/g, "''")}'`;
 const arr = (xs: readonly string[] = []) => `ARRAY[${xs.map(lit).join(',')}]::text[]`;

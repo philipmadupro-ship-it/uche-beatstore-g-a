@@ -1012,6 +1012,23 @@ export function parseAttentionSettings(raw: unknown): OrgAttentionSettings {
 }
 
 /**
+ * PATCH /api/org/[orgId]/settings (LABEL-51): the owner-editable organization
+ * settings. Every key is optional; at least one is required. Whether a
+ * department named in `departments_off` is part of the org's licence is
+ * `planSettingsChange` (lib/labelos/org-settings), checked by the route;
+ * here the names are only bounded to the switchable departments.
+ */
+export const OrgSettingsPatchBodySchema = z.object({
+  legal_gate: z.enum(['on', 'off']).optional(),
+  marketing_gate: z.enum(['on', 'off']).optional(),
+  require_signed_master_split: z.boolean().optional(),
+  attention_release_days: z.number().int().min(1).max(365).optional(),
+  attention_stalled_days: z.number().int().min(1).max(365).optional(),
+  departments_off: z.array(z.enum(['contracts', 'finance', 'marketing', 'pr', 'executive', 'artistic', 'store', 'search', 'digest'])).max(9).optional(),
+}).strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
+export type OrgSettingsPatchBody = z.infer<typeof OrgSettingsPatchBodySchema>;
+
+/**
  * PATCH /api/org/[orgId]/members. Which roles, functions, scopes and
  * switches are allowed is decided per org kind and per actor by
  * `planMemberChange` (lib/labelos/members), so here they are only bounded

@@ -7,7 +7,7 @@
  *   L (label): artists C1 (Nova), C2 (Kilo). Nova: project LP1, releases R1
  *     (dated), R3 (target date only), R4 (cancelled), R5 (no date).
  *     Kilo: Inbox LP2, release R2. Members: owner and A&R (whole org),
- *     A&R scoped to Kilo, marketing (catalog.read only), a finance member
+ *     A&R scoped to Kilo, marketing (catalog.read only), an operations member
  *     (no catalogue ability), a roster artist scoped to Nova.
  *   L2: release RX.
  */
@@ -82,7 +82,7 @@ beforeEach(() => {
         member(MKT, 'member', ['marketing']),
         member(AR_C2, 'member', ['a_and_r'], 'artists'),
         member(ARTIST, 'artist', [], 'artists'),
-        member(FIN, 'member', ['finance']),
+        member(FIN, 'member', ['operations']),
         member(X, 'owner', [], 'org', L2),
       ],
       member_artist_scopes: [

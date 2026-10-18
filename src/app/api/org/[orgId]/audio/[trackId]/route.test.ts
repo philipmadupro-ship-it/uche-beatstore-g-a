@@ -205,7 +205,7 @@ beforeEach(() => {
         member(ENG, 'member', ['engineer']),
         member(MK, 'member', ['marketing']),
         member(LEG, 'member', ['legal']),
-        member(FIN, 'member', ['finance']),
+        member(FIN, 'member', ['operations']),
         member(ART, 'artist', [], 'artists'),
         member(AR_SC, 'member', ['a_and_r'], 'artists'),
         member(MK_SC, 'member', ['marketing'], 'artists'),

@@ -66,6 +66,7 @@ const detail = (over: Partial<ReleaseDetail> = {}): ReleaseDetail => ({
   ],
   candidates: [{ id: 's9', title: 'Extra' }],
   readiness: readiness({ legal: gate('blocked', [{ code: 'x', message: 'Track 1: the split is open' }]) }),
+  gatesSkipped: [],
   artwork: { current: null, options: [] },
   me: { canWrite: true, isOwner: false, canManagePublic: false, mayReadRights: true },
   ...over,
@@ -118,6 +119,26 @@ describe('the tracklist', () => {
     cleanup();
     mount(detail({ me: { canWrite: false, isOwner: false, canManagePublic: false, mayReadRights: true } }));
     expect(screen.queryByLabelText('Move Midnight down')).toBeNull();
+  });
+});
+
+describe('the skipped-approval banner (LABEL-51)', () => {
+  it('shows on a release when the owner switched legal approval off, naming credits & splits as still gating', () => {
+    mount(detail({ gatesSkipped: ['legal'] }));
+    const note = screen.getByTestId('release-gate-skipped');
+    expect(note.textContent).toMatch(/Legal approval is switched off/);
+    expect(note.textContent).toMatch(/Credits & splits still gate/);
+  });
+  it('does not show on a delivered or cancelled release, or with nothing skipped', () => {
+    const base = detail().release;
+    mount(detail({ gatesSkipped: ['legal'], release: { ...base, state: 'delivered' } }));
+    expect(screen.queryByTestId('release-gate-skipped')).toBeNull();
+    cleanup();
+    mount(detail({ gatesSkipped: ['legal'], release: { ...base, state: 'cancelled' } }));
+    expect(screen.queryByTestId('release-gate-skipped')).toBeNull();
+    cleanup();
+    mount(detail());
+    expect(screen.queryByTestId('release-gate-skipped')).toBeNull();
   });
 });
 

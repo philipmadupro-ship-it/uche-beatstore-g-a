@@ -82,6 +82,10 @@ export const FUNCTION_LABELS: Readonly<Record<OrgFunction, string>> = {
   producer: 'Producer',
   engineer: 'Engineer',
   operations: 'Operations',
+  pr: 'PR & press',
+  executive: 'Executive',
+  artistic_director: 'Artistic director',
+  contracts: 'Contracts',
 };
 
 export type InvitationGrantInput = { role: string; functions: readonly string[]; contactIds: readonly string[] };

@@ -77,13 +77,21 @@ export const FACE_MODULES: Readonly<Record<AccountFace, readonly Module[]>> = {
 
 /**
  * The capabilities a module owns: an org without the module holds none of
- * them. Only capabilities that exist today are listed; LABEL-49's department
- * capabilities (finance.write, pr.*, exec.read, creative.*, contract.*) are
- * added here with them. Keep in step with `capability_modules` in 170.
+ * them. LABEL-49 added the department capabilities. Keep in step with
+ * `capability_modules` in has_org_cap (latest: 171).
  */
 export const CAPABILITY_MODULE: Readonly<Partial<Record<Capability, Module>>> = {
   'contracts.read': 'contracts',
+  'contracts.write': 'contracts',
+  'contracts.sign': 'contracts',
   'finance.read': 'finance',
+  'finance.write': 'finance',
+  'finance.approve': 'finance',
+  'pr.read': 'pr',
+  'pr.write': 'pr',
+  'exec.read': 'executive',
+  'creative.read': 'artistic',
+  'creative.approve': 'artistic',
 };
 
 // ── Lookups ─────────────────────────────────────────────────────────────

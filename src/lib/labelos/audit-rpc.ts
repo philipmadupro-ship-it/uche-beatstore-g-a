@@ -23,6 +23,7 @@
  *   splitSign                split_sheet.signed (155, LABEL-28)
  *   platformCreateLicensee   org.created + org.entitlements_changed in the new org (170, LABEL-47)
  *   platformSetEntitlements  org.entitlements_changed in the licensee org (170, LABEL-47)
+ *   orgSettings              org.settings_changed (172, LABEL-51; owner only, checked again in SQL)
  *
  * Accepting an invitation (`member.joined`) is 138's
  * `labelos_accept_invitation` (lib/labelos/invitations.ts), which already
@@ -69,6 +70,8 @@ export const AUDIT_RPCS = {
   // Migration 170 (LABEL-47): the platform console. The event lands in the AFFECTED org, the operator as actor.
   platformCreateLicensee: 'labelos_platform_create_licensee',
   platformSetEntitlements: 'labelos_platform_set_entitlements',
+  // Migration 172 (LABEL-51): the owner's organization settings, with `org.settings_changed`.
+  orgSettings: 'labelos_audit_org_settings',
   // Migration 190 (doc 25): team accounts an org creates — membership + managed row + event, and reset / switch-off.
   teamAccountCreate: 'labelos_audit_team_account_create',
   teamAccountReset: 'labelos_audit_team_account_reset',
@@ -232,6 +235,8 @@ export type AuditRpcArgs = {
     p_max_artists: number | null;
     p_payload: EventPayload;
   };
+  /** Merge `p_patch` (only the keys that change) into `organizations.settings`; answers `{ settings }` or `{ error: 'not_found' | 'not_owner' }`. */
+  orgSettings: { p_org: string; p_actor: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
   teamAccountCreate: {
     p_org: string;
     p_actor: string;
@@ -276,6 +281,7 @@ export function isMissingAuditRpc(error: AuditRpcError | null): boolean {
 export const AUDIT_RPC_NOT_READY = 'Auditing is not set up yet (migration 146 has not been applied).';
 export const CREDITS_NOT_READY = 'Credits and parties are not set up yet (migration 153 has not been applied).';
 export const SPLITS_NOT_READY = 'Split sheets are not set up yet (migration 155 has not been applied).';
+export const ORG_SETTINGS_NOT_READY = 'Organization settings are not set up yet (migration 172 has not been applied).';
 export const APPROVALS_NOT_READY = 'Approvals are not set up yet (migration 157 has not been applied).';
 export const PROJECT_MEMBERS_NOT_READY = 'External project members are not set up yet (migration 148 has not been applied).';
 

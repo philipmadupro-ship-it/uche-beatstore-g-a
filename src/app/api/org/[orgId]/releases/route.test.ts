@@ -11,7 +11,7 @@
  *     — a beat B1, an artwork A1 and a contract A2. LP2: Kilo's Inbox with
  *     song S2 and an artwork A3. Releases R1 (LP1, Nova: S1/S1, S1/M1) and
  *     R2 (LP2, Kilo: S2). Members: owner, A&R (release.write), marketing
- *     (read-only), finance (no catalogue), A&R scoped to C2, roster artist C1.
+ *     (read-only), operations (no catalogue), A&R scoped to C2, roster artist C1.
  *   L2: artist CX, project XP1, song XS1, release RX. Owner X.
  *   The producer: project PP1 and song PS1 (org_id NULL).
  */
@@ -160,7 +160,7 @@ beforeEach(() => {
         member(OWN, 'owner'),
         member(AR, 'member', ['a_and_r']),
         member(MKT, 'member', ['marketing']),
-        member(FIN, 'member', ['finance']),
+        member(FIN, 'member', ['operations']),
         member(AR_C2, 'member', ['a_and_r'], 'artists'),
         member(ART, 'artist', [], 'artists'),
         member(X, 'owner', [], 'org', L2),
@@ -300,7 +300,7 @@ describe('POST /releases: release.write', () => {
     expect(db.tables.projects).toHaveLength(4);
   });
 
-  it('marketing and finance cannot create one (403)', async () => {
+  it('marketing and operations cannot create one (403)', async () => {
     expect((await collection('POST', MKT, L, { title: 'x', contact_id: C1 })).status).toBe(403);
     expect((await collection('POST', FIN, L, { title: 'x', contact_id: C1 })).status).toBe(403);
     expect(db.tables.releases).toHaveLength(3);

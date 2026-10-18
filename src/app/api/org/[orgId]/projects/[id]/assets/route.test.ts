@@ -7,7 +7,7 @@
  *   L (label): artists C1 (Nova), C2 (Kilo). LP1: Nova's project
  *     (project_contacts C1) with an artwork, a session and a contract
  *     (restricted). LP2: Kilo's Inbox. Members: owner, A&R, marketing,
- *     legal, finance (no catalogue), A&R scoped to C2, the roster artist C1.
+ *     legal, operations (no catalogue), A&R scoped to C2, the roster artist C1.
  *   L2: project XP1 with an artwork; owner X.
  *   The producer: project PP1 (org_id NULL, user_id OWN) with one file.
  */
@@ -119,7 +119,7 @@ beforeEach(() => {
         member(AR, 'member', ['a_and_r']),
         member(MKT, 'member', ['marketing']),
         member(LEG, 'member', ['legal']),
-        member(FIN, 'member', ['finance']),
+        member(FIN, 'member', ['operations']),
         member(AR_C2, 'member', ['a_and_r'], 'artists'),
         member(ART, 'artist', [], 'artists'),
         member(X, 'owner', [], 'org', L2),
@@ -332,7 +332,7 @@ describe('POST: adding a file', () => {
     expect(db.tables.activity_events.at(-1)).toMatchObject({ verb: 'file.uploaded', visibility: 'internal' });
   });
 
-  it('legal cannot add a normal file (catalogue read-only); marketing and finance cannot add anything', async () => {
+  it('legal cannot add a normal file (catalogue read-only); marketing and operations cannot add anything', async () => {
     expect((await upload(LEG, L, LP1, 'cover.png')).status).toBe(403);
     expect((await upload(MKT, L, LP1, 'press photo.jpg')).status).toBe(403);
     expect((await upload(FIN, L, LP1, 'cover.png')).status).toBe(403);
@@ -402,7 +402,7 @@ describe('POST: adding a file', () => {
 });
 
 describe('presign', () => {
-  it('mints a key under the org project; marketing and finance cannot; legal can', async () => {
+  it('mints a key under the org project; marketing and operations cannot; legal can', async () => {
     const res = await presign(AR, L, LP1, { file_name: 'Midnight session.zip', size_bytes: 50_000_000 });
     expect(res.status).toBe(200);
     expect(storage.presigned[0]).toMatch(new RegExp(`^orgs/${L}/assets/${LP1}/[A-Za-z0-9_-]{16}\\.zip$`));
