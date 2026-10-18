@@ -9351,8 +9351,8 @@ Orchestrator: session_01U1hEgSEMBP1MAk65kDjAcW. Backlog: `docs/bstudio-label-os/
 
 Owner request from the LABEL-47 decision round. Extends the artist portal (one contact, already has files, password, revocation, sign-in) rather than project shares (anonymous holder, no files). Plan: `docs/portal-contact-uploads.md`; PR #135 into `claude/happy-bardeen-rnosf3`.
 
-- Migration 190 (not applied): `project_contacts.can_upload`, `project_assets.uploaded_by_contact_id`, same-owner + linked-contact trigger. 162–188 are backlog reservations and 189 is #130's.
-- Routes: `POST /api/portal/[token]/files` (+ `/presign`, opaque upload id, never a storage reference in or out). PATCH link accepts `can_upload` (503 naming 190 before it).
+- Migration 191 (not applied; 189–190 are #130's): `project_contacts.can_upload`, `project_assets.uploaded_by_contact_id`, same-owner + linked-contact trigger. 172–187 are backlog reservations.
+- Routes: `POST /api/portal/[token]/files` (+ `/presign`, opaque upload id, never a storage reference in or out). PATCH link accepts `can_upload` (503 naming 191 before it).
 - UI: workspace Uploads switch and password set/remove; portal "Send a file" on the Files tab; "From <contact>" on the project page and workspace Files.
 - Notify / NEW / pulse ignore a contact's own uploads for that contact. Erasure deletes them.
-- Tests: `uploads.test.ts`, `files/route.test.ts`, local check 190, `e2e/portal-uploads.spec.ts` (3/3 on the local real-DB stack; artist-workspace 1–3 + portal-roles re-run green).
+- Tests: `uploads.test.ts`, `files/route.test.ts`, local check 191, `e2e/portal-uploads.spec.ts` (3/3 on the local real-DB stack; artist-workspace 1–3 + portal-roles re-run green).

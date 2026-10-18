@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * "Send a file" in the portal (PORTAL-UP, mig 190): shown only for projects
+ * "Send a file" in the portal (PORTAL-UP, mig 191): shown only for projects
  * whose link the producer opened for uploads. Up to 4 MB goes through the
  * app; larger files PUT straight to private storage on a presigned URL and
  * are then registered. The server decides everything — this only picks the

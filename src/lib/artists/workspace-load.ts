@@ -66,7 +66,7 @@ export interface ProjectLinkRow {
   created_at: string;
   /** Mig 135: the pitch shown to a label for this project; null when missing. */
   pitch_note?: string | null;
-  /** Mig 190: the contact may upload into this project from their portal; false when missing. */
+  /** Mig 191: the contact may upload into this project from their portal; false when missing. */
   can_upload?: boolean;
 }
 
@@ -126,7 +126,7 @@ export async function loadArtistLinks(admin: Admin, userId: string, contactId: s
     const { data, error } = await admin.from('project_contacts').select('project_id, pitch_note').eq('contact_id', contactId).eq('user_id', userId);
     const notes = new Map(error ? [] : ((data ?? []) as Array<{ project_id: string; pitch_note: string | null }>).map((r) => [r.project_id, r.pitch_note]));
     for (const l of links) l.pitch_note = notes.get(l.project_id) ?? null;
-    // Same again for mig 190's upload switch: missing reads as off.
+    // Same again for mig 191's upload switch: missing reads as off.
     const up = await admin.from('project_contacts').select('project_id, can_upload').eq('contact_id', contactId).eq('user_id', userId);
     const uploads = new Set(up.error ? [] : ((up.data ?? []) as Array<{ project_id: string; can_upload: boolean | null }>)
       .filter((u) => u.can_upload === true).map((u) => u.project_id));
@@ -194,7 +194,7 @@ export interface WorkspaceFile {
   isNewForArtist: boolean;
   /** When this artist last downloaded it from the portal. */
   downloadedAt: string | null;
-  /** Sent by THIS artist through their portal (mig 190). */
+  /** Sent by THIS artist through their portal (mig 191). */
   fromArtist: boolean;
   /** Sent by another contact through their portal: their name; null otherwise. */
   uploadedByName: string | null;

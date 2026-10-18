@@ -1,4 +1,4 @@
--- Rollback for 190_portal_contact_uploads.sql (PORTAL-UP).
+-- Rollback for 191_portal_contact_uploads.sql (PORTAL-UP).
 --
 -- Lives outside supabase/migrations/ on purpose: scripts/apply-migrations.sh
 -- applies every *.sql in that folder. Run by hand only.

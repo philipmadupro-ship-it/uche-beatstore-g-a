@@ -1,9 +1,9 @@
--- 190_portal_contact_uploads.sql
+-- 191_portal_contact_uploads.sql
 -- PORTAL-UP: a contact uploads their own material through their portal link
 -- (docs/portal-contact-uploads.md). No new table.
 --
--- Numbered 190: 162–188 are reserved by the Label OS phase-2 backlog
--- (docs/bstudio-label-os/23-engineering-backlog-phase-2.md) and 189 is
+-- Numbered 191: 172–187 are reserved by the Label OS phase-2 backlog
+-- (docs/bstudio-label-os/23-engineering-backlog-phase-2.md) and 189–190 are
 -- PR #130's.
 --
 --   1. project_contacts.can_upload — a per-LINK switch beside allow_downloads

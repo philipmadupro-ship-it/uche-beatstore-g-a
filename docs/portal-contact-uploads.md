@@ -22,10 +22,10 @@ reissue and optional email sign-in. So uploads are one more per-link switch
 next to Downloads and Comments, and an uploaded file is an ordinary
 `project_assets` row with the contact as its author.
 
-## Schema — migration 190
+## Schema — migration 191
 
-162–188 are reserved by the phase-2 backlog (`docs/bstudio-label-os/23-…`) and
-189 is PR #130's, so this takes **190** (the first number nothing claims).
+172–187 are reserved by the phase-2 backlog (`docs/bstudio-label-os/23-…`) and
+189–190 are PR #130's, so this takes **191** (the first number nothing claims).
 
 - `project_contacts.can_upload boolean NOT NULL DEFAULT false` — off for every
   existing link.
@@ -33,11 +33,11 @@ next to Downloads and Comments, and an uploaded file is an ordinary
   ON DELETE SET NULL` + index. NULL = the producer's own file.
 - A same-owner trigger: the contact must belong to the asset's owner
   (`user_id`), as every #44 table does.
-- Local check `supabase/local/checks/190_portal_contact_uploads.sql`;
+- Local check `supabase/local/checks/191_portal_contact_uploads.sql`;
   rollback file. Not part of `supabase/apply/pending.sql` until the owner says.
 
-Before 190: the portal never offers uploads (the column reads as false), the
-upload routes answer 404, and the producer's switch answers 503 naming 190.
+Before 191: the portal never offers uploads (the column reads as false), the
+upload routes answer 404, and the producer's switch answers 503 naming 191.
 
 ## Routes
 

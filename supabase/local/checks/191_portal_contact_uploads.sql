@@ -1,4 +1,4 @@
--- Behaviour checks for 190_portal_contact_uploads.sql (PORTAL-UP),
+-- Behaviour checks for 191_portal_contact_uploads.sql (PORTAL-UP),
 -- run by scripts/local-db/check.sh in its own copy of the throwaway database.
 -- Every check RAISEs on failure; psql stops at the first.
 --

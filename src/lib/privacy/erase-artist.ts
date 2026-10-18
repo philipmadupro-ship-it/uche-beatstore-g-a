@@ -13,7 +13,7 @@
  *     no `user_id`) are deleted, with the timeline rows that quote them.
  *     Replies threaded under those comments go too (parent_id cascades); a
  *     producer's message that started its own thread stays.
- *   - files the contact uploaded through their portal (mig 190) are deleted,
+ *   - files the contact uploaded through their portal (mig 191) are deleted,
  *     rows and stored objects, with their upload timeline rows: they are the
  *     person's own material.
  * The project links stay: they are the producer's working history, now

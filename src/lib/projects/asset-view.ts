@@ -33,7 +33,7 @@ export interface ProjectAssetView {
   portal_at: string | null;
   created_at: string;
   downloadUrl: string;
-  /** A contact who sent it through their portal (mig 190); null = the producer's own. */
+  /** A contact who sent it through their portal (mig 191); null = the producer's own. */
   uploaded_by?: { contact_id: string; name: string } | null;
 }
 

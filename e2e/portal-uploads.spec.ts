@@ -1,7 +1,7 @@
 /**
- * Contact uploads through the portal link (PORTAL-UP, mig 190), end to end
+ * Contact uploads through the portal link (PORTAL-UP, mig 191), end to end
  * against a REAL database (scripts/local-db): Postgres + PostgREST with RLS,
- * migration 190's same-owner trigger, the real routes and the real pages.
+ * migration 191's same-owner trigger, the real routes and the real pages.
  *
  *   1. the producer switches Uploads on for one project of the contact's link
  *      and puts a password on the link — both from the workspace

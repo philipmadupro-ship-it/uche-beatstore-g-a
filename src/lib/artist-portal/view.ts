@@ -70,7 +70,7 @@ export interface PortalProject {
   files: number;
   allowDownloads: boolean;
   canComment: boolean;
-  /** The artist may upload their own files into this project (mig 190). */
+  /** The artist may upload their own files into this project (mig 191). */
   canUpload: boolean;
   /** The producer's pitch of this project to this label (mig 135); null elsewhere. */
   pitchNote: string | null;
@@ -86,7 +86,7 @@ export interface PortalFile {
   mime: string | null;
   sizeBytes: number | null;
   isNew: boolean;
-  /** This artist sent it through the portal (mig 190). */
+  /** This artist sent it through the portal (mig 191). */
   fromYou: boolean;
   /** The portal's own streaming route for this file. */
   url: string;

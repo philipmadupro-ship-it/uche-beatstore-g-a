@@ -712,7 +712,7 @@ export const ProjectContactPatchBodySchema = z.object({
   in_portal: z.boolean().optional(),
   allow_downloads: z.boolean().optional(),
   can_comment: z.boolean().optional(),
-  /** Mig 190: the contact may upload their own files into this project from their portal. */
+  /** Mig 191: the contact may upload their own files into this project from their portal. */
   can_upload: z.boolean().optional(),
   /** Mig 135: the pitch a label sees on this project in their portal. Empty clears it. */
   pitch_note: z.string().max(2000).nullable().optional(),
@@ -794,7 +794,7 @@ export const ProjectAssetPatchBodySchema = z.object({
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type ProjectAssetPatchBody = z.infer<typeof ProjectAssetPatchBodySchema>;
 
-// ── Contact uploads through the portal (PORTAL-UP, mig 190) ──────────────
+// ── Contact uploads through the portal (PORTAL-UP, mig 191) ──────────────
 // The kind is guessed from the name and the file always lands in the portal
 // (the artist sees what they sent); the producer recategorises it later.
 

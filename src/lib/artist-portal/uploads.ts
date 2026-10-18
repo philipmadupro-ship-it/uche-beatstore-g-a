@@ -1,12 +1,12 @@
 /**
- * Contact uploads through the portal link (PORTAL-UP, mig 190;
+ * Contact uploads through the portal link (PORTAL-UP, mig 191;
  * docs/portal-contact-uploads.md).
  *
  * A contact sends their own files into a project from their portal when the
  * producer switched `project_contacts.can_upload` on for that link. The file
  * becomes an ordinary project_assets row of the producer, credited to the
  * contact through `uploaded_by_contact_id`. Everything here degrades before
- * 190 is applied: no switch reads as on, no file reads as anyone's.
+ * 191 is applied: no switch reads as on, no file reads as anyone's.
  */
 
 import { selectIn } from '@/lib/db/chunked-in';
@@ -37,7 +37,7 @@ export function portalUploadDecision(
   return uploadable.has(projectId) ? 'ok' : 'uploads-off';
 }
 
-/** The portal projects whose link has uploads on (empty before mig 190). */
+/** The portal projects whose link has uploads on (empty before mig 191). */
 export async function loadUploadableProjects(admin: Admin, portal: PortalRef, projectIds: readonly string[]): Promise<Set<string>> {
   if (projectIds.length === 0) return new Set();
   const { data, error } = await admin
@@ -57,7 +57,7 @@ export async function loadUploadableProjects(admin: Admin, portal: PortalRef, pr
 
 /**
  * Who sent each of `assetIds`, when a contact did (owner-filtered). Read on
- * its own so the main file queries keep working before mig 190.
+ * its own so the main file queries keep working before mig 191.
  */
 export async function loadAssetUploaders(admin: Admin, userId: string, assetIds: readonly string[]): Promise<Map<string, string>> {
   if (assetIds.length === 0) return new Map();

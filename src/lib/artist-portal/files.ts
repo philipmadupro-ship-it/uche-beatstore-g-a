@@ -25,7 +25,7 @@ export interface PortalAssetRow {
   position: number;
   portal_at: string | null;
   created_at: string;
-  /** Mig 190: the contact who uploaded it through their portal; null = the producer. */
+  /** Mig 191: the contact who uploaded it through their portal; null = the producer. */
   uploaded_by_contact_id?: string | null;
 }
 

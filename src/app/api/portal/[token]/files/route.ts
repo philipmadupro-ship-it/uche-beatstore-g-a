@@ -27,7 +27,7 @@ export const dynamic = 'force-dynamic';
 const log = createLogger('api.portal.files.upload');
 
 function notReady() {
-  // Before migration 190 no link can have uploads on, so this is only reached
+  // Before migration 191 no link can have uploads on, so this is only reached
   // in the window between a deploy and the migration. Same answer as outside
   // the portal: nothing to see.
   return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -35,7 +35,7 @@ function notReady() {
 
 /**
  * POST /api/portal/[token]/files — a contact uploads their own file into a
- * project of their portal (PORTAL-UP, mig 190):
+ * project of their portal (PORTAL-UP, mig 191):
  *   multipart  file + project_id + label?        (up to 4 MB, through the server)
  *   JSON       { project_id, upload_id, file_name, label? } after ./presign
  *
