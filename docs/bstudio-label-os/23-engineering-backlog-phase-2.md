@@ -127,12 +127,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: add/remove for each role in e2e; scoped member sees only their artists; independent face shows "Your collaborators" instead of roster wording.
 
 ### LABEL-51 — Organization settings screen
-**Priority:** P1 · **Risk:** Medium · **Deps:** 49 · **Migration:** 172 (audit function for settings) · **Status:** In Progress (session_01XUukitVZqRKtu4UX1W4myN)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 49 · **Migration:** 172 (audit function for settings) · **Status:** Done — #137, squash `945f23984cfc458c4d5101455327742a0bde063c` (2026-10-18)
 - Owner-only screen and route for `legal_gate`, `marketing_gate`, `require_signed_master_split`, `attention_*`, departments on/off (within entitlements). Change and audit event in one transaction. `legal_gate = off` is an explicit, audited skip shown on every release it affects (decision 5).
 - Acceptance: only owner can write; non-owner 403; event `org.settings_changed` names the keys, not values of notes; gate-off banner on the release page.
 
 ### LABEL-52 — Release gates v2 (policy)
-**Priority:** P1 · **Risk:** Medium · **Deps:** 51 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 51 · **Status:** In Progress (session_01939RXhTx8r5quF2Efoz9nF)
 - `seen` required for "Approved" (UI and API); self-approval requires an open request addressed to the decider (owners/admins exempt); song-level legal approval hidden once the song is on a release (release-level stays authoritative, UI says so); artwork size rule of spec 09 §4; restricted counts hidden from role `artist` and scoped staff.
 - Acceptance: tests per rule, mutation checks, existing approval e2e updated to the UI path.
 
@@ -267,6 +267,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 
 ### LABEL-73 — Atomic audit functions
 **Priority:** P1 · **Risk:** High · **Deps:** 44, 55 · **Migration:** 187 · **Status:** Not Started
+- **Also (from LABEL-51):** `settings.departments_off` is enforced in SQL only for restricted project files (172's `labelos_org_asset_allowed`); `has_org_cap` ignores it, so the first RLS policy that uses a `finance.*` / `pr.*` / `exec.read` / `creative.*` capability must subtract `departments_off` there too (parity tests). The settings audit payload's `from` values are read before the lock (two simultaneous owner saves can log a stale `from`); build the payload inside the function.
 - **Also (from LABEL-47):** the caps are check-then-write: an artist→staff role change (seat cap) and contact create/edit (artist cap) can both pass at cap−1 under concurrency (only the invitation accept is enforced under a lock); 154's connection accept inserts a roster artist into the label without checking `max_artists`. Enforce both caps atomically in SQL.
 - **Also (from LABEL-44):** close the readiness-vs-claim window for deliver AND store listing (an item committed between the readiness check and the claim ships unchecked); remove the members route's six-argument fallback once 167 is applied (stale-cache window skips `p_expect`).
 - Implement `20-review-G7-atomic-deliver.md` with G10's amendments (raw `updated_at` string, fingerprint scope, one function family): `labelos_audit_release_deliver`, plus `release.imported`, `release.store_listed/unlisted`, org delete/restore/export, digest channel verbs. `AUDIT_RPCS` entry, `AuditRpcArgs` type, a check proving the four G7 cases, a rollback. Remove the compensating writes.
