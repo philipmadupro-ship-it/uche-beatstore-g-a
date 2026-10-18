@@ -20,6 +20,7 @@ import { buildPortalDigest } from '@/lib/artist-portal/digest';
 import { countUnnotified } from '@/lib/artist-portal/new-items';
 import { buildProjectSendRow } from '@/lib/crm/project-send';
 import { loadPortalAssets, toPortalFileRows } from '@/lib/artist-portal/files';
+import { filesForContact } from '@/lib/artist-portal/uploads';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
@@ -124,7 +125,7 @@ export async function sendPortalDigest(
   const count = countUnnotified(
     links.map((l) => ({ projectId: l.project_id, linkedAt: l.created_at, lastNotifiedAt: l.last_notified_at })),
     projectTracks.map((pt) => ({ projectId: pt.project_id, trackId: pt.track_id, addedAt: pt.added_at })),
-    toPortalFileRows(assets),
+    filesForContact(toPortalFileRows(assets), contact.id),
   );
   if (count.total === 0 && !opts.force) {
     return { ok: false, status: 409, error: 'Nothing new since the last notify.' };

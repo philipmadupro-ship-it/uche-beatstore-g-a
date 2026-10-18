@@ -68,7 +68,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     ]);
 
     return NextResponse.json(
-      pulseVersions({ links, projects, projectTracks, files, states, comments, messages }),
+      // The artist's own uploads (mig 190) are not "new from the producer".
+      pulseVersions({ links, projects, projectTracks, files: files.filter((f) => f.uploaded_by_contact_id !== portal.contact_id), states, comments, messages }),
       { headers: { 'cache-control': 'private, no-store' } },
     );
   } catch (err) {

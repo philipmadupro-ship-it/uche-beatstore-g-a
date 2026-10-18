@@ -47,6 +47,8 @@ export interface PortalFileRow {
   fileId: string;
   /** project_assets.portal_at, or created_at when it was uploaded straight into the portal. */
   portalAt: string;
+  /** The contact who sent it through their portal (mig 190); null = the producer's file. */
+  uploadedBy?: string | null;
 }
 
 export interface NotifyCount {

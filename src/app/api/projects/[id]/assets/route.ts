@@ -18,6 +18,7 @@ import {
 import { PROJECT_ASSET_COLUMNS, toProjectAssetView, type ProjectAssetRow } from '@/lib/projects/asset-view';
 import { deleteProjectAssetObject, projectAssetBuckets, projectAssetSize, storeProjectAsset } from '@/lib/storage/project-assets';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
+import { loadAssetUploaders, loadUploaderNames } from '@/lib/artist-portal/uploads';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -57,7 +58,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     log.error('list failed', { id, error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
-  return NextResponse.json({ schemaReady: true, assets: ((data ?? []) as ProjectAssetRow[]).map(toProjectAssetView) });
+  const rows = (data ?? []) as ProjectAssetRow[];
+  // Who sent each contact upload (mig 190); its own reads, so the list works before it.
+  let uploaders = new Map<string, string>();
+  let names = new Map<string, string>();
+  try {
+    uploaders = await loadAssetUploaders(auth.admin, auth.userId, rows.map((r) => r.id));
+    names = await loadUploaderNames(auth.admin, auth.userId, uploaders);
+  } catch (err) {
+    log.warn('uploaders unavailable', { id, error: errorMessage(err) });
+  }
+  const assets = rows.map((r) => {
+    const contactId = uploaders.get(r.id);
+    return { ...toProjectAssetView(r), uploaded_by: contactId ? { contact_id: contactId, name: names.get(contactId) ?? 'Contact' } : null };
+  });
+  return NextResponse.json({ schemaReady: true, assets });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

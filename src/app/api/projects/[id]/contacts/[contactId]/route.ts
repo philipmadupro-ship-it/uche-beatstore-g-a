@@ -33,7 +33,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .eq('project_id', id)
       .eq('contact_id', contactId)
       .eq('user_id', auth.userId)
-      .select(COLUMNS)
+      // can_upload is mig 190's; name it only when it is being set, so every
+      // other change keeps working before 190 is applied.
+      .select(patch.can_upload !== undefined ? `${COLUMNS}, can_upload` : COLUMNS)
       .maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ error: 'Not linked' }, { status: 404 });
@@ -41,6 +43,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   } catch (err) {
     if (patch.pitch_note !== undefined && isSchemaNotReady(err)) {
       return NextResponse.json({ error: 'Pitch notes need migration 135 applied on Supabase.', migration: '135', schemaReady: false }, { status: 503 });
+    }
+    if (patch.can_upload !== undefined && isSchemaNotReady(err)) {
+      return NextResponse.json({ error: 'Uploads from the portal need migration 190 applied on Supabase.', migration: '190', schemaReady: false }, { status: 503 });
     }
     if (isSchemaNotReady(err)) return schemaNotReadyResponse();
     log.error('PATCH failed', { id, contactId, error: errorMessage(err) });

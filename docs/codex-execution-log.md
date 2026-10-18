@@ -9346,3 +9346,13 @@ Orchestrator: session_01U1hEgSEMBP1MAk65kDjAcW. Backlog: `docs/bstudio-label-os/
 - 2026-10-17 18:55 UTC — status PR #126 squash-merged, `2db2106a118ebbf33928bd3176666b9ca61b5882`.
 - 2026-10-17 19:26 UTC — **LABEL-47 Done**: #132 squash-merged, `e03a073ebf996649ae268011c11ade7b8182d634`. Migration 170: `platform_admins` (operator list, no API write path; the owner adds themself by SQL at final merge) and `org_entitlements` (licence per licensee; no row = everything the face allows); `has_org_cap` and `labelos_accept_invitation` redefined (module check for `contracts.read` / `finance.read`, owner invitations only from an operator, seat cap under a lock). Faces: independent = kind `artist`, label = kind `label`. Console `/platform` + `/api/platform/*`, 404 for everyone but an operator. Gate: 3 checks green on `2813bc8` (after a base merge for #126); independent read-only review found nothing blocking; its two small findings fixed before merge (unlist still allowed after the store module is withdrawn; a wrong policy comment). Cap races and the 154 connection-accept cap bypass were added to LABEL-73. Four product questions (seat counting, artist cap, face ceilings, licence-change feed line) are open for the owner in #132.
 - 2026-10-17 19:26 UTC — LABEL-49 (migration 171) started before LABEL-48, session_01Aj5ecD2rnQ5pVQCtWZaq45: the wizard's Departments step needs 49's functions, and 49 does not wait on the #130 decision.
+
+## 2026-10-18 - PORTAL-UP: contact uploads through the portal link
+
+Owner request from the LABEL-47 decision round. Extends the artist portal (one contact, already has files, password, revocation, sign-in) rather than project shares (anonymous holder, no files). Plan: `docs/portal-contact-uploads.md`; PR #135 into `claude/happy-bardeen-rnosf3`.
+
+- Migration 190 (not applied): `project_contacts.can_upload`, `project_assets.uploaded_by_contact_id`, same-owner + linked-contact trigger. 162–188 are backlog reservations and 189 is #130's.
+- Routes: `POST /api/portal/[token]/files` (+ `/presign`, opaque upload id, never a storage reference in or out). PATCH link accepts `can_upload` (503 naming 190 before it).
+- UI: workspace Uploads switch and password set/remove; portal "Send a file" on the Files tab; "From <contact>" on the project page and workspace Files.
+- Notify / NEW / pulse ignore a contact's own uploads for that contact. Erasure deletes them.
+- Tests: `uploads.test.ts`, `files/route.test.ts`, local check 190, `e2e/portal-uploads.spec.ts` (3/3 on the local real-DB stack; artist-workspace 1–3 + portal-roles re-run green).

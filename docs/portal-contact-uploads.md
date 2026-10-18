@@ -42,7 +42,8 @@ upload routes answer 404, and the producer's switch answers 503 naming 190.
 ## Routes
 
 - `POST /api/portal/[token]/files` — multipart `file` + `project_id` (≤ 4 MB),
-  or JSON `{ project_id, url, file_name }` after a presign. Gate first
+  or JSON `{ project_id, upload_id, file_name }` after a presign (an opaque
+  id; the server rebuilds the storage reference, never takes one). Gate first
   (`gatePortal`: 404 / 410 / 401 password / 401 sign-in), then membership: a
   project not in this portal is **404**; in the portal with uploads off is
   **403**. Same extension allowlist as producer project files
@@ -54,8 +55,9 @@ upload routes answer 404, and the producer's switch answers 503 naming 190.
   and per portal. Writes a `file_uploaded` timeline row and a `portal_upload`
   notification.
 - `POST /api/portal/[token]/files/presign` — same gate + membership, mints a
-  key in the project's own folder; the register step accepts only that shape
-  (`projectAssetKeyOf`) and checks the object exists and its size.
+  key in the project's own folder and returns the PUT URL plus the opaque
+  `upload_id`; the register step rebuilds the key, checks the object exists
+  and its size, and refuses an object already registered.
 - `PATCH /api/projects/[id]/contacts/[contactId] { can_upload }` (Zod).
 - `/api/portal/` is already on the api-gate allowlist; nothing new there.
 
