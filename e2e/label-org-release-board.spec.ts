@@ -512,7 +512,7 @@ test('10 · doc 21 #13: a song on a release has no Approve of its own — the so
   // A draft release page at a phone width: the five gates and their controls stay usable (the ready and blocked ones are delivered by now).
   await page.goto(`/o/${SLUG}/releases/${ids.kilo}`);
   await expect(page.getByTestId('org-approvals')).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator('[data-testid^="org-approval-"][data-testid$="master"], [data-testid="org-approval-artwork"], [data-testid="org-approval-legal"], [data-testid="org-approval-marketing"], [data-testid="org-approval-metadata"]')).toHaveCount(5);
+  for (const g of ['master', 'artwork', 'legal', 'marketing', 'metadata']) await expect(page.getByTestId(`org-approval-${g}`)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: `${shots}/release-approvals-owner-390.png`, fullPage: true });
   await ctx.close();
