@@ -17,6 +17,8 @@
  */
 import { test, expect, type APIRequestContext, type Browser, type BrowserContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
+import { deflateSync } from 'node:zlib';
+import { mkdirSync } from 'node:fs';
 import { ARTIST_A_ID, ARTIST_B_ID, BUYER_ID, PRODUCER_ID, SERVICE_KEY, sessionCookie } from '../scripts/local-db/jwt.mjs';
 
 const REST = 'http://127.0.0.1:54321/rest/v1';
@@ -57,6 +59,41 @@ async function as(browser: Browser, baseURL: string, id: string, email: string):
   await ctx.addCookies([{ name: c.name, value: c.value, url: baseURL }]);
   return ctx;
 }
+
+/** A solid RGB PNG of the given size (a few KB deflated), so the artwork size rule (09 §4) reads a real file header. */
+function solidPng(size: number): Buffer {
+  const table = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (buf: Buffer) => {
+    let c = 0xffffffff;
+    for (const b of buf) c = table[(c ^ b) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type: string, data: Buffer) => {
+    const head = Buffer.alloc(4);
+    head.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const tail = Buffer.alloc(4);
+    tail.writeUInt32BE(crc(body));
+    return Buffer.concat([head, body, tail]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // RGB
+  const row = Buffer.alloc(1 + size * 3, 0x30);
+  row[0] = 0; // filter: none
+  const raw = Buffer.alloc(row.length * size);
+  for (let y = 0; y < size; y++) row.copy(raw, y * row.length);
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
+const shots = 'e2e-artifacts/LABEL-52';
+mkdirSync(shots, { recursive: true });
 
 const producer = { id: PRODUCER_ID, email: 'producer@local.test' };
 const aAndR = { id: ARTIST_A_ID, email: 'artist-a@local.test' };
@@ -282,11 +319,21 @@ test('6 · the ready release: gates are satisfied through the real routes (credi
 
   // Tracklist: the song, released as its master.
   await ok(await a.post(`${api}/releases/${ids.ready}/items`, { data: { song_track_id: READY_SONG, master_track_id: READY_MASTER } }), 'add item');
-  // Artwork: a PNG file of the release's project.
-  await rest(request, 'POST', 'project_assets', {
-    id: ART, org_id: ORG, project_id: ids.readyProject, kind: 'artwork', sensitivity: 'normal', label: `Cover ${run}`, file_name: 'cover.png', url: 'local://project-assets/none-art', mime: 'image/png', size_bytes: 10, created_by: PRODUCER_ID,
-  });
-  await ok(await a.patch(`${api}/releases/${ids.ready}`, { data: { artwork_asset_id: ART } }), 'artwork');
+  // Artwork, through the real file route: a cover that is too small blocks the gate (09 §4 size rule), a 3000 px square one satisfies it.
+  const upload = async (size: number, name: string) => {
+    const res = await a.post(`${api}/projects/${ids.readyProject}/assets`, {
+      multipart: { file: { name, mimeType: 'image/png', buffer: solidPng(size) }, kind: 'artwork' },
+    });
+    expect(res.status(), await res.text()).toBe(201);
+    return (await res.json()).asset.id as string;
+  };
+  const small = await upload(1000, 'cover-small.png');
+  await ok(await a.patch(`${api}/releases/${ids.ready}`, { data: { artwork_asset_id: small } }), 'small artwork');
+  const tooSmall = await (await a.get(`${api}/releases/${ids.ready}/readiness`)).json();
+  expect(tooSmall.readiness.gates.artwork.blockers.map((b: { code: string; message: string }) => b.code)).toEqual(['artwork_too_small']);
+  expect(tooSmall.readiness.gates.artwork.blockers[0].message).toContain('1000×1000');
+  const art = await upload(3000, 'cover.png');
+  await ok(await a.patch(`${api}/releases/${ids.ready}`, { data: { artwork_asset_id: art } }), 'artwork');
 
   // Legal readiness of the song: a writer with a legal name, samples declared, both splits in force and signed.
   const song = `${api}/tracks/${READY_SONG}`;
@@ -299,11 +346,58 @@ test('6 · the ready release: gates are satisfied through the real routes (credi
     await ok(await a.post(`${song}/splits/${sheet.id}/signatures`, { data: { method: 'acknowledged', line_id: sheet.lines[0].id } }), `${kind} sign`);
   }
 
-  // The five release gates that need a person: ask the owner, who decides.
-  for (const gate of ['master', 'legal', 'artwork', 'metadata', 'marketing']) {
-    await ok(await a.post(`${api}/approvals`, { data: { subject: { kind: 'release', id: ids.ready }, gate, approver_id: PRODUCER_ID } }), `ask ${gate}`);
-    await ok(await a.post(`${api}/approvals/decide`, { data: { subject: { kind: 'release', id: ids.ready }, gate, decision: 'approved' } }), `approve ${gate}`);
+  // The five release gates that need a person, decided ON THE PAGE (no service key, no direct route calls).
+  // Master, artwork, legal and metadata: the owner asks themselves (owner/admin may), then approves.
+  const page = await ctx.newPage();
+  await page.goto(`/o/${SLUG}/releases/${ids.ready}`);
+  for (const gate of ['master', 'artwork', 'legal', 'metadata']) {
+    const row = page.getByTestId(`org-approval-${gate}`);
+    await expect(row).toBeVisible({ timeout: 60_000 });
+    await row.getByTestId('org-approval-ask').click();
+    await row.getByRole('button', { name: 'Who should approve' }).click();
+    await page.getByRole('option').first().click();
+    await row.getByTestId('org-approval-send-request').click();
+    await expect(row.getByTestId('org-approval-pending')).toBeVisible({ timeout: 30_000 });
+    const approve = row.getByTestId('org-approval-approve');
+    await expect(approve).toBeEnabled({ timeout: 30_000 });
+    await approve.click();
+    await expect(row.getByTestId(`org-approval-chip-${gate}`)).toHaveText('Approved', { timeout: 30_000 });
   }
+  await page.screenshot({ path: `${shots}/release-approvals-owner-1440.png`, fullPage: true });
+  await page.close();
+
+  // Marketing is decided by the marketing member, who may approve only a request addressed to them (doc 21 #15):
+  // the A&R lead asks on the page, and until then the marketing member's Approve is disabled with the reason.
+  const mkt = await as(browser, baseURL!, marketing.id, marketing.email);
+  const mp = await mkt.newPage();
+  await mp.goto(`/o/${SLUG}/releases/${ids.ready}`);
+  const mrow = mp.getByTestId('org-approval-marketing');
+  await expect(mrow).toBeVisible({ timeout: 60_000 });
+  await expect(mrow.getByTestId('org-approval-approve')).toBeDisabled();
+  await expect(mrow.getByTestId('org-approval-blocked')).toContainText('request addressed to you');
+  await mp.screenshot({ path: `${shots}/release-approvals-marketing-no-request-1440.png`, fullPage: true });
+
+  const lead = await as(browser, baseURL!, aAndR.id, aAndR.email);
+  const lp = await lead.newPage();
+  await lp.goto(`/o/${SLUG}/releases/${ids.ready}`);
+  const lrow = lp.getByTestId('org-approval-marketing');
+  await expect(lrow).toBeVisible({ timeout: 60_000 });
+  // A&R holds no approval ability: asks, cannot decide.
+  await expect(lrow.getByTestId('org-approval-approve')).toHaveCount(0);
+  await lrow.getByTestId('org-approval-ask').click();
+  await lrow.getByRole('button', { name: 'Who should approve' }).click();
+  await lp.getByRole('option').first().click();
+  await lrow.getByTestId('org-approval-send-request').click();
+  await expect(lrow.getByTestId('org-approval-pending')).toBeVisible({ timeout: 30_000 });
+
+  await mp.reload();
+  const mapprove = mp.getByTestId('org-approval-marketing').getByTestId('org-approval-approve');
+  await expect(mapprove).toBeEnabled({ timeout: 60_000 });
+  await mapprove.click();
+  await expect(mp.getByTestId('org-approval-chip-marketing')).toHaveText('Approved', { timeout: 30_000 });
+  await mp.screenshot({ path: `${shots}/release-approvals-marketing-approved-1440.png`, fullPage: true });
+  await mkt.close();
+  await lead.close();
 
   const view = await (await a.get(`${api}/releases/${ids.ready}/readiness`)).json();
   const open = Object.entries(view.readiness.gates as Record<string, { status: string; blockers: { message: string }[] }>).filter(([, g]) => !['approved', 'satisfied', 'not_required'].includes(g.status));

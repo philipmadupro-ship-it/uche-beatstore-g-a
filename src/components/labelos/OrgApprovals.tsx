@@ -206,7 +206,7 @@ function GateRow({ orgId, subject, gate, onChange, onStale }: { orgId: string; s
                 type="button"
                 className={BTN}
                 disabled={busy || !!approveBlocked || !gate.snapshotKey || (gate.status === 'approved' && !gate.stale)}
-                title={approveBlocked ?? undefined}
+                title={approveBlocked && !(gate.status === 'approved' && !gate.stale) ? approveBlocked : undefined}
                 onClick={() => void decide('approved')}
                 data-testid="org-approval-approve"
               >
@@ -231,7 +231,7 @@ function GateRow({ orgId, subject, gate, onChange, onStale }: { orgId: string; s
               {onReleaseText(gate.onReleases ?? [])}
             </p>
           )}
-          {!onRelease && approveBlocked && !deciding && (
+          {!onRelease && approveBlocked && !deciding && !(gate.status === 'approved' && !gate.stale) && (
             <p className="text-[11px] text-white/40" data-testid="org-approval-blocked">
               {gate.selfApprovalBlocked ? 'Someone else holding this gate has to approve a request you made.' : approveBlocked}
             </p>
