@@ -356,7 +356,8 @@ describe('has_org_cap mapping (latest definition) equals capabilities.ts + entit
     }
     expect(mismatches.slice(0, 10)).toEqual([]);
     expect(checked).toBeGreaterThan(10_000);
-  });
+    // ~3 s alone; CI shares a core with the build, so give it room.
+  }, 60_000);
 
   it('spot checks that the mirror is not trivially false', () => {
     const owner = { kind: 'label', role: 'owner', functions: [], capGrants: [], capRevokes: [] };
