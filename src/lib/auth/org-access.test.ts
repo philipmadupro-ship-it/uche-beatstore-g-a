@@ -112,7 +112,7 @@ function member(
     cap_grants: string[];
     cap_revokes: string[];
   }> = {},
-  org: { kind?: string; deleted_at?: string | null } = {},
+  org: { kind?: string; deleted_at?: string | null; settings?: unknown } = {},
 ) {
   return {
     role: 'member',
@@ -121,7 +121,7 @@ function member(
     cap_grants: [],
     cap_revokes: [],
     ...fields,
-    organizations: { kind: org.kind ?? 'label', deleted_at: org.deleted_at ?? null },
+    organizations: { kind: org.kind ?? 'label', deleted_at: org.deleted_at ?? null, settings: org.settings ?? {} },
   };
 }
 
@@ -300,6 +300,51 @@ describe('requireOrgCapability', () => {
     const r = await requireOrgCapability(ORG_A, 'release.approve.master');
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.orgId).toBe(ORG_A);
+  });
+});
+
+describe('departments the owner switched off (LABEL-51)', () => {
+  it('a department in settings.departments_off is absent: its capability answers 404, others are untouched', async () => {
+    signedIn();
+    memberships({ [ORG_A]: member({ role: 'owner' }, { settings: { departments_off: ['contracts'] } }) });
+    const { requireOrgCapability, requireOrgModule } = await load();
+    const off = await requireOrgCapability(ORG_A, 'contracts.read');
+    expect(off.ok).toBe(false);
+    if (!off.ok) expect(off.res.status).toBe(404);
+    const mod = await requireOrgModule(ORG_A, 'contracts');
+    expect(mod.ok).toBe(false);
+    if (!mod.ok) expect(mod.res.status).toBe(404);
+    const core = await requireOrgCapability(ORG_A, 'catalog.read');
+    expect(core.ok).toBe(true);
+    const other = await requireOrgModule(ORG_A, 'finance');
+    expect(other.ok).toBe(true);
+  });
+
+  it('switching a department off never widens the licence: an unlicensed module stays absent', async () => {
+    signedIn();
+    memberships({ [ORG_A]: member({ role: 'owner' }, { settings: { departments_off: ['finance'] } }) });
+    answers.org_entitlements = { data: { modules: ['finance', 'export'], max_seats: null, max_artists: null, setup_done: true }, error: null };
+    const { requireOrgModule } = await load();
+    for (const m of ['contracts', 'finance'] as const) {
+      const r = await requireOrgModule(ORG_A, m);
+      expect(r.ok, m).toBe(false);
+    }
+    const exp = await requireOrgModule(ORG_A, 'export');
+    expect(exp.ok).toBe(true);
+  });
+
+  it('a malformed departments_off switches nothing off', async () => {
+    signedIn();
+    memberships({ [ORG_A]: member({ role: 'owner' }, { settings: { departments_off: 'contracts' } }) });
+    const { requireOrgModule } = await load();
+    expect((await requireOrgModule(ORG_A, 'contracts')).ok).toBe(true);
+  });
+
+  it('the data export cannot be switched off from settings', async () => {
+    signedIn();
+    memberships({ [ORG_A]: member({ role: 'owner' }, { settings: { departments_off: ['export'] } }) });
+    const { requireOrgModule } = await load();
+    expect((await requireOrgModule(ORG_A, 'export')).ok).toBe(true);
   });
 });
 
