@@ -44,8 +44,8 @@ already has an account is refused with "invite them instead" (the existing invit
 | # | Phase | Depends on | Status |
 |---|---|---|---|
 | 1 | **Team accounts** — migration 190 `org_managed_accounts` + audit functions; create account (email, name, password, role, functions, artist scope) in one step; reset password; switch off / on; forced password change on first sign-in; "Create account" on the members page; unit, route, real-database checks and e2e | LABEL-47 (seats) | Done (this branch, PR #130) |
-| 2 | **Department home** — a member whose role is `member` lands on a workspace that shows only their functions (marketing, legal, finance, A&R…), using the LABEL-49 capabilities; the nav already hides what they cannot use | LABEL-49 (other session) | Not started |
-| 3 | **Admin centre** — one page for owners/admins: team accounts, roster, invitations, licence (entitlements), settings, activity | 1, LABEL-51 | Not started |
+| 2 | **Department home** — a member whose role is `member` lands on a workspace that shows only their functions (marketing, legal, finance, A&R…), using the LABEL-49 capabilities; the nav already hides what they cannot use | LABEL-49 (done, #134) | Folded into the backlog's **LABEL-70 Role views** (same home, driven by face + role + functions); not built here so the two do not diverge |
+| 3 | **Admin centre** — one page for owners/admins: team accounts, roster, invitations, licence (entitlements), settings, activity | 1, LABEL-51 (done, #137) | Done (PR #130) |
 | 4 | **Roster accounts** — adding an artist or producer to a label can create their login too (role `artist`, or function `producer`), landing in the artist / producer view | 1, LABEL-50, LABEL-70 | Not started |
 | 5 | **Setup wizard steps** — contract types, team step (phase 1 embedded), departments | 1, LABEL-49, LABEL-57 | Not started |
 
@@ -65,3 +65,16 @@ already has an account is refused with "invite them instead" (the existing invit
 - Every act is an audit event in the org: `member.account_created`, `member.password_reset`,
   `member.account_disabled`, `member.account_enabled`; the person's own change is
   `member.password_changed`. No password, hash or temporary value is ever in a payload.
+
+## 5. Rules phase 3 holds
+
+- `/o/<slug>/settings` is the admin centre: label and artist orgs, capability `members.manage`
+  (owner and admin). It changes nothing; every section links to the page that owns the change
+  (members, roster, connections, organization settings, digest, export and deletion), so no rule
+  exists twice. Owner-only pages are left off for an admin rather than shown and refused.
+- `GET /api/org/[orgId]/admin` answers counts and names only: roles, team accounts waiting on a
+  password or switched off, pending invitations, seats and roster artists against the licence,
+  the licensed modules. The last team changes (member and invitation verbs, all `internal`) are
+  listed only for a whole-org member with `business.read.internal`; `recent` is null otherwise.
+  The section and summary rules are pure in `lib/labelos/admin-centre.ts`.
+- Entry points: "Admin" heads the nav's Organization hub, and the members page links to it.

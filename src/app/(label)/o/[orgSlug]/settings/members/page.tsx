@@ -31,6 +31,7 @@ import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
 import { InviteMemberModal } from '@/components/labelos/InviteMemberModal';
 import { CreateTeamAccountModal, ResetPasswordModal } from '@/components/labelos/TeamAccountModals';
 import { useOrgShell } from '@/components/labelos/OrgShellContext';
+import { mayOpenAdminCentre } from '@/lib/labelos/admin-centre';
 import { capabilityEntitled } from '@/lib/labelos/entitlements';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
@@ -364,6 +365,14 @@ export default function OrgMembersPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {shell && mayOpenAdminCentre({ role: shell.role, orgKind: shell.org.kind, capabilities: shell.capabilities }) && (
+            <Link
+              href={`/o/${org.slug}/settings`}
+              className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 underline-offset-4 hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            >
+              Admin centre
+            </Link>
+          )}
           {(!shell?.modules || shell.modules.includes('digest')) && <Link
             href={`/o/${org.slug}/settings/digest`}
             className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 underline-offset-4 hover:text-white hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"

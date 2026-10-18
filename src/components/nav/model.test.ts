@@ -179,3 +179,18 @@ describe('navGroupsFor', () => {
     expect(activeGroupIn([], '/x')).toBeUndefined();
   });
 });
+
+describe('the admin centre entry (doc 25, phase 3)', () => {
+  it('heads the Organization hub of a label or artist org for whoever manages members', () => {
+    for (const kind of ['label', 'artist'] as const) {
+      const org = navGroupsFor(kind, new Set(['catalog.read', 'members.manage']), { slug: 's', viewerIsProducer: false }).find((g) => g.key === 'org')!;
+      expect(org.items[0]).toMatchObject({ label: 'Admin', href: '/o/s/settings' });
+    }
+  });
+  it('is not drawn for a member who cannot manage the team, nor in a producer org', () => {
+    const member = navGroupsFor('label', new Set(['catalog.read']), { slug: 's', viewerIsProducer: false }).find((g) => g.key === 'org')!;
+    expect(member.items.map((i) => i.label)).not.toContain('Admin');
+    const producer = navGroupsFor('producer', new Set(['members.manage']), { slug: 's', viewerIsProducer: true }).find((g) => g.key === 'org')!;
+    expect(producer.items.map((i) => i.label)).not.toContain('Admin');
+  });
+});
