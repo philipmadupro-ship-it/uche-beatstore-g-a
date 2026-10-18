@@ -23,6 +23,15 @@
 --
 --    Answers {"settings": <merged jsonb>} or {"error": "not_found" | "not_owner"}.
 --
+--  * labelos_org_asset_allowed (143) is REPLACED so that "Contracts & legal
+--    off" also closes the one RLS path that reads a contracts-module object
+--    on a member's own JWT: a restricted project file (contract / split sheet
+--    kinds). Body identical to 143's except the sensitivity branch, which now
+--    also needs `settings -> 'departments_off'` NOT to contain 'contracts'.
+--    `has_org_cap` is deliberately NOT redefined here: the other RLS paths of
+--    a switched-off department (e.g. finance.* tables when they land) will need
+--    that change in their own migration.
+--
 -- No table, no policy, no column: `organizations.settings` exists since 136 and
 -- its readers (release readiness, Needs attention) are total over it.
 --
@@ -106,5 +115,45 @@ $fn$;
 ALTER FUNCTION public.labelos_audit_org_settings(uuid, uuid, jsonb, jsonb) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.labelos_audit_org_settings(uuid, uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.labelos_audit_org_settings(uuid, uuid, jsonb, jsonb) TO service_role;
+
+-- ── labelos_org_asset_allowed: Contracts off closes restricted files ─────
+
+CREATE OR REPLACE FUNCTION public.labelos_org_asset_allowed(p_org uuid, p_kind text, p_sensitivity text)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_visual text[] := ARRAY['artwork', 'lyrics', 'photo', 'video'];
+  v_legal text[] := ARRAY['contract', 'split_sheet'];
+BEGIN
+  IF p_org IS NULL OR NOT public.has_org_cap(p_org, 'catalog.read') THEN
+    RETURN false;
+  END IF;
+  IF NOT (p_kind = ANY (v_visual) OR p_kind = ANY (v_legal))
+     AND NOT public.has_org_cap(p_org, 'audio.working') THEN
+    RETURN false;
+  END IF;
+  IF p_sensitivity IS DISTINCT FROM 'normal' AND NOT public.has_org_cap(p_org, 'contracts.read') THEN
+    RETURN false;
+  END IF;
+  -- LABEL-51: the owner switched the Contracts & legal department off.
+  IF p_sensitivity IS DISTINCT FROM 'normal' AND EXISTS (
+    SELECT 1 FROM public.organizations o
+    WHERE o.id = p_org
+      AND jsonb_typeof(o.settings -> 'departments_off') = 'array'
+      AND (o.settings -> 'departments_off') ? 'contracts'
+  ) THEN
+    RETURN false;
+  END IF;
+  RETURN true;
+END;
+$$;
+
+ALTER FUNCTION public.labelos_org_asset_allowed(uuid, text, text) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_org_asset_allowed(uuid, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.labelos_org_asset_allowed(uuid, text, text) TO authenticated, anon;
 
 NOTIFY pgrst, 'reload schema';

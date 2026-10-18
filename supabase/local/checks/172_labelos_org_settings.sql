@@ -14,11 +14,13 @@
 \set AD  '''a1720000-0000-4000-8000-000000000002'''
 \set M   '''a1720000-0000-4000-8000-000000000003'''
 \set OW2 '''a1720000-0000-4000-8000-000000000004'''
+\set LEG '''a1720000-0000-4000-8000-000000000005'''
+\set LP '''c1720000-0000-4000-8000-000000000001'''
 \set L   '''b1720000-0000-4000-8000-000000000001'''
 \set L2  '''b1720000-0000-4000-8000-000000000002'''
 
 INSERT INTO auth.users (id, email) VALUES
-  (:OW, 'ow172@local.test'), (:AD, 'ad172@local.test'), (:M, 'm172@local.test'), (:OW2, 'ow2172@local.test');
+  (:OW, 'ow172@local.test'), (:AD, 'ad172@local.test'), (:M, 'm172@local.test'), (:OW2, 'ow2172@local.test'), (:LEG, 'leg172@local.test');
 INSERT INTO public.organizations (id, name, slug, kind, created_by, settings) VALUES
   (:L, 'Label', 'label-172', 'label', :OW, '{"legal_gate":"on","attention_release_days":30}'),
   (:L2, 'Label Two', 'label-two-172', 'label', :OW2, '{}');
@@ -26,6 +28,7 @@ INSERT INTO public.org_members (org_id, user_id, role, functions, scope) VALUES
   (:L, :OW, 'owner', '{}', 'org'),
   (:L, :AD, 'admin', '{}', 'org'),
   (:L, :M, 'member', '{legal}', 'org'),
+  (:L, :LEG, 'member', '{legal}', 'org'),
   (:L2, :OW2, 'owner', '{}', 'org');
 
 CREATE FUNCTION public.check_eq(label text, got anyelement, want anyelement) RETURNS void
@@ -94,6 +97,42 @@ SELECT public.check_eq('and has no event', (SELECT count(*) FROM public.activity
 SELECT public.check_raises('a secret-looking payload key is refused and the change rolls back',
   $$SELECT public.labelos_audit_org_settings('b1720000-0000-4000-8000-000000000001', 'a1720000-0000-4000-8000-000000000001', '{"marketing_gate":"off"}', '{"password":"x"}')$$, 'secret-looking');
 SELECT public.check_eq('marketing gate unchanged after the failed call', coalesce((SELECT settings ->> 'marketing_gate' FROM public.organizations WHERE id = :L), 'unset'), 'unset');
+
+-- ── Contracts off closes restricted project files on a member's own JWT ──
+RESET ROLE;
+INSERT INTO public.projects (id, user_id, org_id, name) VALUES (:LP, NULL, :L, 'Nova EP');
+INSERT INTO public.project_assets (user_id, created_by, project_id, kind, sensitivity, url) VALUES
+  (NULL, :OW, :LP, 'artwork', 'normal', 'r2://private/orgs/l/assets/a'),
+  (NULL, :OW, :LP, 'contract', 'restricted', 'r2://private/orgs/l/assets/e'),
+  (NULL, :OW, :LP, 'split_sheet', 'restricted', 'r2://private/orgs/l/assets/f');
+CREATE FUNCTION pg_temp.as_user(u uuid) RETURNS void LANGUAGE sql AS $$
+  SELECT set_config('request.jwt.claims', json_build_object('sub', u::text, 'role', 'authenticated')::text, false);
+$$;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pg_temp TO authenticated;
+SET ROLE authenticated;
+SELECT pg_temp.as_user('a1720000-0000-4000-8000-000000000005');
+SELECT public.check_eq('contracts on: the legal member reads both restricted files',
+  (SELECT count(*) FROM public.project_assets WHERE project_id = :LP AND sensitivity <> 'normal'), 2::bigint);
+RESET ROLE;
+SET ROLE service_role;
+SELECT public.labelos_audit_org_settings(:L, :OW, '{"departments_off":["finance","contracts"]}', '{"keys":["departments_off"]}');
+RESET ROLE;
+SET ROLE authenticated;
+SELECT pg_temp.as_user('a1720000-0000-4000-8000-000000000005');
+SELECT public.check_eq('contracts OFF: the same member, on their own JWT, reads no restricted file',
+  (SELECT count(*) FROM public.project_assets WHERE project_id = :LP AND sensitivity <> 'normal'), 0::bigint);
+SELECT public.check_eq('and still reads the ordinary file (only the contracts module closed)',
+  (SELECT count(*) FROM public.project_assets WHERE project_id = :LP AND sensitivity = 'normal'), 1::bigint);
+RESET ROLE;
+SET ROLE service_role;
+SELECT public.labelos_audit_org_settings(:L, :OW, '{"departments_off":["finance"]}', '{"keys":["departments_off"]}');
+RESET ROLE;
+SET ROLE authenticated;
+SELECT pg_temp.as_user('a1720000-0000-4000-8000-000000000005');
+SELECT public.check_eq('contracts back ON: the restricted files read again',
+  (SELECT count(*) FROM public.project_assets WHERE project_id = :LP AND sensitivity <> 'normal'), 2::bigint);
+RESET ROLE;
+RESET request.jwt.claims;
 
 -- ── a soft-deleted org is gone ───────────────────────────────────────────
 RESET ROLE;

@@ -52,6 +52,13 @@ async function signedIn(context: BrowserContext, baseURL: string, id: string, em
   await context.addCookies([{ name: c.name, value: c.value, url: baseURL }]);
 }
 
+/** Click Save and wait for the PATCH itself, not for a toast (an earlier toast may still be on screen). */
+async function saveAndWait(page: Page) {
+  const saved = page.waitForResponse((r) => r.url().includes('/settings') && r.request().method() === 'PATCH');
+  await page.getByRole('button', { name: /save settings/i }).click();
+  expect((await saved).status()).toBe(200);
+}
+
 async function shot(page: Page, name: string) {
   fs.mkdirSync(SHOTS, { recursive: true });
   await page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true });
@@ -161,8 +168,7 @@ test('3 · ACCEPTANCE: the owner turns legal approval off on the page; one audit
   await page.goto(PAGE);
   await expect(page.getByLabel('Require legal approval')).not.toBeChecked();
   await page.getByLabel('Require legal approval').check();
-  await page.getByRole('button', { name: /save settings/i }).click();
-  await expect(page.getByText('Settings saved').first()).toBeVisible();
+  await saveAndWait(page);
   expect(await settingsRow(request)).toMatchObject({ legal_gate: 'on' });
   expect(await settingsEvents(request)).toHaveLength(2);
   await ctx.close();
@@ -178,8 +184,7 @@ test('4 · a department switched off disappears for the org (404 from the next r
   const page = await owner.newPage();
   await page.goto(PAGE);
   await page.getByLabel('Contracts & legal').uncheck();
-  await page.getByRole('button', { name: /save settings/i }).click();
-  await expect(page.getByText('Settings saved')).toBeVisible();
+  await saveAndWait(page);
   expect((await admin.request.get(`${api}/legal/queue`)).status()).toBe(404);
   await shot(page, 'departments-1440');
 
@@ -188,8 +193,7 @@ test('4 · a department switched off disappears for the org (404 from the next r
   expect(bad.status()).toBe(400);
 
   await page.getByLabel('Contracts & legal').check();
-  await page.getByRole('button', { name: /save settings/i }).click();
-  await expect(page.getByText('Settings saved').first()).toBeVisible();
+  await saveAndWait(page);
   expect((await admin.request.get(`${api}/legal/queue`)).status()).toBe(200);
   await owner.close();
   await admin.close();
