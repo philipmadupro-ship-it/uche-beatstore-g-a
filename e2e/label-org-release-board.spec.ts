@@ -494,3 +494,24 @@ test('9 · artist scope: a member limited to Kilo sees only Kilo’s release; No
   expect(kilo.state).toBe('draft');
   await ctx.close();
 });
+
+test('10 · doc 21 #13: a song on a release has no Approve of its own — the song page says legal is approved on the release (1440 and 390 px)', async ({ browser, baseURL }) => {
+  const ctx = await as(browser, baseURL!, producer.id, producer.email);
+  const page = await ctx.newPage();
+  await page.goto(`/o/${SLUG}/songs/${READY_SONG}`);
+  const row = page.getByTestId('org-approval-legal');
+  await expect(row).toBeVisible({ timeout: 90_000 });
+  await expect(row.getByTestId('org-approval-on-release')).toContainText('Legal is approved on the release');
+  await expect(row.getByTestId('org-approval-approve')).toHaveCount(0);
+  await page.screenshot({ path: `${shots}/song-legal-on-release-1440.png`, fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.getByTestId('org-approval-legal').getByTestId('org-approval-on-release')).toBeVisible({ timeout: 60_000 });
+  await page.screenshot({ path: `${shots}/song-legal-on-release-390.png`, fullPage: true });
+
+  // A draft release page at a phone width: the five gates and their controls stay usable (the ready and blocked ones are delivered by now).
+  await page.goto(`/o/${SLUG}/releases/${ids.kilo}`);
+  await expect(page.getByTestId('org-approvals')).toBeVisible({ timeout: 60_000 });
+  await page.screenshot({ path: `${shots}/release-approvals-owner-390.png`, fullPage: true });
+  await ctx.close();
+});
