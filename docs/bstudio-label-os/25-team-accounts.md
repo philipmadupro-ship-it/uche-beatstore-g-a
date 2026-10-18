@@ -43,7 +43,7 @@ already has an account is refused with "invite them instead" (the existing invit
 
 | # | Phase | Depends on | Status |
 |---|---|---|---|
-| 1 | **Team accounts** — migration 190 `org_managed_accounts` + audit functions; create account (email, name, password, role, functions, artist scope) in one step; reset password; switch off / on; forced password change on first sign-in; "Create account" on the members page; unit, route, real-database checks and e2e | LABEL-47 (seats) | In progress |
+| 1 | **Team accounts** — migration 190 `org_managed_accounts` + audit functions; create account (email, name, password, role, functions, artist scope) in one step; reset password; switch off / on; forced password change on first sign-in; "Create account" on the members page; unit, route, real-database checks and e2e | LABEL-47 (seats) | Done (this branch, PR #130) |
 | 2 | **Department home** — a member whose role is `member` lands on a workspace that shows only their functions (marketing, legal, finance, A&R…), using the LABEL-49 capabilities; the nav already hides what they cannot use | LABEL-49 (other session) | Not started |
 | 3 | **Admin centre** — one page for owners/admins: team accounts, roster, invitations, licence (entitlements), settings, activity | 1, LABEL-51 | Not started |
 | 4 | **Roster accounts** — adding an artist or producer to a label can create their login too (role `artist`, or function `producer`), landing in the artist / producer view | 1, LABEL-50, LABEL-70 | Not started |

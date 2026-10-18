@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { UserPlus } from 'lucide-react';
+import { KeyRound, UserPlus } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ListContainer } from '@/components/ui/ListRow';
 import { Button } from '@/components/ui/Button';
@@ -29,6 +29,7 @@ import { InlineText } from '@/components/ui/InlineText';
 import { Popover } from '@/components/ui/Popover';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
 import { InviteMemberModal } from '@/components/labelos/InviteMemberModal';
+import { CreateTeamAccountModal, ResetPasswordModal } from '@/components/labelos/TeamAccountModals';
 import { useOrgShell } from '@/components/labelos/OrgShellContext';
 import { capabilityEntitled } from '@/lib/labelos/entitlements';
 import { confirmToast, toast } from '@/hooks/useToast';
@@ -68,6 +69,8 @@ type Member = {
   is_you: boolean;
   /** The roster contacts an artists-scoped member sees; null when not shown or whole org. */
   contact_ids: string[] | null;
+  /** An account this org created (doc 25), shown to managers; null otherwise. */
+  managed?: { pending_password_change: boolean; disabled: boolean; created_at: string } | null;
 };
 
 type RosterEntry = { id: string; name: string };
@@ -113,6 +116,9 @@ export default function OrgMembersPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [resetFor, setResetFor] = useState<Member | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [roster, setRoster] = useState<Roster>(null);
 
@@ -164,7 +170,7 @@ export default function OrgMembersPage() {
     return () => {
       alive = false;
     };
-  }, [orgId, loadInvitations]);
+  }, [orgId, loadInvitations, reloadKey]);
 
   const ownerCount = useMemo(() => (members ?? []).filter((m) => m.role === 'owner').length, [members]);
 
@@ -285,6 +291,37 @@ export default function OrgMembersPage() {
     }
   };
 
+  // Team accounts (doc 25): switch an account the org created off or back on.
+  const setDisabled = async (m: Member, disabled: boolean) => {
+    const who = memberLabel(m);
+    if (disabled) {
+      const ok = await confirmToast(`Switch off ${who}'s account?`, 'They cannot sign in until it is switched back on. Their work and membership stay.', {
+        confirmLabel: 'Switch off',
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    setBusy(m.user_id);
+    try {
+      const res = await fetch(`/api/org/${org.id}/team-accounts/${m.user_id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: disabled ? 'disable' : 'enable' }),
+      });
+      const body = await readJson(res);
+      if (!res.ok) {
+        toast.error('Could not change the account', typeof body.error === 'string' ? body.error : undefined);
+        return;
+      }
+      setMembers((cur) => (cur ?? []).map((x) => (x.user_id === m.user_id && x.managed ? { ...x, managed: { ...x.managed, disabled } } : x)));
+      toast.success(disabled ? `${who} switched off` : `${who} switched back on`);
+    } catch {
+      toast.error('Could not reach the server');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const revoke = async (inv: Invitation) => {
     const ok = await confirmToast(`Revoke the invitation to ${inv.email}?`, 'The link stops working. You can invite them again.', {
       confirmLabel: 'Revoke',
@@ -347,6 +384,12 @@ export default function OrgMembersPage() {
               Invite
             </Button>
           )}
+          {manage && (
+            <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+              <KeyRound size={14} aria-hidden="true" />
+              Create account
+            </Button>
+          )}
         </div>
       </header>
 
@@ -380,6 +423,8 @@ export default function OrgMembersPage() {
                   onChange={(p) => change(m, p)}
                   onArtists={(ids) => setArtists(m, ids)}
                   onRemove={() => remove(m)}
+                  onResetPassword={() => setResetFor(m)}
+                  onSetDisabled={(d) => setDisabled(m, d)}
                 />
               ))}
             </ListContainer>
@@ -424,6 +469,27 @@ export default function OrgMembersPage() {
           onInvited={() => void loadInvitations()}
         />
       )}
+      {manage && (
+        <CreateTeamAccountModal
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          orgId={org.id}
+          orgKind={org.kind}
+          orgName={org.name}
+          onCreated={() => setReloadKey((k) => k + 1)}
+        />
+      )}
+      {manage && (
+        <ResetPasswordModal
+          open={resetFor !== null}
+          onClose={() => setResetFor(null)}
+          orgId={org.id}
+          member={resetFor ? { user_id: resetFor.user_id, label: memberLabel(resetFor), email: resetFor.email } : null}
+          onReset={(id) =>
+            setMembers((cur) => (cur ?? []).map((x) => (x.user_id === id && x.managed ? { ...x, managed: { ...x.managed, pending_password_change: true } } : x)))
+          }
+        />
+      )}
     </PageContainer>
   );
 }
@@ -439,6 +505,8 @@ function MemberRow({
   onChange,
   onArtists,
   onRemove,
+  onResetPassword,
+  onSetDisabled,
 }: {
   member: Member;
   orgKind: NonNullable<ReturnType<typeof useOrgShell>>['org']['kind'];
@@ -450,6 +518,8 @@ function MemberRow({
   onChange: (patch: Patch) => void;
   onArtists: (contactIds: string[]) => void;
   onRemove: () => void;
+  onResetPassword: () => void;
+  onSetDisabled: (disabled: boolean) => void;
 }) {
   const role = asRole(m.role);
   const state = toState(m);
@@ -499,6 +569,20 @@ function MemberRow({
       }),
     });
   }
+  // Team accounts (doc 25): only on an account this org created, never your own. The server re-checks
+  // (an account also used elsewhere, or an owner when you are an admin, is refused with a reason).
+  if (manage && m.managed && !m.is_you) {
+    sections.push({
+      id: 'account',
+      label: 'Account',
+      items: [
+        { id: 'reset-password', label: 'Set a new password…', disabled: busy, onSelect: onResetPassword },
+        m.managed.disabled
+          ? { id: 'enable', label: 'Switch account back on', disabled: busy, onSelect: () => onSetDisabled(false) }
+          : { id: 'disable', label: 'Switch account off', disabled: busy, onSelect: () => onSetDisabled(true) },
+      ],
+    });
+  }
   if (removable) {
     sections.push({
       id: 'danger',
@@ -513,6 +597,10 @@ function MemberRow({
         <p className="flex items-center gap-2 text-[13px] font-medium text-white/80">
           <span className="truncate">{who}</span>
           {m.is_you && <span className="shrink-0 rounded-full border border-white/20 px-2 py-0.5 text-[10px] text-white/70">You</span>}
+          {m.managed?.disabled && <span className="shrink-0 rounded-full border border-white/20 px-2 py-0.5 text-[10px] text-white/70">Switched off</span>}
+          {m.managed && !m.managed.disabled && m.managed.pending_password_change && (
+            <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/60">Must set password</span>
+          )}
         </p>
         <p className={`${LABEL} mt-1 truncate`}>
           {[m.email && m.email !== who ? m.email : null, functions.length ? functions.map((f) => FUNCTION_LABELS[f]).join(' · ') : null, limited ? (artistCount === null ? 'Selected artists' : `${artistCount} ${artistCount === 1 ? 'artist' : 'artists'}`) : null, `Joined ${shortDate(m.joined_at)}`]

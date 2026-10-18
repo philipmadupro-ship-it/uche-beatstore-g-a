@@ -31,3 +31,23 @@ export async function ownManagedAccount(admin: Pick<SupabaseClient, 'from'>, use
   if (!row) return { status: 'none' };
   return { status: 'managed', account: { orgId: row.org_id, mustChangePassword: row.must_change_password, disabled: row.disabled_at !== null } };
 }
+
+/**
+ * Must the signed-in person set their own password before using the org
+ * shell? (A team account on its first password, or after a reset.) Read on
+ * the server by the org layouts; any failure answers false — this is a
+ * prompt to choose a password, not an access check (access is the
+ * membership, and a switched-off account cannot sign in at all).
+ */
+export async function sessionMustChangePassword(
+  userId: string | null,
+  admin: Pick<SupabaseClient, 'from'>,
+): Promise<boolean> {
+  if (!userId) return false;
+  try {
+    const own = await ownManagedAccount(admin, userId);
+    return own.status === 'managed' && own.account.mustChangePassword && !own.account.disabled;
+  } catch {
+    return false;
+  }
+}
