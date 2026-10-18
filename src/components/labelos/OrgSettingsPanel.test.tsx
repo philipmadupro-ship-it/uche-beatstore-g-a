@@ -99,4 +99,20 @@ describe('OrgSettingsPanel', () => {
     expect((await screen.findByTestId('settings-denied')).textContent).toMatch(/Only the owner/);
     expect(screen.queryByTestId('org-settings')).toBeNull();
   });
+
+  it('warns when contracts is off while legal approval is still required', async () => {
+    getReply = { status: 200, body: { settings: { ...DEFAULTS, departments_off: ['contracts'] }, licensed: ['contracts', 'export'], switchable: ['contracts'] } };
+    render(<OrgSettingsPanel orgId="o1" />);
+    await screen.findByTestId('org-settings');
+    expect(screen.getByTestId('contracts-legal-warning').textContent).toMatch(/override/);
+  });
+
+  it('keeps a department that is off but no longer licensed visible, so it can be cleared', async () => {
+    getReply = { status: 200, body: { settings: { ...DEFAULTS, departments_off: ['marketing'] }, licensed: ['export'], switchable: [] } };
+    render(<OrgSettingsPanel orgId="o1" />);
+    await screen.findByTestId('org-settings');
+    const box = screen.getByLabelText(/^marketing/i) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(screen.getByText(/not in your licence/i)).toBeTruthy();
+  });
 });

@@ -146,15 +146,15 @@ export function skippedGates(settings: Pick<OrgSettingsView, 'legal_gate' | 'mar
 const GATE_WORDS = { legal: 'Legal approval', marketing: 'Marketing approval' } as const;
 
 /**
- * The banner a release carries when the owner switched an approval off
- * (decision 5: shown on every release it affects). A cancelled release
- * requires nothing, so it carries none. Null when nothing was skipped.
+ * The banner a draft release carries when the owner switched an approval off
+ * (decision 5: shown on every release it affects). Only a draft is affected:
+ * a delivered release's gates were judged when it was delivered, and the
+ * current switch says nothing about that; a cancelled one requires nothing.
+ * Null when nothing was skipped.
  */
 export function gateSkipNotice(skipped: readonly ('legal' | 'marketing')[], releaseState: string): string | null {
-  if (skipped.length === 0 || releaseState === 'cancelled') return null;
+  if (skipped.length === 0 || releaseState !== 'draft') return null;
   const names = skipped.map((g) => GATE_WORDS[g]).join(' and ');
   const verb = skipped.length === 1 ? 'is' : 'are';
-  return releaseState === 'delivered'
-    ? `${names} ${verb} switched off for this organization, so it was not required for this release. Credits & splits still gate.`
-    : `${names} ${verb} switched off for this organization, so this release does not need it. Credits & splits still gate. The owner can switch it back on in settings.`;
+  return `${names} ${verb} switched off for this organization, so this release does not need it. Credits & splits still gate. The owner can switch it back on in settings.`;
 }

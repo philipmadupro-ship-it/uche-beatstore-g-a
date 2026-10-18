@@ -107,12 +107,13 @@ describe('skippedGates (the banner on a release)', () => {
 });
 
 describe('gateSkipNotice', () => {
-  it('is null when nothing is skipped or the release is cancelled', () => {
+  it('is null when nothing is skipped or the release is not a draft (past gates are not rewritten)', () => {
     expect(gateSkipNotice([], 'draft')).toBeNull();
     expect(gateSkipNotice(['legal'], 'cancelled')).toBeNull();
+    expect(gateSkipNotice(['legal'], 'delivered')).toBeNull();
   });
-  it('names the gate and says credits & splits still gate, in draft and delivered wording', () => {
+  it('names the gate and says credits & splits still gate', () => {
     expect(gateSkipNotice(['legal'], 'draft')).toMatch(/^Legal approval is switched off.*does not need it.*Credits & splits still gate/);
-    expect(gateSkipNotice(['legal', 'marketing'], 'delivered')).toMatch(/^Legal approval and Marketing approval are switched off.*was not required/);
+    expect(gateSkipNotice(['legal', 'marketing'], 'draft')).toMatch(/^Legal approval and Marketing approval are switched off/);
   });
 });

@@ -15,7 +15,7 @@ import { requireObjectAccess } from '@/lib/auth/org-access';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { canReadOrgAsset } from './org-assets';
 import { loadOrgArtistWorkspace } from './org-workspace-store';
-import { skippedGates } from './org-settings';
+import { parseOrgSettings, skippedGates } from './org-settings';
 import { evaluateReleaseReadiness, releaseReadinessView, type ReleaseReadinessView } from './release-readiness';
 import { loadReleaseReadinessFacts, ReleaseReadinessNotReadyError } from './release-readiness-store';
 import { RELEASE_COLUMNS, RELEASE_ITEM_COLUMNS, toReleaseView, type ReleaseItemRow, type ReleaseRow, type ReleaseView } from './releases';
@@ -92,10 +92,12 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
 
   // Gates, as this member may read them.
   let readiness: ReleaseReadinessView | null = null;
-  let gatesSkipped: ('legal' | 'marketing')[] = [];
+  // Read on its own: the switches live in organizations.settings (136), not behind the readiness migrations.
+  const settingsRes = await admin.from('organizations').select('settings').eq('id', org).maybeSingle();
+  if (settingsRes.error) throw new Error(`org settings read: ${settingsRes.error.message}`);
+  const gatesSkipped = skippedGates(parseOrgSettings((settingsRes.data as { settings?: unknown } | null)?.settings));
   try {
     const facts = await loadReleaseReadinessFacts(admin, org, id);
-    if (facts) gatesSkipped = skippedGates(facts.settings);
     if (facts) readiness = releaseReadinessView(evaluateReleaseReadiness(facts), access.capabilities.has('rights.read'));
   } catch (err) {
     if (!(err instanceof ReleaseReadinessNotReadyError)) throw err;

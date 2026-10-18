@@ -17,7 +17,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Field } from '@/components/ui/Field';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { MODULES, MODULE_LABELS, type Module } from '@/lib/labelos/entitlements';
-import { parseDepartmentsOff, patchFromDraft, type OrgSettingsView } from '@/lib/labelos/org-settings';
+import { SWITCHABLE_MODULES, parseDepartmentsOff, patchFromDraft, type OrgSettingsView } from '@/lib/labelos/org-settings';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
 const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-5 sm:p-6';
@@ -86,10 +86,10 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
   const set = <K extends keyof OrgSettingsView>(key: K, value: OrgSettingsView[K]) => setDraft({ ...draft, [key]: value });
   const off = new Set(draft.departments_off);
   const toggleDepartment = (m: Module, on: boolean) => {
-    const set = new Set(draft.departments_off);
-    if (on) set.delete(m);
-    else set.add(m);
-    setDraft({ ...draft, departments_off: parseDepartmentsOff([...set]) });
+    const next = new Set(draft.departments_off);
+    if (on) next.delete(m);
+    else next.add(m);
+    setDraft({ ...draft, departments_off: parseDepartmentsOff([...next]) });
   };
 
   const save = async () => {
@@ -124,7 +124,7 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
     }
   };
 
-  const unlicensed = MODULES.filter((m) => !loaded.licensed.includes(m));
+  const unlicensed = MODULES.filter((m) => !loaded.licensed.includes(m) && !off.has(m));
 
   return (
     <div className="space-y-4" data-testid="org-settings">
@@ -149,12 +149,18 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
 
       <section className={CARD} aria-labelledby="departments-h">
         <h2 id="departments-h" className={`${LABEL} mb-1`}>Departments</h2>
-        <p className="text-[11px] leading-relaxed text-white/60">Switch off a department this organization does not use. Its pages and actions disappear for everyone; the data stays. You can only switch off what your licence includes.</p>
+        <p className="text-[11px] leading-relaxed text-white/60">Switch off a department this organization does not use. Its pages and actions are hidden and refused for everyone; the data stays. You can only switch off what your licence includes.</p>
         <div className="divide-y divide-white/10">
-          {loaded.switchable.map((m) => (
-            <ToggleRow key={m} id={`dept-${m}`} label={MODULE_LABELS[m]} hint={off.has(m) ? 'Off' : 'On'} checked={!off.has(m)} onChange={(v) => toggleDepartment(m, v)} />
+          {/* A department already off stays listed even if the licence lapsed, so the owner can see and clear it. */}
+          {SWITCHABLE_MODULES.filter((m) => loaded.switchable.includes(m) || off.has(m)).map((m) => (
+            <ToggleRow key={m} id={`dept-${m}`} label={MODULE_LABELS[m]} hint={off.has(m) ? (loaded.licensed.includes(m) ? 'Off' : 'Off · not in your licence') : 'On'} checked={!off.has(m)} onChange={(v) => toggleDepartment(m, v)} />
           ))}
         </div>
+        {off.has('contracts') && draft.legal_gate === 'on' && (
+          <p className="mt-3 text-[11px] leading-relaxed text-white/70" data-testid="contracts-legal-warning">
+            Contracts &amp; legal is off but legal approval is still required. Nobody will be able to give it, so a release can only go out with the owner&apos;s override. Switch legal approval off as well, or keep the department on.
+          </p>
+        )}
         {unlicensed.length > 0 && (
           <p className="mt-3 text-[11px] leading-relaxed text-white/50" data-testid="unlicensed">
             Not in your licence: {unlicensed.map((m) => MODULE_LABELS[m]).join(', ')}.

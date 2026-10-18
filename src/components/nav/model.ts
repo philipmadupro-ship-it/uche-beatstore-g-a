@@ -127,7 +127,7 @@ function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | 
     items.push({ label: 'Connections', href: `${base}/settings/connections`, icon: Link2 });
   }
   // LABEL-51: the owner's settings (gates, thresholds, departments).
-  if (isOwner) items.push({ label: 'Settings', href: `${base}/settings/organization`, icon: SlidersHorizontal });
+  if (isOwner && orgKind !== 'producer') items.push({ label: 'Settings', href: `${base}/settings/organization`, icon: SlidersHorizontal });
   return { key: 'org', label: 'Organization', icon: Building2, items };
 }
 

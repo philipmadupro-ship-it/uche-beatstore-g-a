@@ -46,6 +46,8 @@ async function load(access: OrgOwnerOk) {
   ]);
   if (row.error) throw new Error(row.error.message);
   if (!row.data) return null;
+  // The producer's own org has no face and no licence: nothing here applies to it.
+  if (org.kind === 'producer') return null;
   const raw = (row.data as { settings?: unknown }).settings;
   return { raw, licensed: entitlements.modules };
 }
