@@ -168,7 +168,8 @@ describe('the queue', () => {
   it('a member limited to Kilo sees only Kilo’s song; the rest is a count, never a title', async () => {
     const body = (await (await get(LGK)).json()) as Body;
     expect(body.items.map((i) => i.title)).toEqual(['Dawn']);
-    expect(body.restricted).toBe(2);
+    // Doc 21 #9: a member limited to some artists is not told how many requests sit outside them.
+    expect(body.restricted).toBe(0);
     expect(JSON.stringify(body)).not.toMatch(/Midnight|Nova/);
   });
 

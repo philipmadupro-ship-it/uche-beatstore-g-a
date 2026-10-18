@@ -10,6 +10,7 @@
  * `restricted`, never titled. Migration 157 (approvals) may not be applied:
  * that is `schemaReady: false`, as the approvals route answers it.
  */
+import { restrictedCountFor } from './restricted-counts';
 import { objectAccessFor, type OrgAccessOk } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { currentDecision, type ApprovalRow } from './approvals';
@@ -134,7 +135,7 @@ export async function loadLegalQueue(access: OrgAccessOk): Promise<LegalQueue> {
     artist: artistId && artistName.has(artistId) ? { id: artistId, name: artistName.get(artistId)! } : null,
     requestedBy: requestedById ? (people.get(requestedById) ?? 'Member') : null,
   }));
-  return { schemaReady: true, items: sortLegalQueue(items), restricted, truncated };
+  return { schemaReady: true, items: sortLegalQueue(items), restricted: restrictedCountFor(restricted, access), truncated };
 }
 
 export { LegalReadinessNotReadyError };

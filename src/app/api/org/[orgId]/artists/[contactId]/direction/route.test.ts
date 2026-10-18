@@ -180,6 +180,16 @@ describe('GET direction', () => {
     const ar = await (await (await route()).GET(send(`${base(L, C1)}/direction`, 'GET'), p(C1))).json();
     expect(ar.references[0]).toMatchObject({ kind: 'track', trackId: S3, trackTitle: 'Midnight demo' });
   });
+
+  it('doc 21 #9: marketing limited to some artists are told no count of restricted references', async () => {
+    db.tables.artist_references.push(ref(R_PUBLIC, C1, { kind: 'track', title: 'Demo ref', note: null, track_id: S3 }));
+    db.tables.org_members.find((m) => m.user_id === MKT)!.scope = 'artists';
+    db.tables.member_artist_scopes.push({ org_id: L, user_id: MKT, contact_id: C1 });
+    current = MKT;
+    const mkt = await (await (await route()).GET(send(`${base(L, C1)}/direction`, 'GET'), p(C1))).json();
+    expect(mkt.references).toEqual([]);
+    expect(mkt.restrictedReferences).toBe(0);
+  });
 });
 
 describe('PUT direction', () => {

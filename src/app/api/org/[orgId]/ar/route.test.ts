@@ -109,6 +109,15 @@ describe('GET the inbox', () => {
     expect(JSON.stringify(body)).not.toContain('Midnight');
   });
 
+  it('doc 21 #9: the same marketing member limited to some artists, and the roster artist, are told no count', async () => {
+    db.tables.org_members.find((m) => m.user_id === MKT)!.scope = 'artists';
+    db.tables.member_artist_scopes.push({ org_id: L, user_id: MKT, contact_id: C1 });
+    const scoped = await (await get(MKT)).json();
+    expect(scoped.restricted).toBe(0);
+    expect(JSON.stringify(scoped)).not.toContain('Midnight');
+    expect((await (await get(ART)).json()).restricted).toBe(0);
+  });
+
   it('refuses a stranger and an anonymous caller', async () => {
     expect((await get(STRANGER)).status).toBe(403);
     expect((await get(null)).status).toBe(401);

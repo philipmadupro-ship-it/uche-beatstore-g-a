@@ -230,6 +230,16 @@ describe('artist scope', () => {
   });
 });
 
+describe('restricted counts (doc 21 #9)', () => {
+  it('the marketing member of the next test, once limited to some artists, is told no count', async () => {
+    db.tables.org_members.find((m) => m.user_id === MKT)!.scope = 'artists';
+    db.tables.member_artist_scopes.push({ org_id: L, user_id: MKT, contact_id: C1 });
+    const { attention } = await (await read(MKT)).json();
+    expect(attention.restricted).toBe(0);
+    expect(JSON.stringify(attention)).not.toContain('Secret demo');
+  });
+});
+
 describe('D4 and task visibility', () => {
   it('marketing never reads a working demo: it is a count, not a title; its own task is listed', async () => {
     const { attention } = await (await read(MKT)).json();
