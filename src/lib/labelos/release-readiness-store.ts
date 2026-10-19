@@ -16,9 +16,11 @@ import { ApprovalsNotReadyError, currentSnapshot, isMissingApprovalsSchema, list
 import { CreditsNotReadyError } from './credits-store';
 import { SplitsNotReadyError } from './splits-store';
 import { currentDecision, GATES, type Gate } from './approvals';
+import { readProjectAssetHead } from '@/lib/storage/project-assets';
 import { evaluateLegalReadiness, type LegalReadiness } from './legal-readiness';
 import { LegalReadinessNotReadyError, loadLegalFacts, readReadinessSong } from './legal-readiness-store';
-import type { MasterRelation, ReadinessApproval, ReadinessItem, ReleaseReadinessFacts } from './release-readiness';
+import { IMAGE_HEAD_BYTES, readImageInfo, type ImageInfo } from './image-size';
+import { ARTWORK_MIME, type MasterRelation, type ReadinessApproval, type ReadinessItem, type ReleaseReadinessFacts } from './release-readiness';
 import { RELEASE_ITEM_COLUMNS, type ReleaseItemRow } from './releases';
 
 export class ReleaseReadinessNotReadyError extends Error {
@@ -40,6 +42,23 @@ export async function readReadinessSettings(admin: AdminClient, org: string): Pr
   const res = await admin.from('organizations').select('settings').eq('id', org).maybeSingle();
   check('org settings read', res.error);
   return parseReadinessSettings((res.data as { settings?: unknown } | null)?.settings);
+}
+
+/**
+ * What the artwork file's own header says (09 §4 size rule): the first
+ * `IMAGE_HEAD_BYTES` of the stored object (a ranged read, never the whole
+ * file and never a URL). Null when the object is gone, outside the allowed
+ * buckets, or its header does not read as a PNG / JPEG — the readiness rule
+ * treats all three as "could not be checked".
+ */
+export async function readArtworkInfo(ref: string | null | undefined): Promise<ImageInfo | null> {
+  if (!ref) return null;
+  try {
+    const head = await readProjectAssetHead(ref, IMAGE_HEAD_BYTES);
+    return head ? readImageInfo(head) : null;
+  } catch {
+    return null;
+  }
 }
 
 const RELATIONS: readonly MasterRelation[] = ['master', 'instrumental', 'version'];
@@ -73,9 +92,16 @@ export async function loadReleaseReadinessFacts(admin: AdminClient, org: string,
 
   let artwork: ReleaseReadinessFacts['artwork'] = null;
   if (base.artworkAssetId) {
-    const a = await admin.from('project_assets').select('mime').eq('id', base.artworkAssetId).eq('org_id', org).eq('project_id', base.projectId).maybeSingle();
+    const a = await admin.from('project_assets').select('mime, url').eq('id', base.artworkAssetId).eq('org_id', org).eq('project_id', base.projectId).maybeSingle();
     check('artwork read', a.error);
-    if (a.data) artwork = { mime: (a.data as { mime: string | null }).mime ?? null };
+    if (a.data) {
+      const row = a.data as { mime: string | null; url: string | null };
+      // The size rule runs only on a type the type rule let through; read nothing for the rest.
+      // A cancelled or delivered release is not judged on size (and costs no read): only a draft can still change.
+      const typeOk = !!row.mime && (ARTWORK_MIME as readonly string[]).includes(row.mime.toLowerCase());
+      const sizeChecked = rel.state === 'draft';
+      artwork = { mime: row.mime ?? null, info: typeOk && sizeChecked ? await readArtworkInfo(row.url) : null, sizeChecked };
+    }
   }
 
   // Songs, masters and the link that makes a recording a master.

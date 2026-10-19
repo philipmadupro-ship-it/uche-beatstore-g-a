@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canExportLegalPack, canSeeLegalQueue, sortLegalQueue, type LegalQueueItem } from './legal-queue';
+import { canExportLegalPack, canSeeLegalQueue, isQueueable, sortLegalQueue, type LegalQueueItem } from './legal-queue';
 
 const item = (over: Partial<LegalQueueItem>): LegalQueueItem => ({
   kind: 'song',
@@ -61,5 +61,14 @@ describe('who sees the queue and the pack', () => {
     expect(canExportLegalPack(caps('contracts.read', 'rights.read'))).toBe(true);
     expect(canExportLegalPack(caps('contracts.read'))).toBe(false);
     expect(canExportLegalPack(caps('rights.read'))).toBe(false);
+  });
+});
+
+describe('isQueueable (doc 21 #13)', () => {
+  it('a song on a live release is approved at the release, so it is not queued; everything else is', () => {
+    expect(isQueueable('song', true)).toBe(false);
+    expect(isQueueable('song', false)).toBe(true);
+    expect(isQueueable('release', true)).toBe(true);
+    expect(isQueueable('release', false)).toBe(true);
   });
 });

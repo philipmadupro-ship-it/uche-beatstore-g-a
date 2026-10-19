@@ -44,6 +44,25 @@ let mem: ReturnType<typeof memoryAdmin>;
 /** Tables PostgREST answers as missing (an unapplied migration). */
 let missing = new Set<string>();
 
+/** What the stored artwork file starts with, by its reference (09 §4 size rule reads the file's own header). */
+let artworkHead: Record<string, Uint8Array | null> = {};
+const headReads: { ref: string; bytes: number }[] = [];
+vi.mock('@/lib/storage/project-assets', () => ({
+  readProjectAssetHead: async (ref: string, bytes: number) => {
+    headReads.push({ ref, bytes });
+    return artworkHead[ref] ?? null;
+  },
+}));
+const pngHead = (width: number, height: number, colorType = 2) => {
+  const b = new Uint8Array(33);
+  b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+  new DataView(b.buffer).setUint32(16, width);
+  new DataView(b.buffer).setUint32(20, height);
+  b[24] = 8;
+  b[25] = colorType;
+  return b;
+};
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: current ? { id: current } : null } }) } }),
@@ -116,7 +135,7 @@ beforeEach(() => {
       ],
       tracks: [track(S1, L, 'song', 'Midnight'), track(M1, L, 'song', 'Midnight (master)'), track(S2, L, 'song', 'Dawn'), track(XS1, L2, 'song', 'Xen')],
       track_links: [{ from_track_id: S1, to_track_id: M1, relation: 'master', user_id: null }],
-      project_assets: [{ id: A1, project_id: LP1, org_id: L, kind: 'artwork', mime: 'image/png', sensitivity: 'normal' }],
+      project_assets: [{ id: A1, project_id: LP1, org_id: L, kind: 'artwork', mime: 'image/png', sensitivity: 'normal', url: 'local://project-assets/art-1' }],
       parties: [{ id: P1, org_id: L, kind: 'person', display_name: 'Nova', legal_name: null, ipi: null, pro: null, pro_affiliation: 'unknown', publisher_name: null, user_id: null, contact_id: null }],
       track_collaborators: [
         { id: 'c1', org_id: L, track_id: S1, name: 'Nova', role: 'songwriter', source: 'manual', scope: 'composition', status: 'confirmed', party_id: P1, created_at: '2026-10-01' },
@@ -137,6 +156,8 @@ beforeEach(() => {
       activity_events: [],
     },
   };
+  headReads.length = 0;
+  artworkHead = { 'local://project-assets/art-1': pngHead(3000, 3000) };
   mem = memoryAdmin(db);
 });
 
@@ -176,6 +197,40 @@ describe('the derived gates', () => {
     expect(readiness.gates.marketing.status).toBe('not_required');
     expect(readiness.gates.masters.status).toBe('stale');
     expect(readiness.gates.masters.approval).toMatchObject({ status: 'approved', stale: true });
+  });
+
+  it('artwork size rule (09 §4), read from the stored file: square, RGB, at least the org minimum', async () => {
+    const blockers = async () => (await (await read(OWN, L, R1)).json()).readiness.gates.artwork.blockers.map((b: { code: string }) => b.code);
+    expect(await blockers()).toEqual([]);
+    artworkHead['local://project-assets/art-1'] = pngHead(2999, 2999);
+    expect(await blockers()).toEqual(['artwork_too_small']);
+    artworkHead['local://project-assets/art-1'] = pngHead(3600, 3000);
+    expect(await blockers()).toEqual(['artwork_not_square']);
+    artworkHead['local://project-assets/art-1'] = pngHead(3000, 3000, 0);
+    expect(await blockers()).toEqual(['artwork_color']);
+    // The org's own minimum.
+    db.tables.organizations[0].settings = { artwork_min_px: 2000 };
+    artworkHead['local://project-assets/art-1'] = pngHead(2400, 2400);
+    expect(await blockers()).toEqual([]);
+    // A file that is gone or is not an image cannot vouch for itself.
+    artworkHead['local://project-assets/art-1'] = null;
+    expect(await blockers()).toEqual(['artwork_unreadable']);
+    artworkHead['local://project-assets/art-1'] = new TextEncoder().encode('not an image at all, just words');
+    expect(await blockers()).toEqual(['artwork_unreadable']);
+  });
+
+  it('only the head of the file is asked for, and only while the release is a draft', async () => {
+    artworkHead['local://project-assets/art-1'] = pngHead(2000, 2000);
+    await read(OWN, L, R1);
+    expect(headReads).toEqual([{ ref: 'local://project-assets/art-1', bytes: 262144 }]);
+    for (const state of ['delivered', 'cancelled']) {
+      headReads.length = 0;
+      db.tables.releases.find((r) => r.id === R1)!.state = state;
+      const { readiness } = await (await read(OWN, L, R1)).json();
+      expect(headReads, state).toEqual([]);
+      // Not judged on size once it can no longer change.
+      expect(readiness.gates.artwork.blockers.map((b: { code: string }) => b.code), state).toEqual([]);
+    }
   });
 
   it('an approved artwork whose snapshot matches stays approved', async () => {

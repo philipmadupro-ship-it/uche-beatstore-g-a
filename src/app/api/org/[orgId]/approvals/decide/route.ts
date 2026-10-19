@@ -12,8 +12,12 @@
  *    (`subject_snapshot`: the split sheet versions in force and the credits for
  *    legal, the artwork file, the tracklist). It is never edited; if the
  *    facts move later the approval reads as stale (GET /approvals), derived.
- *  - `seen` (the `snapshotKey` the screen was drawn from) makes "Approved" mean "approved what I was looking at": when the
- *    facts changed since, it is a 409 and nothing is written. Optional for API callers; the app always sends it.
+ *  - `seen` (the `snapshotKey` the screen was drawn from) makes "Approved" mean "approved what I was looking at": it is
+ *    REQUIRED to approve (400 `seen_required`), and when the facts changed since it is a 409 and nothing is written.
+ *    The key reaches only a member who may decide the gate, through GET /approvals — which the subject's page loads — so
+ *    having one is what "opened it" means; nothing else is stored for it (doc 21 #14).
+ *  - Approving needs an open request addressed to the decider, owner/admin exempt (doc 21 #15). A SONG's legal gate cannot
+ *    be approved once the song is on a release: the release's gate is the authority (doc 21 #13).
  *  - ONE Postgres function (`labelos_audit_approval_decide`) inserts the row and
  *    its `approval.decided` event in one transaction and re-checks the
  *    self-approval rule against the latest row under a lock, so two people
@@ -28,7 +32,7 @@ import { OrgApprovalDecideBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { approvalIsStale, currentDecision, isOwnerOrAdmin, planDecide, snapshotKey } from '@/lib/labelos/approvals';
-import { ApprovalsNotReadyError, approvalContext, currentSnapshot, isMissingApprovalsSchema, legalGateReadiness, listApprovals, readReleaseFacts } from '@/lib/labelos/approvals-store';
+import { ApprovalsNotReadyError, approvalContext, currentSnapshot, isMissingApprovalsSchema, legalGateReadiness, listApprovals, readReleaseFacts, releasesOfSong } from '@/lib/labelos/approvals-store';
 import { actorOf, gateStates, json, resolveSubject } from '@/lib/labelos/approvals-route';
 import { APPROVALS_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { CreditsNotReadyError } from '@/lib/labelos/credits-store';
@@ -81,14 +85,11 @@ export async function POST(req: NextRequest, { params }: Params) {
       stale: approvalIsStale(current, snapshot),
       legalReady: readiness?.ready,
       legalBlockers: readiness?.blockers,
+      seen: body.seen,
+      currentKey: snapshotKey(snapshot),
+      songOnRelease: subject.kind === 'song' && body.gate === 'legal' && body.decision === 'approved' ? (await releasesOfSong(admin, org, subject.id)).length > 0 : false,
     });
     if (!plan.ok) return json(plan.status, { error: plan.error, code: plan.code });
-
-    // Approve what the approver looked at: if the facts moved after their screen was drawn, they have not seen what
-    // this approval would record. (After the capability and input checks, so those answers do not depend on it.)
-    if (plan.decision === 'approved' && body.seen && body.seen !== snapshotKey(snapshot)) {
-      return json(409, { error: 'This changed after you opened it. Look at it again before approving.', code: 'changed_since_seen' });
-    }
 
     const ctx = await approvalContext(admin, org, subject, release);
     const { data, error } = await auditRpc(admin, 'approvalDecide', {

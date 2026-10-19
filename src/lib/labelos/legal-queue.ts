@@ -30,6 +30,17 @@ export type LegalQueueItem = {
   blockers: number;
 };
 
+/**
+ * Is this open request worth a place in the queue? A song that is on a live
+ * release is approved at the release (doc 21 #13), and its own Approve
+ * answers 409 `decided_on_release`, so a request sitting on it can never be
+ * cleared from here: leaving it in would show legal a row it cannot act on.
+ * The release's own request is the one that appears.
+ */
+export function isQueueable(kind: SubjectKind, onLiveRelease: boolean): boolean {
+  return !(kind === 'song' && onLiveRelease);
+}
+
 /** Ready first, then fewer blockers, then oldest, then id. */
 export function compareLegalQueue(a: LegalQueueItem, b: LegalQueueItem): number {
   if (a.ready !== b.ready) return a.ready ? -1 : 1;

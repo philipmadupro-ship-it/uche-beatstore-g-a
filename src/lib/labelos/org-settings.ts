@@ -57,8 +57,11 @@ export function parseDepartmentsOff(raw: unknown): Module[] {
 /** Total over any stored value: a missing or malformed key reads as its default. */
 export function parseOrgSettings(raw: unknown): OrgSettingsView {
   const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const readiness = parseReadinessSettings(obj);
   return {
-    ...parseReadinessSettings(obj),
+    legal_gate: readiness.legal_gate,
+    marketing_gate: readiness.marketing_gate,
+    require_signed_master_split: readiness.require_signed_master_split,
     ...parseAttentionSettings(obj),
     departments_off: parseDepartmentsOff(obj.departments_off),
   };

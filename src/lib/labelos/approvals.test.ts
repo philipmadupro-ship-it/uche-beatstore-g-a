@@ -252,9 +252,11 @@ describe('planRequest', () => {
 
 describe('planDecide', () => {
   const legal = actor('member', ['legal']);
-  const base = { kind: 'song' as const, gate: 'legal', decision: 'approved', actor: legal, current: NONE, stale: false, legalReady: true };
-  const ownRequest = currentDecision([row({ decision: 'requested', actor_id: ME })]);
-  const theirRequest = currentDecision([row({ decision: 'requested', actor_id: OTHER })]);
+  const KEY = 'k-now';
+  const asked = (by: string, of: string) => currentDecision([row({ decision: 'requested', actor_id: by, approver_id: of })]);
+  const base = { kind: 'song' as const, gate: 'legal', decision: 'approved', actor: legal, current: asked(OTHER, ME), stale: false, legalReady: true, seen: KEY, currentKey: KEY, songOnRelease: false };
+  const ownRequest = asked(ME, ME);
+  const theirRequest = asked(OTHER, ME);
 
   it('needs the gate capability: 403 before anything else', () => {
     expect(planDecide({ ...base, actor: actor('member', ['a_and_r']), decision: 'nonsense' })).toMatchObject({ ok: false, status: 403, code: 'forbidden' });
@@ -283,9 +285,43 @@ describe('planDecide', () => {
     expect(planDecide({ ...base, actor: actor('admin'), current: ownRequest }).ok).toBe(true);
   });
 
-  it('… and anyone else may approve it, linking the request they answer', () => {
+  it('… and the person it was addressed to may approve it, linking the request they answer', () => {
     const r = planDecide({ ...base, current: theirRequest });
     expect(r).toMatchObject({ ok: true, requestId: theirRequest.pending!.id });
+  });
+
+  describe('doc 21 #15: approving needs an open request addressed to the decider (owners and admins exempt)', () => {
+    it('no request at all: refused, 403 no_request', () => {
+      expect(planDecide({ ...base, current: NONE })).toMatchObject({ ok: false, status: 403, code: 'no_request' });
+    });
+
+    it('a request addressed to someone else: refused', () => {
+      expect(planDecide({ ...base, current: asked(OTHER, OTHER) })).toMatchObject({ ok: false, status: 403, code: 'no_request' });
+    });
+
+    it('an answered request is closed: a later approval needs a new one', () => {
+      const closed = currentDecision([row({ decision: 'requested', actor_id: OTHER, approver_id: ME }), row({ decision: 'changes_requested', note: 'fix', actor_id: ME })]);
+      expect(planDecide({ ...base, current: closed })).toMatchObject({ ok: false, code: 'no_request' });
+    });
+
+    it('the address compares ids without regard to case', () => {
+      expect(planDecide({ ...base, current: asked(OTHER, ME.toUpperCase()) }).ok).toBe(true);
+    });
+
+    it('owners and admins are exempt, with or without a request', () => {
+      for (const role of ['owner', 'admin']) {
+        expect(planDecide({ ...base, actor: actor(role), current: NONE }).ok).toBe(true);
+        expect(planDecide({ ...base, actor: actor(role), current: asked(OTHER, OTHER) }).ok).toBe(true);
+      }
+    });
+
+    it('it binds approvals only: changes can be requested without a request', () => {
+      expect(planDecide({ ...base, decision: 'changes_requested', note: 'wrong version', current: NONE }).ok).toBe(true);
+    });
+
+    it('the capability still comes first', () => {
+      expect(planDecide({ ...base, actor: actor('artist'), current: NONE })).toMatchObject({ status: 403, code: 'forbidden' });
+    });
   });
 
   it('a requester may decline their own request (changes requested) with a note', () => {
@@ -309,8 +345,53 @@ describe('planDecide', () => {
 
   it('approving what is already approved and unchanged is a conflict; renewing a stale one is not', () => {
     const approved = currentDecision([row({ decision: 'approved' })]);
-    expect(planDecide({ ...base, current: approved })).toMatchObject({ ok: false, status: 409, code: 'already_approved' });
-    expect(planDecide({ ...base, current: approved, stale: true }).ok).toBe(true);
+    expect(planDecide({ ...base, actor: actor('owner'), current: approved })).toMatchObject({ ok: false, status: 409, code: 'already_approved' });
+    expect(planDecide({ ...base, actor: actor('owner'), current: approved, stale: true }).ok).toBe(true);
+  });
+
+  describe('doc 21 #14: "Approved" must carry `seen`, and it must match what is there now', () => {
+    it('no seen key: 400 seen_required — for the screen and for API callers alike', () => {
+      for (const seen of [undefined, null, '', '   ']) {
+        expect(planDecide({ ...base, seen })).toMatchObject({ ok: false, status: 400, code: 'seen_required' });
+      }
+    });
+
+    it('a key that no longer matches the facts: 409 changed_since_seen, nothing recorded', () => {
+      expect(planDecide({ ...base, seen: 'k-before' })).toMatchObject({ ok: false, status: 409, code: 'changed_since_seen' });
+    });
+
+    it('the matching key passes', () => {
+      expect(planDecide({ ...base, seen: KEY, currentKey: KEY }).ok).toBe(true);
+    });
+
+    it('owners and admins are not exempt from seen', () => {
+      expect(planDecide({ ...base, actor: actor('owner'), seen: null })).toMatchObject({ ok: false, code: 'seen_required' });
+    });
+
+    it('changes requested does not need it: asking for a change commits nothing to what was seen', () => {
+      expect(planDecide({ ...base, decision: 'changes_requested', note: 'no', seen: null }).ok).toBe(true);
+    });
+
+    it('capability and note come before seen', () => {
+      expect(planDecide({ ...base, actor: actor('artist'), seen: null })).toMatchObject({ status: 403 });
+      expect(planDecide({ ...base, note: 'x'.repeat(2001), seen: null })).toMatchObject({ code: 'note_too_long' });
+    });
+  });
+
+  describe('doc 21 #13: legal is approved on the release once the song is on one', () => {
+    it('a song on a release cannot be approved at its own legal gate: 409 on_release', () => {
+      expect(planDecide({ ...base, songOnRelease: true })).toMatchObject({ ok: false, status: 409, code: 'decided_on_release' });
+      expect(planDecide({ ...base, actor: actor('owner'), songOnRelease: true })).toMatchObject({ ok: false, code: 'decided_on_release' });
+    });
+
+    it('… but changes can still be requested on it', () => {
+      expect(planDecide({ ...base, songOnRelease: true, decision: 'changes_requested', note: 'x' }).ok).toBe(true);
+    });
+
+    it('the release itself, and a song on no release, are not affected', () => {
+      expect(planDecide({ ...base, kind: 'release', actor: actor('owner'), songOnRelease: true }).ok).toBe(true);
+      expect(planDecide({ ...base, songOnRelease: false }).ok).toBe(true);
+    });
   });
 });
 

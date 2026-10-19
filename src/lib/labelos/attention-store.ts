@@ -21,6 +21,7 @@
  * A source whose migration is not applied (releases 144–157, tasks 151,
  * activity 136) contributes nothing instead of failing the section.
  */
+import { restrictedCountFor } from './restricted-counts';
 import type { OrgAccessOk } from '@/lib/auth/org-access';
 import { orgProjectIdsInScope, scopedOrgQuery } from '@/lib/auth/org-access';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
@@ -343,5 +344,5 @@ export async function loadAttention(access: OrgAccessOk, slug: string | null = n
     tasks,
   };
   const { items, restricted } = computeAttention(input);
-  return { items, restricted, releasesReady: releases.ready };
+  return { items, restricted: restrictedCountFor(restricted, access), releasesReady: releases.ready };
 }

@@ -177,6 +177,15 @@ describe('GET /api/org/[orgId]/overview', () => {
     expect(JSON.stringify(o)).not.toContain('Kilo demo');
   });
 
+  it('doc 21 #9: marketing limited to some artists is told no restricted count, per artist or in total', async () => {
+    db.tables.org_members.find((m) => m.user_id === MKT)!.scope = 'artists';
+    db.tables.member_artist_scopes.push({ org_id: L, user_id: MKT, contact_id: C1 }, { org_id: L, user_id: MKT, contact_id: C2 });
+    current = MKT;
+    const { overview: o } = await (await overview()).json();
+    expect(rowOf(o, C2)).toMatchObject({ songs: 0, restricted: 0 });
+    expect(o.totals).toMatchObject({ restricted: 0 });
+  });
+
   it('with the release cancelled marketing loses the in-review song, and Nova has no next release', async () => {
     db.tables.releases[0].state = 'cancelled';
     current = MKT;

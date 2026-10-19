@@ -222,6 +222,17 @@ describe('GET …/artists/[contactId]/workspace', () => {
     expect(JSON.stringify(w)).not.toContain('Dawn');
   });
 
+  it('doc 21 #9: the same marketing member, once limited to some artists, is told no "restricted" count', async () => {
+    db.tables.org_members.find((m) => m.user_id === MKT)!.scope = 'artists';
+    db.tables.member_artist_scopes.push({ org_id: L, user_id: MKT, contact_id: C1 });
+    db.tables.releases[0].state = 'cancelled';
+    current = MKT;
+    const { workspace: w } = await (await workspace(C1)).json();
+    expect(w.songs.map((s: { id: string }) => s.id)).toEqual([S1]);
+    expect(w.restrictedSongs).toBe(0);
+    expect(w.releases[0].items[1]).toEqual({ position: 2, songTrackId: S3, title: null, restricted: true });
+  });
+
   it('a member limited to Kilo gets 404 on Nova, and their own artist works', async () => {
     current = AR_C2;
     expect((await workspace(C1)).status).toBe(404);
@@ -305,7 +316,9 @@ describe('GET …/songs/[trackId]', () => {
     const d = await (await song(S1)).json();
     // S1 is reachable through Kilo's inbox; its master/demo/loop sit only in Nova's project (or none).
     expect(d.recordings.map((r: { trackId: string }) => r.trackId)).toEqual([S1]);
-    expect(d.restrictedRecordings).toBe(3);
+    // Doc 21 #9: three recordings are withheld, and a scoped member is not told how many.
+    expect(d.restrictedRecordings).toBe(0);
+    expect(JSON.stringify(d)).not.toMatch(/Nova/);
     expect(d.artists).toEqual([{ id: C2, name: 'Kilo' }]);
     expect(d.releases).toEqual([]);
   });
