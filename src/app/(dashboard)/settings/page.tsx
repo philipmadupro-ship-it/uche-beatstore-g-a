@@ -40,6 +40,20 @@ export default function SettingsPage() {
   const [prefs, setPrefs] = useState<Prefs>({ lossless_exports: true, auto_tagging: false });
   const [eraseEmail, setEraseEmail] = useState('');
   const [erasing, setErasing] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  /** Page-level button uses the same hook the TopBar menu uses: toast on
+      failure, hard-nav to /login on success. */
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    const { error } = await signOut();
+    if (error) {
+      setSigningOut(false);
+      toast.error('Sign out failed', error);
+    }
+    // useAuth hard-navigates to /login on success.
+  };
 
   useEffect(() => {
     (async () => {
@@ -161,11 +175,12 @@ export default function SettingsPage() {
           meta={user?.email}
           actions={
             <Button
-              onClick={() => signOut()}
+              onClick={handleSignOut}
               variant="secondary"
+              disabled={signingOut}
               leadingIcon={<LogOut size={13} aria-hidden="true" />}
             >
-              Sign out
+              {signingOut ? 'Signing out…' : 'Sign out'}
             </Button>
           }
         />
