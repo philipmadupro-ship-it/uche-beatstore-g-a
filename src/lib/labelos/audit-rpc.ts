@@ -72,6 +72,10 @@ export const AUDIT_RPCS = {
   platformSetEntitlements: 'labelos_platform_set_entitlements',
   // Migration 172 (LABEL-51): the owner's organization settings, with `org.settings_changed`.
   orgSettings: 'labelos_audit_org_settings',
+  // Migration 190 (doc 25): team accounts an org creates — membership + managed row + event, and reset / switch-off.
+  teamAccountCreate: 'labelos_audit_team_account_create',
+  teamAccountReset: 'labelos_audit_team_account_reset',
+  teamAccountSetDisabled: 'labelos_audit_team_account_set_disabled',
 } as const;
 export type AuditRpcKey = keyof typeof AUDIT_RPCS;
 
@@ -233,6 +237,17 @@ export type AuditRpcArgs = {
   };
   /** Merge `p_patch` (only the keys that change) into `organizations.settings`; answers `{ settings }` or `{ error: 'not_found' | 'not_owner' }`. */
   orgSettings: { p_org: string; p_actor: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
+  teamAccountCreate: {
+    p_org: string;
+    p_actor: string;
+    p_user: string;
+    p_role: string;
+    p_functions: string[];
+    p_artist_ids: string[];
+    p_payload: EventPayload;
+  };
+  teamAccountReset: { p_org: string; p_actor: string; p_user: string };
+  teamAccountSetDisabled: { p_org: string; p_actor: string; p_user: string; p_disabled: boolean };
 };
 
 export type AuditRpcError = { message: string; code?: string };

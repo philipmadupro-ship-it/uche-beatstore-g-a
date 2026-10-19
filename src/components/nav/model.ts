@@ -2,10 +2,11 @@ import {
   Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
   CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
   Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2,
-  SlidersHorizontal,
+  SlidersHorizontal, ShieldCheck,
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
+import { ADMIN_CENTRE_CAPABILITY } from '@/lib/labelos/admin-centre';
 
 /**
  * Navigation model — Spotify-style hubs.
@@ -122,6 +123,10 @@ function licensed(org: OrgNavContext, module: string): boolean {
 function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | string> | null, isOwner = false): NavGroup {
   const base = `/o/${slug}`;
   const items: NavGroup['items'] = [{ label: 'Members', href: `${base}/settings/members`, icon: UsersRound }];
+  // Doc 25 phase 3: the admin centre, first, for whoever runs the team of a label or artist org (lib/labelos/admin-centre's rule).
+  if ((orgKind === 'label' || orgKind === 'artist') && caps?.has(ADMIN_CENTRE_CAPABILITY)) {
+    items.unshift({ label: 'Admin', href: `${base}/settings`, icon: ShieldCheck });
+  }
   // LABEL-41: label and artist orgs connect to each other; the people who run the org manage it.
   if ((orgKind === 'label' || orgKind === 'artist') && caps?.has('org.manage')) {
     items.push({ label: 'Connections', href: `${base}/settings/connections`, icon: Link2 });

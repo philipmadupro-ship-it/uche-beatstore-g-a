@@ -66,6 +66,16 @@ export function isLabelOsJoinApiPath(pathname: string): boolean {
 }
 
 /**
+ * `/api/org/setup` (LABEL-48): a new account creating its own organization.
+ * Gate `session` for the same reason as join — the caller is a member of
+ * nothing until this request makes them one. Exact match only; the route
+ * requires a session and takes the user from it.
+ */
+export function isLabelOsSetupApiPath(pathname: string): boolean {
+  return pathname === '/api/org/setup';
+}
+
+/**
  * `/api/org/<uuid>/restore` (LABEL-39): bringing back an org inside its grace
  * period. Gate `session`, for the same reason as join: a soft-deleted org's
  * owner may have no other membership left, so the membership gate (which
@@ -116,6 +126,15 @@ export function isLabelOsJoinPagePath(pathname: string): boolean {
 }
 
 /**
+ * The setup page, `/setup` (LABEL-48): behind the flag like `/o/*`, but for
+ * a signed-in account that is a member of nothing yet. The page sends a
+ * signed-out visitor to /login and a member to /o itself.
+ */
+export function isLabelOsSetupPagePath(pathname: string): boolean {
+  return pathname === '/setup' || pathname === '/setup/';
+}
+
+/**
  * The Label OS page namespaces: `/o` and everything under `/o/`, and
  * `/shared` (LABEL-21, "Shared with me" — the external project member's own
  * pages, outside any org shell). Exact segment match, because `/offline`,
@@ -131,8 +150,8 @@ export function isLabelOsPagePath(pathname: string): boolean {
  *  - `member`   a Label OS path: the caller must belong to some org or (LABEL-21)
  *               some project. This is coarse admission only; the
  *               routes check org and capability (lib/auth/org-access.ts);
- *  - `session`  `/api/org/join`, `/api/org/<id>/restore` and `/api/platform/*` (LABEL-47) only: being
- *               signed in is enough to reach the route, which does all of the authorisation itself;
+ *  - `session`  `/api/org/join`, `/api/org/setup` (LABEL-48), `/api/org/<id>/restore` and `/api/platform/*` (LABEL-47)
+ *               only: being signed in is enough to reach the route, which does all of the authorisation itself;
  *  - `producer` everything else: the caller must be the producer.
  *
  * Membership NEVER admits anyone to a `producer` path. That isolation is the
@@ -143,6 +162,7 @@ export type ApiGate = 'none' | 'session' | 'member' | 'producer';
 export function apiGateFor(pathname: string, signedIn: boolean): ApiGate {
   if (!signedIn || !pathname.startsWith('/api/')) return 'none';
   if (isLabelOsJoinApiPath(pathname)) return 'session';
+  if (isLabelOsSetupApiPath(pathname)) return 'session';
   if (isLabelOsRestoreApiPath(pathname)) return 'session';
   if (isPlatformApiPath(pathname)) return 'session';
   if (isLabelOsApiPath(pathname)) return 'member';

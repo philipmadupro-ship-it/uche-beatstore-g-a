@@ -110,7 +110,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - **Owner decision (2026-10-19):** an org created at sign-up (#130's `/setup`) gets every module and option (no `org_entitlements` row = everything). Default limits are chosen later, together with plans and prices.
 
 ### LABEL-48 — Create organization + setup wizard
-**Priority:** P0 · **Risk:** Medium · **Deps:** 47 · **Status:** Blocked on PR #130 — the owner's own task (sign-up, `/setup`, `labelos_setup_org` mig 189, team accounts mig 190, admin centre). The owner said to merge it; LABEL-48 then builds the wizard on #130's `/setup` and `labelos_setup_org` instead of a second `POST /api/org`
+**Priority:** P0 · **Risk:** Medium · **Deps:** 47 · **Status:** In Progress (see execution log). Builds on #130 (merged `0f62ce2`: sign-up account type, `/setup`, `labelos_setup_org` mig 189, team accounts mig 190, admin centre): the wizard extends #130's `/setup` and `labelos_setup_org` instead of a second `POST /api/org`
 - `POST /api/org` (platform-licensed accounts only; independent creates kind `artist` + the owner's own artist contact, label creates kind `label`). First sign-in of a licensee with `setup_done = false` is redirected to `/setup`.
 - Wizard steps (each skippable except 1): **1 Who are you** (the faces the licensee is entitled to) → **2 How you work** (pick the contract types you use; every type has a template, LABEL-57) → **3 Team and roster** (LABEL-50 window embedded) → **4 Departments** (toggle finance, marketing/PR, legal, A&R, executive, artistic direction, producers, collaborators; preset per face) → **5 Review and create** (creates org, roster, default gates from LABEL-52, optional first draft release).
 - Acceptance: Playwright journeys for both faces at 1440 and 390 px; wizard is resumable; leaving mid-way creates nothing half-done (one transaction via audit RPC); `org.created` event.
@@ -122,7 +122,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Out of scope: the modules themselves.
 
 ### LABEL-50 — Roster and team window
-**Priority:** P0 · **Risk:** Medium · **Deps:** 48, 49 · **Status:** Blocked on PR #130 (builds on its team-accounts routes and admin centre, not a second copy)
+**Priority:** P0 · **Risk:** Medium · **Deps:** 48, 49 · **Status:** Not Started — after LABEL-48; builds on #130's team-accounts routes and admin centre, not a second copy
 - One window ("Team and roster") usable from the wizard and from Organization: **add artist** (creates the roster contact, optional login invite with role `artist`), **add member** with role + functions + artist scope, **add collaborator** (beatmaker, producer, rapper, feature: a contact with a role and optional external-project invite), edit/remove with `planMemberChange` rules (last owner is 409).
 - Reuses `POST /api/org/[orgId]/contacts` and invitations; adds the screens and the missing role pickers.
 - Acceptance: add/remove for each role in e2e; scoped member sees only their artists; independent face shows "Your collaborators" instead of roster wording.

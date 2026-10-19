@@ -47,6 +47,7 @@ import { createLogger } from '@/lib/log';
 import { isUUID, readBody } from '@/lib/validate';
 import { seatLimitError, takesSeat } from '@/lib/labelos/entitlements';
 import { seatsInUse } from '@/lib/labelos/entitlements-store';
+import { isMissingTeamAccounts, toManagedView, type ManagedRow, type ManagedView } from '@/lib/labelos/team-accounts';
 
 const log = createLogger('api.org.members');
 
@@ -126,6 +127,21 @@ function isLastOwnerError(error: { code?: string; message?: string } | null): bo
   return !!error && /must keep at least one owner/i.test(error.message ?? '');
 }
 
+/**
+ * The accounts this org created (migration 190), for managers. Before 190 is
+ * applied the read fails and the list simply has none: never a 500.
+ */
+async function managedAccounts(access: OrgAccessOk): Promise<Map<string, ManagedView>> {
+  const out = new Map<string, ManagedView>();
+  const { data, error } = await scopedOrgQuery(access.admin, 'org_managed_accounts', access, 'user_id, must_change_password, disabled_at, created_at');
+  if (error) {
+    if (!isMissingTeamAccounts(error)) log.warn('managed accounts not read', { orgId: access.orgId, error: error.message });
+    return out;
+  }
+  for (const row of (data ?? []) as unknown as ManagedRow[]) out.set(row.user_id.toLowerCase(), toManagedView(row));
+  return out;
+}
+
 const LAST_OWNER = 'An organization must keep at least one owner. Make someone else owner first.';
 
 async function ownerCount(access: OrgAccessOk): Promise<number> {
@@ -167,12 +183,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ org
       rows = rows.filter((r) => mayListMember(viewer, { userId: r.user_id, role: r.role }, logins.get(r.user_id.toLowerCase()) ?? []));
     }
     const withEmail = access.capabilities.has('members.manage');
-    const [ids, lists] = await Promise.all([
+    const [ids, lists, managed] = await Promise.all([
       memberIdentities(access.admin as unknown as IdentityAdmin, access.orgId, rows.map((r) => r.user_id), { withEmail }),
       scopeLists(access, rows),
+      withEmail ? managedAccounts(access) : Promise.resolve(new Map<string, ManagedView>()),
     ]);
     return NextResponse.json(
-      { members: rows.map((r) => toView(r, access.userId, ids.get(r.user_id), withEmail, lists.get(r.user_id) ?? null)) },
+      {
+        members: rows.map((r) => ({
+          ...toView(r, access.userId, ids.get(r.user_id), withEmail, lists.get(r.user_id) ?? null),
+          // Team accounts this org created (doc 25): only for managers, null for everyone else.
+          managed: managed.get(r.user_id.toLowerCase()) ?? null,
+        })),
+      },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (err) {
