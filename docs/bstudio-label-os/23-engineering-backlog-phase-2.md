@@ -107,9 +107,10 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - **Platform console** `/platform` (platform operator only; a `platform_admins` table, seeded for the owner by SQL, never self-service): list licensees, create a licensee org with a face, set modules and seat caps, send the owner-invite. Every action audited.
 - Acceptance: a licensee without `finance` gets 404 on finance pages/routes and no nav entry; the operator console is unreachable by any org member (two-org + member tests); parity and RLS-final-state tests updated.
 - Out of scope: billing, plans, payment.
+- **Owner decision (2026-10-19):** an org created at sign-up (#130's `/setup`) gets every module and option (no `org_entitlements` row = everything). Default limits are chosen later, together with plans and prices.
 
 ### LABEL-48 — Create organization + setup wizard
-**Priority:** P0 · **Risk:** Medium · **Deps:** 47 · **Status:** On hold — overlaps PR #130 (sign-up, org setup, team accounts); waiting on the owner
+**Priority:** P0 · **Risk:** Medium · **Deps:** 47 · **Status:** Blocked on PR #130 — the owner's own task (sign-up, `/setup`, `labelos_setup_org` mig 189, team accounts mig 190, admin centre). The owner said to merge it; LABEL-48 then builds the wizard on #130's `/setup` and `labelos_setup_org` instead of a second `POST /api/org`
 - `POST /api/org` (platform-licensed accounts only; independent creates kind `artist` + the owner's own artist contact, label creates kind `label`). First sign-in of a licensee with `setup_done = false` is redirected to `/setup`.
 - Wizard steps (each skippable except 1): **1 Who are you** (the faces the licensee is entitled to) → **2 How you work** (pick the contract types you use; every type has a template, LABEL-57) → **3 Team and roster** (LABEL-50 window embedded) → **4 Departments** (toggle finance, marketing/PR, legal, A&R, executive, artistic direction, producers, collaborators; preset per face) → **5 Review and create** (creates org, roster, default gates from LABEL-52, optional first draft release).
 - Acceptance: Playwright journeys for both faces at 1440 and 390 px; wizard is resumable; leaving mid-way creates nothing half-done (one transaction via audit RPC); `org.created` event.
@@ -121,7 +122,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Out of scope: the modules themselves.
 
 ### LABEL-50 — Roster and team window
-**Priority:** P0 · **Risk:** Medium · **Deps:** 48, 49 · **Status:** Not Started
+**Priority:** P0 · **Risk:** Medium · **Deps:** 48, 49 · **Status:** Blocked on PR #130 (builds on its team-accounts routes and admin centre, not a second copy)
 - One window ("Team and roster") usable from the wizard and from Organization: **add artist** (creates the roster contact, optional login invite with role `artist`), **add member** with role + functions + artist scope, **add collaborator** (beatmaker, producer, rapper, feature: a contact with a role and optional external-project invite), edit/remove with `planMemberChange` rules (last owner is 409).
 - Reuses `POST /api/org/[orgId]/contacts` and invitations; adds the screens and the missing role pickers.
 - Acceptance: add/remove for each role in e2e; scoped member sees only their artists; independent face shows "Your collaborators" instead of roster wording.
@@ -132,7 +133,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: only owner can write; non-owner 403; event `org.settings_changed` names the keys, not values of notes; gate-off banner on the release page.
 
 ### LABEL-52 — Release gates v2 (policy)
-**Priority:** P1 · **Risk:** Medium · **Deps:** 51 · **Status:** In Progress (session_01939RXhTx8r5quF2Efoz9nF)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 51 · **Status:** Done — #139, squash `cb191e7eedf82d503fd24d308a3cafd4c25b5699` (2026-10-19)
 - `seen` required for "Approved" (UI and API); self-approval requires an open request addressed to the decider (owners/admins exempt); song-level legal approval hidden once the song is on a release (release-level stays authoritative, UI says so); artwork size rule of spec 09 §4; restricted counts hidden from role `artist` and scoped staff.
 - Acceptance: tests per rule, mutation checks, existing approval e2e updated to the UI path.
 
@@ -141,7 +142,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## C. Real music-business data
 
 ### LABEL-53 — Recording and song metadata editor
-**Priority:** P0 · **Risk:** Medium · **Deps:** 49 · **Migration:** 173 · **Status:** Not Started
+**Priority:** P0 · **Risk:** Medium · **Deps:** 49 · **Migration:** 173 · **Status:** In Progress (session_01MdzVrfyDLcpCD7bVXTgphD)
 - Editor on the song page and tray: title, version, **ISRC**, **ISWC**, BPM, key, language, explicit, genre, recording date, **P-line**, master owner, notes. `PATCH /api/org/[orgId]/songs/[trackId]` (today GET only); ISRC needs `release.write`, creative fields `catalog.write`; validators exist (ISRC/ISWC); ASCII-only identifiers; CAS on `updated_at`.
 - Acceptance: the release "Track has no ISRC" blocker offers a working link to this editor; a Playwright journey sets an ISRC with no service-key seeding; audit event names fields, never values of notes.
 
@@ -267,6 +268,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 
 ### LABEL-73 — Atomic audit functions
 **Priority:** P1 · **Risk:** High · **Deps:** 44, 55 · **Migration:** 187 · **Status:** Not Started
+- **Also (from LABEL-52):** the addressee rule (approve only an open request addressed to you), the song-on-a-live-release refusal and `seen` are enforced in the route only. `labelos_audit_approval_decide` re-checks only self-approval and does not verify that the latest row is the one the plan read; move all three into the function.
 - **Also (from LABEL-51):** `settings.departments_off` is enforced in SQL only for restricted project files (172's `labelos_org_asset_allowed`); `has_org_cap` ignores it, so the first RLS policy that uses a `finance.*` / `pr.*` / `exec.read` / `creative.*` capability must subtract `departments_off` there too (parity tests). The settings audit payload's `from` values are read before the lock (two simultaneous owner saves can log a stale `from`); build the payload inside the function.
 - **Also (from LABEL-47):** the caps are check-then-write: an artist→staff role change (seat cap) and contact create/edit (artist cap) can both pass at cap−1 under concurrency (only the invitation accept is enforced under a lock); 154's connection accept inserts a roster artist into the label without checking `max_artists`. Enforce both caps atomically in SQL.
 - **Also (from LABEL-44):** close the readiness-vs-claim window for deliver AND store listing (an item committed between the readiness check and the claim ships unchecked); remove the members route's six-argument fallback once 167 is applied (stale-cache window skips `p_expect`).
@@ -274,7 +276,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 
 ### LABEL-74 — Visibility decisions
 **Priority:** P2 · **Risk:** Low · **Deps:** 52 · **Status:** Not Started
-- Slack channel digest from the artist-visible, non-restricted view only (+ warning when sharing a saved view name); forbidden pages 404 except settings; `ensurePersonalOrg` gated on the flag; `references` cap no longer reveals internal references.
+- Slack channel digest from the artist-visible, non-restricted view only (+ warning when sharing a saved view name); forbidden pages 404 except settings; `ensurePersonalOrg` gated on the flag; `references` cap no longer reveals internal references. **Added from LABEL-52:** `releaseItemTitles` (`org-workspace.ts`) keeps restricted placeholders in position, so a scoped viewer can count hidden songs on a release; drop them (or collapse them into one uncounted line) for anyone who does not get restricted counts.
 
 ### LABEL-75 — Lifecycle decisions
 **Priority:** P2 · **Risk:** Low · **Deps:** none · **Status:** Not Started
@@ -282,7 +284,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 
 ### LABEL-76 — UI polish
 **Priority:** P2 · **Risk:** Low · **Deps:** 70 · **Status:** Not Started
-- Overview at 390 px (stage counts, next release) and the 1440 px header overlap; Label OS panels use tokens so `data-theme="de-roche-archive"` is readable; `/o` app chrome (logo/home/sign-out); stop UI-asks-server-refuses 403s in the console.
+- Overview at 390 px (stage counts, next release) and the 1440 px header overlap; Label OS panels use tokens so `data-theme="de-roche-archive"` is readable; `/o` app chrome (logo/home/sign-out); stop UI-asks-server-refuses 403s in the console. **Added from LABEL-52:** a settings field for `artwork_min_px` (today JSON only); the artwork head read is 256 KB, so a JPEG with large APP/XMP/ICC segments before its SOF reads as "size could not be read" (read further or say so plainly); decide whether a PNG with alpha passes the RGB rule; answer `no_request` before `seen_required`.
 
 ### LABEL-77 — Test infrastructure
 **Priority:** P1 · **Risk:** Low · **Deps:** none · **Status:** Not Started
