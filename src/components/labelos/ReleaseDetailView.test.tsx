@@ -45,7 +45,7 @@ afterEach(() => {
 
 const gate = (status: string, blockers: { code: string; message: string }[] = [], withheld = 0) => ({
   status, blockerCount: blockers.length + withheld, warningCount: 0,
-  blockers: blockers.map((b) => ({ ...b, fixCapability: 'release.write', itemId: null, songId: null })), warnings: [], withheld, approval: null,
+  blockers: blockers.map((b) => ({ ...b, fixCapability: 'release.write', itemId: null, songId: null, trackId: null })), warnings: [], withheld, approval: null,
 });
 const readiness = (over: Partial<Record<ReleaseGate, ReturnType<typeof gate>>> = {}, ready = false) => ({
   releaseState: 'draft',
@@ -151,6 +151,16 @@ describe('the gates', () => {
     fireEvent.click(screen.getByTestId('release-gate-open-legal'));
     const pop = await screen.findByTestId('release-gate-popover-legal');
     expect(pop.textContent).toMatch(/Track 1: the split is open/);
+  });
+
+  it('"Track has no ISRC" links to the metadata editor open on that recording (LABEL-53)', async () => {
+    const g = gate('blocked');
+    g.blockers = [{ code: 'isrc', message: 'Track 1 has no ISRC.', fixCapability: 'release.write', itemId: 'i1', songId: 's1', trackId: 'm1' } as never];
+    g.blockerCount = 1;
+    mount(detail({ readiness: readiness({ metadata: g }) }));
+    fireEvent.click(screen.getByTestId('release-gate-open-metadata'));
+    const link = await screen.findByTestId('release-fix-isrc-m1');
+    expect(link.getAttribute('href')).toMatch(/\/songs\/s1\?edit=m1#details$/);
   });
 
   it('without rights.read says how many details are withheld, and names none', async () => {

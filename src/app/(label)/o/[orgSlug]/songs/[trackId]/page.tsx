@@ -14,8 +14,16 @@ import { loadOrgSong } from '@/lib/labelos/org-workspace-store';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OrgSongPage({ params }: { params: Promise<{ orgSlug: string; trackId: string }> }) {
+export default async function OrgSongPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ orgSlug: string; trackId: string }>;
+  searchParams: Promise<{ edit?: string }>;
+}) {
   const { orgSlug, trackId } = await params;
+  // `?edit=<track>` opens that recording's details (the release's "Add the ISRC" link); the view only honours ids that belong to this song.
+  const { edit } = await searchParams;
   const shell = await orgShellFor(orgSlug);
   if (!shell) notFound();
   const access = await requireObjectAccess({ table: 'tracks', id: trackId, cap: 'catalog.read', orgId: shell.org.id });
@@ -24,7 +32,7 @@ export default async function OrgSongPage({ params }: { params: Promise<{ orgSlu
   if (!detail) notFound();
   return (
     <PageContainer>
-      <OrgSongView orgId={shell.org.id} orgSlug={shell.org.slug} detail={detail} />
+      <OrgSongView orgId={shell.org.id} orgSlug={shell.org.slug} detail={detail} editTrackId={typeof edit === 'string' ? edit.toLowerCase() : null} />
     </PageContainer>
   );
 }

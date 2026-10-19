@@ -150,7 +150,7 @@ export function ReleaseDetailView({ orgId, orgSlug, detail, extraActions }: { or
           <Details detail={detail} editable={editable} onSave={saveField} />
         </div>
         <div className="space-y-6">
-          <Gates detail={detail} />
+          <Gates detail={detail} orgSlug={orgSlug} />
           {/* The five gates that need a person (09 §4) are asked for and answered here; the server shows each member only what they may do, and nothing at all to one who may not read approvals. */}
           {draft && <OrgApprovals key={release.id} orgId={orgId} subject={{ kind: 'release', id: release.id }} onChanged={() => router.refresh()} />}
           <Delivery orgId={orgId} detail={detail} busy={busy} act={act} />
@@ -379,7 +379,7 @@ function Details({ detail, editable, onSave }: { detail: Detail; editable: boole
 
 // ── Gates ───────────────────────────────────────────────────────────────
 
-function Gates({ detail }: { detail: Detail }) {
+function Gates({ detail, orgSlug }: { detail: Detail; orgSlug: string }) {
   const { readiness } = detail;
   return (
     <section aria-labelledby="release-gates" className={CARD} data-testid="release-gates">
@@ -389,7 +389,7 @@ function Gates({ detail }: { detail: Detail }) {
       ) : (
         <ul className="space-y-2">
           {RELEASE_GATES.map((g) => (
-            <GateRow key={g} gate={g} view={readiness.gates[g]} mayReadRights={detail.me.mayReadRights} />
+            <GateRow key={g} gate={g} view={readiness.gates[g]} mayReadRights={detail.me.mayReadRights} orgSlug={orgSlug} />
           ))}
         </ul>
       )}
@@ -397,7 +397,7 @@ function Gates({ detail }: { detail: Detail }) {
   );
 }
 
-function GateRow({ gate, view, mayReadRights }: { gate: ReleaseGate; view: NonNullable<Detail['readiness']>['gates'][ReleaseGate]; mayReadRights: boolean }) {
+function GateRow({ gate, view, mayReadRights, orgSlug }: { gate: ReleaseGate; view: NonNullable<Detail['readiness']>['gates'][ReleaseGate]; mayReadRights: boolean; orgSlug: string }) {
   const tone = gateTone(view.status);
   const hasDetail = view.blockerCount > 0 || view.warningCount > 0;
   return (
@@ -424,7 +424,18 @@ function GateRow({ gate, view, mayReadRights }: { gate: ReleaseGate; view: NonNu
                   <p className={`${LABEL} mb-1.5`}>Blocking</p>
                   <ul className="space-y-1.5">
                     {view.blockers.map((b, i) => (
-                      <li key={`${b.code}-${b.itemId ?? i}-${i}`} className="text-white/80">{b.message}</li>
+                      <li key={`${b.code}-${b.itemId ?? i}-${i}`} className="text-white/80">
+                        {b.message}
+                        {b.code === 'isrc' && b.songId && b.trackId && (
+                          <Link
+                            href={`/o/${orgSlug}/songs/${b.songId}?edit=${b.trackId}#details`}
+                            className="ml-2 text-white underline decoration-white/30 underline-offset-2 hover:decoration-white"
+                            data-testid={`release-fix-isrc-${b.trackId}`}
+                          >
+                            Add the ISRC
+                          </Link>
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>

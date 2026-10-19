@@ -28,6 +28,7 @@ import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { RestrictedNote } from '@/components/artists/OrgArtistWorkspaceTabs';
 import { OrgCredits } from '@/components/labelos/OrgCredits';
 import { OrgSplits } from '@/components/labelos/OrgSplits';
+import { OrgTrackMetadata } from '@/components/labelos/OrgTrackMetadata';
 import { OrgApprovals } from '@/components/labelos/OrgApprovals';
 import { OrgLegalReadiness } from '@/components/labelos/OrgLegalReadiness';
 import { SongStageControl } from '@/components/labelos/SongStageControl';
@@ -68,13 +69,15 @@ export function playRecordingAt(orgId: string, song: OrgSongDetail['song'], rec:
   });
 }
 
-export function OrgSongView({ orgId, orgSlug, detail }: { orgId: string; orgSlug: string; detail: OrgSongDetail }) {
+export function OrgSongView({ orgId, orgSlug, detail, editTrackId = null }: { orgId: string; orgSlug: string; detail: OrgSongDetail; editTrackId?: string | null }) {
   const { song, recordings } = detail;
   const base = `/o/${orgSlug}`;
   const currentId = usePlayer((s) => s.currentTrack?.id ?? null);
   const isPlaying = usePlayer((s) => s.isPlaying);
   const [a, setA] = useState<string | null>(recordings[0]?.trackId ?? null);
   const [b, setB] = useState<string | null>(recordings[1]?.trackId ?? null);
+  // The recording whose details are open: the one a link named (the release's "Add the ISRC"), if it is this song's or one of its recordings.
+  const [editing, setEditing] = useState<string | null>(editTrackId && (editTrackId === song.id || recordings.some((r) => r.trackId === editTrackId)) ? editTrackId : null);
   const byId = new Map(recordings.map((r) => [r.trackId, r]));
   const loaded = currentId ? byId.get(currentId) ?? null : null;
 
@@ -158,6 +161,17 @@ export function OrgSongView({ orgId, orgSlug, detail }: { orgId: string; orgSlug
                     </p>
                     <p className="truncate text-[11px] text-white/40">{r.title ?? 'Untitled'} · {r.recordingClass}</p>
                   </div>
+                  {r.trackId !== song.id && (
+                    <button
+                      type="button"
+                      aria-expanded={editing === r.trackId}
+                      onClick={() => setEditing(editing === r.trackId ? null : r.trackId)}
+                      className={`${CHIP} ${editing === r.trackId ? CHIP_ON : CHIP_REST}`}
+                      data-testid={`org-rec-edit-${r.trackId}`}
+                    >
+                      Details
+                    </button>
+                  )}
                   <div className="flex shrink-0 gap-1" role="group" aria-label={`Compare ${r.label}`}>
                     <button type="button" aria-pressed={a === r.trackId} onClick={() => { setA(r.trackId); if (b === r.trackId) setB(a); }} className={`${CHIP} ${a === r.trackId ? CHIP_ON : CHIP_REST}`}>A</button>
                     <button type="button" aria-pressed={b === r.trackId} onClick={() => { setB(r.trackId); if (a === r.trackId) setA(b); }} className={`${CHIP} ${b === r.trackId ? CHIP_ON : CHIP_REST}`}>B</button>
@@ -170,6 +184,18 @@ export function OrgSongView({ orgId, orgSlug, detail }: { orgId: string; orgSlug
         {detail.restrictedRecordings > 0 && (
           <div className="mt-3"><RestrictedNote testId="org-song-restricted">{recordingsText(detail.restrictedRecordings)}</RestrictedNote></div>
         )}
+      </section>
+
+      <section id="details" aria-labelledby="org-song-details" className="scroll-mt-24 space-y-4" data-testid="org-song-details">
+        <h2 id="org-song-details" className={LABEL}>Details</h2>
+        <div className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+          <OrgTrackMetadata key={`meta-${song.id}`} orgId={orgId} trackId={song.id} title="Song" testId="org-song-metadata" />
+        </div>
+        {recordings.filter((r) => r.trackId !== song.id && editing === r.trackId).map((r) => (
+          <div key={r.trackId} className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+            <OrgTrackMetadata orgId={orgId} trackId={r.trackId} title={`Recording · ${r.label}`} testId={`org-rec-metadata-${r.trackId}`} />
+          </div>
+        ))}
       </section>
 
       <OrgCredits key={`credits-${song.id}`} orgId={orgId} trackId={song.id} />
