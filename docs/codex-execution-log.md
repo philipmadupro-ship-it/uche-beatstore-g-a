@@ -9373,3 +9373,16 @@ Orchestrator: session_01U1hEgSEMBP1MAk65kDjAcW. Backlog: `docs/bstudio-label-os/
 - 2026-10-19 05:38 UTC — LABEL-53 (migration 173) started on Sonnet, session_01MdzVrfyDLcpCD7bVXTgphD.
 - 2026-10-19 06:05 UTC — **#130 merged** (`0f62ce2`), the owner's own task. It adds the account type at sign-up, `/setup` + `POST /api/org/setup` (migration 189 `labelos_setup_org`), team accounts (migration 190 `org_managed_accounts` + its functions; server-side forced password change; team accounts cannot create or join another org; reset and switch-off revoke sessions; only an owner may reset an admin) and the admin centre `/o/<slug>/settings`. Gate: 3 checks green on `87fc28f` (after merging `cb191e7`); preview checked (flag off: `/setup`, `/account/password` and `/api/org/setup` 404); real-db e2e 44/44 reported. 189 and 190 are not applied (final merge, after 170–172). **Final-apply note:** confirm `postgres` may DELETE from `auth.sessions` on production. LABEL-48 starts on top of it.
 - 2026-10-19 06:05 UTC — LABEL-48 started on Sonnet, session_01SDgRGH4VkVHresRGGoh7sW. It builds on #130's `/setup` and `labelos_setup_org`; migration 192 may be used only if needed (next free number outside the backlog). LABEL-50 follows it.
+- 2026-10-19 10:05 UTC — **Owner decision: Label OS goes live.**
+  - Integrate claude/happy-bardeen-rnosf3 into main and merge when green.
+  - Apply the migrations to the PRODUCTION database through one SQL-editor bundle.
+  - Switch `LABEL_OS_ENABLED` on in production.
+  - The producer account (the owner's outlook.com login) must not change.
+
+  The go-live session (session_01N5iuXW7Y4hWLMnH8xmr76n, branch `release/label-os-into-main`) does four things:
+  - merges main in;
+  - builds `supabase/apply/labelos-go-live.sql` (pending 130–135 and 139_buyer, Label OS 136–172 and 189–190, the producer as platform operator, a verify table);
+  - proves it idempotent on a database in the production state, and proves the code safe both before and after the bundle;
+  - writes `docs/bstudio-label-os/go-live.md`.
+
+  The phase-2 backlog continues on the Label OS branch.
