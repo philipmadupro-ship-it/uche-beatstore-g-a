@@ -15,7 +15,7 @@ let otherError: { code: string; message: string } | null = null;
 const rows = [{ id: 't1', user_id: ME }];
 
 // Just enough of the query builder: records whether org_id was mentioned.
-function from(_table: string) {
+function from() {
   let mentionsOrg = false;
   const b: Record<string, unknown> = {};
   const chain = () => b;
