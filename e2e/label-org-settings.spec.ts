@@ -20,7 +20,7 @@
 import { test, expect, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import { ARTIST_A_ID, BUYER_ID, PRODUCER_ID, SERVICE_KEY, sessionCookie } from '../scripts/local-db/jwt.mjs';
+import { ANON_KEY, ARTIST_A_ID, BUYER_ID, PRODUCER_ID, SERVICE_KEY, sessionCookie, userToken } from '../scripts/local-db/jwt.mjs';
 
 const REST = 'http://127.0.0.1:54321/rest/v1';
 const run = randomUUID().slice(0, 6);
@@ -174,29 +174,76 @@ test('3 · ACCEPTANCE: the owner turns legal approval off on the page; one audit
   await ctx.close();
 });
 
-test('4 · a department switched off disappears for the org (404 from the next request) and comes back', async ({ browser, baseURL }) => {
+test('4 · CONTRACTS: off needs legal approval off; then the department vanishes (routes AND restricted files on the member’s own JWT) and comes back', async ({ browser, baseURL, request }) => {
+  // A member who holds contracts.read (the legal function) and two restricted files in a project of the org.
+  await rest(request, 'PATCH', `org_members?org_id=eq.${ORG}&user_id=eq.${BUYER_ID}`, { functions: ['legal'] });
+  await rest(request, 'POST', 'project_assets', [
+    { user_id: null, created_by: PRODUCER_ID, project_id: NOVA_INBOX, kind: 'contract', sensitivity: 'restricted', url: 'r2://private/orgs/e2e/assets/contract' },
+    { user_id: null, created_by: PRODUCER_ID, project_id: NOVA_INBOX, kind: 'artwork', sensitivity: 'normal', url: 'r2://private/orgs/e2e/assets/art' },
+  ]);
+  // The member's own session on PostgREST: RLS decides, no service key.
+  const restricted = async () => {
+    const res = await request.get(`${REST}/project_assets?select=kind&project_id=eq.${NOVA_INBOX}&sensitivity=neq.normal`, {
+      headers: { apikey: ANON_KEY, authorization: `Bearer ${userToken(BUYER_ID, 'buyer@local.test')}` },
+    });
+    expect(res.ok(), await res.text()).toBeTruthy();
+    return ((await res.json()) as { kind: string }[]).length;
+  };
+  const ordinary = async () => {
+    const res = await request.get(`${REST}/project_assets?select=kind&project_id=eq.${NOVA_INBOX}&sensitivity=eq.normal`, {
+      headers: { apikey: ANON_KEY, authorization: `Bearer ${userToken(BUYER_ID, 'buyer@local.test')}` },
+    });
+    return ((await res.json()) as unknown[]).length;
+  };
+
   const owner = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await signedIn(owner, baseURL!, PRODUCER_ID, 'producer@local.test');
-  const admin = await browser.newContext();
-  await signedIn(admin, baseURL!, ARTIST_A_ID, 'artist-a@local.test');
-  expect((await admin.request.get(`${api}/legal/queue`)).status()).toBe(200);
+  const member = await browser.newContext();
+  await signedIn(member, baseURL!, BUYER_ID, 'buyer@local.test');
+  expect((await member.request.get(`${api}/legal/queue`)).status()).toBe(200);
+  expect(await restricted()).toBe(1);
 
   const page = await owner.newPage();
   await page.goto(PAGE);
+  // Legal approval is on: Contracts cannot go off alone. The page says why and Save stays disabled.
   await page.getByLabel('Contracts & legal').uncheck();
-  await saveAndWait(page);
-  expect((await admin.request.get(`${api}/legal/queue`)).status()).toBe(404);
-  await shot(page, 'departments-1440');
+  await expect(page.getByTestId('contracts-legal-warning')).toContainText('legal approval');
+  await expect(page.getByRole('button', { name: /save settings/i })).toBeDisabled();
+  // The route refuses it too.
+  const refused = await owner.request.patch(`${api}/settings`, { data: { departments_off: ['contracts'] } });
+  expect(refused.status()).toBe(422);
+  expect(await member.request.get(`${api}/legal/queue`).then((r) => r.status())).toBe(200);
 
-  // A licence cannot be widened from here: an unknown / non-switchable department is refused.
-  const bad = await owner.request.patch(`${api}/settings`, { data: { departments_off: ['export'] } });
-  expect(bad.status()).toBe(400);
+  // Both off in one save (the legal skip asks first).
+  await page.getByLabel('Require legal approval').uncheck();
+  await expect(page.getByTestId('contracts-legal-warning')).toHaveCount(0);
+  await page.getByRole('button', { name: /save settings/i }).click();
+  await page.getByRole('button', { name: 'Skip legal approval' }).click();
+  await expect(page.getByText('Settings saved').first()).toBeVisible();
+  await expect.poll(async () => (await settingsRow(request)).departments_off).toEqual(['contracts']);
+  expect(await settingsRow(request)).toMatchObject({ legal_gate: 'off' });
+  expect((await member.request.get(`${api}/legal/queue`)).status()).toBe(404);
+  expect(await restricted()).toBe(0);
+  expect(await ordinary()).toBe(1);
+  await shot(page, 'contracts-off-1440');
 
+  // Legal approval cannot come back on while Contracts is off (the route says so); switch Contracts on first.
+  const lockedOn = await owner.request.patch(`${api}/settings`, { data: { legal_gate: 'on' } });
+  expect(lockedOn.status()).toBe(422);
   await page.getByLabel('Contracts & legal').check();
   await saveAndWait(page);
-  expect((await admin.request.get(`${api}/legal/queue`)).status()).toBe(200);
+  expect((await member.request.get(`${api}/legal/queue`)).status()).toBe(200);
+  expect(await restricted()).toBe(1);
+  // An unknown / non-switchable department is refused.
+  expect((await owner.request.patch(`${api}/settings`, { data: { departments_off: ['export'] } })).status()).toBe(400);
+
+  // Put legal approval back on, through the page.
+  await page.goto(PAGE);
+  await page.getByLabel('Require legal approval').check();
+  await saveAndWait(page);
+  expect(await settingsRow(request)).toMatchObject({ legal_gate: 'on' });
   await owner.close();
-  await admin.close();
+  await member.close();
 });
 
 test('5 · the producer dashboard and /store are untouched', async ({ browser, baseURL }) => {

@@ -129,10 +129,11 @@ describe('the skipped-approval banner (LABEL-51)', () => {
     expect(note.textContent).toMatch(/Legal approval is switched off/);
     expect(note.textContent).toMatch(/Credits & splits still gate/);
   });
-  it('does not show on a delivered or cancelled release, or with nothing skipped', () => {
+  it('shows on a delivered release too, but not on a cancelled one or with nothing skipped', () => {
     const base = detail().release;
     mount(detail({ gatesSkipped: ['legal'], release: { ...base, state: 'delivered' } }));
-    expect(screen.queryByTestId('release-gate-skipped')).toBeNull();
+    expect(screen.getByTestId('release-gate-skipped').textContent).toMatch(/Legal approval is switched off/);
+    cleanup();
     cleanup();
     mount(detail({ gatesSkipped: ['legal'], release: { ...base, state: 'cancelled' } }));
     expect(screen.queryByTestId('release-gate-skipped')).toBeNull();

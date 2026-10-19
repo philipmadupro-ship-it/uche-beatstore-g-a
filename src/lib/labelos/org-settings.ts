@@ -109,6 +109,16 @@ export function planSettingsChange(input: {
     }
   }
 
+  // Contracts & legal off while legal approval is required would leave a gate nobody can clear.
+  // Only a request that touches one of the two is judged, so an org already in that state can still change other settings.
+  if (wanted.legal_gate !== undefined || wanted.departments_off !== undefined) {
+    const after = {
+      legal_gate: wanted.legal_gate ?? before.legal_gate,
+      departments_off: wanted.departments_off !== undefined ? parseDepartmentsOff(wanted.departments_off) : before.departments_off,
+    };
+    if (contractsLockout(after)) return { ok: false, error: CONTRACTS_NEED_LEGAL_OFF };
+  }
+
   const patch: Record<string, unknown> = {};
   const changes: Record<string, { from: string | number | boolean | string[]; to: string | number | boolean | string[] }> = {};
   const keys: SettingKey[] = [];
@@ -146,15 +156,25 @@ export function skippedGates(settings: Pick<OrgSettingsView, 'legal_gate' | 'mar
 const GATE_WORDS = { legal: 'Legal approval', marketing: 'Marketing approval' } as const;
 
 /**
- * The banner a draft release carries when the owner switched an approval off
- * (decision 5: shown on every release it affects). Only a draft is affected:
- * a delivered release's gates were judged when it was delivered, and the
- * current switch says nothing about that; a cancelled one requires nothing.
- * Null when nothing was skipped.
+ * The banner a release carries when the owner switched an approval off
+ * (decision 5: shown on every release it affects). It states only the
+ * CURRENT setting, so it is true on a draft and on a delivered release alike;
+ * a cancelled release requires nothing and carries none. Null when nothing is
+ * skipped.
  */
 export function gateSkipNotice(skipped: readonly ('legal' | 'marketing')[], releaseState: string): string | null {
-  if (skipped.length === 0 || releaseState !== 'draft') return null;
+  if (skipped.length === 0 || releaseState === 'cancelled') return null;
   const names = skipped.map((g) => GATE_WORDS[g]).join(' and ');
   const verb = skipped.length === 1 ? 'is' : 'are';
-  return `${names} ${verb} switched off for this organization, so this release does not need it. Credits & splits still gate. The owner can switch it back on in settings.`;
+  return releaseState === 'delivered'
+    ? `${names} ${verb} switched off for this organization. Credits & splits still gate.`
+    : `${names} ${verb} switched off for this organization, so this release does not need it. Credits & splits still gate. The owner can switch it back on in settings.`;
+}
+
+export const CONTRACTS_NEED_LEGAL_OFF =
+  'Contracts & legal cannot be switched off while legal approval is still required: nobody could give it. Switch legal approval off as well.';
+
+/** The state after the change would leave legal approval required with nobody able to give it. */
+export function contractsLockout(state: Pick<OrgSettingsView, 'legal_gate' | 'departments_off'>): boolean {
+  return state.legal_gate === 'on' && state.departments_off.includes('contracts');
 }
