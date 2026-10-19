@@ -73,6 +73,8 @@ export const VERBS = [
   'recording.uploaded',
   'recording.downloaded',
   'recording.copied',
+  // The metadata editor (LABEL-53): the payload lists changed FIELD NAMES, never values.
+  'recording.metadata_updated',
   // Comments (LABEL-22; the subject is the comment, never its words)
   'comment.created',
   'comment.updated',
@@ -240,6 +242,8 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'recording.uploaded': 'artist',
   'recording.downloaded': 'internal',
   'recording.copied': 'internal',
+  // Codes, ownership and P-lines are rights business; the payload is field names only.
+  'recording.metadata_updated': 'internal',
   // The creative record (a note on a mix). A route overrides to `internal` for
   // an internal comment — the event of a team-only note is team-only too.
   'comment.created': 'artist',

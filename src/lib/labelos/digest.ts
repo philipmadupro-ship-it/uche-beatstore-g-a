@@ -401,6 +401,7 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'recording.uploaded': { one: 'uploaded a recording', many: 'uploaded {n} recordings' },
   'recording.downloaded': { one: 'downloaded a recording', many: 'downloaded {n} recordings' },
   'recording.copied': { one: 'copied a recording', many: 'copied {n} recordings' },
+  'recording.metadata_updated': { one: 'edited the details of a recording', many: 'edited the details of {n} recordings' },
   'comment.created': { one: 'left a comment', many: 'left {n} comments' },
   'comment.updated': { one: 'edited a comment', many: 'edited {n} comments' },
   'comment.resolved': { one: 'resolved a comment thread', many: 'resolved {n} comment threads' },

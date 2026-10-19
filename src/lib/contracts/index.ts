@@ -1686,3 +1686,32 @@ export const PlatformEntitlementsBodySchema = z.object({
 export const PlatformOwnerInviteBodySchema = z.object({
   email: z.string().trim().email('Not a valid email').max(254),
 }).strict();
+
+/**
+ * PATCH /api/org/[orgId]/songs/[trackId] (LABEL-53): the recording / song
+ * metadata editor. Every field is optional: omitted keeps what is there,
+ * `null` (or a blank string) clears it — except the title. `expected` is the
+ * compare-and-set token the editor was loaded with (`metadata_updated_at`,
+ * `null` for a row nobody edited yet); a row that changed meanwhile is 409
+ * with the current values. The values themselves are judged by
+ * `planMetadataPatch` (lib/labelos/track-metadata.ts), which needs the
+ * caller's capabilities; this contract only fixes the shape.
+ */
+const metadataText = z.string().max(4000).nullable().optional();
+export const OrgTrackMetadataBodySchema = z.object({
+  expected: z.string().max(64).nullable(),
+  title: metadataText,
+  version_label: metadataText,
+  isrc: metadataText,
+  iswc: metadataText,
+  bpm: z.number().nullable().optional(),
+  key: metadataText,
+  language: metadataText,
+  explicit: z.boolean().nullable().optional(),
+  genre: metadataText,
+  recorded_on: metadataText,
+  p_line: metadataText,
+  master_owner: metadataText,
+  notes: metadataText,
+}).strict();
+export type OrgTrackMetadataBody = z.infer<typeof OrgTrackMetadataBodySchema>;
