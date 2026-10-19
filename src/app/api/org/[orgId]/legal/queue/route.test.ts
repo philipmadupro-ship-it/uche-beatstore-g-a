@@ -151,6 +151,15 @@ describe('the queue', () => {
     expect(body.items).toHaveLength(3);
   });
 
+  it('doc 21 #13: a song that is on a live release is approved at the release, so it is not listed (and not counted); a cancelled release does not hide it', async () => {
+    db.tables.release_items.push({ id: 'ri-q', release_id: R1, org_id: L, position: 1, song_track_id: S1, master_track_id: S1 });
+    const body = (await (await get(OWN)).json()) as Body;
+    expect(body.items.map((i) => i.id)).not.toContain(S1);
+    expect(body.items.map((i) => `${i.kind}:${i.title}`)).toContain('release:Nova EP');
+    db.tables.releases.find((r) => r.id === R1)!.state = 'cancelled';
+    expect(((await (await get(OWN)).json()) as Body).items.map((i) => i.id)).toContain(S1);
+  });
+
   it('a request made after an approval re-opens the gate and is listed', async () => {
     db.tables.approvals.push(request({ song_id: S3, created_at: '2026-10-06T00:00:00Z' }));
     const body = (await (await get(LG)).json()) as Body;

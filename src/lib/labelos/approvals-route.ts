@@ -38,6 +38,7 @@ import {
 } from './approvals';
 import { approverCandidates, currentSnapshot, listApprovals, namesOf, readReleaseFacts, releasesOfSong, approvalView, type ApprovalView, type Subject } from './approvals-store';
 import { readReadinessSong } from './legal-readiness-store';
+import { scopeAllowsContact } from './artist-scope';
 import { memberMayReadSongRow } from './song-stage-store';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
@@ -79,6 +80,11 @@ export const actorOf = (access: Pick<OrgAccessOk, 'userId' | 'role' | 'capabilit
   capabilities: access.capabilities,
 });
 
+/** The releases a viewer may be told by name: those of the artists their scope reaches (null scope = the whole org). */
+export function visibleReleaseTitles(releases: readonly { id: string; title: string; contactId: string | null }[], scope: OrgAccessOk['artistScope']): { id: string; title: string }[] {
+  return releases.filter((r) => scopeAllowsContact(scope, r.contactId)).map((r) => ({ id: r.id, title: r.title }));
+}
+
 export type GateState = {
   gate: Gate;
   label: string;
@@ -98,7 +104,9 @@ export type GateState = {
   selfApprovalBlocked: boolean;
   /** Why "Approved" is not available to this viewer right now (`approveBlocker`: no request addressed to them, or their own), else null. */
   approveBlockedReason: string | null;
-  /** A song's legal gate only: the live releases the song is on. Non-empty = the release's legal approval is the authority and Approve is withdrawn here. */
+  /** A song's legal gate only: the song is on a live release, so the release's legal approval is the authority and Approve is withdrawn. Sent to deciders only. */
+  onRelease: boolean;
+  /** … and the titles of those releases the viewer's artist scope reaches (a scoped member never learns the title of one outside it). Deciders only. */
   onReleases: { id: string; title: string }[];
   canRequest: boolean;
   /** The viewer may also hand the person asked a task ("Send to legal", LABEL-31): `tasks.write`. */
@@ -149,7 +157,8 @@ export async function gateStates(admin: AdminClient, access: OrgAccessOk, resolv
       snapshotKey: key,
       selfApprovalBlocked: !!current.pending && current.pending.actor_id === access.userId && !isOwnerOrAdmin(access.role),
       approveBlockedReason: canDecide ? (approveBlocker(actor, current.pending)?.message ?? null) : null,
-      onReleases: subject.kind === 'song' && gate === 'legal' ? onReleases : [],
+      onRelease: canDecide && subject.kind === 'song' && gate === 'legal' && onReleases.length > 0,
+      onReleases: canDecide && subject.kind === 'song' && gate === 'legal' ? visibleReleaseTitles(onReleases, access.artistScope) : [],
       canRequest,
       canTask: access.capabilities.has('tasks.write'),
       approvers: canRequest ? await approverCandidates(admin, org, subject, gate, { table, id: subject.id }) : [],

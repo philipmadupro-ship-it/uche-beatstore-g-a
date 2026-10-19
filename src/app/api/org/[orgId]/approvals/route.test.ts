@@ -476,6 +476,25 @@ describe('doc 21 #13 — a song on a release is approved at the release', () => 
     expect((await decide(LG, release(), 'legal', 'approved')).status).toBe(201);
   });
 
+  it('a member limited to another artist is told neither the title nor even that the song is on a release; a non-decider gets no titles', async () => {
+    const SC_LEGAL = u(9);
+    db.tables.org_members.push(member(SC_LEGAL, 'member', ['legal'], 'artists'));
+    // Scoped to Kilo (C2) only, but allowed to open the song through Kilo's inbox: the release is Nova's.
+    db.tables.member_artist_scopes.push({ org_id: L, user_id: SC_LEGAL, contact_id: C2 });
+    db.tables.project_tracks.push({ project_id: LP2, track_id: S1, position: 1 });
+    const scoped = legalOf(await state(SC_LEGAL, `?song=${S1}`)) as unknown as { onRelease: boolean; onReleases: unknown[] };
+    expect(scoped.onReleases).toEqual([]);
+    expect(JSON.stringify(scoped)).not.toContain('Nova EP');
+    // The server still refuses the approval, in words that name nothing.
+    await request(AR, song(), 'legal', SC_LEGAL);
+    const res = await decide(SC_LEGAL, song(), 'legal', 'approved');
+    expect(res.status).toBe(409);
+    expect(JSON.stringify(await res.json())).not.toContain('Nova EP');
+    // Someone who cannot decide gets neither the flag nor a title.
+    const reader = legalOf(await state(AR, `?song=${S1}`)) as unknown as { onRelease: boolean; onReleases: unknown[] };
+    expect(reader).toMatchObject({ onRelease: false, onReleases: [] });
+  });
+
   it('a cancelled release no longer counts; a release gate state carries no list', async () => {
     db.tables.releases[0].state = 'cancelled';
     expect((legalOf(await state(OWN, `?song=${S1}`)) as unknown as { onReleases: unknown[] }).onReleases).toEqual([]);

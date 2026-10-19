@@ -98,7 +98,7 @@ export type ReleaseReadinessFacts = {
     artworkAssetId: string | null;
   };
   /** The artwork file when one is set and was found; `info` is what its header says (null = could not be read). */
-  artwork: { mime: string | null; info: ImageInfo | null } | null;
+  artwork: { mime: string | null; info: ImageInfo | null; sizeChecked?: boolean } | null;
   items: readonly ReadinessItem[];
   /** Legal readiness of each distinct song on the tracklist. */
   legal: ReadonlyMap<string, LegalReadiness>;
@@ -290,7 +290,7 @@ export function evaluateReleaseReadiness(facts: ReleaseReadinessFacts): ReleaseR
   else if (!facts.artwork) ab.push(art('artwork_missing', 'The artwork file no longer exists.'));
   else if (!facts.artwork.mime || !(ARTWORK_MIME as readonly string[]).includes(facts.artwork.mime.toLowerCase())) {
     ab.push(art('artwork_type', 'The artwork must be a JPEG or PNG.'));
-  } else {
+  } else if (facts.artwork.sizeChecked !== false) {
     for (const p of artworkSizeProblems(facts.artwork.info, settings.artwork_min_px)) ab.push(art(p.code, p.message));
   }
   const artwork = approvalGate('artwork', 'artwork', facts.approvals.artwork, ab, []);

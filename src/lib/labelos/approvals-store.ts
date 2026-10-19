@@ -205,7 +205,7 @@ export async function approvalContext(
  * release, so its own Approve is withdrawn. Org-filtered on both tables; a
  * missing releases schema (migration 144) reads as "on none".
  */
-export async function releasesOfSong(admin: AdminClient, org: string, songId: string): Promise<{ id: string; title: string }[]> {
+export async function releasesOfSong(admin: AdminClient, org: string, songId: string): Promise<{ id: string; title: string; contactId: string | null }[]> {
   const items = await admin.from('release_items').select('release_id').eq('org_id', org).eq('song_track_id', songId);
   if (items.error) {
     if (isMissingSchema(items.error)) return [];
@@ -213,11 +213,11 @@ export async function releasesOfSong(admin: AdminClient, org: string, songId: st
   }
   const ids = [...new Set(((items.data ?? []) as { release_id: string }[]).map((r) => r.release_id))];
   if (ids.length === 0) return [];
-  const rels = await admin.from('releases').select('id, title, state').eq('org_id', org).in('id', ids.slice(0, 50));
+  const rels = await admin.from('releases').select('id, title, state, contact_id').eq('org_id', org).in('id', ids.slice(0, 50));
   if (rels.error) throw new Error(`releases read: ${rels.error.message}`);
-  return ((rels.data ?? []) as { id: string; title: string | null; state: string }[])
+  return ((rels.data ?? []) as { id: string; title: string | null; state: string; contact_id: string | null }[])
     .filter((r) => r.state !== 'cancelled')
-    .map((r) => ({ id: r.id, title: r.title ?? 'Untitled release' }));
+    .map((r) => ({ id: r.id, title: r.title ?? 'Untitled release', contactId: r.contact_id }));
 }
 
 // ── People ──────────────────────────────────────────────────────────────

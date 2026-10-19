@@ -16,7 +16,7 @@ import { ApprovalsNotReadyError, currentSnapshot, isMissingApprovalsSchema, list
 import { CreditsNotReadyError } from './credits-store';
 import { SplitsNotReadyError } from './splits-store';
 import { currentDecision, GATES, type Gate } from './approvals';
-import { openProjectAsset } from '@/lib/storage/project-assets';
+import { readProjectAssetHead } from '@/lib/storage/project-assets';
 import { evaluateLegalReadiness, type LegalReadiness } from './legal-readiness';
 import { LegalReadinessNotReadyError, loadLegalFacts, readReadinessSong } from './legal-readiness-store';
 import { IMAGE_HEAD_BYTES, readImageInfo, type ImageInfo } from './image-size';
@@ -46,47 +46,19 @@ export async function readReadinessSettings(admin: AdminClient, org: string): Pr
 
 /**
  * What the artwork file's own header says (09 §4 size rule): the first
- * `IMAGE_HEAD_BYTES` of the stored object, never the whole file and never a
- * URL. Null when the object is gone, outside the allowed buckets, or its
- * header does not read as a PNG / JPEG — the readiness rule treats all three
- * as "could not be checked".
+ * `IMAGE_HEAD_BYTES` of the stored object (a ranged read, never the whole
+ * file and never a URL). Null when the object is gone, outside the allowed
+ * buckets, or its header does not read as a PNG / JPEG — the readiness rule
+ * treats all three as "could not be checked".
  */
 export async function readArtworkInfo(ref: string | null | undefined): Promise<ImageInfo | null> {
   if (!ref) return null;
   try {
-    const body = await openProjectAsset(ref);
-    if (!body) return null;
-    if (body instanceof Uint8Array) return readImageInfo(body.subarray(0, IMAGE_HEAD_BYTES));
-    const reader = body.getReader();
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    try {
-      while (total < IMAGE_HEAD_BYTES) {
-        const { done, value } = await reader.read();
-        if (done || !value) break;
-        chunks.push(value);
-        total += value.length;
-        // A header is usually in the first chunk: stop as soon as it reads.
-        const so_far = readImageInfo(concat(chunks, total));
-        if (so_far) return so_far;
-      }
-    } finally {
-      void reader.cancel().catch(() => undefined);
-    }
-    return readImageInfo(concat(chunks, total).subarray(0, IMAGE_HEAD_BYTES));
+    const head = await readProjectAssetHead(ref, IMAGE_HEAD_BYTES);
+    return head ? readImageInfo(head) : null;
   } catch {
     return null;
   }
-}
-
-function concat(chunks: Uint8Array[], total: number): Uint8Array {
-  const out = new Uint8Array(total);
-  let at = 0;
-  for (const c of chunks) {
-    out.set(c, at);
-    at += c.length;
-  }
-  return out;
 }
 
 const RELATIONS: readonly MasterRelation[] = ['master', 'instrumental', 'version'];
@@ -125,8 +97,10 @@ export async function loadReleaseReadinessFacts(admin: AdminClient, org: string,
     if (a.data) {
       const row = a.data as { mime: string | null; url: string | null };
       // The size rule runs only on a type the type rule let through; read nothing for the rest.
+      // A cancelled or delivered release is not judged on size (and costs no read): only a draft can still change.
       const typeOk = !!row.mime && (ARTWORK_MIME as readonly string[]).includes(row.mime.toLowerCase());
-      artwork = { mime: row.mime ?? null, info: typeOk ? await readArtworkInfo(row.url) : null };
+      const sizeChecked = rel.state === 'draft';
+      artwork = { mime: row.mime ?? null, info: typeOk && sizeChecked ? await readArtworkInfo(row.url) : null, sizeChecked };
     }
   }
 

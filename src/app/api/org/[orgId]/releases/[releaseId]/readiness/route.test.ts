@@ -46,7 +46,13 @@ let missing = new Set<string>();
 
 /** What the stored artwork file starts with, by its reference (09 §4 size rule reads the file's own header). */
 let artworkHead: Record<string, Uint8Array | null> = {};
-vi.mock('@/lib/storage/project-assets', () => ({ openProjectAsset: async (ref: string) => artworkHead[ref] ?? null }));
+const headReads: { ref: string; bytes: number }[] = [];
+vi.mock('@/lib/storage/project-assets', () => ({
+  readProjectAssetHead: async (ref: string, bytes: number) => {
+    headReads.push({ ref, bytes });
+    return artworkHead[ref] ?? null;
+  },
+}));
 const pngHead = (width: number, height: number, colorType = 2) => {
   const b = new Uint8Array(33);
   b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
@@ -150,6 +156,7 @@ beforeEach(() => {
       activity_events: [],
     },
   };
+  headReads.length = 0;
   artworkHead = { 'local://project-assets/art-1': pngHead(3000, 3000) };
   mem = memoryAdmin(db);
 });
@@ -210,6 +217,20 @@ describe('the derived gates', () => {
     expect(await blockers()).toEqual(['artwork_unreadable']);
     artworkHead['local://project-assets/art-1'] = new TextEncoder().encode('not an image at all, just words');
     expect(await blockers()).toEqual(['artwork_unreadable']);
+  });
+
+  it('only the head of the file is asked for, and only while the release is a draft', async () => {
+    artworkHead['local://project-assets/art-1'] = pngHead(2000, 2000);
+    await read(OWN, L, R1);
+    expect(headReads).toEqual([{ ref: 'local://project-assets/art-1', bytes: 262144 }]);
+    for (const state of ['delivered', 'cancelled']) {
+      headReads.length = 0;
+      db.tables.releases.find((r) => r.id === R1)!.state = state;
+      const { readiness } = await (await read(OWN, L, R1)).json();
+      expect(headReads, state).toEqual([]);
+      // Not judged on size once it can no longer change.
+      expect(readiness.gates.artwork.blockers.map((b: { code: string }) => b.code), state).toEqual([]);
+    }
   });
 
   it('an approved artwork whose snapshot matches stays approved', async () => {

@@ -45,9 +45,10 @@ export const changedText = (parts: readonly string[]): string => {
 };
 
 /** A song's legal gate with the song on a release: the release holds the authoritative approval. */
-export const legalOnRelease = (g: Pick<GateStateView, 'gate' | 'onReleases'>): boolean => g.gate === 'legal' && (g.onReleases?.length ?? 0) > 0;
+export const legalOnRelease = (g: Pick<GateStateView, 'gate' | 'onRelease' | 'onReleases'>): boolean => g.gate === 'legal' && (g.onRelease === true || (g.onReleases?.length ?? 0) > 0);
 
 export const onReleaseText = (releases: readonly { title: string }[]): string => {
+  if (releases.length === 0) return 'This song is on a release. Legal is approved on the release; this song’s own approval no longer counts.';
   const names = releases.slice(0, 2).map((r) => `“${r.title}”`).join(' and ');
   const more = releases.length > 2 ? ` and ${releases.length - 2} more` : '';
   return `This song is on ${names}${more}. Legal is approved on the release; this song’s own approval no longer counts.`;

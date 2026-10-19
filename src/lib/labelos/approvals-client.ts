@@ -20,6 +20,7 @@ export type GateStateView = {
   selfApprovalBlocked: boolean;
   approveBlockedReason?: string | null;
   /** A song's legal gate: the live releases it is on; Approve is the release's to give. */
+  onRelease?: boolean;
   onReleases?: { id: string; title: string }[];
   canRequest: boolean;
   /** Sent back as `seen` when approving, so the approval records what was on screen. Null for a viewer who cannot decide. */
