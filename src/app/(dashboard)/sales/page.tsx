@@ -725,7 +725,7 @@ function SaleRow({ sale }: { sale: Sale }) {
         <span className="shrink-0 inline-flex items-center gap-1.5">
           <span
             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-red-500/15 border border-red-500/35 text-red-400"
-            title="This exclusive was already sold to someone else when this payment landed — refund the buyer via Stripe"
+            title="This exclusive was already sold to someone else when this payment landed — refund the buyer via Stripe. Their downloads are on hold until then."
           >
             Needs refund review
           </span>

@@ -5,6 +5,7 @@ import { errorMessage } from '@/lib/errors';
 import { streamAudioPreviewSource } from '@/lib/audio/stream-source';
 import { createLogger } from '@/lib/log';
 import { canStreamPublicly, publicPreviewSource, type PreviewTrackRow } from '@/lib/store/public-preview-access';
+import { ownedStreamHeaders, sessionOwnsTrack } from '@/lib/store/owned-preview-access';
 
 const log = createLogger('api.store.preview');
 
@@ -33,7 +34,11 @@ export async function GET(
     // Listed, or in a featured bundle — and the producer's own track either
     // way. A row a buyer inserted must not become a public stream.
     const row = track as PreviewTrackRow | null;
-    if (!row || !(await canStreamPublicly(admin, id, row))) {
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // Not public (an exclusive delists the beat it sells): the signed-in buyer
+    // who owns it may still hear the same public preview. Anyone else 404s.
+    const isPublic = await canStreamPublicly(admin, id, row);
+    if (!isPublic && !(await sessionOwnsTrack(admin, id, row.user_id))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     const source = publicPreviewSource(row);
@@ -43,7 +48,11 @@ export async function GET(
 
     const upstream = await streamAudioPreviewSource(req, source);
     const headers = new Headers(upstream.headers);
-    headers.set('cache-control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=300');
+    if (isPublic) {
+      headers.set('cache-control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=300');
+    } else {
+      ownedStreamHeaders(headers);
+    }
     return new Response(upstream.body, { status: upstream.status, headers });
   } catch (err) {
     // Public route: log the detail, never return it (DB/storage internals).

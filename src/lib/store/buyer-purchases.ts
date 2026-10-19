@@ -63,6 +63,16 @@ export function isLicenseDownloadActive(row: { download_unlocked?: boolean | nul
   return row.download_unlocked !== false;
 }
 
+interface PurchasedTrackMeta {
+  title: string | null;
+  cover_url: string | null;
+  type: string | null;
+  bpm: number | null;
+  key: string | null;
+  scale: string | null;
+  duration_seconds: number | null;
+}
+
 function isNonEmptyString(value: string | null | undefined): value is string {
   return typeof value === 'string' && value.length > 0;
 }
@@ -104,10 +114,15 @@ export async function loadBuyerPurchases(admin: Admin, rawEmail: string) {
   const licenseRows = (lpRes.data ?? []) as LicensePurchaseAccountRow[];
   const allItems = licenseRows.flatMap((r) => parsePurchaseLineItems(r.line_items));
   const trackIds = [...new Set(allItems.map((i) => i.track_id).filter(isNonEmptyString))];
-  const titleMap = new Map<string, string>();
+  // The same read also carries what the player needs to play a bought beat
+  // from the account (cover, length, tempo), so it costs no extra query.
+  const trackMap = new Map<string, PurchasedTrackMeta>();
   if (trackIds.length > 0) {
-    const { data: tracks } = await admin.from('tracks').select('id, title').in('id', trackIds);
-    for (const t of (tracks ?? []) as Array<{ id: string; title: string }>) titleMap.set(t.id, t.title);
+    const { data: tracks } = await admin
+      .from('tracks')
+      .select('id, title, cover_url, type, bpm, key, scale, duration_seconds')
+      .in('id', trackIds);
+    for (const t of (tracks ?? []) as Array<PurchasedTrackMeta & { id: string }>) trackMap.set(t.id, t);
   }
 
   const trackLicenses = licenseRows.map((row) => {
@@ -115,10 +130,19 @@ export async function loadBuyerPurchases(admin: Admin, rawEmail: string) {
     return {
       id: row.id,
       kind: 'track' as const,
-      items: parsePurchaseLineItems(row.line_items).map((i) => ({
-        ...i,
-        title: titleMap.get(i.track_id) ?? null,
-      })),
+      items: parsePurchaseLineItems(row.line_items).map((i) => {
+        const t = trackMap.get(i.track_id);
+        return {
+          ...i,
+          title: t?.title ?? null,
+          cover_url: t?.cover_url ?? null,
+          type: t?.type ?? null,
+          bpm: t?.bpm ?? null,
+          key: t?.key ?? null,
+          scale: t?.scale ?? null,
+          duration_seconds: t?.duration_seconds ?? null,
+        };
+      }),
       amount_usd: Number(row.amount_usd ?? 0),
       created_at: row.created_at,
       status: row.status,

@@ -120,8 +120,16 @@ export function clearBuyerIdentity(): void {
   setPersistentBuyerSession(false);
 }
 
-async function dispatch(action: Record<string, unknown>): Promise<BuyerActionResult> {
-  const identity = buyerIdentityQuery();
+async function dispatch(
+  action: Record<string, unknown>,
+  identityQuery?: string,
+): Promise<BuyerActionResult> {
+  // A page that already knows whose library it is showing (the legacy token
+  // page) passes that identity, so a write never lands in a different
+  // account's library because a session marker outranks the token here.
+  const identity = identityQuery
+    ? { query: identityQuery, mode: identityQuery.startsWith('token=') ? ('token' as const) : ('session' as const) }
+    : buyerIdentityQuery();
   if (!identity) return { ok: false, error: 'No buyer session' };
   try {
     const res = await fetch(`/api/store/me?${identity.query}`, {
@@ -143,7 +151,8 @@ async function dispatch(action: Record<string, unknown>): Promise<BuyerActionRes
   }
 }
 
-export const logPlay = (track_id: string) => dispatch({ action: 'log_play', track_id });
+export const logPlay = (track_id: string, identityQuery?: string) =>
+  dispatch({ action: 'log_play', track_id }, identityQuery);
 /** Idempotent: sends the state the heart now shows, never a flip. */
 export const setFavorite = (track_id: string, favorited: boolean) =>
   dispatch({ action: 'set_favorite', track_id, favorited });

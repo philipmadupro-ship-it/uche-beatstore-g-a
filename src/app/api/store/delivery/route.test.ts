@@ -22,6 +22,12 @@ vi.mock('@/lib/auth/ownership', () => ({
   }),
 }));
 
+const mockRateLimit = vi.fn();
+vi.mock('@/lib/security/rate-limit', () => ({
+  rateLimitDurable: (...a: unknown[]) => mockRateLimit(...a),
+  clientIp: () => '203.0.113.9',
+}));
+
 vi.mock('@/lib/env', () => ({
   getAppUrl: () => 'https://example.test',
 }));
@@ -107,6 +113,7 @@ async function loadRoute() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockIsSupabaseConfigured.mockReturnValue(true);
+  mockRateLimit.mockResolvedValue(true);
   mockFrom.mockImplementation((table: string) => tableForProjectDelivery(table));
 });
 
@@ -142,6 +149,148 @@ describe('GET /api/store/delivery', () => {
 
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: 'Download access revoked (refunded or disputed)' });
+  });
+
+  it('holds delivery for an exclusive that sold twice until the producer has reviewed it', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'license_purchases') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({
+                data: {
+                  id: 'purchase-1',
+                  buyer_email: 'buyer@example.test',
+                  amount_usd: 300,
+                  created_at: '2026-01-01T00:00:00Z',
+                  status: 'paid',
+                  download_unlocked: true,
+                  needs_refund_review: true,
+                  track_ids: ['track-1'],
+                  line_items: [{ track_id: 'track-1', license_type: 'exclusive' }],
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return tableForProjectDelivery(table);
+    });
+
+    const mod = await loadRoute();
+    const res = await mod.GET(req());
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.error).toMatch(/review/i);
+    expect(body.tracks).toBeUndefined();
+  });
+
+  it('answers 400 without a session and 404 for a session that matches nothing', async () => {
+    mockFrom.mockImplementation((table: string) => ({
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }),
+      _table: table,
+    }));
+    const mod = await loadRoute();
+
+    const missing = await mod.GET(new NextRequest('http://localhost/api/store/delivery'));
+    const unknown = await mod.GET(req('cs_unknown'));
+
+    expect(missing.status).toBe(400);
+    expect(unknown.status).toBe(404);
+  });
+
+  describe('a track whose master is a WAV', () => {
+    function mockWavMaster(fileTypes: string[], wavUrl: string | null = null) {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'license_purchases') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: () => Promise.resolve({
+                  data: {
+                    id: 'purchase-1', buyer_email: 'buyer@example.test', amount_usd: 30,
+                    created_at: '2026-01-01T00:00:00Z', status: 'paid', download_unlocked: true,
+                    track_ids: ['track-1'],
+                    line_items: [{ track_id: 'track-1', license_id: 'custom', license_type: 'lease', file_types: fileTypes, stems_included: false }],
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'tracks') {
+          return {
+            select: () => ({
+              in: () => Promise.resolve({
+                data: [{ id: 'track-1', title: 'WAV Beat', type: 'beat', audio_url: 'r2://private/tracks/beat.wav', wav_url: wavUrl, stems_status: 'none' }],
+                error: null,
+              }),
+            }),
+          };
+        }
+        return tableForProjectDelivery(table);
+      });
+    }
+
+    it('lists the MP3 for an MP3-only lease, which used to list nothing at all', async () => {
+      mockWavMaster(['MP3']);
+      const mod = await loadRoute();
+      const body = await (await mod.GET(req())).json();
+
+      expect(body.tracks[0].downloads).toEqual([
+        { format: 'mp3', label: 'MP3', proxied_url: expect.stringMatching(/^\/api\/store\/download-file\?.*format=mp3/) },
+      ]);
+    });
+
+    it('lists the MP3 and the WAV for a tier that includes both, and no WAV for one that does not', async () => {
+      mockWavMaster(['MP3', 'WAV']);
+      const mod = await loadRoute();
+      const both = (await (await mod.GET(req())).json()).tracks[0].downloads.map((d: { format: string }) => d.format);
+      expect(both).toEqual(['mp3', 'wav-main']);
+
+      mockWavMaster(['MP3']);
+      const mp3Only = (await (await mod.GET(req())).json()).tracks[0].downloads.map((d: { format: string }) => d.format);
+      expect(mp3Only).toEqual(['mp3']);
+    });
+
+    it('lists no MP3 for a tier that does not include one', async () => {
+      mockWavMaster(['WAV']);
+      const mod = await loadRoute();
+      const formats = (await (await mod.GET(req())).json()).tracks[0].downloads.map((d: { format: string }) => d.format);
+      expect(formats).toEqual(['wav-main']);
+    });
+  });
+
+  it('answers 429 over the per-IP limit, before any lookup', async () => {
+    mockRateLimit.mockResolvedValue(false);
+    const mod = await loadRoute();
+    const res = await mod.GET(req());
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get('retry-after')).toBe('60');
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockRateLimit).toHaveBeenCalledWith('dl-list:203.0.113.9', 60, 60_000);
+  });
+
+  it('does not echo internal error text to the buyer', async () => {
+    mockFrom.mockImplementation(() => {
+      throw new Error('relation "license_purchases" secret-internal-detail');
+    });
+    const mod = await loadRoute();
+    const res = await mod.GET(req());
+
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).not.toContain('secret-internal-detail');
+  });
+
+  it('hands out same-origin download URLs, so the page can check them before saving', async () => {
+    const mod = await loadRoute();
+    const body = await (await mod.GET(req())).json();
+
+    expect(body.tracks[0].downloads[0].proxied_url).toMatch(/^\/api\/store\/download-file\?/);
   });
 
   it('returns project access amount and downloadable project tracks', async () => {

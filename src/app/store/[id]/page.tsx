@@ -951,6 +951,8 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  // False when the offer went out on an email nobody proved is theirs.
+  const [verified, setVerified] = useState(false);
 
   const offerPrice = Number.parseFloat(priceStr);
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -967,6 +969,8 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
         body: JSON.stringify({ track_id: trackId, buyer_email: email.trim(), offered_price_usd: offerPrice, message: message.trim() || undefined }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed');
+      const sentBody = await res.json().catch(() => ({} as { verified?: boolean }));
+      setVerified(sentBody.verified === true);
       setSent(true);
     } catch (err) {
       toast.error('Could not send offer', err instanceof Error ? err.message : 'Please try again.');
@@ -998,6 +1002,11 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
             <Check size={26} className="mx-auto mb-3" style={{ color: accent }} />
             <p className="text-[13px] font-medium text-white mb-1">Offer sent</p>
             <p className="text-[11px] text-white/60 leading-relaxed">The producer will reply to your email if interested.</p>
+            {!verified && (
+              <p className="mt-2 text-[10px] text-white/40 leading-relaxed">
+                <Link href="/store/account" className="underline underline-offset-2 hover:text-white/60">Sign in</Link> before you make an offer and it is kept under My beats.
+              </p>
+            )}
             <button onClick={onClose} className="mt-5 text-[9px] font-mono uppercase tracking-wider text-white/60 hover:text-white transition-colors">Close</button>
           </div>
         ) : (

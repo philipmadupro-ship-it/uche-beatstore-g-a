@@ -20,6 +20,8 @@ vi.mock('@/lib/audio/stream-source', () => ({
   streamAudioPreviewSource: (...a: unknown[]) => mockStream(...(a as [])),
 }));
 vi.mock('@/lib/auth/ownership', () => ({
+  // Anonymous caller: the owned-buyer fallback in the preview route finds no session.
+  requireUser: () => Promise.resolve({ ok: false }),
   createServiceClient: () => ({
     from: (table: string) => {
       let eqVal: unknown;

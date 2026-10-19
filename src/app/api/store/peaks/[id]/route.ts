@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { streamAudioPreviewSource } from '@/lib/audio/stream-source';
 import { errorMessage } from '@/lib/errors';
 import { canStreamPublicly } from '@/lib/store/public-preview-access';
+import { ownedStreamHeaders, sessionOwnsTrack } from '@/lib/store/owned-preview-access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,13 @@ function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
-async function resolveStorePeaks(trackId: string): Promise<string | null> {
+interface ResolvedPeaks {
+  url: string;
+  /** Served to the owner of a delisted beat, so it depends on the cookie. */
+  owned: boolean;
+}
+
+async function resolveStorePeaks(trackId: string): Promise<ResolvedPeaks | null> {
   if (isSupabaseConfigured()) {
     const admin = createServiceClient();
     const { data, error } = await admin
@@ -31,16 +38,19 @@ async function resolveStorePeaks(trackId: string): Promise<string | null> {
     if (error) throw error;
     const row = data as TrackPeaksRow | null;
     // Same rule as the preview it draws: listed or in a featured bundle.
-    if (!row || !(await canStreamPublicly(admin, trackId, {
+    if (!row) return null;
+    const isPublic = await canStreamPublicly(admin, trackId, {
       user_id: row.user_id ?? null,
       store_listed: row.store_listed ?? null,
-    }))) return null;
-    return row.peaks_url || null;
+    });
+    // An exclusive delists the beat it sells; its buyer still gets the waveform.
+    if (!isPublic && !(await sessionOwnsTrack(admin, trackId, row.user_id))) return null;
+    return row.peaks_url ? { url: row.peaks_url, owned: !isPublic } : null;
   }
 
   const row = getById<TrackPeaksRow>('tracks', trackId);
   if (!row?.store_listed) return null;
-  return row.peaks_url || null;
+  return row.peaks_url ? { url: row.peaks_url, owned: false } : null;
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -49,10 +59,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!id) return jsonError('Missing track id', 400);
 
   try {
-    const peaksUrl = await resolveStorePeaks(id);
-    if (!peaksUrl) return jsonError('Peaks not found', 404);
+    const peaks = await resolveStorePeaks(id);
+    if (!peaks) return jsonError('Peaks not found', 404);
 
-    const upstream = await streamAudioPreviewSource(req, peaksUrl);
+    const upstream = await streamAudioPreviewSource(req, peaks.url);
     if (!upstream.ok) {
       return new Response(upstream.body, {
         status: upstream.status,
@@ -68,6 +78,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     headers.set('access-control-expose-headers', 'Content-Length, Content-Range, Accept-Ranges');
     headers.set('cache-control', 'public, s-maxage=3600, stale-while-revalidate=86400');
     headers.set('x-content-type-options', 'nosniff');
+    if (peaks.owned) ownedStreamHeaders(headers);
 
     return new Response(upstream.body, {
       status: upstream.status,

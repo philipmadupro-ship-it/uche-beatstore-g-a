@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       discount_percent: row.discount_percent ?? 0,
       discount_amount: row.discount_amount ?? 0,
     });
-  } catch (err) {
+  } catch {
     return NextResponse.json({ valid: false, error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

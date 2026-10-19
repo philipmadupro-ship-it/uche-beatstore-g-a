@@ -5,18 +5,24 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Loader2, AlertCircle, Music, Layers, Download, ExternalLink,
-  CreditCard, Heart, History, ListMusic, Plus, Trash2,
+  CreditCard, Heart, History, ListMusic, Play, Plus, Trash2,
 } from 'lucide-react';
 import { setBuyerToken } from '@/lib/buyer-session';
 import { toast } from '@/hooks/useToast';
-import { BuyerLibraryTile, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
+import { BuyerLibraryTile, BuyerPlayButton, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
+import { useBuyerPlayback } from '@/hooks/useBuyerPlayback';
+import { purchasedItemSummary } from '@/lib/store/buyer-playback';
 import { CoverImage } from '@/components/ui/CoverImage';
 import type { BuyerLibraryShape, BuyerLibraryPlaylist } from '@/lib/store/buyer-library';
 
 interface TrackLicense {
   id: string;
   kind: 'track';
-  items: Array<{ track_id: string; license_id: string; license_type: string; title?: string | null }>;
+  items: Array<{
+    track_id: string; license_id: string; license_type: string; title?: string | null;
+    cover_url?: string | null; type?: string | null; bpm?: number | null;
+    key?: string | null; scale?: string | null; duration_seconds?: number | null;
+  }>;
   amount_usd: number;
   created_at: string;
   status: string | null;
@@ -55,6 +61,8 @@ function fmtMoney(n: number) {
 
 export default function AccountPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
+  // This page is identified by its link, so audio and play logs ask as the token.
+  const { isPlayingTrack, play } = useBuyerPlayback(`token=${encodeURIComponent(token)}`);
   const [data, setData] = useState<AccountData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -214,8 +222,8 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
                           href={b.download_url}
                           className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white text-black hover:bg-white/90 transition-colors"
                         >
-                          <Download size={11} />
-                          Open
+                          <Play size={11} fill="currentColor" aria-hidden="true" />
+                          Open to listen
                         </a>
                       )}
                     </li>
@@ -238,10 +246,29 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-medium text-white truncate">
-                            {r.items.map((i) => i.title).filter(Boolean).join(' · ')
-                              || `${r.items.length} track${r.items.length === 1 ? '' : 's'}`}
-                          </p>
+                          {r.access_revoked || r.items.length === 0 ? (
+                            <p className="text-[11px] font-medium text-white truncate">
+                              {r.items.map((i) => i.title).filter(Boolean).join(' · ')
+                                || `${r.items.length} track${r.items.length === 1 ? '' : 's'}`}
+                            </p>
+                          ) : (
+                            <ul className="space-y-1">
+                              {r.items.map((i, n) => {
+                                const itemTitle = i.title?.trim() || 'Untitled beat';
+                                return (
+                                  <li key={`${i.track_id}-${n}`} className="flex items-center gap-1.5 min-w-0">
+                                    <BuyerPlayButton
+                                      title={itemTitle}
+                                      playing={isPlayingTrack(i.track_id)}
+                                      onToggle={() => play(purchasedItemSummary(i), r.items.map(purchasedItemSummary))}
+                                      className="size-7 shrink-0 rounded-md border border-white/10 hover:border-white/20 hover:bg-white/[0.06]"
+                                    />
+                                    <span className="text-[11px] font-medium text-white truncate">{itemTitle}</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
                           <p className="text-[10px] font-mono text-white/40 mt-0.5">
                             {fmtDate(r.created_at)} · {fmtMoney(r.amount_usd)}
                             {r.items[0]?.license_type ? ` · ${r.items[0].license_type}` : ''}
@@ -309,7 +336,7 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
             <Link href="/store/account" className="text-white/60 hover:text-white underline underline-offset-2">
               Sign in with this email
             </Link>{' '}
-            to keep the same purchases, favourites and playlists without a link that expires.
+            to keep the same purchases, favourites and projects without a link that expires.
           </p>
         </footer>
       </div>
@@ -321,6 +348,7 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
 
 function BuyerLibrary({ token }: { token: string }) {
   const queryClient = useQueryClient();
+  const { isPlayingTrack, play } = useBuyerPlayback(`token=${encodeURIComponent(token)}`);
 
   const { data, isLoading } = useQuery({
     queryKey: ['buyerLibrary', token],
@@ -349,7 +377,7 @@ function BuyerLibrary({ token }: { token: string }) {
       if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
       return j.playlist as BuyerLibraryPlaylist;
     },
-    onSuccess: () => { setNewPlaylistName(''); toast.success('Playlist created'); refresh(); },
+    onSuccess: () => { setNewPlaylistName(''); toast.success('Project created'); refresh(); },
     onError: (e: Error) => toast.error('Could not create', e.message),
   });
 
@@ -365,7 +393,7 @@ function BuyerLibrary({ token }: { token: string }) {
         throw new Error(j.error ?? `HTTP ${res.status}`);
       }
     },
-    onSuccess: () => { toast.success('Playlist deleted'); refresh(); },
+    onSuccess: () => { toast.success('Project deleted'); refresh(); },
     onError: (e: Error) => toast.error('Could not delete', e.message),
   });
 
@@ -399,6 +427,8 @@ function BuyerLibrary({ token }: { token: string }) {
                 <BuyerLibraryTile
                   track={r.track}
                   subline={new Date(r.played_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                  playing={r.track ? isPlayingTrack(r.track.id) : false}
+                  onPlay={r.track ? () => play(r.track!, recentHistory.map((h) => h.track)) : undefined}
                 />
               </li>
             ))}
@@ -418,7 +448,11 @@ function BuyerLibrary({ token }: { token: string }) {
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
             {data.favorites.map((f) => (
               <li key={f.track_id}>
-                <BuyerLibraryTile track={f.track} />
+                <BuyerLibraryTile
+                  track={f.track}
+                  playing={f.track ? isPlayingTrack(f.track.id) : false}
+                  onPlay={f.track ? () => play(f.track!, data.favorites.map((x) => x.track)) : undefined}
+                />
               </li>
             ))}
           </ul>
@@ -429,14 +463,14 @@ function BuyerLibrary({ token }: { token: string }) {
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4">
         <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-3">
           <ListMusic size={11} />
-          My playlists ({data.playlists.length})
+          Projects ({data.playlists.length})
         </p>
         <div className="flex items-center gap-2 mb-3">
           <input
             type="text"
             value={newPlaylistName}
             onChange={(e) => setNewPlaylistName(e.target.value)}
-            placeholder="New playlist name"
+            placeholder="New project name"
             maxLength={80}
             onKeyDown={(e) => { if (e.key === 'Enter' && newPlaylistName.trim()) createMut.mutate(newPlaylistName.trim()); }}
             className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
@@ -470,7 +504,7 @@ function BuyerLibrary({ token }: { token: string }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (confirm(`Delete playlist "${p.name}"?`)) deleteMut.mutate(p.id);
+                    if (confirm(`Delete project "${p.name}"?`)) deleteMut.mutate(p.id);
                   }}
                   title="Delete"
                   className="w-7 h-7 rounded-md border border-white/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-900/40 transition-colors"
