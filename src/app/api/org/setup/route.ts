@@ -82,8 +82,7 @@ export async function POST(req: NextRequest) {
       p_user: session.userId,
       p_kind: kind,
       p_name: name,
-      // Only when there is something to store, so a plain setup still works on 189 alone.
-      ...(settings.keys.length > 0 ? { p_settings: settings.patch } : {}),
+      p_settings: settings.patch,
     });
     const result = interpretSetupResult(data, error as { code?: string; message?: string } | null);
     if (result.status === 'schema_missing') return NextResponse.json({ error: SETUP_NOT_READY }, { status: 503 });

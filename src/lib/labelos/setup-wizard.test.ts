@@ -67,6 +67,7 @@ describe('skipping a step', () => {
     expect(skipStep(d, 'departments').departmentsOff).toEqual([]);
     const t = skipStep(d, 'team');
     expect([t.roster, t.team]).toEqual([[], []]);
+    expect(skipStep(label({ release: { enabled: true, title: 'x', type: 'single', artistIndex: 0 } }), 'team').release.enabled).toBe(false);
     expect(stepProblems(t, 'team')).toEqual([]);
     expect(skipStep(d, 'who')).toBe(d);
   });

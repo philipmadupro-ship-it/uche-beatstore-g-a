@@ -49,7 +49,7 @@ describe('POST /api/org/setup', () => {
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ org: { id: ORG, slug: 'nova', kind: 'artist' }, home: '/o/nova', created: true });
     expect(admin.rpcs).toEqual([
-      { name: 'labelos_setup_org', args: { p_user: USER, p_kind: 'artist', p_name: 'Nova' } },
+      { name: 'labelos_setup_org', args: { p_user: USER, p_kind: 'artist', p_name: 'Nova', p_settings: {} } },
     ]);
     expect(admin.chains.some((c) => c.table === 'activity_events')).toBe(true);
   });

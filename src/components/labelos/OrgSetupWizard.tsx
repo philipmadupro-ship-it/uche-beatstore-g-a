@@ -90,7 +90,7 @@ export function OrgSetupWizard({ userId, initialFace, email }: { userId: string;
   const [shown, setShown] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [outcome, setOutcome] = useState<{ home: string; results: StepResult[] } | null>(null);
+  const [outcome, setOutcome] = useState<{ home: string; results: StepResult[]; existing?: boolean } | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
   // Resume after mount: localStorage does not exist on the server render.
@@ -156,6 +156,12 @@ export function OrgSetupWizard({ userId, initialFace, email }: { userId: string;
     }
     clearDraft(storage(), userId);
     const results = run.status === 'created' ? run.results : [];
+    if (run.status === 'exists') {
+      // Settings are not an edit of an existing org: say so instead of dropping what was entered silently.
+      setOutcome({ home: run.home, results: [], existing: true });
+      setBusy(false);
+      return;
+    }
     if (results.length === 0) {
       // Hard navigation: the proxy must see the new membership on a fresh request.
       window.location.assign(run.home);
@@ -179,10 +185,10 @@ export function OrgSetupWizard({ userId, initialFace, email }: { userId: string;
         <header>
           <p className={cn(LEGEND, 'mb-2')}>Your account is ready</p>
           <h1 ref={heading} tabIndex={-1} className="font-heading text-[28px] font-bold leading-[1.05] tracking-tight text-white focus:outline-none sm:text-[32px]">
-            {failed.length === 0 ? 'All set' : 'Set up, with a few things left'}
+            {outcome.existing ? 'You already have an organization' : failed.length === 0 ? 'All set' : 'Set up, with a few things left'}
           </h1>
           <p className="mt-2 text-[11px] leading-relaxed text-white/60">
-            {failed.length === 0 ? 'Everything you added is in place.' : 'The organization exists. These did not go through; each can be done from the place named.'}
+            {outcome.existing ? 'This account already has an organization, so nothing you entered here was applied. Settings, people and roster can be changed from inside it.' : failed.length === 0 ? 'Everything you added is in place.' : 'The organization exists. These did not go through; each can be done from the place named.'}
           </p>
         </header>
         <ul className="divide-y divide-white/10" data-testid="wizard-results">
@@ -313,7 +319,7 @@ export function OrgSetupWizard({ userId, initialFace, email }: { userId: string;
 
           <section aria-labelledby="release-h">
             <h2 id="release-h" className={LEGEND}>First release</h2>
-            <CheckRow id="release-on" label="Start a first draft release" hint="Optional. A draft you can finish from the Releases board." checked={draft.release.enabled} disabled={face === 'label' && rosterNames(draft).length === 0} onChange={(v) => update({ ...draft, release: { ...draft.release, enabled: v } })} />
+            <CheckRow id="release-on" label="Start a first draft release" hint="Optional. A draft you can finish from the Releases board." checked={draft.release.enabled} disabled={face === 'label' && rosterNames(draft).length === 0 && !draft.release.enabled} onChange={(v) => update({ ...draft, release: { ...draft.release, enabled: v } })} />
             {face === 'label' && rosterNames(draft).length === 0 ? <p className="text-[11px] text-white/50">Add a roster artist in step 3 to start a release for them.</p> : null}
             {draft.release.enabled ? (
               <div className="mt-2 grid gap-3 sm:grid-cols-2" data-testid="wizard-release">

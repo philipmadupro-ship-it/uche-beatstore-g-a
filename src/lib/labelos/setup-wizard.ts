@@ -215,7 +215,7 @@ export function skipStep(draft: WizardDraft, step: WizardStepId): WizardDraft {
   const preset = draft.face ? FACE_PRESETS[draft.face] : null;
   if (step === 'work') return { ...draft, contractTypes: preset ? [...preset.contractTypes] : [], contractsTouched: false };
   if (step === 'departments') return { ...draft, departmentsOff: preset ? [...preset.departmentsOff] : [], departmentsTouched: false };
-  if (step === 'team') return { ...draft, roster: [], team: [], release: { ...draft.release, artistIndex: 0 } };
+  if (step === 'team') return { ...draft, roster: [], team: [], release: { ...draft.release, artistIndex: 0, enabled: draft.face === 'label' ? false : draft.release.enabled } };
   return draft;
 }
 
