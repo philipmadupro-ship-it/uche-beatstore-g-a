@@ -26,6 +26,8 @@
  * never logs or echoes it. Attempts are rate-limited per client.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { MANAGED_ACCOUNT_STAYS } from '@/lib/labelos/team-accounts';
+import { ownManagedAccount } from '@/lib/labelos/team-accounts-store';
 import { liveMembership, liveProjectMembership, sessionIdentity } from '@/lib/auth/org-access';
 import { isPlatformAdmin } from '@/lib/auth/platform-access';
 import { createServiceClient } from '@/lib/auth/ownership';
@@ -151,6 +153,13 @@ export async function POST(req: NextRequest) {
         emailMatches,
         member,
       });
+    }
+
+    // Doc 25: a team account stays in the organization that made it. Joining
+    // anything else would put it out of that org's reach (190's `shared`).
+    const own = await ownManagedAccount(admin, session!.userId);
+    if (own.status === 'managed') {
+      return NextResponse.json({ error: MANAGED_ACCOUNT_STAYS, code: 'team_account' }, { status: 409 });
     }
 
     const { data, error } = await admin.rpc(ACCEPT_INVITATION_RPC, { p_token_hash: tokenHash, p_user: session!.userId });

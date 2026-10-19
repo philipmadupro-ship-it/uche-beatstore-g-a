@@ -67,6 +67,8 @@
  * twin `public.can_see_artist` (migration 139).
  */
 import { NextResponse } from 'next/server';
+import { MUST_CHANGE_PASSWORD, sessionIdOf } from '@/lib/labelos/team-accounts';
+import { sessionMustChangePassword } from '@/lib/labelos/team-accounts-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createServiceClient, type AdminClient, type OwnershipFail } from '@/lib/auth/ownership';
 import {
@@ -143,6 +145,22 @@ export type SessionIdentity = { userId: string; email: string | null };
 export async function sessionIdentity(): Promise<SessionIdentity | null> {
   const session = await readSession();
   return session ? { userId: session.userId, email: session.email } : null;
+}
+
+/**
+ * The Supabase session the caller's request belongs to (its id, from the
+ * access token's `session_id` claim), or null. Only for keeping THIS session
+ * while ending the others (a team account's own password change, doc 25);
+ * call it after `sessionIdentity()` has validated the same token.
+ */
+export async function currentSessionId(): Promise<string | null> {
+  try {
+    const cookieClient = await createServerClient();
+    const { data } = await cookieClient.auth.getSession();
+    return sessionIdOf(data.session?.access_token);
+  } catch {
+    return null;
+  }
 }
 
 type SessionDetail = SessionIdentity & { lastSignInAt: string | null };
@@ -236,13 +254,23 @@ async function memberContext(
 ): Promise<OrgAccessResult> {
   const admin = createServiceClient();
   let membership: Awaited<ReturnType<typeof readMembership>>;
+  let mustChangePassword: boolean;
   try {
-    membership = await readMembership(admin, orgId, userId);
+    // Doc 25: a team account still on its org-given password reaches no org
+    // route until it chooses its own (src/proxy.ts refuses first; this holds
+    // without the proxy). Read alongside the membership; any error reads as false.
+    [membership, mustChangePassword] = await Promise.all([
+      readMembership(admin, orgId, userId),
+      sessionMustChangePassword(userId, admin),
+    ]);
   } catch (err) {
     log.error('membership read failed', { orgId, error: err instanceof Error ? err.message : String(err) });
     return fail(500, 'Could not check organization access');
   }
   if (!membership) return missing();
+  if (mustChangePassword) {
+    return { ok: false, res: NextResponse.json({ error: MUST_CHANGE_PASSWORD, mustChangePassword: true }, { status: 403 }) };
+  }
   let artistScope: ArtistScope;
   try {
     artistScope = await readArtistScope(admin, orgId, userId, membership);

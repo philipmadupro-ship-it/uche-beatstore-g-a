@@ -850,3 +850,39 @@ describe('liveMembership', () => {
     expect(await liveMembership(admin, ORG_A, USER)).toBeNull();
   });
 });
+
+describe('a team account must choose its own password first (doc 25)', () => {
+  it('a member still on the password the org gave them is refused every org route (403 mustChangePassword)', async () => {
+    signedIn();
+    memberships({ [ORG_A]: member({ role: 'admin' }) });
+    answers.org_managed_accounts = { data: { org_id: ORG_A, must_change_password: true, disabled_at: null }, error: null };
+    const { requireOrgCapability, requireOrgMember } = await load();
+    for (const r of [await requireOrgCapability(ORG_A, 'catalog.read'), await requireOrgMember(ORG_A)]) {
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.res.status).toBe(403);
+        expect(await r.res.json()).toMatchObject({ mustChangePassword: true });
+      }
+    }
+  });
+
+  it('once chosen (or for anyone the org did not create) nothing is in the way', async () => {
+    signedIn();
+    memberships({ [ORG_A]: member({ role: 'admin' }) });
+    answers.org_managed_accounts = { data: { org_id: ORG_A, must_change_password: false, disabled_at: null }, error: null };
+    const { requireOrgCapability } = await load();
+    expect((await requireOrgCapability(ORG_A, 'catalog.read')).ok).toBe(true);
+    answers.org_managed_accounts = { data: null, error: null };
+    expect((await requireOrgCapability(ORG_A, 'catalog.read')).ok).toBe(true);
+  });
+
+  it('a non-member is still a non-member (403 Forbidden, no hint about the password)', async () => {
+    signedIn();
+    memberships({});
+    answers.org_managed_accounts = { data: { org_id: ORG_B, must_change_password: true, disabled_at: null }, error: null };
+    const { requireOrgCapability } = await load();
+    const r = await requireOrgCapability(ORG_A, 'catalog.read');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(await r.res.json()).toEqual({ error: 'Forbidden' });
+  });
+});

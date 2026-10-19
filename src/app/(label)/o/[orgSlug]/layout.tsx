@@ -23,7 +23,9 @@ import { LabelOsFlagProvider } from '@/components/labelos/LabelOsFlag';
 import { OrgShellProvider } from '@/components/labelos/OrgShellContext';
 import { OrgCommandPalette } from '@/components/labelos/OrgCommandPalette';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
-import { orgShellFor, ownedDeletedOrgFor } from '@/lib/auth/org-access';
+import { orgShellFor, ownedDeletedOrgFor, sessionIdentity } from '@/lib/auth/org-access';
+import { createServiceClient } from '@/lib/auth/ownership';
+import { sessionMustChangePassword } from '@/lib/labelos/team-accounts-store';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 
 export const dynamic = 'force-dynamic';
@@ -46,6 +48,9 @@ export default async function OrgShellLayout({
     if (pending) redirect(`/restore/${pending.id}`);
     notFound();
   }
+  // Doc 25: a team account on the password its org gave it chooses its own before anything else.
+  const session = await sessionIdentity();
+  if (await sessionMustChangePassword(session?.userId ?? null, createServiceClient())) redirect('/account/password');
 
   const body = (
     <div className="min-h-screen bg-[#090907]">

@@ -34,6 +34,11 @@ export const EXTERNAL_ROUTES: Readonly<Record<string, { methods: readonly string
     kind: 'session',
     why: 'Accepting an invitation; the one route a non-member reaches, which checks the invitation itself.',
   },
+  'setup/route.ts': {
+    methods: ['POST'],
+    kind: 'session',
+    why: 'Creating the caller’s OWN organization (LABEL-48); it reads no existing org, and the new org id comes from the SQL function.',
+  },
   '[orgId]/projects/[id]/route.ts': {
     methods: ['GET'],
     kind: 'project',
