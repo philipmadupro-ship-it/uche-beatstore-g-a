@@ -107,13 +107,39 @@ describe('skippedGates (the banner on a release)', () => {
 });
 
 describe('gateSkipNotice', () => {
-  it('is null when nothing is skipped or the release is not a draft (past gates are not rewritten)', () => {
+  it('is null when nothing is skipped or the release is cancelled', () => {
     expect(gateSkipNotice([], 'draft')).toBeNull();
     expect(gateSkipNotice(['legal'], 'cancelled')).toBeNull();
-    expect(gateSkipNotice(['legal'], 'delivered')).toBeNull();
   });
-  it('names the gate and says credits & splits still gate', () => {
+  it('names the gate and says credits & splits still gate, on a draft', () => {
     expect(gateSkipNotice(['legal'], 'draft')).toMatch(/^Legal approval is switched off.*does not need it.*Credits & splits still gate/);
     expect(gateSkipNotice(['legal', 'marketing'], 'draft')).toMatch(/^Legal approval and Marketing approval are switched off/);
+  });
+  it('a delivered release gets the notice too, stating only the current setting', () => {
+    const text = gateSkipNotice(['legal'], 'delivered')!;
+    expect(text).toMatch(/^Legal approval is switched off for this organization/);
+    expect(text).not.toMatch(/was not required|did not need/);
+  });
+});
+
+describe('contracts off needs legal approval off (nobody could give it otherwise)', () => {
+  const plan = (current: unknown, patch: Record<string, unknown>) => planSettingsChange({ current, patch, licensed: LICENSED });
+  it('refuses switching Contracts off while legal approval is on', () => {
+    const r = plan({}, { departments_off: ['contracts'] });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/legal approval/i);
+  });
+  it('allows it in the same request that switches legal approval off', () => {
+    expect(plan({}, { departments_off: ['contracts'], legal_gate: 'off' })).toMatchObject({ ok: true, keys: ['legal_gate', 'departments_off'] });
+  });
+  it('allows it when legal approval is already off', () => {
+    expect(plan({ legal_gate: 'off' }, { departments_off: ['contracts'] })).toMatchObject({ ok: true });
+  });
+  it('refuses switching legal approval back on while Contracts is off', () => {
+    const r = plan({ legal_gate: 'off', departments_off: ['contracts'] }, { legal_gate: 'on' });
+    expect(r.ok).toBe(false);
+  });
+  it('does not block an unrelated change on an org already in that state', () => {
+    expect(plan({ departments_off: ['contracts'] }, { attention_release_days: 14 })).toMatchObject({ ok: true });
   });
 });

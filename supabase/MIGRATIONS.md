@@ -234,7 +234,7 @@ Update this table when a run is confirmed.
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 171 (136–171 Label OS, not applied), 121 is `121_share_full_playback` (SHARE-01) (phase 2 reservations: 172 LABEL-51, in flight; next unreserved = 173; outside the backlog 189–190 PR #130, 191 PR #135). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 172 (136–172 Label OS, not applied), 121 is `121_share_full_playback` (SHARE-01) (phase 2 reservations: 170–172 merged; next unreserved = 173 (LABEL-53); outside the backlog 189–190 PR #130, 191 PR #135). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
