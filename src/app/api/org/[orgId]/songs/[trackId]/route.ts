@@ -29,8 +29,8 @@ import { loadOrgSong, orgTrackFacts } from '@/lib/labelos/org-workspace-store';
 import { memberSeesTrackRow } from '@/lib/labelos/org-workspace';
 import { recordEvent } from '@/lib/labelos/activity';
 import { songEventSubject } from '@/lib/labelos/song-stage-store';
-import { planMetadataPatch, type MetadataField, type MetadataInput } from '@/lib/labelos/track-metadata';
-import { readMetadata, writeMetadata } from '@/lib/labelos/track-metadata-store';
+import { canSeePrivateFields, planMetadataPatch, withoutPrivate, type MetadataField, type MetadataInput } from '@/lib/labelos/track-metadata';
+import { readMetadata, sameToken, writeMetadata } from '@/lib/labelos/track-metadata-store';
 import { OrgTrackMetadataBodySchema } from '@/lib/contracts';
 import { readBody } from '@/lib/validate';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -76,26 +76,28 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!current) return json(404, { error: 'Not found' });
 
     const { metadata_updated_at: token, ...values } = current;
-    const plan = planMetadataPatch(input as MetadataInput, values, access.capabilities);
+    const see = canSeePrivateFields(access.capabilities, access.role);
+    const plan = planMetadataPatch(input as MetadataInput, values, access.capabilities, see);
     if (!plan.ok) return json(plan.status, { error: plan.error, ...(plan.field ? { field: plan.field } : {}) });
-    if (plan.changed.length === 0) return json(200, { changed: [], values, updatedAt: token });
+    if (plan.changed.length === 0) return json(200, { changed: [], values: withoutPrivate(values, see), updatedAt: token });
 
     const conflict = () => json(409, {
       error: 'Someone else changed these details while you were editing. Nothing was saved; the current values are shown.',
-      values,
+      values: withoutPrivate(values, see),
       updatedAt: token,
     });
-    if ((expected ?? null) !== (token ?? null)) return conflict();
+    if (!sameToken(expected, token)) return conflict();
 
     const now = new Date().toISOString();
-    if (!(await writeMetadata(access.admin, { org, trackId, expected: token, set: plan.set, now }))) {
+    const newToken = await writeMetadata(access.admin, { org, trackId, expected: token, set: plan.set, now });
+    if (newToken === null) {
       // Lost the race between the read and the write: show what is there now.
       const fresh = await readMetadata(access.admin, org, trackId);
       if (!fresh) return json(404, { error: 'Not found' });
       const { metadata_updated_at: freshToken, ...freshValues } = fresh;
       return json(409, {
         error: 'Someone else changed these details while you were editing. Nothing was saved; the current values are shown.',
-        values: freshValues,
+        values: withoutPrivate(freshValues, see),
         updatedAt: freshToken,
       });
     }
@@ -113,7 +115,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     } catch (err) {
       log.error('metadata event failed', { orgId: org, trackId, error: errorMessage(err) });
     }
-    return json(200, { changed: plan.changed, values: { ...values, ...plan.set }, updatedAt: now });
+    return json(200, { changed: plan.changed, values: withoutPrivate({ ...values, ...plan.set }, see), updatedAt: newToken });
   } catch (err) {
     log.error('metadata save failed', { orgId: org, trackId, error: errorMessage(err) });
     return json(500, { error: 'Could not save the details' });

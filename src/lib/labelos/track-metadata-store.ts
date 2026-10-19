@@ -21,14 +21,27 @@ export async function readMetadata(admin: AdminClient, org: string, trackId: str
   return (data as unknown as MetadataRow | null) ?? null;
 }
 
-/** True when the row still held `expected` and was written; false when it changed meanwhile. */
+/** Two renderings of one instant ("…123Z" from JS, "…123+00:00" from PostgREST) are the same token. */
+export function sameToken(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (a == null || b == null) return a == null && b == null;
+  const x = Date.parse(a);
+  const y = Date.parse(b);
+  return Number.isNaN(x) || Number.isNaN(y) ? a === b : x === y;
+}
+
+/**
+ * The row's NEW token (the database's own rendering of it) when the row still
+ * held `expected` and was written; null when it changed meanwhile. `expected`
+ * must be the string the database returned, never a client's rendering.
+ */
 export async function writeMetadata(
   admin: AdminClient,
   args: { org: string; trackId: string; expected: string | null; set: Partial<MetadataValues>; now: string },
-): Promise<boolean> {
+): Promise<string | null> {
   let q = admin.from('tracks').update({ ...args.set, metadata_updated_at: args.now }).eq('id', args.trackId).eq('org_id', args.org);
   q = args.expected === null ? q.is('metadata_updated_at', null) : q.eq('metadata_updated_at', args.expected);
-  const { data, error } = await q.select('id');
+  const { data, error } = await q.select('metadata_updated_at');
   if (error) throw new Error(`metadata write: ${error.message}`);
-  return ((data ?? []) as unknown[]).length === 1;
+  const rows = (data ?? []) as { metadata_updated_at: string | null }[];
+  return rows.length === 1 ? rows[0].metadata_updated_at ?? args.now : null;
 }

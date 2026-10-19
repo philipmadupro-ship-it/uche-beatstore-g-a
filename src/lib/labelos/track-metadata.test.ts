@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { capabilityFor, fieldsFor, isRealDate, planMetadataPatch, type MetadataValues } from './track-metadata';
+import { canSeePrivateFields, withoutPrivate, capabilityFor, fieldsFor, isRealDate, planMetadataPatch, type MetadataValues } from './track-metadata';
 
 const EMPTY: MetadataValues = {
   title: 'Midnight', version_label: null, isrc: null, iswc: null, bpm: null, key: null, language: null,
@@ -86,5 +86,26 @@ describe('fieldsFor', () => {
     expect(fieldsFor('recording')).toContain('isrc');
     expect(fieldsFor('song')).toContain('iswc');
     expect(fieldsFor('song')).toContain('isrc');
+  });
+});
+
+describe('private fields', () => {
+  it('only an editor or an internal reader sees them, never a roster artist', () => {
+    expect(canSeePrivateFields(new Set(['catalog.write']), 'member')).toBe(true);
+    expect(canSeePrivateFields(new Set(['catalog.read', 'business.read.internal']), 'member')).toBe(true);
+    expect(canSeePrivateFields(new Set(['catalog.read']), 'member')).toBe(false);
+    expect(canSeePrivateFields(new Set(['catalog.read', 'audio.finished']), 'member')).toBe(false);
+    expect(canSeePrivateFields(new Set(['catalog.write', 'business.read.internal']), 'artist')).toBe(false);
+  });
+  it('omits the keys instead of nulling them', () => {
+    const out = withoutPrivate(EMPTY, false);
+    expect('notes' in out).toBe(false);
+    expect('master_owner' in out).toBe(false);
+    expect(out.title).toBe('Midnight');
+    expect(withoutPrivate(EMPTY, true)).toEqual(EMPTY);
+  });
+  it('without private rights, naming a private field is a 403', () => {
+    expect(planMetadataPatch({ notes: 'x' }, EMPTY, WRITER, false)).toMatchObject({ ok: false, status: 403, field: 'notes' });
+    expect(planMetadataPatch({ genre: 'x' }, EMPTY, WRITER, false)).toMatchObject({ ok: true });
   });
 });

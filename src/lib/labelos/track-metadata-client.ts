@@ -8,14 +8,15 @@ import type { MetadataField, MetadataValues } from './track-metadata';
 export type MetadataLoad = {
   trackId: string;
   kind: 'song' | 'recording';
-  values: MetadataValues;
+  /** Notes and the master owner are absent (not null) for a viewer who may not see them. */
+  values: Partial<MetadataValues>;
   updatedAt: string | null;
   writable: MetadataField[];
 };
 
 export type SaveResult =
-  | { ok: true; values: MetadataValues; updatedAt: string | null; changed: MetadataField[] }
-  | { ok: false; conflict: true; error: string; values: MetadataValues; updatedAt: string | null }
+  | { ok: true; values: Partial<MetadataValues>; updatedAt: string | null; changed: MetadataField[] }
+  | { ok: false; conflict: true; error: string; values: Partial<MetadataValues>; updatedAt: string | null }
   | { ok: false; conflict: false; error: string; field?: MetadataField };
 
 const LOAD_FAILED = 'Could not load the details.';
@@ -43,7 +44,7 @@ export async function saveMetadata(orgId: string, trackId: string, expected: str
     const body = (await res.json().catch(() => ({}))) as {
       error?: string;
       field?: MetadataField;
-      values?: MetadataValues;
+      values?: Partial<MetadataValues>;
       updatedAt?: string | null;
       changed?: MetadataField[];
     };
@@ -58,17 +59,17 @@ export async function saveMetadata(orgId: string, trackId: string, expected: str
 }
 
 /** The fields whose text differs from the saved values: what Save sends. Pure. */
-export function diffDraft(saved: MetadataValues, draft: Record<MetadataField, string>, fields: readonly MetadataField[]): Partial<Record<MetadataField, string | number | boolean | null>> {
+export function diffDraft(saved: Partial<MetadataValues>, draft: Record<MetadataField, string>, fields: readonly MetadataField[]): Partial<Record<MetadataField, string | number | boolean | null>> {
   const out: Partial<Record<MetadataField, string | number | boolean | null>> = {};
   for (const f of fields) {
     const text = draft[f];
     if (f === 'explicit') {
       const next = text === 'yes' ? true : text === 'no' ? false : null;
-      if (next !== saved.explicit) out.explicit = next;
+      if (next !== (saved.explicit ?? null)) out.explicit = next;
     } else if (f === 'bpm') {
       const trimmed = text.trim();
       const next = trimmed === '' ? null : Number(trimmed);
-      if (next !== saved.bpm) out.bpm = Number.isNaN(next) ? trimmed : next;
+      if (next !== (saved.bpm ?? null)) out.bpm = Number.isNaN(next) ? trimmed : next;
     } else {
       const next = f === 'notes' ? (text.trim() === '' ? null : text) : text.trim() === '' ? null : text.trim();
       if (next !== (saved[f] ?? null)) out[f] = next;
@@ -78,16 +79,16 @@ export function diffDraft(saved: MetadataValues, draft: Record<MetadataField, st
 }
 
 /** The saved values as the form's text. */
-export function toDraft(v: MetadataValues): Record<MetadataField, string> {
+export function toDraft(v: Partial<MetadataValues>): Record<MetadataField, string> {
   return {
     title: v.title ?? '',
     version_label: v.version_label ?? '',
     isrc: v.isrc ?? '',
     iswc: v.iswc ?? '',
-    bpm: v.bpm === null ? '' : String(v.bpm),
+    bpm: v.bpm == null ? '' : String(v.bpm),
     key: v.key ?? '',
     language: v.language ?? '',
-    explicit: v.explicit === null ? 'unset' : v.explicit ? 'yes' : 'no',
+    explicit: v.explicit == null ? 'unset' : v.explicit ? 'yes' : 'no',
     genre: v.genre ?? '',
     recorded_on: v.recorded_on ?? '',
     p_line: v.p_line ?? '',

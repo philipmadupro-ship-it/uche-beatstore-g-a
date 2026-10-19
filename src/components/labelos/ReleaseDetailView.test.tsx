@@ -163,6 +163,16 @@ describe('the gates', () => {
     expect(link.getAttribute('href')).toMatch(/\/songs\/s1\?edit=m1#details$/);
   });
 
+  it('the ISRC link is shown only to someone who can write the release', async () => {
+    const g = gate('blocked');
+    g.blockers = [{ code: 'isrc', message: 'Track 1 has no ISRC.', fixCapability: 'release.write', itemId: 'i1', songId: 's1', trackId: 'm1' } as never];
+    g.blockerCount = 1;
+    mount(detail({ me: { canWrite: false, isOwner: false, canManagePublic: false, mayReadRights: true }, readiness: readiness({ metadata: g }) }));
+    fireEvent.click(screen.getByTestId('release-gate-open-metadata'));
+    await screen.findByTestId('release-gate-popover-metadata');
+    expect(screen.queryByTestId('release-fix-isrc-m1')).toBeNull();
+  });
+
   it('without rights.read says how many details are withheld, and names none', async () => {
     mount(detail({ me: { canWrite: true, isOwner: false, canManagePublic: false, mayReadRights: false }, readiness: readiness({ credits_splits: gate('blocked', [], 2) }) }));
     fireEvent.click(screen.getByTestId('release-gate-open-credits_splits'));

@@ -125,6 +125,14 @@ for (const [name, size] of [['desktop', { width: 1440, height: 900 }], ['phone',
     await expect(editor.getByLabel('ISRC')).toHaveValue(stored);
     await page.screenshot({ path: `${SHOTS}/${name}-3-saved.png` });
 
+    // A SECOND save in the same page load uses the token the server returned: no false conflict.
+    await editor.getByLabel('Genre').fill(`Again ${name}`);
+    await editor.getByTestId(`org-rec-metadata-${MASTER}-save`).click();
+    await expect(editor.getByTestId(`org-rec-metadata-${MASTER}-save`)).toBeDisabled({ timeout: 25_000 });
+    await expect(editor.getByTestId(`org-rec-metadata-${MASTER}-conflict`)).toHaveCount(0);
+    await expect.poll(async () => (await trackRow(request, MASTER)).genre, { timeout: 25_000 }).toBe(`Again ${name}`);
+    await expect(editor.getByTestId(`org-rec-metadata-${MASTER}-conflict`)).toHaveCount(0);
+
     // On the real table, in the normal form.
     expect((await trackRow(request, MASTER)).isrc).toBe(stored);
 
@@ -147,7 +155,8 @@ test('3 · the audit event lists field names, never values or notes', async ({ r
   for (const e of events) {
     expect(e.visibility).toBe('internal');
     expect(e.audit).toBe(false);
-    expect(e.payload.fields.sort()).toEqual(['genre', 'isrc', 'notes']);
+    expect(e.payload.fields.length).toBeGreaterThanOrEqual(1);
+    expect(e.payload.fields.every((f) => ['genre', 'isrc', 'notes'].includes(f))).toBe(true);
   }
   const blob = JSON.stringify(events);
   expect(blob).not.toContain('PRIVATE');

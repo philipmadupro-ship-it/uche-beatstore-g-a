@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
-import { fieldsFor, TEXT_MAX, type MetadataField, type MetadataValues } from '@/lib/labelos/track-metadata';
+import { fieldsFor, PRIVATE_FIELDS, TEXT_MAX, type MetadataField, type MetadataValues } from '@/lib/labelos/track-metadata';
 import { diffDraft, fetchMetadata, saveMetadata, toDraft, type MetadataLoad } from '@/lib/labelos/track-metadata-client';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
@@ -55,7 +55,7 @@ const PLACEHOLDER: Partial<Record<MetadataField, string>> = {
 };
 const HINT: Partial<Record<MetadataField, string>> = {
   isrc: 'Needs release rights. Dashes are fine; stored compact.',
-  notes: 'Private to people who can edit this. Never shown in the activity feed.',
+  notes: 'Internal: shown only to people who can edit this or read internal business data, never to the artist. Never in the activity feed.',
 };
 const EXPLICIT_CHOICES: { value: string; label: string }[] = [
   { value: 'unset', label: 'Not stated' },
@@ -68,12 +68,12 @@ export function OrgTrackMetadata({ orgId, trackId, title, testId = 'org-metadata
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<MetadataField, string> | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [saved, setSaved] = useState<MetadataValues | null>(null);
+  const [saved, setSaved] = useState<Partial<MetadataValues> | null>(null);
   const [busy, setBusy] = useState(false);
   const [fieldError, setFieldError] = useState<{ field?: MetadataField; message: string } | null>(null);
-  const [conflict, setConflict] = useState<{ values: MetadataValues; updatedAt: string | null; message: string } | null>(null);
+  const [conflict, setConflict] = useState<{ values: Partial<MetadataValues>; updatedAt: string | null; message: string } | null>(null);
 
-  const apply = useCallback((values: MetadataValues, updatedAt: string | null) => {
+  const apply = useCallback((values: Partial<MetadataValues>, updatedAt: string | null) => {
     setSaved(values);
     setToken(updatedAt);
     setDraft(toDraft(values));
@@ -93,7 +93,8 @@ export function OrgTrackMetadata({ orgId, trackId, title, testId = 'org-metadata
   if (loadError) return <p className="text-[11px] text-red-400" role="alert" data-testid={`${testId}-error`}>{loadError}</p>;
   if (!loaded || !draft || !saved) return <p className="text-[11px] text-white/40" data-testid={`${testId}-loading`}>Loading details…</p>;
 
-  const fields = fieldsFor(loaded.kind);
+  // Notes and the master owner are not in the payload for a viewer who may not see them: no field, not even a disabled one.
+  const fields = fieldsFor(loaded.kind).filter((f) => !(PRIVATE_FIELDS as readonly string[]).includes(f) || f in saved);
   const writable = new Set<MetadataField>(loaded.writable);
   const patch = diffDraft(saved, draft, fields.filter((f) => writable.has(f)));
   const dirty = Object.keys(patch).length > 0;
@@ -135,7 +136,9 @@ export function OrgTrackMetadata({ orgId, trackId, title, testId = 'org-metadata
           return (
             <div key={f} className={cn('space-y-1', (f === 'notes' || f === 'title') && 'sm:col-span-2')}>
               <label htmlFor={id} className={LABEL}>{FIELD_LABEL[f]}</label>
-              {f === 'explicit' ? (
+              {readOnly && (PRIVATE_FIELDS as readonly string[]).includes(f) ? (
+                <p id={id} className="whitespace-pre-wrap text-[11px] text-white/80">{draft[f] || '—'}</p>
+              ) : f === 'explicit' ? (
                 <div id={id} role="group" aria-label="Explicit" className="flex gap-1">
                   {EXPLICIT_CHOICES.map((c) => (
                     <button

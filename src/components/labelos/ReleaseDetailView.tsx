@@ -389,7 +389,7 @@ function Gates({ detail, orgSlug }: { detail: Detail; orgSlug: string }) {
       ) : (
         <ul className="space-y-2">
           {RELEASE_GATES.map((g) => (
-            <GateRow key={g} gate={g} view={readiness.gates[g]} mayReadRights={detail.me.mayReadRights} orgSlug={orgSlug} />
+            <GateRow key={g} gate={g} view={readiness.gates[g]} mayReadRights={detail.me.mayReadRights} orgSlug={orgSlug} canFix={detail.me.canWrite} />
           ))}
         </ul>
       )}
@@ -397,7 +397,7 @@ function Gates({ detail, orgSlug }: { detail: Detail; orgSlug: string }) {
   );
 }
 
-function GateRow({ gate, view, mayReadRights, orgSlug }: { gate: ReleaseGate; view: NonNullable<Detail['readiness']>['gates'][ReleaseGate]; mayReadRights: boolean; orgSlug: string }) {
+function GateRow({ gate, view, mayReadRights, orgSlug, canFix }: { gate: ReleaseGate; view: NonNullable<Detail['readiness']>['gates'][ReleaseGate]; mayReadRights: boolean; orgSlug: string; canFix: boolean }) {
   const tone = gateTone(view.status);
   const hasDetail = view.blockerCount > 0 || view.warningCount > 0;
   return (
@@ -426,7 +426,7 @@ function GateRow({ gate, view, mayReadRights, orgSlug }: { gate: ReleaseGate; vi
                     {view.blockers.map((b, i) => (
                       <li key={`${b.code}-${b.itemId ?? i}-${i}`} className="text-white/80">
                         {b.message}
-                        {b.code === 'isrc' && b.songId && b.trackId && (
+                        {canFix && b.code === 'isrc' && b.songId && b.trackId && (
                           <Link
                             href={`/o/${orgSlug}/songs/${b.songId}?edit=${b.trackId}#details`}
                             className="ml-2 text-white underline decoration-white/30 underline-offset-2 hover:decoration-white"

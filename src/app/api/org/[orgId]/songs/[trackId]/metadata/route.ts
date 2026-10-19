@@ -15,7 +15,7 @@ import { createLogger } from '@/lib/log';
 import { orgTrackFacts } from '@/lib/labelos/org-workspace-store';
 import { memberSeesTrackRow } from '@/lib/labelos/org-workspace';
 import { readMetadata } from '@/lib/labelos/track-metadata-store';
-import { METADATA_FIELDS, capabilityFor } from '@/lib/labelos/track-metadata';
+import { METADATA_FIELDS, PRIVATE_FIELDS, canSeePrivateFields, capabilityFor, withoutPrivate } from '@/lib/labelos/track-metadata';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +33,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     if (!facts || !memberSeesTrackRow(access.capabilities, facts)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const row = await readMetadata(access.admin, org, trackId);
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const { metadata_updated_at: updatedAt, ...values } = row;
+    const { metadata_updated_at: updatedAt, ...all } = row;
+    const see = canSeePrivateFields(access.capabilities, access.role);
+    const values = withoutPrivate(all, see);
     return NextResponse.json(
       {
         trackId,
@@ -41,7 +43,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
         values,
         updatedAt,
         // Field by field: what this member's capabilities let them change.
-        writable: METADATA_FIELDS.filter((f) => access.capabilities.has(capabilityFor(f))),
+        writable: METADATA_FIELDS.filter((f) => access.capabilities.has(capabilityFor(f)) && (see || !(PRIVATE_FIELDS as readonly string[]).includes(f))),
       },
       { headers: { 'Cache-Control': 'no-store' } },
     );

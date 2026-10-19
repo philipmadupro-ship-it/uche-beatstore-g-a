@@ -162,7 +162,46 @@ describe('GET metadata', () => {
   });
 });
 
+describe('private fields', () => {
+  it('notes and master_owner are absent (not null) for a roster artist and present for an editor', async () => {
+    row(S1).notes = 'internal talk';
+    row(S1).master_owner = 'Label Ltd';
+    const artist = await (await load(ART, L, S1)).json();
+    expect('notes' in artist.values).toBe(false);
+    expect('master_owner' in artist.values).toBe(false);
+    expect(JSON.stringify(artist)).not.toContain('internal talk');
+    expect(artist.writable).not.toContain('notes');
+    expect(artist.values.title).toBe('Midnight');
+    const editor = await (await load(AR, L, S1)).json();
+    expect(editor.values.notes).toBe('internal talk');
+    expect(editor.writable).toContain('notes');
+  });
+
+  it('a roster artist cannot write them, and a response to them never carries them', async () => {
+    row(S1).notes = 'internal talk';
+    expect((await patch(ART, L, S1, { expected: null, notes: 'x' })).status).toBe(403);
+    const res = await patch(ART, L, S1, { expected: null, genre: 'Pop' });
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(await res.json())).not.toContain('internal talk');
+    expect(row(S1).notes).toBe('internal talk');
+  });
+});
+
 describe('PATCH', () => {
+  it('saves twice in a row with the token the server returned, whatever its rendering (Z vs +00:00)', async () => {
+    const first = await (await patch(AR, L, S1, { expected: null, genre: 'Pop' })).json();
+    expect(first.updatedAt).toBe(row(S1).metadata_updated_at);
+    // PostgREST renders the same instant as +00:00; a client holding either form must not get a false 409.
+    row(S1).metadata_updated_at = '2026-10-19T10:00:00.123+00:00';
+    const z = await patch(AR, L, S1, { expected: '2026-10-19T10:00:00.123Z', genre: 'Rock' });
+    expect(z.status).toBe(200);
+    const second = await z.json();
+    expect(row(S1).genre).toBe('Rock');
+    row(S1).metadata_updated_at = '2026-10-19T11:00:00.5+00:00';
+    expect((await patch(AR, L, S1, { expected: second.updatedAt, genre: 'Jazz' })).status).toBe(409);
+    expect((await patch(AR, L, S1, { expected: '2026-10-19T11:00:00.500Z', genre: 'Jazz' })).status).toBe(200);
+  });
+
   it('sets an ISRC on the recording through the editor, normalised, and records field names only', async () => {
     const res = await patch(AR, L, M1, { expected: null, isrc: 'gb-aaa-26-00001', notes: 'private words about the mix' });
     expect(res.status).toBe(200);

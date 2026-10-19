@@ -68,6 +68,23 @@ export const BPM_MAX = 400;
 /** A language as the sleeve writes it: "en", "fr", "pt-BR". Lower-case primary tag, ASCII (the 173 CHECK). */
 export const LANGUAGE_RE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 
+/**
+ * Notes and the master owner are internal: only a viewer who can edit the
+ * catalogue or read internal business data sees them, and never a roster
+ * artist (role `artist`), whatever abilities were switched on. They are
+ * omitted from what everyone else is sent, not sent as null.
+ */
+export const PRIVATE_FIELDS = ['notes', 'master_owner'] as const;
+export function canSeePrivateFields(caps: ReadonlySet<string>, role: string | null): boolean {
+  return role !== 'artist' && (caps.has('catalog.write') || caps.has('business.read.internal'));
+}
+export function withoutPrivate<T extends Partial<MetadataValues>>(values: T, see: boolean): Partial<MetadataValues> {
+  if (see) return values;
+  const out: Partial<MetadataValues> = { ...values };
+  for (const f of PRIVATE_FIELDS) delete out[f];
+  return out;
+}
+
 /** The capability a field needs. The ISRC is a release input; the rest are the catalogue's. */
 export function capabilityFor(field: MetadataField): Capability {
   return field === 'isrc' ? 'release.write' : 'catalog.write';
@@ -98,13 +115,13 @@ function blankToNull(v: string): string | null {
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/;
 
-export function planMetadataPatch(input: MetadataInput, current: MetadataValues, caps: ReadonlySet<string>): MetadataPlan {
+export function planMetadataPatch(input: MetadataInput, current: MetadataValues, caps: ReadonlySet<string>, mayWritePrivate = true): MetadataPlan {
   const named = METADATA_FIELDS.filter((f) => input[f] !== undefined);
   if (named.length === 0) return { ok: true, set: {}, changed: [] };
 
   // Permission first, so a caller learns nothing about values they may not write.
   for (const f of named) {
-    if (!caps.has(capabilityFor(f))) return { ok: false, status: 403, error: 'Forbidden', field: f };
+    if (!caps.has(capabilityFor(f)) || (!mayWritePrivate && (PRIVATE_FIELDS as readonly string[]).includes(f))) return { ok: false, status: 403, error: 'Forbidden', field: f };
   }
 
   const set: Partial<MetadataValues> = {};
