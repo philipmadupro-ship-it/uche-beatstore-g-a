@@ -13,8 +13,9 @@
  * All rules are in lib/labelos/setup-wizard*.ts; this file draws them.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { AccountFacePicker } from '@/components/labelos/AccountFacePicker';
+import { OrgSetupDone } from '@/components/labelos/OrgSetupDone';
 import { OrgSetupTeamStep } from '@/components/labelos/OrgSetupTeamStep';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -179,32 +180,7 @@ export function OrgSetupWizard({ userId, initialFace, email }: { userId: string;
   const isLast = draft.step === 'review';
 
   if (outcome) {
-    const failed = outcome.results.filter((r) => !r.ok);
-    return (
-      <div className="w-full max-w-2xl space-y-6 rounded-[20px] border border-white/10 bg-[#0D0D0A] p-6 sm:p-8" data-testid="wizard-done">
-        <header>
-          <p className={cn(LEGEND, 'mb-2')}>Your account is ready</p>
-          <h1 ref={heading} tabIndex={-1} className="font-heading text-[28px] font-bold leading-[1.05] tracking-tight text-white focus:outline-none sm:text-[32px]">
-            {outcome.existing ? 'You already have an organization' : failed.length === 0 ? 'All set' : 'Set up, with a few things left'}
-          </h1>
-          <p className="mt-2 text-[11px] leading-relaxed text-white/60">
-            {outcome.existing ? 'This account already has an organization, so nothing you entered here was applied. Settings, people and roster can be changed from inside it.' : failed.length === 0 ? 'Everything you added is in place.' : 'The organization exists. These did not go through; each can be done from the place named.'}
-          </p>
-        </header>
-        <ul className="divide-y divide-white/10" data-testid="wizard-results">
-          {outcome.results.map((r, i) => (
-            <li key={i} className="flex items-start gap-3 py-3" data-testid={r.ok ? 'result-ok' : 'result-failed'}>
-              {r.ok ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#6DC6A4]" aria-hidden="true" /> : <XCircle size={16} className="mt-0.5 shrink-0 text-[#ffb7a8]" aria-hidden="true" />}
-              <div className="min-w-0 text-[13px] leading-relaxed">
-                <p className="break-words text-white/80">{r.label}</p>
-                <p className="text-[11px] text-white/60">{r.ok ? r.message : `${r.message} Do it in ${r.fixIn}.`}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
-        <Button variant="primary" className="w-full" onClick={() => window.location.assign(outcome.home)}>Open your workspace</Button>
-      </div>
-    );
+    return <OrgSetupDone home={outcome.home} results={outcome.results} existing={outcome.existing} onOpen={() => window.location.assign(outcome.home)} />;
   }
 
   return (

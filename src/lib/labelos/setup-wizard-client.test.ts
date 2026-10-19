@@ -99,6 +99,26 @@ describe('runSetup', () => {
     expect(s.calls[2].body).toEqual({ title: 'Debut', type: 'single', contact_id: 'self' });
   });
 
+  it('a created login carries the password it was made with, for the done screen to show once; an invitation and a failed login carry none', async () => {
+    const s = server({
+      'POST /api/org/setup': () => created,
+      'POST /invitations': () => ({ status: 201, body: {} }),
+      'POST /team-accounts': (c) => ((c.body as { name: string }).name === 'Lee' ? { status: 201, body: {} } : { status: 409, body: { error: 'taken' } }),
+    });
+    const run = await runSetup(
+      label({
+        team: [
+          { ...emptyEntry(), email: 'm@x.test', fn: 'marketing' },
+          { ...emptyEntry(), email: 'l@x.test', fn: 'legal', mode: 'login', name: 'Lee', password: 'a-good-password-1' },
+          { ...emptyEntry(), email: 'k@x.test', fn: 'legal', mode: 'login', name: 'Kim', password: 'another-good-pass-2' },
+        ],
+      }),
+      s.fetchFn,
+    );
+    if (run.status !== 'created') throw new Error('expected created');
+    expect(run.results.map((r) => r.password)).toEqual([undefined, 'a-good-password-1', undefined]);
+  });
+
   it('a network error is a line, not a throw', async () => {
     let n = 0;
     const fetchFn: FetchLike = async () => {

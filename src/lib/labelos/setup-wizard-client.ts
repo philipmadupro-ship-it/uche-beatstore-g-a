@@ -32,7 +32,15 @@ export type FetchLike = (url: string, init?: { method?: string; headers?: Record
   json: () => Promise<unknown>;
 }>;
 
-export type StepResult = { kind: FollowUpKind; label: string; ok: boolean; message: string; fixIn: string };
+export type StepResult = {
+  kind: FollowUpKind;
+  label: string;
+  ok: boolean;
+  message: string;
+  fixIn: string;
+  /** A login that was created: the password the creator chose, for the done screen to show ONCE (React state only, never saved). */
+  password?: string;
+};
 
 export type SetupRun =
   | { status: 'failed'; error: string }
@@ -58,7 +66,7 @@ function errorOf(data: Record<string, unknown>, fallback: string): string {
 const DONE: Record<FollowUpKind, string> = {
   roster: 'Added to the roster',
   invitation: 'Invitation sent',
-  login: 'Login created. Give them the password you chose; they will be asked to change it.',
+  login: 'Login created. They are asked to choose their own password on first sign-in.',
   release: 'Draft release created',
 };
 
@@ -91,6 +99,7 @@ export async function runSetup(draft: WizardDraft, fetchFn: FetchLike): Promise<
       ok: r.ok,
       message: r.ok ? DONE[f.kind] : errorOf(r.data, `Could not do this (${r.status || 'no connection'}).`),
       fixIn: f.fixIn,
+      ...(r.ok && f.kind === 'login' && typeof f.body.password === 'string' ? { password: f.body.password } : {}),
     });
     return r;
   };
