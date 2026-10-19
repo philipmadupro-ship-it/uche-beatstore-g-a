@@ -11,6 +11,7 @@ import { uploadOrgPeaks, uploadOrgPreview } from '@/lib/storage/org-media';
 import { prepareMp3Deliverable } from '@/lib/audio/mp3-deliverable';
 import { realMp3Deps } from '@/lib/audio/mp3-deliverable.server';
 import { errorMessage } from '@/lib/errors';
+import { isMissingOrgColumn } from '@/lib/auth/org-column';
 import { parseTitleMetadata } from '@/lib/upload/title-metadata';
 import { compareFilenameWithDetected } from '@/lib/audio/metadata-agreement';
 
@@ -306,6 +307,8 @@ type Scalar = string | number | null;
 /** The track's organization (LABEL-12 `tracks.org_id`), or null for a producer track. Throws on a read error. */
 async function trackOrgId(admin: ServiceClient, trackId: string): Promise<string | null> {
   const { data, error } = await admin.from('tracks').select('org_id').eq('id', trackId).maybeSingle();
+  // Before migration 141 no track has an org.
+  if (error && isMissingOrgColumn(error)) return null;
   if (error) throw new Error(`Track lookup failed: ${error.message}`);
   const orgId = (data as { org_id?: unknown } | null)?.org_id;
   return typeof orgId === 'string' && orgId ? orgId : null;
