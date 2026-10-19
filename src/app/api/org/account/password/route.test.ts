@@ -17,7 +17,8 @@ let admin: ReturnType<typeof fakeAdmin>;
 const authCalls: unknown[][] = [];
 const events: unknown[][] = [];
 
-vi.mock('@/lib/auth/org-access', () => ({ sessionIdentity: async () => session }));
+const SESSION_ID = '55555555-5555-4555-8555-555555555555';
+vi.mock('@/lib/auth/org-access', () => ({ sessionIdentity: async () => session, currentSessionId: async () => SESSION_ID }));
 vi.mock('@/lib/auth/ownership', () => ({
   createServiceClient: () =>
     Object.assign(admin.client, {
@@ -60,7 +61,8 @@ describe('POST /api/org/account/password', () => {
     const res = await post({ password: PASSWORD });
     expect(res.status).toBe(200);
     expect(authCalls).toEqual([[USER, { password: PASSWORD }]]);
-    expect(admin.rpcs).toEqual([{ name: 'labelos_team_account_password_changed', args: { p_user: USER } }]);
+    // The session making the change is kept; 190 ends the others.
+    expect(admin.rpcs).toEqual([{ name: 'labelos_team_account_password_changed', args: { p_user: USER, p_keep_session: SESSION_ID } }]);
     expect(events).toEqual([[{ orgId: ORG, userId: USER }, 'member.password_changed', { type: 'member', id: USER }, {}]]);
     expect(JSON.stringify(events)).not.toContain(PASSWORD);
   });

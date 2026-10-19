@@ -14,6 +14,7 @@ let session: { userId: string; email: string | null } | null = null;
 let allowed = true;
 let rpcAnswer: Answer = { data: null, error: null };
 let admin: ReturnType<typeof fakeAdmin>;
+let managedRow: unknown = null;
 
 vi.mock('@/lib/auth/org-access', () => ({ sessionIdentity: async () => session }));
 vi.mock('@/lib/auth/ownership', () => ({ createServiceClient: () => admin.client }));
@@ -32,7 +33,8 @@ beforeEach(() => {
   session = { userId: USER, email: 'nova@example.com' };
   allowed = true;
   rpcAnswer = { data: { org_id: ORG, slug: 'nova', kind: 'artist', created: true }, error: null };
-  admin = fakeAdmin({ answer: () => ({ data: null, error: null }), rpc: () => rpcAnswer });
+  managedRow = null;
+  admin = fakeAdmin({ answer: (c) => (c.table === 'org_managed_accounts' ? { data: managedRow, error: null } : { data: null, error: null }), rpc: () => rpcAnswer });
 });
 
 describe('POST /api/org/setup', () => {
@@ -92,5 +94,21 @@ describe('POST /api/org/setup', () => {
     const res = await post({ face: 'label', name: 'X' });
     expect(res.status).toBe(500);
     expect(JSON.stringify(await res.json())).not.toMatch(/secret/);
+  });
+});
+
+describe('a team account stays in its organization (doc 25)', () => {
+  it('cannot set up an organization of its own: 409, nothing created', async () => {
+    managedRow = { org_id: ORG, must_change_password: false, disabled_at: null };
+    const res = await post({ face: 'label', name: 'Side Label' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('team_account');
+    expect(admin.rpcs).toEqual([]);
+  });
+
+  it('even switched off (the case this exists for)', async () => {
+    managedRow = { org_id: ORG, must_change_password: false, disabled_at: '2026-10-19T00:00:00Z' };
+    expect((await post({ face: 'independent', name: 'Mine' })).status).toBe(409);
+    expect(admin.rpcs).toEqual([]);
   });
 });

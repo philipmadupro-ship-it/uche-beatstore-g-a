@@ -22,17 +22,31 @@
 --  * labelos_team_account_target — may THIS org reset / switch off THIS
 --    account? Only one it created, that is in nothing else: no other org,
 --    no shared project, not the producer, not a platform operator, never the
---    actor themselves, and an owner only by an owner. The route asks it
+--    actor themselves, and an owner or an admin only by an owner (peer admins
+--    cannot reset each other and sign in as each other). The route asks it
 --    before touching the auth user, so an org can never take over somebody's
---    own account.
+--    own account. (The setup and join routes refuse a managed account, so it
+--    cannot become "in something else" and slip out of its org's control.)
 --  * labelos_audit_team_account_reset / _set_disabled — the flag change and
 --    its audit event (`member.password_reset`, `member.account_disabled` /
---    `member.account_enabled`), re-checking the same rule under a row lock.
+--    `member.account_enabled`), re-checking the same rule under a row lock,
+--    and revoking every session the person has (`labelos_revoke_auth_sessions`)
+--    in the same transaction, so a reset or a switch-off ends their sign-ins.
 --  * labelos_team_account_password_changed — the person's own change clears
---    the flag (the route records `member.password_changed`).
+--    the flag and revokes their OTHER sessions (the current one is kept; the
+--    route records `member.password_changed`).
+--  * labelos_revoke_auth_sessions — deletes auth.sessions rows (refresh tokens
+--    go with them, and Supabase refuses an access token whose session is
+--    gone). If this database does not let it (no table, no privilege) it
+--    warns and answers false instead of failing the act; the route logs that.
+--  * labelos_my_password_pending — the ONE function the API roles may call:
+--    does the CALLER (auth.uid()) still have to choose their own password?
+--    It answers about the caller only, so the proxy can refuse every other
+--    Label OS request on the caller's own session.
 --
 -- No password, hash or temporary value is ever written here or to an event.
--- All functions: SECURITY DEFINER, owner postgres, service_role EXECUTE only.
+-- All functions: SECURITY DEFINER, owner postgres, service_role EXECUTE only,
+-- except labelos_my_password_pending (authenticated, about oneself).
 -- Idempotent: IF NOT EXISTS, CREATE OR REPLACE, DROP POLICY IF EXISTS.
 
 CREATE TABLE IF NOT EXISTS public.org_managed_accounts (
@@ -145,7 +159,9 @@ BEGIN
     RETURN 'not_member';
   END IF;
   SELECT role INTO v_actor_role FROM public.org_members WHERE org_id = p_org AND user_id = p_actor;
-  IF v_role = 'owner' AND v_actor_role IS DISTINCT FROM 'owner' THEN
+  -- An owner or an admin only by an owner: otherwise two admins could reset
+  -- each other and sign in as each other.
+  IF v_role IN ('owner', 'admin') AND v_actor_role IS DISTINCT FROM 'owner' THEN
     RETURN 'owner_only';
   END IF;
   IF EXISTS (SELECT 1 FROM public.org_members WHERE user_id = p_user AND org_id <> p_org)
@@ -155,6 +171,27 @@ BEGIN
     RETURN 'shared';
   END IF;
   RETURN NULL;
+END;
+$fn$;
+
+-- ── session revocation ───────────────────────────────────────────────────
+-- Every session of p_user except p_keep (the caller's current one, on their
+-- own change). True when done; false, with a warning, when this database does
+-- not let it, so a reset or switch-off never fails for want of it.
+
+CREATE OR REPLACE FUNCTION public.labelos_revoke_auth_sessions(p_user uuid, p_keep uuid DEFAULT NULL)
+RETURNS boolean
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public
+AS $fn$
+BEGIN
+  DELETE FROM auth.sessions WHERE user_id = p_user AND (p_keep IS NULL OR id <> p_keep);
+  RETURN true;
+EXCEPTION WHEN undefined_table OR insufficient_privilege THEN
+  RAISE WARNING 'labelos_revoke_auth_sessions: sessions not revoked: %', SQLERRM;
+  RETURN false;
 END;
 $fn$;
 
@@ -182,7 +219,7 @@ BEGIN
   SET must_change_password = true, password_reset_at = now()
   WHERE org_id = p_org AND user_id = p_user;
   PERFORM public.labelos_audit_insert(p_org, p_actor, 'member.password_reset', 'member', p_user, '{}'::jsonb);
-  RETURN jsonb_build_object('ok', true);
+  RETURN jsonb_build_object('ok', true, 'sessions_revoked', public.labelos_revoke_auth_sessions(p_user));
 END;
 $fn$;
 
@@ -214,24 +251,54 @@ BEGIN
     p_org, p_actor,
     CASE WHEN p_disabled THEN 'member.account_disabled' ELSE 'member.account_enabled' END,
     'member', p_user, '{}'::jsonb);
-  RETURN jsonb_build_object('ok', true);
+  -- Switching off ends every sign-in; switching back on has nothing to end.
+  RETURN jsonb_build_object('ok', true, 'sessions_revoked',
+    CASE WHEN p_disabled THEN public.labelos_revoke_auth_sessions(p_user) ELSE true END);
 END;
 $fn$;
 
 -- ── the person's own change ──────────────────────────────────────────────
--- Returns the org id of their managed row, or NULL when they have none.
+-- Returns the org id of their managed row, or NULL when they have none, and
+-- revokes their other sessions (p_keep_session = the one they changed it from).
+-- An earlier draft took (p_user) only; a replay drops that signature.
 
-CREATE OR REPLACE FUNCTION public.labelos_team_account_password_changed(p_user uuid)
+DROP FUNCTION IF EXISTS public.labelos_team_account_password_changed(uuid);
+
+CREATE OR REPLACE FUNCTION public.labelos_team_account_password_changed(p_user uuid, p_keep_session uuid DEFAULT NULL)
 RETURNS uuid
-LANGUAGE sql
+LANGUAGE plpgsql
 VOLATILE
 SECURITY DEFINER
 SET search_path = public
 AS $fn$
+DECLARE
+  v_org uuid;
+BEGIN
   UPDATE public.org_managed_accounts
   SET must_change_password = false, password_changed_at = now()
   WHERE user_id = p_user
-  RETURNING org_id;
+  RETURNING org_id INTO v_org;
+  IF v_org IS NOT NULL THEN
+    PERFORM public.labelos_revoke_auth_sessions(p_user, p_keep_session);
+  END IF;
+  RETURN v_org;
+END;
+$fn$;
+
+-- ── the caller's own pending change ──────────────────────────────────────
+-- For src/proxy.ts on the caller's session: may answer only about auth.uid().
+
+CREATE OR REPLACE FUNCTION public.labelos_my_password_pending()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $fn$
+  SELECT EXISTS (
+    SELECT 1 FROM public.org_managed_accounts
+    WHERE user_id = auth.uid() AND must_change_password AND disabled_at IS NULL
+  );
 $fn$;
 
 ALTER FUNCTION public.labelos_audit_team_account_create(uuid, uuid, uuid, text, text[], uuid[], jsonb) OWNER TO postgres;
@@ -250,8 +317,16 @@ ALTER FUNCTION public.labelos_audit_team_account_set_disabled(uuid, uuid, uuid, 
 REVOKE ALL ON FUNCTION public.labelos_audit_team_account_set_disabled(uuid, uuid, uuid, boolean) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.labelos_audit_team_account_set_disabled(uuid, uuid, uuid, boolean) TO service_role;
 
-ALTER FUNCTION public.labelos_team_account_password_changed(uuid) OWNER TO postgres;
-REVOKE ALL ON FUNCTION public.labelos_team_account_password_changed(uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.labelos_team_account_password_changed(uuid) TO service_role;
+ALTER FUNCTION public.labelos_team_account_password_changed(uuid, uuid) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_team_account_password_changed(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_team_account_password_changed(uuid, uuid) TO service_role;
+
+ALTER FUNCTION public.labelos_revoke_auth_sessions(uuid, uuid) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_revoke_auth_sessions(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_revoke_auth_sessions(uuid, uuid) TO service_role;
+
+ALTER FUNCTION public.labelos_my_password_pending() OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_my_password_pending() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.labelos_my_password_pending() TO authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';

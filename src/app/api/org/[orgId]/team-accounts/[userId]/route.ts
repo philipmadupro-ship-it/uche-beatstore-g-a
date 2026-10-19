@@ -10,10 +10,11 @@
  *
  * Only an account THIS org created and that is in nothing else (no other
  * org, no shared project, not the producer, not a platform operator), never
- * the caller's own, an owner only by an owner — 190's
+ * the caller's own, an owner or an admin only by an owner — 190's
  * `labelos_team_account_target`, re-checked under a row lock by the audited
- * function. That function runs FIRST and writes the event; the auth change
- * follows. If the auth change fails the answer says so (502), and a failed
+ * function. That function runs FIRST, writes the event and ends every
+ * session the person has (a reset and a switch-off sign them out
+ * everywhere); the auth change follows. 30 changes a minute per manager. If the auth change fails the answer says so (502), and a failed
  * switch-off is put back so the record matches the account.
  *
  * A password is never read back, logged or put in an event.
@@ -31,6 +32,7 @@ import {
   targetRefusal,
 } from '@/lib/labelos/team-accounts';
 import { createLogger } from '@/lib/log';
+import { rateLimitDurable } from '@/lib/security/rate-limit';
 import { isUUID, readBody } from '@/lib/validate';
 
 const log = createLogger('api.org.team-accounts.user');
@@ -48,6 +50,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ or
     const weak = passwordProblem(body.password);
     if (weak) return NextResponse.json({ error: weak, code: 'weak_password' }, { status: 400 });
   }
+  if (!(await rateLimitDurable(`team-account-change:u:${access.userId}`, 30, 60 * 1000))) {
+    return NextResponse.json({ error: 'Too many changes. Try again in a minute.' }, { status: 429 });
+  }
 
   const { admin } = access;
   const base = { p_org: access.orgId, p_actor: access.userId, p_user: userId };
@@ -58,11 +63,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ or
         : await auditRpc(admin, 'teamAccountSetDisabled', { ...base, p_disabled: body.action === 'disable' });
     if (isMissingTeamAccounts(error)) return NextResponse.json({ error: TEAM_ACCOUNTS_NOT_READY }, { status: 503 });
     if (error) throw new Error(error.message);
-    const answer = (data ?? {}) as { ok?: boolean; error?: string };
+    const answer = (data ?? {}) as { ok?: boolean; error?: string; sessions_revoked?: boolean };
     if (answer.ok !== true) {
       const refused = targetRefusal(answer.error);
       if (!refused) throw new Error(`unexpected team account answer: ${String(answer.error)}`);
       return NextResponse.json({ error: refused.error, code: refused.code }, { status: refused.status });
+    }
+    // 190 ended their sessions in the same transaction, unless this database
+    // would not let it (then the ban / new password still stops new sign-ins).
+    if (answer.sessions_revoked === false) {
+      log.warn('team account sessions not revoked', { orgId: access.orgId, userId, action: body.action });
     }
 
     const authChange =

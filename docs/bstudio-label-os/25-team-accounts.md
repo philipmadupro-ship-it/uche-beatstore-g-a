@@ -38,6 +38,23 @@ A reset or a switch-off is allowed only on an account **this organisation create
 belongs to **nothing else** (no other organisation, no shared project, not the producer, not a
 platform operator). An organisation can never take over somebody's own account: an email that
 already has an account is refused with "invite them instead" (the existing invitation flow).
+The other direction holds too: a team account **cannot set up its own organisation or accept an
+invitation elsewhere** (409), so it can never slip out of the control of the org that made it.
+
+### The pre-claim risk, and what limits it
+
+The org creates the login with a password it knows, for an address that belongs to a person.
+If that person later signs in to the same address another way (Google, a magic link), Supabase
+links it to the existing account — the org-made one. So:
+
+- team accounts are for **company addresses** the organisation controls (the owner's own
+  instruction: "usually the company email"). A personal address should be **invited**, so the
+  person joins with an account that is theirs; the create form says so;
+- the organisation can **always reset** a team account or switch it off, and both **end every
+  session** the person has (190 deletes their `auth.sessions` rows in the same transaction as the
+  audit event), so a password the org once knew stops working everywhere, at once;
+- the person's own password change **ends every other session** (the one they are using stays),
+  so whoever else held the org-given password is signed out the moment they choose their own.
 
 ## 3. Phases (each one PR into the Label OS branch)
 
@@ -60,8 +77,20 @@ already has an account is refused with "invite them instead" (the existing invit
 - Capability `members.manage` for every write; an `owner` account is never created this way;
   an admin cannot reset or switch off an owner. Seat cap (LABEL-47) enforced under the same
   lock as invitations.
-- A managed account with `must_change_password` is sent to `/account/password` from the org shell
-  until it sets its own password.
+- A managed account with `must_change_password` reaches **nothing** in Label OS until it sets its
+  own password: `src/proxy.ts` asks 190's `labelos_my_password_pending()` on the caller's own
+  session (it answers about the caller only — the one 190 function `authenticated` may call) and
+  answers every `/api/org/*`, `/api/platform/*` request with 403 `{ mustChangePassword: true }` and
+  sends every `/o`, `/shared`, `/setup`, `/join`, `/restore`, `/platform` page to
+  `/account/password`. The only exception is `POST /api/org/account/password`. The org routes check
+  again with the service role (`lib/auth/org-access` `memberContext`), so this holds without the
+  proxy too.
+- An owner **or an admin** account is reset or switched off only by an **owner** (peer admins
+  cannot reset each other and sign in as each other); held in 190's guard under the row lock.
+- Reset and switch-off end every session of the person (`labelos_revoke_auth_sessions`, in the
+  audited function); if a database does not allow it the act still happens, answers
+  `sessions_revoked: false` and the route logs it. `PATCH …/team-accounts/[userId]` is limited to
+  30 changes a minute per manager.
 - Every act is an audit event in the org: `member.account_created`, `member.password_reset`,
   `member.account_disabled`, `member.account_enabled`; the person's own change is
   `member.password_changed`. No password, hash or temporary value is ever in a payload.

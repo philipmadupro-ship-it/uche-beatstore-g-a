@@ -12,10 +12,16 @@ let currentUser: { id: string; user_metadata?: Record<string, unknown> } | null 
 let producerIds = new Set<string>();
 let memberIds = new Set<string>();
 let membershipReads = 0;
+let pendingPassword = new Set<string>();
 
 vi.mock('@supabase/ssr', () => ({
   createServerClient: () => ({
     auth: { getUser: async () => ({ data: { user: currentUser } }) },
+    // 190's labelos_my_password_pending: about the caller only.
+    rpc: async (fn: string) =>
+      fn === 'labelos_my_password_pending'
+        ? { data: !!currentUser && pendingPassword.has(currentUser.id), error: null }
+        : { data: null, error: { message: `unexpected rpc ${fn}` } },
     from: (table: string) => ({
       select: () => ({
         eq: (_col: string, id: string) => {
@@ -37,9 +43,9 @@ vi.mock('@supabase/ssr', () => ({
   }),
 }));
 
-async function run(path: string) {
+async function run(path: string, method = 'GET') {
   const { proxy } = await import('./proxy');
-  return proxy(new NextRequest(`https://example.test${path}`));
+  return proxy(new NextRequest(`https://example.test${path}`, { method }));
 }
 
 beforeEach(() => {
@@ -52,6 +58,7 @@ beforeEach(() => {
   producerIds = new Set(['producer-1', 'producer-member']);
   memberIds = new Set(['member-1', 'producer-member']);
   membershipReads = 0;
+  pendingPassword = new Set();
 });
 
 describe('proxy API producer gate', () => {
@@ -497,5 +504,46 @@ describe('Label OS landing: flag off changes nothing', () => {
     currentUser = { id: 'buyer-1', user_metadata: { account_type: 'label' } };
     expect(new URL((await run('/login')).headers.get('location')!).pathname).toBe('/store/account/me');
     expect((await run('/setup')).status).toBe(404);
+  });
+});
+
+describe('a team account must choose its own password first (doc 25, flag on)', () => {
+  beforeEach(() => {
+    vi.stubEnv('LABEL_OS_ENABLED', 'true');
+    currentUser = { id: 'member-1' };
+    pendingPassword = new Set(['member-1']);
+  });
+
+  it('refuses every Label OS API request with 403 mustChangePassword', async () => {
+    for (const p of ['/api/org', '/api/org/0b0e1a57-0000-4000-8000-000000000001/members', '/api/org/join', '/api/org/setup', '/api/platform/orgs']) {
+      const res = await run(p, 'GET');
+      expect(res.status, p).toBe(403);
+      expect(await res.json(), p).toMatchObject({ mustChangePassword: true });
+    }
+    expect((await run('/api/org/0b0e1a57-0000-4000-8000-000000000001/tasks', 'POST')).status).toBe(403);
+  });
+
+  it('sends every Label OS page to /account/password, /shared and /setup included', async () => {
+    for (const p of ['/o', '/o/north/artists', '/shared', '/setup', '/join/abc']) {
+      const res = await run(p);
+      expect(res.status, p).toBe(307);
+      expect(new URL(res.headers.get('location')!).pathname, p).toBe('/account/password');
+    }
+  });
+
+  it('lets through only the request that saves the password', async () => {
+    expect((await run('/api/org/account/password', 'POST')).status).toBe(200);
+    expect((await run('/api/org/account/password', 'GET')).status).toBe(403);
+  });
+
+  it('once it is chosen, nothing is in the way', async () => {
+    pendingPassword = new Set();
+    expect((await run('/api/org')).status).toBe(200);
+    expect((await run('/o')).status).toBe(200);
+  });
+
+  it('flag off: Label OS answers 404 before anything is asked', async () => {
+    vi.stubEnv('LABEL_OS_ENABLED', '');
+    expect((await run('/api/org')).status).toBe(404);
   });
 });

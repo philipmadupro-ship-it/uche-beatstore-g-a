@@ -7,11 +7,14 @@
 -- accounts and their memberships stay: they become ordinary members, and the
 -- team-account routes answer 503.
 
+DROP FUNCTION IF EXISTS public.labelos_my_password_pending();
+DROP FUNCTION IF EXISTS public.labelos_team_account_password_changed(uuid, uuid);
 DROP FUNCTION IF EXISTS public.labelos_team_account_password_changed(uuid);
 DROP FUNCTION IF EXISTS public.labelos_audit_team_account_set_disabled(uuid, uuid, uuid, boolean);
 DROP FUNCTION IF EXISTS public.labelos_audit_team_account_reset(uuid, uuid, uuid);
 DROP FUNCTION IF EXISTS public.labelos_team_account_target(uuid, uuid, uuid);
 DROP FUNCTION IF EXISTS public.labelos_audit_team_account_create(uuid, uuid, uuid, text, text[], uuid[], jsonb);
+DROP FUNCTION IF EXISTS public.labelos_revoke_auth_sessions(uuid, uuid);
 DROP TABLE IF EXISTS public.org_managed_accounts;
 
 NOTIFY pgrst, 'reload schema';

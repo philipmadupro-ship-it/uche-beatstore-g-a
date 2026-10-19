@@ -5,7 +5,9 @@ import {
   interpretCreate,
   isEmailTaken,
   isMissingTeamAccounts,
+  passwordGateExempt,
   passwordProblem,
+  sessionIdOf,
   targetRefusal,
   toManagedView,
 } from './team-accounts';
@@ -84,5 +86,27 @@ describe('toManagedView', () => {
   it('shows state, never a secret', () => {
     const view = toManagedView({ user_id: 'u', must_change_password: true, disabled_at: null, created_at: '2026-10-17T00:00:00Z' });
     expect(view).toEqual({ pending_password_change: true, disabled: false, created_at: '2026-10-17T00:00:00Z' });
+  });
+});
+
+describe('sessionIdOf (keep this session, end the others)', () => {
+  const token = (claims: object) => `h.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.s`;
+  it('reads the session_id claim of an access token', () => {
+    expect(sessionIdOf(token({ sub: 'u', session_id: '55555555-5555-4555-8555-555555555555' }))).toBe('55555555-5555-4555-8555-555555555555');
+  });
+  it('anything else is null, so every session ends', () => {
+    expect(sessionIdOf(undefined)).toBeNull();
+    expect(sessionIdOf('not-a-jwt')).toBeNull();
+    expect(sessionIdOf(token({ sub: 'u' }))).toBeNull();
+    expect(sessionIdOf(token({ session_id: "x'; drop" }))).toBeNull();
+  });
+});
+
+describe('passwordGateExempt', () => {
+  it('only saving one’s own password', () => {
+    expect(passwordGateExempt('/api/org/account/password', 'POST')).toBe(true);
+    expect(passwordGateExempt('/api/org/account/password', 'GET')).toBe(false);
+    expect(passwordGateExempt('/api/org/account/password/x', 'POST')).toBe(false);
+    expect(passwordGateExempt('/api/org', 'POST')).toBe(false);
   });
 });

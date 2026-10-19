@@ -79,12 +79,13 @@ export function targetRefusal(reason: unknown): { status: 403 | 404 | 409; error
     case 'not_member':
       return { status: 404, code: reason, error: 'This organization did not create that account.' };
     case 'owner_only':
-      return { status: 403, code: 'owner_only', error: 'Only an owner can do this to an owner.' };
+      return { status: 403, code: 'owner_only', error: 'Only an owner can do this to an owner or an admin.' };
     case 'shared':
+      // No one can reset or switch off an account that is also used outside this org; removing it from the team is what is left.
       return {
         status: 409,
         code: 'shared',
-        error: 'This account is also used elsewhere, so only its owner can change it. Remove them from the team instead.',
+        error: 'This account is also used outside this organization, so it cannot be reset or switched off from here. Remove them from the team instead.',
       };
     default:
       return null;
@@ -100,6 +101,15 @@ export function isEmailTaken(error: { message?: string; code?: string; status?: 
 
 export const EMAIL_TAKEN =
   'This email already has an account. Invite them instead: they will join with the account they already have.';
+
+/**
+ * A team account belongs to the org that made it: it may not set up its own
+ * organization or accept an invitation elsewhere. Either would put it "in
+ * something else", which 190's guard (rightly) answers with `shared` — and
+ * the org could then no longer reset or switch it off.
+ */
+export const MANAGED_ACCOUNT_STAYS =
+  'This is a team account of an organization, so it cannot set up or join another one. Use your own account for that.';
 
 /** Long enough that a banned account cannot sign in for the life of the product (~100 years). */
 export const BAN_FOREVER = '876000h';
@@ -133,4 +143,38 @@ export type ManagedView = { pending_password_change: boolean; disabled: boolean;
 
 export function toManagedView(row: ManagedRow): ManagedView {
   return { pending_password_change: row.must_change_password, disabled: row.disabled_at !== null, created_at: row.created_at };
+}
+
+// ── Choosing one's own password first ───────────────────────────────────
+
+/** What every other Label OS request answers while the caller must choose their password (403). */
+export const MUST_CHANGE_PASSWORD = 'Choose your own password first.';
+export const PASSWORD_PAGE = '/account/password';
+
+/**
+ * The one Label OS request a team account on its org-given password may make:
+ * saving its own password. Everything else under /api/org, /o, /shared,
+ * /join, /setup, /restore and the platform console waits until it has. The
+ * password page itself is outside those namespaces (src/proxy.ts).
+ */
+export function passwordGateExempt(pathname: string, method: string): boolean {
+  return pathname === '/api/org/account/password' && method.toUpperCase() === 'POST';
+}
+
+/**
+ * The `session_id` claim of a Supabase access token (the session it belongs
+ * to), so the person's own change can keep that one and end the rest. Null
+ * when absent or unreadable — then every session ends, the safe default.
+ */
+export function sessionIdOf(accessToken: string | null | undefined): string | null {
+  if (!accessToken) return null;
+  const part = accessToken.split('.')[1];
+  if (!part) return null;
+  try {
+    const json = JSON.parse(Buffer.from(part.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')) as { session_id?: unknown };
+    const id = json.session_id;
+    return typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+  } catch {
+    return null;
+  }
 }

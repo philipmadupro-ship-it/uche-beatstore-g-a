@@ -22,6 +22,13 @@ CREATE TABLE IF NOT EXISTS auth.users (
   created_at timestamptz DEFAULT now()
 );
 ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS email_confirmed_at timestamptz DEFAULT now();
+-- Supabase's sign-in sessions (refresh tokens hang off them). Only the columns
+-- a migration touches: 190 revokes a team account's sessions on reset / switch-off.
+CREATE TABLE IF NOT EXISTS auth.sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now()
+);
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
   SELECT nullif(current_setting('request.jwt.claims', true)::json->>'sub', '')::uuid
 $$;

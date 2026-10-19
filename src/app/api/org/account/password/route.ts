@@ -7,11 +7,12 @@
  * Anyone else is 404 here — their password is theirs to manage through the
  * normal reset flow, not an org route. The user is the session's own; the
  * new password goes to Supabase's admin API and nowhere else, then 190's
- * `labelos_team_account_password_changed` clears the flag and the org's log
- * gets `member.password_changed` (no secret in it).
+ * `labelos_team_account_password_changed` clears the flag and signs the
+ * person out everywhere but here, and the org's log gets
+ * `member.password_changed` (no secret in it).
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { sessionIdentity } from '@/lib/auth/org-access';
+import { currentSessionId, sessionIdentity } from '@/lib/auth/org-access';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { AccountPasswordBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
@@ -49,7 +50,12 @@ export async function POST(req: NextRequest) {
     const updated = await admin.auth.admin.updateUserById(session.userId, { password: parsed.data.password });
     if (updated.error) throw new Error(updated.error.message);
 
-    const cleared = await admin.rpc('labelos_team_account_password_changed', { p_user: session.userId });
+    // Clears the flag and ends every OTHER session (another device, someone
+    // who had the org-given password); the one making the change stays.
+    const cleared = await admin.rpc('labelos_team_account_password_changed', {
+      p_user: session.userId,
+      p_keep_session: await currentSessionId(),
+    });
     if (cleared.error) throw new Error(cleared.error.message);
 
     // Everyday event, best effort: the password is changed either way.

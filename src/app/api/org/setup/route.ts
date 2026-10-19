@@ -32,6 +32,8 @@ import {
   interpretSetupResult,
   kindForFace,
 } from '@/lib/labelos/setup';
+import { MANAGED_ACCOUNT_STAYS } from '@/lib/labelos/team-accounts';
+import { ownManagedAccount } from '@/lib/labelos/team-accounts-store';
 import { createLogger } from '@/lib/log';
 import { rateLimitDurable } from '@/lib/security/rate-limit';
 import { readBody } from '@/lib/validate';
@@ -41,6 +43,20 @@ const log = createLogger('api.org.setup');
 export async function POST(req: NextRequest) {
   const session = await sessionIdentity();
   if (!session) return NextResponse.json({ error: 'Sign in to set up your organization' }, { status: 401 });
+
+  const admin = createServiceClient();
+  // Doc 25: a team account stays in the organization that made it. Its own
+  // org would put it out of that org's reach (190's `shared`), so a
+  // switched-off employee could keep a way in.
+  try {
+    const own = await ownManagedAccount(admin, session.userId);
+    if (own.status === 'managed') {
+      return NextResponse.json({ error: MANAGED_ACCOUNT_STAYS, code: 'team_account' }, { status: 409 });
+    }
+  } catch (err) {
+    log.error('team account check failed', { userId: session.userId, error: errorMessage(err) });
+    return NextResponse.json({ error: 'Could not set up the organization' }, { status: 500 });
+  }
 
   const parsed = await readBody(req, OrgSetupBodySchema);
   if (!parsed.ok) return parsed.res;
@@ -52,7 +68,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many attempts. Try again in a minute.' }, { status: 429 });
   }
 
-  const admin = createServiceClient();
   try {
     const { data, error } = await admin.rpc(SETUP_ORG_RPC, {
       p_user: session.userId,

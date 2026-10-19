@@ -5,6 +5,8 @@ import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath,
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
 import { memberLanding } from '@/lib/labelos/member-landing';
+import { MUST_CHANGE_PASSWORD, PASSWORD_PAGE, passwordGateExempt } from '@/lib/labelos/team-accounts';
+import { callerMustChangePassword } from '@/lib/labelos/team-accounts-store';
 import { nonMemberLanding } from '@/lib/labelos/setup';
 import { isSupabaseConfigured } from '@/lib/local-store';
 
@@ -116,6 +118,21 @@ export async function proxy(request: NextRequest) {
   // getUser() — not getSession() — actually validates the JWT against the
   // auth server and triggers a refresh when needed.
   const { data: { user } } = await supabase.auth.getUser();
+
+  // Doc 25: a team account still on the password its organization gave it
+  // reaches nothing in Label OS but the request that saves its own password
+  // (the page for it, /account/password, is outside these namespaces). Asked
+  // on the caller's own session; the org routes check again (org-access).
+  if (
+    user &&
+    (labelOsApi || labelOsPage || labelOsJoinPage) &&
+    !passwordGateExempt(request.nextUrl.pathname, request.method) &&
+    (await callerMustChangePassword(supabase))
+  ) {
+    return labelOsApi
+      ? NextResponse.json({ error: MUST_CHANGE_PASSWORD, mustChangePassword: true }, { status: 403 })
+      : NextResponse.redirect(new URL(PASSWORD_PAGE, request.url));
+  }
 
   // The producer is the user with a creator_profiles row (RLS lets a session
   // read only its own). Buyers share this auth, so "signed in" is not enough.

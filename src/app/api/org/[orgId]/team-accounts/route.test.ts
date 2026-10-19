@@ -224,3 +224,29 @@ describe('PATCH team-accounts/[userId]', () => {
     expect(authCalls).toEqual([]);
   });
 });
+
+describe('PATCH team-accounts/[userId]: sessions and peers (review of PR #130)', () => {
+  it('an admin resetting another admin is refused like an owner (403 owner_only), and nothing is touched', async () => {
+    rpcAnswers.labelos_audit_team_account_reset = { data: { error: 'owner_only' }, error: null };
+    const res = await patch(NEW_USER, { action: 'reset_password', password: PASSWORD });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatch(/owner or an admin/);
+    expect(authCalls).toEqual([]);
+  });
+
+  it('a database that could not end the sessions still resets, and says so in the log', async () => {
+    rpcAnswers.labelos_audit_team_account_reset = { data: { ok: true, sessions_revoked: false }, error: null };
+    expect((await patch(NEW_USER, { action: 'reset_password', password: PASSWORD })).status).toBe(200);
+    expect(JSON.stringify(logged)).toContain('sessions not revoked');
+    noPasswordAnywhere(null);
+  });
+
+  it('the shared refusal names the one thing left to do, and promises no owner path', async () => {
+    rpcAnswers.labelos_audit_team_account_set_disabled = { data: { error: 'shared' }, error: null };
+    const res = await patch(NEW_USER, { action: 'disable' });
+    expect(res.status).toBe(409);
+    const { error } = await res.json();
+    expect(error).toMatch(/Remove them from the team/);
+    expect(error).not.toMatch(/only its owner/);
+  });
+});

@@ -208,6 +208,7 @@ export function CreateTeamAccountModal({
             onChange={(e) => setEmail(e.target.value)}
             disabled={submitting}
             placeholder="name@yourlabel.com"
+            helperText="Use an address your organization controls. For someone's own address, invite them instead."
           />
           <PasswordInput value={password} onChange={setPassword} disabled={submitting} email={email.trim()} />
 

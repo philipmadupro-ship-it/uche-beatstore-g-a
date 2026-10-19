@@ -108,12 +108,27 @@ test('the person signs in with it, must choose their own password, and lands in 
   // Typing before hydration is reset by React; wait for the page to settle.
   await page.waitForLoadState('networkidle');
 
+  // Until they choose their own, nothing else in Label OS answers them: not the API, not a page.
+  const blocked = await page.request.get(`/api/org/${ORG}/members`);
+  expect(blocked.status()).toBe(403);
+  expect(await blocked.json()).toMatchObject({ mustChangePassword: true });
+  const other = await page.context().newPage();
+  await other.goto(`/o/${SLUG}/settings/members`);
+  await expect(other).toHaveURL(/\/account\/password$/);
+  await other.close();
+
   await page.getByLabel('New password').fill(OWN_PASSWORD);
   await expect(page.getByLabel('New password')).toHaveValue(OWN_PASSWORD);
   await page.getByLabel('Type it again').fill(OWN_PASSWORD);
   await page.getByRole('button', { name: 'Save and continue' }).click();
   await expect(page).toHaveURL(new RegExp(`/o/${SLUG}`));
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect((await page.request.get(`/api/org/${ORG}/members`)).status()).toBe(200);
+
+  // A team account stays in its label: it cannot set up an organization of its own.
+  const own = await page.request.post('/api/org/setup', { data: { face: 'label', name: `Side ${run}` } });
+  expect(own.status()).toBe(409);
+  expect((await own.json()).code).toBe('team_account');
   await ctx.close();
 
   // The old password no longer works; their own does, straight into the label.

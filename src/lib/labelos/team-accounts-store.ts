@@ -51,3 +51,18 @@ export async function sessionMustChangePassword(
     return false;
   }
 }
+
+/**
+ * The proxy's check, on the CALLER's own session: 190's
+ * `labelos_my_password_pending` answers only about auth.uid(). Any error —
+ * 190 not applied included — reads as false; the org routes check again with
+ * the service role (lib/auth/org-access), so this is the first line, not the only one.
+ */
+export async function callerMustChangePassword(supabase: { rpc: (fn: string) => PromiseLike<{ data: unknown; error: unknown }> }): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('labelos_my_password_pending');
+    return !error && data === true;
+  } catch {
+    return false;
+  }
+}
