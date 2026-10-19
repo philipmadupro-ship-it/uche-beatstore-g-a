@@ -70,7 +70,7 @@ export function diffDraft(saved: MetadataValues, draft: Record<MetadataField, st
       const next = trimmed === '' ? null : Number(trimmed);
       if (next !== saved.bpm) out.bpm = Number.isNaN(next) ? trimmed : next;
     } else {
-      const next = text.trim() === '' ? null : text.trim();
+      const next = f === 'notes' ? (text.trim() === '' ? null : text) : text.trim() === '' ? null : text.trim();
       if (next !== (saved[f] ?? null)) out[f] = next;
     }
   }

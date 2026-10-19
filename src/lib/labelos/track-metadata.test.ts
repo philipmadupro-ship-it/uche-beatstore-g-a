@@ -51,6 +51,13 @@ describe('planMetadataPatch', () => {
     for (const v of [10, 500, 120.5]) expect(planMetadataPatch({ bpm: v }, EMPTY, WRITER)).toMatchObject({ ok: false, field: 'bpm' });
   });
 
+  it('a text bpm is judged by the planner, naming the field; notes keep their spacing', () => {
+    expect(planMetadataPatch({ bpm: '14o' }, EMPTY, WRITER)).toMatchObject({ ok: false, status: 400, field: 'bpm' });
+    expect(planMetadataPatch({ bpm: '140' }, EMPTY, WRITER)).toMatchObject({ ok: true, set: { bpm: 140 } });
+    expect(planMetadataPatch({ notes: '  indented\n' }, EMPTY, WRITER)).toMatchObject({ ok: true, set: { notes: '  indented\n' } });
+    expect(planMetadataPatch({ notes: ' \n ' }, { ...EMPTY, notes: 'x' }, WRITER)).toMatchObject({ ok: true, set: { notes: null } });
+  });
+
   it('language is tidied and checked', () => {
     expect(planMetadataPatch({ language: 'PT-br' }, EMPTY, WRITER)).toMatchObject({ ok: true, set: { language: 'pt-BR' } });
     expect(planMetadataPatch({ language: 'English' }, EMPTY, WRITER)).toMatchObject({ ok: false, field: 'language' });

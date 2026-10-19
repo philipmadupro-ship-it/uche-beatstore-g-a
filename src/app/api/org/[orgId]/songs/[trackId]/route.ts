@@ -100,14 +100,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       });
     }
 
-    // Everyday event, best effort: the edit is saved either way. Field names only — never a value, never a note.
-    await recordEvent(
-      access.admin,
-      { orgId: org, userId: access.userId },
-      'recording.metadata_updated',
-      await songEventSubject(access.admin, org, trackId),
-      { fields: plan.changed as MetadataField[] },
-    );
+    // Everyday event, best effort: the edit is saved either way, so nothing here may turn into a 500.
+    // Field names only — never a value, never a note.
+    try {
+      await recordEvent(
+        access.admin,
+        { orgId: org, userId: access.userId },
+        'recording.metadata_updated',
+        await songEventSubject(access.admin, org, trackId),
+        { fields: plan.changed as MetadataField[] },
+      );
+    } catch (err) {
+      log.error('metadata event failed', { orgId: org, trackId, error: errorMessage(err) });
+    }
     return json(200, { changed: plan.changed, values: { ...values, ...plan.set }, updatedAt: now });
   } catch (err) {
     log.error('metadata save failed', { orgId: org, trackId, error: errorMessage(err) });

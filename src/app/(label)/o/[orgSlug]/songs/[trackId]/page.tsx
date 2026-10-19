@@ -32,7 +32,7 @@ export default async function OrgSongPage({
   if (!detail) notFound();
   return (
     <PageContainer>
-      <OrgSongView orgId={shell.org.id} orgSlug={shell.org.slug} detail={detail} editTrackId={typeof edit === 'string' ? edit.toLowerCase() : null} />
+      <OrgSongView key={`${trackId}:${edit ?? ''}`} orgId={shell.org.id} orgSlug={shell.org.slug} detail={detail} editTrackId={typeof edit === 'string' ? edit.toLowerCase() : null} />
     </PageContainer>
   );
 }

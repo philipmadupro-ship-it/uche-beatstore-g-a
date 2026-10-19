@@ -1740,7 +1740,8 @@ export const OrgTrackMetadataBodySchema = z.object({
   version_label: metadataText,
   isrc: metadataText,
   iswc: metadataText,
-  bpm: z.number().nullable().optional(),
+  // A string is allowed so that "14o" reaches the planner, which names the field in its refusal.
+  bpm: z.union([z.number().finite(), z.string().max(20)]).nullable().optional(),
   key: metadataText,
   language: metadataText,
   explicit: z.boolean().nullable().optional(),

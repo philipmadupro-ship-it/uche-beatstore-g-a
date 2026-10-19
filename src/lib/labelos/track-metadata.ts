@@ -81,7 +81,7 @@ export function isRealDate(v: string): boolean {
 }
 
 /** Everything the body may carry: absent = leave, null / blank = clear (not for the title). */
-export type MetadataInput = { [K in MetadataField]?: MetadataValues[K] | undefined };
+export type MetadataInput = { [K in MetadataField]?: (K extends 'bpm' ? number | string : MetadataValues[K]) | undefined };
 
 export type MetadataPlan =
   | { ok: true; set: Partial<MetadataValues>; changed: MetadataField[] }
@@ -116,12 +116,13 @@ export function planMetadataPatch(input: MetadataInput, current: MetadataValues,
     } else if (f === 'bpm') {
       if (raw === null) next = null;
       else {
-        const n = Number(raw);
+        const n = typeof raw === 'string' && raw.trim() === '' ? NaN : Number(raw);
         if (!Number.isInteger(n) || n < BPM_MIN || n > BPM_MAX) return bad(f, `bpm: a whole number from ${BPM_MIN} to ${BPM_MAX}`);
         next = n;
       }
     } else {
-      const text = raw === null ? null : blankToNull(String(raw));
+      // Notes keep the author's own spacing; only an all-blank note counts as cleared.
+      const text = raw === null ? null : f === 'notes' ? (String(raw).trim() === '' ? null : String(raw)) : blankToNull(String(raw));
       if (text === null) {
         if (f === 'title') return bad(f, 'title: a recording needs a title');
         next = null;
