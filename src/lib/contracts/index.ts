@@ -896,6 +896,32 @@ export const OrgInvitationCreateBodySchema = z.object({
 export type OrgInvitationCreateBody = z.infer<typeof OrgInvitationCreateBodySchema>;
 
 /**
+ * POST /api/org/[orgId]/team-accounts (doc 25): create a login for a person
+ * directly — what an invitation carries, plus their name and the password
+ * the creator chose (checked by lib/labelos/team-accounts#passwordProblem).
+ */
+export const TeamAccountCreateBodySchema = z.object({
+  email: z.string().trim().email('Enter a valid email address').max(200),
+  name: z.string().trim().min(1, 'Enter their name').max(80),
+  password: z.string().max(200),
+  role: z.string().min(1).max(40),
+  functions: z.array(z.string().min(1).max(40)).max(9).optional().default([]),
+  contact_ids: z.array(z.string().uuid()).max(100).optional().default([]),
+}).strict();
+export type TeamAccountCreateBody = z.infer<typeof TeamAccountCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/team-accounts/[userId]: reset the password, or switch the account off / on. */
+export const TeamAccountPatchBodySchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('reset_password'), password: z.string().max(200) }).strict(),
+  z.object({ action: z.literal('disable') }).strict(),
+  z.object({ action: z.literal('enable') }).strict(),
+]);
+export type TeamAccountPatchBody = z.infer<typeof TeamAccountPatchBodySchema>;
+
+/** POST /api/org/account/password: a team account sets its own password. */
+export const AccountPasswordBodySchema = z.object({ password: z.string().max(200) }).strict();
+
+/**
  * POST /api/org/join. The token travels in the body, never an API query
  * string (the join PAGE's own URL does carry it, as share links do). `preview` reads what the invitation is
  * for (no session needed); `accept` joins (session required).
@@ -905,6 +931,16 @@ export const OrgJoinBodySchema = z.object({
   action: z.enum(['preview', 'accept']).optional().default('accept'),
 }).strict();
 export type OrgJoinBody = z.infer<typeof OrgJoinBodySchema>;
+
+/**
+ * POST /api/org/setup (LABEL-48, first slice). What the new account is and
+ * what its organization is called (src/lib/labelos/setup.ts).
+ */
+export const OrgSetupBodySchema = z.object({
+  face: z.enum(['independent', 'label']),
+  name: z.string().min(1).max(200),
+}).strict();
+export type OrgSetupBody = z.infer<typeof OrgSetupBodySchema>;
 
 // ── Label OS org settings + members (LABEL-09) ───────────────────────────
 

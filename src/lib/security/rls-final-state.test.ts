@@ -123,6 +123,8 @@ function labelOsTables(): string[] {
     // 170_labelos_entitlements_platform.sql (LABEL-47)
     'org_entitlements',
     'platform_admins',
+    // 190_labelos_team_accounts.sql (doc 25): service-role only, no policy.
+    'org_managed_accounts',
   ];
 }
 
@@ -262,7 +264,7 @@ describe('final RLS policy state', () => {
     const onTable = (table: string) => [...policies].filter(([k]) => k.startsWith(`${table}.`));
 
     // Tables only the service role touches (RLS on, no policy, no grant): a policy would only invite a read. Each is asserted policy-less in its own block.
-    const SERVICE_ONLY = ['org_digest_members', 'org_digest_channels'];
+    const SERVICE_ONLY = ['org_digest_members', 'org_digest_channels', 'org_managed_accounts'];
 
     it('every org-core table has at least one policy, except the service-role-only ones, which have none', () => {
       for (const table of labelOsTables()) {

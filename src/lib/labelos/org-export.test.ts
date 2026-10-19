@@ -121,6 +121,7 @@ describe('the export covers every table that carries an org_id', () => {
     org_digest_channels: 'holds the encrypted Slack webhook secret',
     org_overview_seen: 'a member’s own read marker, not the organization’s data',
     org_entitlements: 'the platform operator’s licence for the organization (modules and caps), not the organization’s own data',
+    org_managed_accounts: 'sign-in administration of the accounts the org created (password-change and switch-off state); the memberships themselves are exported with org_members',
   };
 
   function orgScopedTablesInMigrations(): string[] {

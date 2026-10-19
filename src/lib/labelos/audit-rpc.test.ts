@@ -19,7 +19,8 @@ const SQL_154 = readFileSync(join(process.cwd(), 'supabase/migrations/154_labelo
 const SQL_170 = readFileSync(join(process.cwd(), 'supabase/migrations/170_labelos_entitlements_platform.sql'), 'utf8');
 // LABEL-51 adds the organization settings write.
 const SQL_172 = readFileSync(join(process.cwd(), 'supabase/migrations/172_labelos_org_settings.sql'), 'utf8');
-const SQL = SQL_146 + SQL_148 + SQL_153 + SQL_154 + SQL_155 + SQL_157 + SQL_170 + SQL_172;
+const SQL_190 = readFileSync(join(process.cwd(), 'supabase/migrations/190_labelos_team_accounts.sql'), 'utf8');
+const SQL = SQL_146 + SQL_148 + SQL_153 + SQL_154 + SQL_155 + SQL_157 + SQL_170 + SQL_172 + SQL_190;
 
 describe('auditRpc', () => {
   it('calls the named function with the arguments untouched', async () => {
@@ -56,7 +57,7 @@ describe('auditRpc', () => {
   });
 });
 
-describe('migrations 146 + 148 + 153 + 154 + 155 + 157 + 170 + 172 hold exactly these functions, service_role only', () => {
+describe('migrations 146 + 148 + 153 + 154 + 155 + 157 + 170 + 172 + 190 hold exactly these functions, service_role only', () => {
   for (const [key, name] of Object.entries(AUDIT_RPCS)) {
     it(`${key} → ${name}`, () => {
       expect(SQL).toMatch(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\(`));
