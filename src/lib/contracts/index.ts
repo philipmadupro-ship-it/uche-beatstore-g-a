@@ -21,6 +21,7 @@ import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
 import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
 import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers';
 import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
+import { CONTRACT_TYPE_IDS, type ContractTypeId } from '@/lib/labelos/contract-types';
 import { STORE_PLAYBACKS } from '@/lib/labelos/store-listing';
 import { CURSOR_RE } from '@/lib/labelos/activity-feed';
 import { DECISIONS as APPROVAL_DECISIONS, GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
@@ -939,6 +940,17 @@ export type OrgJoinBody = z.infer<typeof OrgJoinBodySchema>;
 export const OrgSetupBodySchema = z.object({
   face: z.enum(['independent', 'label']),
   name: z.string().min(1).max(200),
+  /**
+   * The wizard's choices (LABEL-48), written with the org in one transaction.
+   * Same keys and values as PATCH …/settings; `planSettingsChange` judges them
+   * in the route and migration 192's validator again in the database.
+   */
+  settings: z.object({
+    legal_gate: z.enum(['on', 'off']).optional(),
+    marketing_gate: z.enum(['on', 'off']).optional(),
+    departments_off: z.array(z.enum(['contracts', 'finance', 'marketing', 'pr', 'executive', 'artistic', 'store', 'search', 'digest'])).max(9).optional(),
+    contract_types: z.array(z.enum(CONTRACT_TYPE_IDS as [ContractTypeId, ...ContractTypeId[]])).max(8).optional(),
+  }).strict().optional(),
 }).strict();
 export type OrgSetupBody = z.infer<typeof OrgSetupBodySchema>;
 
@@ -1027,6 +1039,8 @@ export const OrgSettingsPatchBodySchema = z.object({
   attention_release_days: z.number().int().min(1).max(365).optional(),
   attention_stalled_days: z.number().int().min(1).max(365).optional(),
   departments_off: z.array(z.enum(['contracts', 'finance', 'marketing', 'pr', 'executive', 'artistic', 'store', 'search', 'digest'])).max(9).optional(),
+  /** LABEL-48: the contract types the org works with (lib/labelos/contract-types). */
+  contract_types: z.array(z.enum(CONTRACT_TYPE_IDS as [ContractTypeId, ...ContractTypeId[]])).max(8).optional(),
 }).strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
 export type OrgSettingsPatchBody = z.infer<typeof OrgSettingsPatchBodySchema>;
 

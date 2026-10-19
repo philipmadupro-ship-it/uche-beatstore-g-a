@@ -24,6 +24,7 @@
 import { parseAttentionSettings, parseReadinessSettings } from '@/lib/contracts';
 import type { EventPayload } from './activity';
 import { MODULES, type Module } from './entitlements';
+import { parseContractTypes, type ContractTypeId } from './contract-types';
 
 /** Modules the owner may switch off (everything but the data export). */
 export const SWITCHABLE_MODULES: readonly Module[] = MODULES.filter((m) => m !== 'export');
@@ -35,6 +36,7 @@ export const SETTING_KEYS = [
   'attention_release_days',
   'attention_stalled_days',
   'departments_off',
+  'contract_types',
 ] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
@@ -45,6 +47,8 @@ export type OrgSettingsView = {
   attention_release_days: number;
   attention_stalled_days: number;
   departments_off: Module[];
+  /** Which contract types the org works with (LABEL-48). Only the choice; templates are LABEL-57. */
+  contract_types: ContractTypeId[];
 };
 
 /** Total over any stored value: known, switchable, once each, in MODULES order. */
@@ -64,6 +68,7 @@ export function parseOrgSettings(raw: unknown): OrgSettingsView {
     require_signed_master_split: readiness.require_signed_master_split,
     ...parseAttentionSettings(obj),
     departments_off: parseDepartmentsOff(obj.departments_off),
+    contract_types: parseContractTypes(obj.contract_types),
   };
 }
 
@@ -127,7 +132,7 @@ export function planSettingsChange(input: {
   const keys: SettingKey[] = [];
   for (const key of SETTING_KEYS) {
     if (wanted[key] === undefined) continue;
-    const to = key === 'departments_off' ? parseDepartmentsOff(wanted[key]) : wanted[key];
+    const to = key === 'departments_off' ? parseDepartmentsOff(wanted[key]) : key === 'contract_types' ? parseContractTypes(wanted[key]) : wanted[key];
     const from = before[key];
     if (sameValue(from, to)) continue;
     patch[key] = to;
@@ -141,8 +146,8 @@ export function planSettingsChange(input: {
 export function patchFromDraft(saved: OrgSettingsView, draft: OrgSettingsView): SettingsPatch {
   const out: Record<string, unknown> = {};
   for (const key of SETTING_KEYS) {
-    const a = key === 'departments_off' ? parseDepartmentsOff(saved[key]) : saved[key];
-    const b = key === 'departments_off' ? parseDepartmentsOff(draft[key]) : draft[key];
+    const a = key === 'departments_off' ? parseDepartmentsOff(saved[key]) : key === 'contract_types' ? parseContractTypes(saved[key]) : saved[key];
+    const b = key === 'departments_off' ? parseDepartmentsOff(draft[key]) : key === 'contract_types' ? parseContractTypes(draft[key]) : draft[key];
     if (!sameValue(a, b)) out[key] = b;
   }
   return out as SettingsPatch;
