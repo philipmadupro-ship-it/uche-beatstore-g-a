@@ -18,6 +18,9 @@
  * Credits (LABEL-27) follow the recordings: a pill per person with its status and
  * rights-holder party. Tasks on this song (LABEL-23) sit at the foot, the member's
  * own side of them. Splits (LABEL-28) and legal readiness (LABEL-29) follow the credits.
+ * Details (LABEL-53, `#details`) — the metadata editor for the song and, behind a
+ * button, each recording — sit after the approvals so the rights forms keep their
+ * place on the page; the release's "Add the ISRC" link scrolls straight to them.
  */
 
 import { useState } from 'react';
@@ -186,6 +189,14 @@ export function OrgSongView({ orgId, orgSlug, detail, editTrackId = null }: { or
         )}
       </section>
 
+      <OrgCredits key={`credits-${song.id}`} orgId={orgId} trackId={song.id} />
+
+      <OrgSplits key={`splits-${song.id}`} orgId={orgId} trackId={song.id} />
+
+      <OrgLegalReadiness key={`legal-${song.id}`} orgId={orgId} trackId={song.id} />
+
+      <OrgApprovals key={`approvals-${song.id}`} orgId={orgId} trackId={song.id} />
+
       <section id="details" aria-labelledby="org-song-details" className="scroll-mt-24 space-y-4" data-testid="org-song-details">
         <h2 id="org-song-details" className={LABEL}>Details</h2>
         <div className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
@@ -197,14 +208,6 @@ export function OrgSongView({ orgId, orgSlug, detail, editTrackId = null }: { or
           </div>
         ))}
       </section>
-
-      <OrgCredits key={`credits-${song.id}`} orgId={orgId} trackId={song.id} />
-
-      <OrgSplits key={`splits-${song.id}`} orgId={orgId} trackId={song.id} />
-
-      <OrgLegalReadiness key={`legal-${song.id}`} orgId={orgId} trackId={song.id} />
-
-      <OrgApprovals key={`approvals-${song.id}`} orgId={orgId} trackId={song.id} />
 
       <section aria-labelledby="org-song-where" className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div>
