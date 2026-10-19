@@ -6,6 +6,7 @@
  * summary. Service-role reads, org filter on every query; authorisation is the
  * route's (`requireOrgCapability` catalog.read).
  */
+import { restrictedCountFor } from './restricted-counts';
 import type { OrgAccessOk } from '@/lib/auth/org-access';
 import { orgProjectIdsInScope } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
@@ -95,7 +96,8 @@ export async function loadArInbox(access: OrgAccessOk): Promise<ArInbox> {
   const facts = await orgTrackFacts(admin, org, candidates.map((t) => t.id));
   const { visible, hidden } = partitionSongs(candidates, facts, access.capabilities);
   const ordered = sortInbox(visible.map((t) => ({ ...t, stage: t.song_stage as string })));
-  if (ordered.length === 0) return { songs: [], restricted: hidden, canReview: mayReview(access.capabilities) };
+  const restrictedShown = restrictedCountFor(hidden, access);
+  if (ordered.length === 0) return { songs: [], restricted: restrictedShown, canReview: mayReview(access.capabilities) };
 
   const ids = ordered.map((t) => t.id);
   // Ratings are read by members with a review ability only (migration 149's policy asks the same).
@@ -151,5 +153,5 @@ export async function loadArInbox(access: OrgAccessOk): Promise<ArInbox> {
       summary: summarizeReviews(all),
     };
   });
-  return { songs, restricted: hidden, canReview: mayReview(access.capabilities) };
+  return { songs, restricted: restrictedShown, canReview: mayReview(access.capabilities) };
 }

@@ -100,11 +100,13 @@ describe('OrgSettingsPanel', () => {
     expect(screen.queryByTestId('org-settings')).toBeNull();
   });
 
-  it('warns when contracts is off while legal approval is still required', async () => {
+  it('blocks Save and says why when Contracts is off while legal approval is still required', async () => {
     getReply = { status: 200, body: { settings: { ...DEFAULTS, departments_off: ['contracts'] }, licensed: ['contracts', 'export'], switchable: ['contracts'] } };
     render(<OrgSettingsPanel orgId="o1" />);
     await screen.findByTestId('org-settings');
-    expect(screen.getByTestId('contracts-legal-warning').textContent).toMatch(/override/);
+    expect(screen.getByTestId('contracts-legal-warning').textContent).toMatch(/legal approval/i);
+    fireEvent.click(screen.getByLabelText(/require marketing approval/i));
+    expect((save() as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('keeps a department that is off but no longer licensed visible, so it can be cleared', async () => {

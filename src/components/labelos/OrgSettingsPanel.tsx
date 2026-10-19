@@ -17,7 +17,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Field } from '@/components/ui/Field';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { MODULES, MODULE_LABELS, type Module } from '@/lib/labelos/entitlements';
-import { SWITCHABLE_MODULES, parseDepartmentsOff, patchFromDraft, type OrgSettingsView } from '@/lib/labelos/org-settings';
+import { CONTRACTS_NEED_LEGAL_OFF, SWITCHABLE_MODULES, contractsLockout, parseDepartmentsOff, patchFromDraft, type OrgSettingsView } from '@/lib/labelos/org-settings';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
 const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-5 sm:p-6';
@@ -77,7 +77,8 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
   }, [draft, days]);
   const patch = loaded && next ? patchFromDraft(loaded.settings, next) : {};
   const dirty = Object.keys(patch).length > 0;
-  const invalid = !daysValid(days.release) || !daysValid(days.stalled);
+  const lockout = draft ? contractsLockout(draft) : false;
+  const invalid = !daysValid(days.release) || !daysValid(days.stalled) || lockout;
 
   if (status === 'loading') return <p className="text-[11px] text-white/60" role="status">Loading settings…</p>;
   if (status === 'denied') return <p className="text-[11px] text-white/70" data-testid="settings-denied">Only the owner of this organization can change its settings.</p>;
@@ -156,9 +157,9 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
             <ToggleRow key={m} id={`dept-${m}`} label={MODULE_LABELS[m]} hint={off.has(m) ? (loaded.licensed.includes(m) ? 'Off' : 'Off · not in your licence') : 'On'} checked={!off.has(m)} onChange={(v) => toggleDepartment(m, v)} />
           ))}
         </div>
-        {off.has('contracts') && draft.legal_gate === 'on' && (
-          <p className="mt-3 text-[11px] leading-relaxed text-white/70" data-testid="contracts-legal-warning">
-            Contracts &amp; legal is off but legal approval is still required. Nobody will be able to give it, so a release can only go out with the owner&apos;s override. Switch legal approval off as well, or keep the department on.
+        {lockout && (
+          <p className="mt-3 text-[11px] leading-relaxed text-[#ffb7a8]" role="alert" data-testid="contracts-legal-warning">
+            {CONTRACTS_NEED_LEGAL_OFF}
           </p>
         )}
         {unlicensed.length > 0 && (

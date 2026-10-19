@@ -1,3 +1,4 @@
+import type { ImageInfo } from './image-size';
 import { describe, expect, it } from 'vitest';
 import { parseReadinessSettings } from '@/lib/contracts';
 import { buildSnapshot, currentDecision, GATES, type ApprovalRow, type Gate } from './approvals';
@@ -23,6 +24,8 @@ const legal = (blockers: Reason[] = [], warnings: Reason[] = []): LegalReadiness
   requirements: [], blockers, warnings, score: { percent: blockers.length ? 40 : 100, satisfiedWeight: 1, applicableWeight: 2 },
 });
 
+const GOOD_ART: ImageInfo = { format: 'jpeg', width: 3000, height: 3000, color: 'rgb' };
+
 let clock = 0;
 const row = (gate: Gate, decision: string, snapshot: unknown): ApprovalRow => ({
   id: `a${clock}`, org_id: 'o', song_id: null, release_id: 'r', gate, decision, note: null, actor_id: 'u', approver_id: null,
@@ -42,7 +45,7 @@ function ready(over: Partial<ReleaseReadinessFacts> = {}): ReleaseReadinessFacts
       state: 'draft', title: 'Nova EP', type: 'single', primaryArtist: 'Nova', labelName: 'Label', pLine: '℗ 2026 Label', cLine: '© 2026 Label',
       primaryGenre: 'Pop', targetDate: '2026-12-01', releaseDate: null, upc: '123456789012', artworkAssetId: 'art',
     },
-    artwork: { mime: 'image/jpeg' },
+    artwork: { mime: 'image/jpeg', info: GOOD_ART },
     items: [item(1), item(2, S2)],
     legal: new Map([[S1, legal()], [S2, legal()]]),
     approvals: Object.fromEntries(GATES.map((g) => [g, approved(g)])) as Record<Gate, ReadinessApproval>,
@@ -55,14 +58,14 @@ const status = (f: ReleaseReadinessFacts, g: (typeof RELEASE_GATES)[number]) => 
 
 describe('settings are total', () => {
   it('defaults on a missing, malformed or unknown value, and drops unknown keys', () => {
-    expect(parseReadinessSettings(null)).toEqual({ legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false });
+    expect(parseReadinessSettings(null)).toEqual({ legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, artwork_min_px: 3000 });
     expect(parseReadinessSettings('off')).toEqual(parseReadinessSettings({}));
     expect(parseReadinessSettings([])).toEqual(parseReadinessSettings({}));
     expect(parseReadinessSettings({ legal_gate: 'maybe', marketing_gate: 0, require_signed_master_split: 'yes', digest: {} })).toEqual({
-      legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false,
+      legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, artwork_min_px: 3000,
     });
     expect(parseReadinessSettings({ legal_gate: 'off', marketing_gate: 'off', require_signed_master_split: true })).toEqual({
-      legal_gate: 'off', marketing_gate: 'off', require_signed_master_split: true,
+      legal_gate: 'off', marketing_gate: 'off', require_signed_master_split: true, artwork_min_px: 3000,
     });
   });
 });
@@ -190,13 +193,30 @@ describe('tracklist, masters, artwork, metadata', () => {
     expect(status(ready({ items: [item(1, S1, { masterRelation: 'instrumental' })] }), 'masters')).toBe('approved');
     expect(status(ready({ items: [item(1, S1, { masterRelation: 'version' })] }), 'masters')).toBe('approved');
   });
+  it('artwork size rule (09 §4): square, RGB, at least the org minimum; a header that cannot be read blocks', () => {
+    const codes = (info: ImageInfo | null, settings = parseReadinessSettings({})) =>
+      evaluateReleaseReadiness(ready({ artwork: { mime: 'image/png', info }, settings })).gates.artwork.blockers.map((b) => b.code);
+    expect(codes(GOOD_ART)).toEqual([]);
+    expect(codes({ ...GOOD_ART, width: 2999, height: 2999 })).toEqual(['artwork_too_small']);
+    expect(codes({ ...GOOD_ART, width: 3600 })).toEqual(['artwork_not_square']);
+    expect(codes({ ...GOOD_ART, color: 'cmyk' })).toEqual(['artwork_color']);
+    expect(codes(null)).toEqual(['artwork_unreadable']);
+    expect(status(ready({ artwork: { mime: 'image/png', info: { ...GOOD_ART, width: 2000, height: 2000 } } }), 'artwork')).toBe('blocked');
+    // The minimum is the org's: 1400 passes a 1500 px cover, and a garbage setting reads as 3000.
+    const small = { ...GOOD_ART, width: 1500, height: 1500 };
+    expect(codes(small, parseReadinessSettings({ artwork_min_px: 1400 }))).toEqual([]);
+    expect(codes(small, parseReadinessSettings({ artwork_min_px: 'tiny' }))).toEqual(['artwork_too_small']);
+    expect(parseReadinessSettings({ artwork_min_px: 3000.5 }).artwork_min_px).toBe(3000);
+    expect(parseReadinessSettings({ artwork_min_px: 50 }).artwork_min_px).toBe(3000);
+  });
+
   it('artwork: none, a missing file, a wrong type, then fine', () => {
     const rel = ready().release;
     expect(status(ready({ release: { ...rel, artworkAssetId: null }, artwork: null }), 'artwork')).toBe('blocked');
     expect(status(ready({ artwork: null }), 'artwork')).toBe('blocked');
-    expect(status(ready({ artwork: { mime: 'image/gif' } }), 'artwork')).toBe('blocked');
-    expect(status(ready({ artwork: { mime: null } }), 'artwork')).toBe('blocked');
-    expect(status(ready({ artwork: { mime: 'IMAGE/PNG' } }), 'artwork')).toBe('approved');
+    expect(status(ready({ artwork: { mime: 'image/gif', info: GOOD_ART } }), 'artwork')).toBe('blocked');
+    expect(status(ready({ artwork: { mime: null, info: GOOD_ART } }), 'artwork')).toBe('blocked');
+    expect(status(ready({ artwork: { mime: 'IMAGE/PNG', info: GOOD_ART } }), 'artwork')).toBe('approved');
   });
   it('metadata lists every missing field and every item without an ISRC', () => {
     const rel = ready().release;

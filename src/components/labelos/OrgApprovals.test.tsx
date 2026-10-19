@@ -114,7 +114,7 @@ describe('states', () => {
 
 describe('deciding', () => {
   const decider = (over: Partial<GateStateView> = {}) =>
-    gate({ canDecide: true, status: 'requested', chip: { label: 'Awaiting approval', tone: 'waiting' }, pending: row({ decision: 'requested', approver: 'Lena Legal' }) as never, ...over });
+    gate({ canDecide: true, status: 'requested', chip: { label: 'Awaiting approval', tone: 'waiting' }, pending: row({ decision: 'requested', approver: 'Lena Legal' }) as never, snapshotKey: 'k0', ...over });
 
   it('Approve posts the decision and shows the new state with a toast', async () => {
     mount(decider());
@@ -123,7 +123,7 @@ describe('deciding', () => {
     fireEvent.click(approve);
     await waitFor(() => expect(calls.length).toBe(2));
     expect(calls[1].url).toBe('/api/org/org1/approvals/decide');
-    expect(JSON.parse(String(calls[1].init?.body))).toEqual({ subject: { kind: 'song', id: SONG }, gate: 'legal', decision: 'approved' });
+    expect(JSON.parse(String(calls[1].init?.body))).toEqual({ subject: { kind: 'song', id: SONG }, gate: 'legal', decision: 'approved', seen: 'k0' });
     await waitFor(() => expect(screen.getByTestId('org-approval-chip-legal').textContent).toContain('Approved'));
     expect(toast.success).toHaveBeenCalledWith('Approved');
   });
@@ -168,6 +168,31 @@ describe('deciding', () => {
     const approve = await screen.findByTestId('org-approval-approve');
     expect((approve as HTMLButtonElement).disabled).toBe(true);
     expect(approve.getAttribute('title')).toBe('You cannot approve a request you made yourself');
+  });
+
+  it('Approve is unavailable without the key the server hands a decider: nothing is sent unseen', async () => {
+    mount(decider({ snapshotKey: null }));
+    const approve = await screen.findByTestId('org-approval-approve');
+    expect((approve as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('with no request addressed to them, Approve is disabled and says why', async () => {
+    mount(decider({ status: 'none', pending: null, approveBlockedReason: 'Approving needs a request addressed to you. Ask for one first.' }));
+    const approve = await screen.findByTestId('org-approval-approve');
+    expect((approve as HTMLButtonElement).disabled).toBe(true);
+    expect(approve.getAttribute('title')).toContain('request addressed to you');
+    expect(screen.getByTestId('org-approval-blocked').textContent).toContain('request addressed to you');
+    // Asking for changes is still possible.
+    expect((screen.getByTestId('org-approval-changes') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('a song’s legal gate on a release has no Approve: it says the release holds the approval', async () => {
+    mount(decider({ onReleases: [{ id: 'rel1', title: 'Nova EP' }] }));
+    await screen.findByTestId('org-approval-on-release');
+    expect(screen.queryByTestId('org-approval-approve')).toBeNull();
+    expect(screen.getByTestId('org-approval-on-release').textContent).toContain('Nova EP');
+    expect(screen.getByTestId('org-approval-on-release').textContent).toContain('Legal is approved on the release');
+    expect(screen.getByTestId('org-approval-changes')).toBeTruthy();
   });
 
   it('the server’s own words are the error', async () => {

@@ -980,6 +980,8 @@ export const OrgReadinessSettingsSchema = z.object({
   legal_gate: z.enum(['on', 'off']).catch('on'),
   marketing_gate: z.enum(['on', 'off']).catch('on'),
   require_signed_master_split: z.boolean().catch(false),
+  /** The shorter side of cover art, in pixels (09 §4: 3000 is the common DSP minimum). Whole numbers 600-10000; anything else reads as 3000. */
+  artwork_min_px: z.number().int().min(600).max(10000).catch(3000),
 });
 export type OrgReadinessSettings = z.infer<typeof OrgReadinessSettingsSchema>;
 
@@ -1580,7 +1582,11 @@ export const OrgApprovalDecideBodySchema = z.object({
   gate: z.enum(APPROVAL_GATES),
   decision: z.enum(APPROVAL_DECISIONS),
   note: z.string().max(APPROVAL_NOTE_MAX).nullable().optional(),
-  /** `snapshotKey` of the gate as the screen drew it. When given with "approved" and the facts moved since, 409 `changed_since_seen`. */
+  /**
+   * `snapshotKey` of the gate as the screen drew it. REQUIRED with "approved" (doc 21 #14; absent = 400 `seen_required`
+   * from `planDecide`, which says it in words); when the facts moved since, 409 `changed_since_seen`. Optional here so
+   * the refusal is that plain-spoken one, not a schema error.
+   */
   seen: z.string().max(64).nullable().optional(),
 }).strict();
 export type OrgApprovalDecideBody = z.infer<typeof OrgApprovalDecideBodySchema>;

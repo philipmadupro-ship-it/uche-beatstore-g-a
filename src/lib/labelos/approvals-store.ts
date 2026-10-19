@@ -15,6 +15,7 @@
 import { capabilitiesFor } from './capabilities';
 import { objectAccessFor } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
+import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { isUUID } from '@/lib/validate';
 import {
   APPROVAL_COLUMNS,
@@ -196,6 +197,27 @@ export async function approvalContext(
   }
   const rel = release ?? (await readReleaseFacts(admin, org, subject.id));
   return { artist_id: rel?.contactId ?? null, project_id: rel?.projectId ?? null, song_id: null, release_id: subject.id };
+}
+
+/**
+ * The live releases a song is on (doc 21 #13): a tracklist row of a release
+ * that is not cancelled. A song on one has its legal approval given on the
+ * release, so its own Approve is withdrawn. Org-filtered on both tables; a
+ * missing releases schema (migration 144) reads as "on none".
+ */
+export async function releasesOfSong(admin: AdminClient, org: string, songId: string): Promise<{ id: string; title: string; contactId: string | null }[]> {
+  const items = await admin.from('release_items').select('release_id').eq('org_id', org).eq('song_track_id', songId);
+  if (items.error) {
+    if (isMissingSchema(items.error)) return [];
+    throw new Error(`release items read: ${items.error.message}`);
+  }
+  const ids = [...new Set(((items.data ?? []) as { release_id: string }[]).map((r) => r.release_id))];
+  if (ids.length === 0) return [];
+  const rels = await admin.from('releases').select('id, title, state, contact_id').eq('org_id', org).in('id', ids.slice(0, 50));
+  if (rels.error) throw new Error(`releases read: ${rels.error.message}`);
+  return ((rels.data ?? []) as { id: string; title: string | null; state: string; contact_id: string | null }[])
+    .filter((r) => r.state !== 'cancelled')
+    .map((r) => ({ id: r.id, title: r.title ?? 'Untitled release', contactId: r.contact_id }));
 }
 
 // ── People ──────────────────────────────────────────────────────────────

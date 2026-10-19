@@ -203,6 +203,15 @@ describe('GET /api/org/[orgId]/activity — the org overview feed', () => {
     expect(sorted(ids(b))).toEqual([1, 2, 3, 4, 6, 7, 10, 12]);
   });
 
+  it('doc 21 #9: marketing limited to some artists is not told how many events were withheld', async () => {
+    db.tables.org_members.find((m) => m.user_id === MKT)!.scope = 'artists';
+    db.tables.member_artist_scopes.push({ org_id: L, user_id: MKT, contact_id: C2 });
+    current = MKT;
+    const b: Body = await (await feed()).json();
+    expect(b.restricted).toBe(0);
+    expect(JSON.stringify(b)).not.toContain('Kilo demo');
+  });
+
   it('marketing (internal yes, working audio no): the demo’s events are counted, not listed (D4)', async () => {
     current = MKT;
     const b: Body = await (await feed()).json();

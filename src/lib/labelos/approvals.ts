@@ -345,6 +345,22 @@ export function planRequest(input: RequestInput): Plan<{ gate: Gate }> {
   return { ok: true, gate };
 }
 
+/**
+ * Why this person cannot press "Approved" on the gate as it stands, from who
+ * asked and who was asked (doc 21 #15). Owners and admins are exempt from
+ * both rules. Anyone else needs an OPEN request addressed to them (a request
+ * that was answered is closed, a new decision needs a new request) and cannot
+ * answer one they made themselves. `null` = nothing in the way. The one copy
+ * of the rule: `planDecide` refuses on it and the gate state tells the screen.
+ */
+export function approveBlocker(actor: Pick<Actor, 'id' | 'role'>, pending: ApprovalRow | null): { code: 'self_approval' | 'no_request'; message: string } | null {
+  if (isOwnerOrAdmin(actor.role)) return null;
+  const me = actor.id.toLowerCase();
+  if (pending && pending.actor_id?.toLowerCase() === me) return { code: 'self_approval', message: 'You cannot approve a request you made yourself' };
+  if (!pending || pending.approver_id?.toLowerCase() !== me) return { code: 'no_request', message: 'Approving needs a request addressed to you. Ask for one first.' };
+  return null;
+}
+
 export type DecideInput = {
   kind: SubjectKind;
   gate: string;
@@ -358,6 +374,12 @@ export type DecideInput = {
   legalReady?: boolean;
   /** The number of legal blockers, for the message. */
   legalBlockers?: number;
+  /** What the decider's screen was drawn from (`snapshotKey` of the gate, sent by the client). Approving needs it (doc 21 #14). */
+  seen: string | null | undefined;
+  /** `snapshotKey` of the gate's facts as they are now. */
+  currentKey: string;
+  /** A song that is on a release: its legal approval is the release's (doc 21 #13). Ignored for a release. */
+  songOnRelease: boolean;
 };
 
 /**
@@ -366,8 +388,15 @@ export type DecideInput = {
  *
  *  - needs `release.approve.<gate>`;
  *  - "Changes requested" needs a note (what to change);
- *  - the person who asked cannot approve their own request — unless they are
- *    owner or admin (D4 note). Declining it is fine;
+ *  - "Approved" must carry `seen`, the key of what the approver's screen showed
+ *    (doc 21 #14): none is a 400, one that no longer matches the facts a 409
+ *    `changed_since_seen`, so an approval records what was looked at;
+ *  - approving needs an open request addressed to the decider, and nobody
+ *    answers their own — owner and admin are exempt from both (`approveBlocker`,
+ *    doc 21 #15 and the D4 note). Declining is fine either way;
+ *  - a SONG's legal gate is not approved once the song is on a release: the
+ *    release's legal gate is the authority (doc 21 #13). Changes can still be
+ *    requested;
  *  - `legal` is recorded as approved only while the readiness has no blockers;
  *  - approving what is approved and unchanged is a 409 (an approval of
  *    something stale is the way to renew it).
@@ -384,14 +413,18 @@ export function planDecide(input: DecideInput): Plan<{ gate: Gate; decision: Dec
 
   const pending = input.current.pending;
   if (input.decision === 'approved') {
-    if (pending && pending.actor_id === input.actor.id && !isOwnerOrAdmin(input.actor.role)) {
-      return refuse(403, 'self_approval', 'You cannot approve a request you made yourself');
+    if (!input.seen || input.seen.trim().length === 0) return refuse(400, 'seen_required', 'Open it and look before approving');
+    const blocked = approveBlocker(input.actor, pending);
+    if (blocked) return refuse(403, blocked.code, blocked.message);
+    if (input.kind === 'song' && gate === 'legal' && input.songOnRelease) {
+      return refuse(409, 'decided_on_release', 'This song is on a release. Legal is approved on the release.');
     }
     if (input.current.status === 'approved' && !input.stale) return refuse(409, 'already_approved', 'This is already approved');
     if (gate === 'legal' && input.legalReady === false) {
       const n = input.legalBlockers ?? 0;
       return refuse(422, 'legal_blockers', n > 0 ? `Legal readiness has ${n} blocker${n === 1 ? '' : 's'}; clear them before approving` : 'Legal readiness has blockers; clear them before approving');
     }
+    if (input.seen !== input.currentKey) return refuse(409, 'changed_since_seen', 'This changed after you opened it. Look at it again before approving.');
   }
   return { ok: true, gate, decision: input.decision, requestId: pending?.id ?? null };
 }

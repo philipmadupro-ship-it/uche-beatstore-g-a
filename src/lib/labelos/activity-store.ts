@@ -25,6 +25,7 @@
  * asOf" cannot cover an event written while the page was loading, or one the
  * database stamped slightly earlier than it became visible.
  */
+import { restrictedCountFor } from './restricted-counts';
 import type { OrgAccessOk } from '@/lib/auth/org-access';
 import { orgProjectIdsInScope, scopedOrgQuery } from '@/lib/auth/org-access';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
@@ -218,7 +219,8 @@ export async function loadActivityFeed(access: OrgAccessOk, req: FeedRequest): P
   }
 
   const { names, projectArtists } = await resolveNames(access, events, scoped, target.kind === 'org');
-  return { events, names, projectArtists, restricted, hasMore, nextBefore, asOf };
+  // How much is withheld is for whole-org staff to know (doc 21 #9); a scoped member or a roster artist is told nothing.
+  return { events, names, projectArtists, restricted: restrictedCountFor(restricted, access), hasMore, nextBefore, asOf };
 }
 
 /**

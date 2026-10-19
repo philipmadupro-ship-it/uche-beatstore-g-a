@@ -13,6 +13,7 @@
  *
  * Built field by field (lib/labelos/direction): no org id, no author id.
  */
+import { restrictedCountFor } from '@/lib/labelos/restricted-counts';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireObjectAccess } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -51,7 +52,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       direction: doc.direction,
       updatedAt: doc.updatedAt,
       references: visible,
-      restrictedReferences: restricted,
+      restrictedReferences: restrictedCountFor(restricted, access),
       permissions: { write: access.capabilities.has('catalog.write'), internal: canReadInternalReference(access.role) },
     });
   } catch (err) {

@@ -10,12 +10,13 @@
  * `restricted`, never titled. Migration 157 (approvals) may not be applied:
  * that is `schemaReady: false`, as the approvals route answers it.
  */
+import { restrictedCountFor } from './restricted-counts';
 import { objectAccessFor, type OrgAccessOk } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { currentDecision, type ApprovalRow } from './approvals';
-import { approvalContext, isMissingApprovalsSchema, legalGateReadiness, namesOf, readReleaseFacts, type Subject } from './approvals-store';
+import { approvalContext, isMissingApprovalsSchema, legalGateReadiness, namesOf, readReleaseFacts, releasesOfSong, type Subject } from './approvals-store';
 import { LegalReadinessNotReadyError, readReadinessSong } from './legal-readiness-store';
-import { sortLegalQueue, type LegalQueueItem } from './legal-queue';
+import { isQueueable, sortLegalQueue, type LegalQueueItem } from './legal-queue';
 import { memberMayReadSongRow } from './song-stage-store';
 
 const COLUMNS = 'id, org_id, song_id, release_id, gate, decision, note, actor_id, approver_id, request_id, created_at';
@@ -101,6 +102,8 @@ export async function loadLegalQueue(access: OrgAccessOk): Promise<LegalQueue> {
         if (!row || row.state === 'cancelled') return null;
         title = row.title;
       }
+      // A song on a live release is approved at the release (doc 21 #13): it is not this queue's to list, nor counted.
+      if (subject.kind === 'song' && !isQueueable('song', (await releasesOfSong(admin, org, subject.id)).length > 0)) return null;
       if (!(await mayOpen(access, subject))) {
         restricted += 1;
         return null;
@@ -134,7 +137,7 @@ export async function loadLegalQueue(access: OrgAccessOk): Promise<LegalQueue> {
     artist: artistId && artistName.has(artistId) ? { id: artistId, name: artistName.get(artistId)! } : null,
     requestedBy: requestedById ? (people.get(requestedById) ?? 'Member') : null,
   }));
-  return { schemaReady: true, items: sortLegalQueue(items), restricted, truncated };
+  return { schemaReady: true, items: sortLegalQueue(items), restricted: restrictedCountFor(restricted, access), truncated };
 }
 
 export { LegalReadinessNotReadyError };

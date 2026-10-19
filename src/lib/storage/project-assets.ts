@@ -122,6 +122,32 @@ export async function streamProjectAsset(
 }
 
 /**
+ * The first `bytes` of a stored project file and nothing more (the artwork
+ * size rule reads an image header): a bounded read of a local file, or a
+ * ranged GET of an R2 object. Null when it is gone or outside the allowed
+ * buckets. Never the whole object.
+ */
+export async function readProjectAssetHead(ref: string, bytes: number): Promise<Uint8Array | null> {
+  if (ref.startsWith('local://')) {
+    let file: string;
+    try { file = localPath(ref.slice(8)); } catch { return null; }
+    if (!fs.existsSync(file)) return null;
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(bytes);
+      const read = fs.readSync(fd, buf, 0, bytes, 0);
+      return new Uint8Array(buf.subarray(0, read));
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+  const r = parseR2ObjectRef(ref);
+  if (!r || !projectAssetBuckets().includes(r.bucket)) return null;
+  const object = await getStoredObject(ref, `bytes=0-${bytes - 1}`);
+  return object?.Body ? await object.Body.transformToByteArray() : null;
+}
+
+/**
  * A stored project file as bytes to put into an archive (the legal pack,
  * LABEL-31): the whole object, not a Range response, and never a URL. Null
  * when the object is gone or the reference is outside the allowed buckets.

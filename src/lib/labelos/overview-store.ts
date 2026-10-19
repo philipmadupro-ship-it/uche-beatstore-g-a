@@ -24,6 +24,7 @@ import { ORG_CONTACT_COLUMNS, toOrgContactView, type OrgContactRow } from './org
 import { isWorkspaceSong, partitionSongs, type OrgTrackFacts } from './org-workspace';
 import { orgTrackFacts } from './org-workspace-store';
 import { chunks, inChunks, pageAll, ReadError } from './paged-read';
+import { mayShowRestrictedCounts } from './restricted-counts';
 import { summarizeRoster, type OverviewRelease, type RosterSummary } from './overview';
 
 export type OrgOverview = RosterSummary & {
@@ -33,7 +34,18 @@ export type OrgOverview = RosterSummary & {
 
 export { CHUNK, ReadError, chunks, pageAll, inChunks } from './paged-read';
 
+/** The roster summary as this member may be told it: how many songs are restricted is for whole-org staff only (doc 21 #9). */
 export async function loadOrgOverview(access: OrgAccessOk): Promise<OrgOverview> {
+  const overview = await readOrgOverview(access);
+  if (mayShowRestrictedCounts(access)) return overview;
+  return {
+    ...overview,
+    artists: overview.artists.map((a) => ({ ...a, restricted: 0 })),
+    totals: { ...overview.totals, restricted: 0 },
+  };
+}
+
+async function readOrgOverview(access: OrgAccessOk): Promise<OrgOverview> {
   const { admin, orgId } = access;
 
   const contactRows = await pageAll<OrgContactRow>(
