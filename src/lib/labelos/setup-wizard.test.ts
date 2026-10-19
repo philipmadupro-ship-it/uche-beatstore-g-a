@@ -23,6 +23,7 @@ import {
   withDepartment,
   withFace,
   nextStep,
+  skipStep,
   previousStep,
   type DraftStorage,
   type WizardDraft,
@@ -56,6 +57,18 @@ describe('presets', () => {
   it('an independent artist has no roster list to carry', () => {
     const l = label({ roster: [{ name: 'A', email: '' }] });
     expect(withFace(l, 'independent').roster).toEqual([]);
+  });
+});
+
+describe('skipping a step', () => {
+  it('puts the step back to the face preset or to nobody, so half-typed input cannot block the review', () => {
+    const d = withDepartment(withContractType(label({ roster: [{ name: '', email: 'bad' }], team: [emptyEntry()] }), 'management', true), 'finance', false);
+    expect(skipStep(d, 'work').contractTypes).toEqual(FACE_PRESETS.label.contractTypes);
+    expect(skipStep(d, 'departments').departmentsOff).toEqual([]);
+    const t = skipStep(d, 'team');
+    expect([t.roster, t.team]).toEqual([[], []]);
+    expect(stepProblems(t, 'team')).toEqual([]);
+    expect(skipStep(d, 'who')).toBe(d);
   });
 });
 

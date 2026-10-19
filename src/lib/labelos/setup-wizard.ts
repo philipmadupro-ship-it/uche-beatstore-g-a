@@ -206,6 +206,19 @@ export function effectiveGates(draft: Pick<WizardDraft, 'legalGate' | 'marketing
   };
 }
 
+/**
+ * "Skip" on a step: leave it as if it had never been opened, so a half-typed
+ * form cannot block the review. Steps 2 and 4 return to the face's preset,
+ * the team step to nobody.
+ */
+export function skipStep(draft: WizardDraft, step: WizardStepId): WizardDraft {
+  const preset = draft.face ? FACE_PRESETS[draft.face] : null;
+  if (step === 'work') return { ...draft, contractTypes: preset ? [...preset.contractTypes] : [], contractsTouched: false };
+  if (step === 'departments') return { ...draft, departmentsOff: preset ? [...preset.departmentsOff] : [], departmentsTouched: false };
+  if (step === 'team') return { ...draft, roster: [], team: [], release: { ...draft.release, artistIndex: 0 } };
+  return draft;
+}
+
 // ── What is sent ────────────────────────────────────────────────────────
 
 export type SetupSettings = {
