@@ -116,6 +116,8 @@ export type ReadinessBlocker = {
   fixCapability: Capability;
   itemId?: string;
   songId?: string;
+  /** The recording the blocker is about (LABEL-53: where the metadata editor opens for an ISRC). */
+  trackId?: string;
   /** Names a person, a legal identifier or a split: only `rights.read` is told which. */
   sensitive: boolean;
 };
@@ -303,7 +305,7 @@ export function evaluateReleaseReadiness(facts: ReleaseReadinessFacts): ReleaseR
     gate: 'metadata',
     fixCapability: 'release.write',
     sensitive: false,
-    ...(i ? { itemId: i.id, songId: i.songId } : {}),
+    ...(i ? { itemId: i.id, songId: i.songId, trackId: i.masterId } : {}),
   });
   const fields: [string, string | null, string][] = [
     ['title', release.title, 'The release has no title.'],
@@ -342,8 +344,8 @@ export type GateView = {
   blockerCount: number;
   warningCount: number;
   /** Blockers the caller may read; sensitive ones appear only with `rights.read`. */
-  blockers: { code: string; message: string; fixCapability: Capability; itemId: string | null; songId: string | null }[];
-  warnings: { code: string; message: string; fixCapability: Capability; itemId: string | null; songId: string | null }[];
+  blockers: { code: string; message: string; fixCapability: Capability; itemId: string | null; songId: string | null; trackId: string | null }[];
+  warnings: { code: string; message: string; fixCapability: Capability; itemId: string | null; songId: string | null; trackId: string | null }[];
   /** Blockers and warnings counted but not listed (they would name rights data). */
   withheld: number;
   approval: ApprovalState | null;
@@ -357,7 +359,7 @@ export type ReleaseReadinessView = {
 
 /** Field by field: a new property of a blocker is never sent until it is named here. */
 export function releaseReadinessView(r: ReleaseReadiness, mayReadRights: boolean): ReleaseReadinessView {
-  const pick = (b: ReadinessBlocker) => ({ code: b.code, message: b.message, fixCapability: b.fixCapability, itemId: b.itemId ?? null, songId: b.songId ?? null });
+  const pick = (b: ReadinessBlocker) => ({ code: b.code, message: b.message, fixCapability: b.fixCapability, itemId: b.itemId ?? null, songId: b.songId ?? null, trackId: b.trackId ?? null });
   const gates = {} as Record<ReleaseGate, GateView>;
   for (const g of RELEASE_GATES) {
     const s = r.gates[g];
