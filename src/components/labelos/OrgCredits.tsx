@@ -182,7 +182,7 @@ function CreditRowView({ orgId, trackId, credit, onChanged, onWithdrawn }: { org
   };
 
   const withdraw = async () => {
-    const ok = await confirmToast('Withdraw this credit?', `${credit.roleLabel}. It comes off the song; the withdrawal stays in the activity record.`, { confirmLabel: 'Withdraw', danger: true });
+    const ok = await confirmToast('Withdraw this credit?', `${credit.roleLabel}. It comes off the song; the withdrawal stays in the activity record.`, { confirmLabel: 'Withdraw credit', danger: true });
     if (!ok) return;
     setBusy(true);
     const res = await withdrawCredit(orgId, trackId, credit.id);

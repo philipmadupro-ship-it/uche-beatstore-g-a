@@ -327,13 +327,13 @@ function PartyEditor({ orgId, data, party, onSaved, onDeleted, onClose }: {
         <Field label="Stage or display name" value={form.displayName} onChange={(v) => set('displayName', v)} disabled={!editable('displayName')} testid="display-name" hint="What a credit or split sheet shows." />
         {(isNew || canEdit) && (
           <div className="space-y-1">
-            <span className={LABEL}>Kind</span>
+            <span className={`${LABEL} block`}>Kind</span>
             <Dropdown value={form.kind} onChange={(v) => set('kind', v)} options={KINDS} aria-label="Kind" disabled={!editable('kind')} />
           </div>
         )}
         {canEdit && (
           <div className="space-y-1">
-            <span className={LABEL}>Linked account</span>
+            <span className={`${LABEL} block`}>Linked account</span>
             <Dropdown value={form.userId} onChange={(v) => set('userId', v)} options={memberOptions} aria-label="Linked account" />
             <p className="text-[10px] text-white/40">The member who can see this party, confirm it and acknowledge their own split lines.</p>
           </div>
@@ -350,7 +350,7 @@ function PartyEditor({ orgId, data, party, onSaved, onDeleted, onClose }: {
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="PRO" value={form.pro} onChange={(v) => set('pro', v)} disabled={!editable('pro')} testid="pro" placeholder="SACEM, ASCAP, BMI…" />
             <div className="space-y-1">
-              <span className={LABEL}>PRO membership</span>
+              <span className={`${LABEL} block`}>PRO membership</span>
               <Dropdown value={form.proAffiliation} onChange={(v) => set('proAffiliation', v)} options={AFFILIATIONS} aria-label="PRO membership" disabled={!editable('proAffiliation')} />
             </div>
             <Field label="IPI / CAE" value={form.ipi} onChange={(v) => set('ipi', v)} disabled={!editable('ipi')} testid="ipi" hint="9 to 11 digits." />

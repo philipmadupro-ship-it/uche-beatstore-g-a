@@ -127,7 +127,7 @@ describe('OrgCredits', () => {
     expect(calls.some((c) => c.method === 'DELETE')).toBe(false); // nothing is sent until confirmed
     const ask = useToastStore.getState().toasts.find((t) => t.title === 'Withdraw this credit?')!;
     expect(ask).toBeTruthy();
-    ask.actions!.find((a) => a.label === 'Withdraw')!.onClick();
+    ask.actions!.find((a) => a.label === 'Withdraw credit')!.onClick();
     await waitFor(() => expect(calls.find((c) => c.method === 'DELETE')).toMatchObject({ url: '/api/org/o1/tracks/t1/credits/c1' }));
     await waitFor(() => expect(screen.queryByTestId('credit-person')).toBeNull());
     expect(toasts()).toContain('success:Credit withdrawn');
