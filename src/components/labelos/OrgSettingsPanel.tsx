@@ -17,6 +17,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Field } from '@/components/ui/Field';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { MODULES, MODULE_LABELS, type Module } from '@/lib/labelos/entitlements';
+import { CONTRACT_TYPES, TEMPLATES_LATER, parseContractTypes, type ContractTypeId } from '@/lib/labelos/contract-types';
 import { CONTRACTS_NEED_LEGAL_OFF, SWITCHABLE_MODULES, contractsLockout, parseDepartmentsOff, patchFromDraft, type OrgSettingsView } from '@/lib/labelos/org-settings';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
@@ -93,6 +94,14 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
     setDraft({ ...draft, departments_off: parseDepartmentsOff([...next]) });
   };
 
+  const contractTypes = new Set<ContractTypeId>(draft.contract_types);
+  const toggleContractType = (id: ContractTypeId, on: boolean) => {
+    const next = new Set(draft.contract_types);
+    if (on) next.add(id);
+    else next.delete(id);
+    setDraft({ ...draft, contract_types: parseContractTypes([...next]) });
+  };
+
   const save = async () => {
     if (!dirty || invalid) return;
     if (patch.legal_gate === 'off') {
@@ -167,6 +176,16 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
             Not in your licence: {unlicensed.map((m) => MODULE_LABELS[m]).join(', ')}.
           </p>
         )}
+      </section>
+
+      <section className={CARD} aria-labelledby="contract-types-h">
+        <h2 id="contract-types-h" className={`${LABEL} mb-1`}>Contract types</h2>
+        <p className="text-[11px] leading-relaxed text-white/60">The kinds of contract this organization works with. {TEMPLATES_LATER}</p>
+        <div className="divide-y divide-white/10">
+          {CONTRACT_TYPES.map((t) => (
+            <ToggleRow key={t.id} id={`contract-${t.id}`} label={t.label} hint={contractTypes.has(t.id) ? 'Used' : 'Not used'} checked={contractTypes.has(t.id)} onChange={(v) => toggleContractType(t.id, v)} />
+          ))}
+        </div>
       </section>
 
       <div className="flex flex-wrap items-center gap-3">

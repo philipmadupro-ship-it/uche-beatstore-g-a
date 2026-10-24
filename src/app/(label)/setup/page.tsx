@@ -1,6 +1,6 @@
 /**
  * /setup — a new account says what it is and gets its organization
- * (LABEL-48, first slice; lib/labelos/setup.ts).
+ * (LABEL-48; lib/labelos/setup.ts, the wizard in lib/labelos/setup-wizard.ts).
  *
  * Reached from sign-up (the face picked there arrives as `?type=` or in the
  * account's `user_metadata`) and from src/proxy.ts, which sends a signed-in
@@ -14,7 +14,7 @@ import { createClient } from '@/lib/supabase/server';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { SETUP_PATH, faceFromMetadata, isSetupFace } from '@/lib/labelos/setup';
-import { OrgSetupForm } from '@/components/labelos/OrgSetupForm';
+import { OrgSetupWizard } from '@/components/labelos/OrgSetupWizard';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +34,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#090907] px-4 py-10 text-white">
-      <OrgSetupForm initialFace={initialFace} email={user.email ?? null} />
+      <OrgSetupWizard userId={user.id} initialFace={initialFace} email={user.email ?? null} />
     </div>
   );
 }

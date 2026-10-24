@@ -29,7 +29,7 @@ describe('parseDepartmentsOff', () => {
 
 describe('parseOrgSettings', () => {
   it('reads defaults from nothing and from garbage', () => {
-    const d = { legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, attention_release_days: 30, attention_stalled_days: 30, departments_off: [] };
+    const d = { legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, attention_release_days: 30, attention_stalled_days: 30, departments_off: [], contract_types: [] };
     expect(parseOrgSettings(null)).toEqual(d);
     expect(parseOrgSettings([])).toEqual(d);
     expect(parseOrgSettings({ legal_gate: 'OFF', attention_release_days: 0 })).toEqual(d);
@@ -45,6 +45,20 @@ describe('effectiveModules', () => {
     // A module that was never licensed stays absent even if listed.
     expect(effectiveModules(LICENSED, ['pr']).has('pr')).toBe(false);
     expect(effectiveModules(LICENSED, []).size).toBe(LICENSED.size);
+  });
+});
+
+describe('contract_types (LABEL-48)', () => {
+  it('reads known ids once each in vocabulary order, and nothing from garbage', () => {
+    expect(parseOrgSettings({ contract_types: ['management', 'recording', 'recording', 'nope', 7] }).contract_types).toEqual(['recording', 'management']);
+    expect(parseOrgSettings({ contract_types: 'recording' }).contract_types).toEqual([]);
+  });
+  it('is part of the plan: only a real change is written, and the event names old and new', () => {
+    const base = { current: {}, licensed: LICENSED };
+    const plan = planSettingsChange({ ...base, patch: { contract_types: ['licence', 'recording'] } });
+    expect(plan).toMatchObject({ ok: true, patch: { contract_types: ['recording', 'licence'] }, keys: ['contract_types'] });
+    expect(planSettingsChange({ ...base, patch: { contract_types: [] } })).toMatchObject({ ok: true, keys: [] });
+    expect(planSettingsChange({ current: { contract_types: ['licence'] }, licensed: LICENSED, patch: { contract_types: ['licence'] } })).toMatchObject({ keys: [] });
   });
 });
 
