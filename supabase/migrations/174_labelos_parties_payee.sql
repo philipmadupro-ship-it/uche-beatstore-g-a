@@ -64,6 +64,8 @@ RETURNS boolean
 LANGUAGE sql
 IMMUTABLE
 PARALLEL SAFE
+SECURITY DEFINER
+SET search_path = public
 AS $$
   SELECT p_text IS NOT NULL AND (
     -- an IBAN: two letters, two digits, then 11 to 30 more letters / digits (single spaces allowed)
