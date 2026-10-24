@@ -17,6 +17,10 @@ describe('notificationHref', () => {
     expect(notificationHref('night-shift', { kind: 'invitation', data: 'junk' })).toBe('/o/night-shift');
   });
 
+  it('a request to confirm rights details opens the Parties page', () => {
+    expect(notificationHref('night-shift', { kind: 'party_confirmation', data: { partyId: ID } })).toBe('/o/night-shift/rights/parties');
+  });
+
   it('is not for the producer bell: a producer notification kind has no org link', () => {
     expect(notificationHref('night-shift', { kind: 'purchase', data: { target: { kind: 'song', id: ID } } })).toBeNull();
   });

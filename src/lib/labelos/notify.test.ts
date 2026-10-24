@@ -21,7 +21,7 @@ const ask = (over: Partial<DirectAsk> = {}): DirectAsk => ({ kind: 'task_assigne
 
 describe('the closed union', () => {
   it('is exactly the five direct asks of 08 §B6', () => {
-    expect([...DIRECT_ASK_KINDS]).toEqual(['task_assigned', 'approval_requested', 'mention', 'credit_named_you', 'invitation']);
+    expect([...DIRECT_ASK_KINDS]).toEqual(['task_assigned', 'approval_requested', 'mention', 'credit_named_you', 'invitation', 'party_confirmation']);
   });
 
   it('forbids broadcast kinds: nothing about uploads, stages, reviews, members or "everyone"', () => {

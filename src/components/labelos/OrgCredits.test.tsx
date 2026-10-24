@@ -18,7 +18,7 @@ const view = (over: Partial<CreditView> = {}): CreditView => ({
   id: 'c1', trackId: 't1', name: 'Pierre', role: 'mixer', roleLabel: 'Mixer', scope: 'recording', status: 'proposed', roleDetail: null,
   source: 'manual', partyId: 'p1', contactId: null, mine: false, proposedByMe: false, confirmedAt: null, disputeNote: null,
   createdAt: '2026-10-01T10:00:00Z',
-  party: { id: 'p1', kind: 'person', displayName: 'Pierre', contactId: null, legal: { legalName: 'Pierre Producteur', email: null, ipi: '00123456789', isni: null, pro: 'SACEM', proAffiliation: 'affiliated', publisherName: null, publisherIpi: null } },
+  party: { id: 'p1', kind: 'person', displayName: 'Pierre', contactId: null, legal: { legalName: 'Pierre Producteur', email: null, ipi: '00123456789', isni: null, pro: 'SACEM', proAffiliation: 'affiliated', publisherName: null, publisherIpi: null, address: null, country: null, confirmedAt: null } },
   can: { confirm: true, dispute: true },
   ...over,
 });

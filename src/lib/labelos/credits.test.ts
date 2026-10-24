@@ -8,6 +8,8 @@ import {
   creditView,
   externalActor,
   mayReadLegal,
+  mayReadPayee,
+  planWithdraw,
   orgActor,
   partyView,
   planDecision,
@@ -24,7 +26,9 @@ const OWNER = orgActor(U(1), caps('owner'));
 const AR = orgActor(U(2), caps('member', ['a_and_r']));
 const PRODUCER = orgActor(U(3), caps('member', ['producer']));
 const MARKETING = orgActor(U(4), caps('member', ['marketing']));
-const ARTIST = orgActor(U(5), caps('artist'));
+const ARTIST = orgActor(U(5), caps('artist'), 'artist');
+const FINANCE = orgActor(U(6), caps('member', ['finance']));
+const LEGAL = orgActor(U(7), caps('member', ['legal']));
 
 const party = (over: Partial<PartyRow> = {}): PartyRow => ({
   id: 'p1', kind: 'person', display_name: 'Pierre', legal_name: 'Pierre Producteur', email: 'p@x.test', ipi: '00123456789', isni: null,
@@ -172,5 +176,70 @@ describe('views', () => {
     expect(worstStatus(['confirmed', 'disputed', 'proposed'])).toBe('disputed');
     expect(worstStatus(['confirmed'])).toBe('confirmed');
     expect(worstStatus([])).toBe('confirmed');
+  });
+});
+
+describe('LABEL-54: what a roster artist, finance and legal read of a party', () => {
+  const full = party({ address: '1 rue X, Paris', country: 'FR', tax_id: 'FR123', payment_instructions: 'PayPal, ask finance', details_confirmed_at: '2026-10-02' });
+
+  it('a roster artist reads names only for a co-writer — no legal block, no payee block', () => {
+    const v = partyView(full, ARTIST);
+    expect(v.displayName).toBe('Pierre');
+    expect(v.legal).toBeUndefined();
+    expect(v.payee).toBeUndefined();
+    expect(JSON.stringify(v)).not.toMatch(/Producteur|p@x.test|00123456789|rue X|FR123|PayPal/);
+  });
+
+  it('… but reads their own party', () => {
+    const v = partyView(party({ user_id: ARTIST.userId, address: 'Home' }), ARTIST);
+    expect(v.legal?.legalName).toBe('Pierre Producteur');
+    expect(v.legal?.address).toBe('Home');
+    expect(v.mine).toBe(true);
+    expect(v.payee).toBeUndefined();
+  });
+
+  it('legal reads the legal block and the payee block (rights.write); finance reads payee only through finance.read', () => {
+    expect(partyView(full, LEGAL).legal?.address).toBe('1 rue X, Paris');
+    expect(mayReadPayee(OWNER)).toBe(true);
+    expect(mayReadPayee(LEGAL)).toBe(true);
+    expect(partyView(full, OWNER).payee).toEqual({ taxId: 'FR123', paymentInstructions: 'PayPal, ask finance' });
+  });
+
+  it('a department with neither capability reads no payee data, even on its own party', () => {
+    expect(mayReadPayee(MARKETING)).toBe(false);
+    expect(mayReadPayee(PRODUCER)).toBe(false);
+    const own = partyView(party({ user_id: PRODUCER.userId, tax_id: 'X1' }), PRODUCER);
+    expect(own.payee).toBeUndefined();
+    expect(own.legal).toBeDefined();
+  });
+
+  it('an external member and a roster artist never read payee data, whatever caps they hold', () => {
+    expect(mayReadPayee(externalActor(U(9), 'editor'))).toBe(false);
+    expect(mayReadPayee({ ...ARTIST, caps: new Set([...ARTIST.caps, 'finance.read', 'rights.write']) })).toBe(false);
+  });
+
+  it('a roster artist cannot read a co-writer through mayReadLegal', () => {
+    expect(mayReadLegal(ARTIST, U(3))).toBe(false);
+    expect(mayReadLegal(ARTIST, ARTIST.userId)).toBe(true);
+  });
+});
+
+describe('planWithdraw', () => {
+  it('a rights writer removes any credit', () => {
+    expect(planWithdraw(OWNER, { partyUserId: U(3) }).ok).toBe(true);
+    expect(planWithdraw(OWNER, { partyUserId: null }).ok).toBe(true);
+  });
+  it('the credited person withdraws their own, and only their own (404 otherwise)', () => {
+    expect(planWithdraw(PRODUCER, { partyUserId: U(3) }).ok).toBe(true);
+    expect(planWithdraw(PRODUCER, { partyUserId: U(8) })).toEqual({ ok: false, status: 404, error: 'Not found' });
+    expect(planWithdraw(PRODUCER, { partyUserId: null })).toMatchObject({ ok: false, status: 404 });
+  });
+  it('someone with no credits ability at all gets 404, not 403, on a credit that is not theirs', () => {
+    expect(planWithdraw(MARKETING, { partyUserId: U(3) })).toMatchObject({ ok: false, status: 404 });
+  });
+  it('an external contributor withdraws their own line', () => {
+    const ext = externalActor(U(3), 'contributor');
+    expect(planWithdraw(ext, { partyUserId: U(3) }).ok).toBe(true);
+    expect(planWithdraw(ext, { partyUserId: U(4) })).toMatchObject({ status: 404 });
   });
 });

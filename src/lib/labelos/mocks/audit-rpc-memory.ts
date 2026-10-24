@@ -365,6 +365,29 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       });
       return ok({ credit: { ...credit } });
     },
+    // Migration 174 (LABEL-54): withdraw a credit — the row goes, the event stays.
+    labelos_audit_credit_withdraw: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const credits = (tables.track_collaborators ??= []);
+      const i = credits.findIndex((c) => c.id === args.p_credit && c.org_id === args.p_org);
+      if (i < 0) return ok({ error: 'not_found' });
+      const [credit] = credits.splice(i, 1);
+      const subject = (args.p_subject ?? {}) as Row;
+      (tables.activity_events ??= []).push({
+        org_id: args.p_org,
+        actor_id: args.p_actor,
+        verb: 'credit.withdrawn',
+        subject_type: 'credit',
+        subject_id: credit.id,
+        artist_id: subject.artist_id ?? null,
+        project_id: subject.project_id ?? null,
+        song_id: subject.song_id ?? null,
+        payload: args.p_payload,
+        audit: true,
+        visibility: 'artist',
+      });
+      return ok({ withdrawn: true });
+    },
     // Migration 155 (LABEL-28): split sheets. These mimic the SQL: the same refusals, in the same order.
     labelos_split_create_draft: (args, tables) => {
       const track = (tables.tracks ?? []).find((t) => t.id === args.p_track && t.org_id === args.p_org && t.type === 'song');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeIsni, ownPartyName, partyColumns } from './parties';
+import { normalizeIsni, ownPartyName, partyColumns, partyLockViolation, pickSelfCorrections } from './parties';
 
 describe('partyColumns', () => {
   it('keeps only the keys the body names', () => {
@@ -49,5 +49,61 @@ describe('ownPartyName', () => {
     expect(ownPartyName({ name: 'Pierre', email: 'p@x.test' })).toBe('Pierre');
     expect(ownPartyName({ name: null, email: 'pierre@x.test' })).toBe('pierre');
     expect(ownPartyName({ name: null, email: null })).toBe('Member');
+  });
+});
+
+describe('LABEL-54 fields', () => {
+  it('stores address, upper-cased country, tax id and payment instructions as typed text', () => {
+    expect(partyColumns({ address: ' 1 rue  X ', country: 'fr', tax_id: ' FR 12 ', payment_instructions: 'PayPal, ask finance' })).toEqual({
+      ok: true,
+      columns: { address: '1 rue X', country: 'FR', tax_id: 'FR 12', payment_instructions: 'PayPal, ask finance' },
+    });
+  });
+  it('empty strings clear them', () => {
+    expect(partyColumns({ address: '', country: '', tax_id: ' ', payment_instructions: '' })).toEqual({
+      ok: true,
+      columns: { address: null, country: null, tax_id: null, payment_instructions: null },
+    });
+  });
+  it('refuses a country that is not a two-letter code', () => {
+    expect(partyColumns({ country: 'France' })).toMatchObject({ ok: false, error: expect.stringContaining('country') });
+  });
+  it('refuses payment instructions that hold an IBAN or a card number, without echoing the number', () => {
+    for (const v of ['GB29 NWBK 6016 1331 9268 19', '4111 1111 1111 1111']) {
+      const r = partyColumns({ payment_instructions: v });
+      expect(r.ok).toBe(false);
+      expect(JSON.stringify(r)).not.toContain(v.slice(0, 8));
+    }
+  });
+});
+
+describe('pickSelfCorrections', () => {
+  it('keeps the legal fields and drops identity, links and payee data', () => {
+    expect(
+      pickSelfCorrections({ legal_name: 'N', ipi: '1', display_name: 'X', user_id: 'u', contact_id: 'c', tax_id: 't', payment_instructions: 'p', email: 'e', kind: 'company', address: 'a', country: 'FR' }),
+    ).toEqual({ legal_name: 'N', ipi: '1', address: 'a', country: 'FR' });
+  });
+});
+
+describe('partyLockViolation', () => {
+  const cur = { display_name: 'Nova', user_id: 'u1' };
+  it('allows anything while no sheet that left draft names the party', () => {
+    expect(partyLockViolation({ display_name: 'Nova O', user_id: 'u2' }, cur, false)).toBeNull();
+  });
+  it('refuses a rename once a circulated sheet names the party, whitespace and all', () => {
+    expect(partyLockViolation({ display_name: 'Nova Okafor' }, cur, true)).toMatch(/new version/i);
+    expect(partyLockViolation({ display_name: '  nova ' }, cur, true)).toMatch(/new version/i);
+  });
+  it('lets the same name through (a no-op rename is not a rename)', () => {
+    expect(partyLockViolation({ display_name: ' Nova  ' }, cur, true)).toBeNull();
+  });
+  it('refuses swapping or removing the linked account, allows linking one that is missing', () => {
+    expect(partyLockViolation({ user_id: 'u2' }, cur, true)).toMatch(/account/);
+    expect(partyLockViolation({ user_id: null }, cur, true)).toMatch(/account/);
+    expect(partyLockViolation({ user_id: 'u1' }, cur, true)).toBeNull();
+    expect(partyLockViolation({ user_id: 'u9' }, { display_name: 'Nova', user_id: null }, true)).toBeNull();
+  });
+  it('never locks the legal data', () => {
+    expect(partyLockViolation({}, cur, true)).toBeNull();
   });
 });
