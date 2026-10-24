@@ -123,6 +123,49 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
   });
 }
 
+test('the producer can still write: projects, playlists, contacts, tracks, profile', async ({ browser, baseURL }) => {
+  const ctx = await signedIn(browser, baseURL!, PRODUCER_ID, 'producer@local.test', { width: 1440, height: 900 });
+  const api = ctx.request;
+  const json = (data: unknown) => ({ data: JSON.stringify(data), headers: { 'content-type': 'application/json' }, failOnStatusCode: false });
+  const failures: string[] = [];
+  const check = async (label: string, res: import('@playwright/test').APIResponse, ok = [200, 201]) => {
+    if (res.status() >= 500 || !ok.includes(res.status())) failures.push(`${label} → ${res.status()} ${(await res.text()).slice(0, 160)}`);
+  };
+
+  const created = await api.post('/api/projects', json({ name: 'Go-live check' }));
+  await check('POST /api/projects', created);
+  const projectId = (await created.json().catch(() => ({})))?.project?.id as string | undefined;
+  if (projectId) {
+    await check('PATCH /api/projects/:id', await api.patch(`/api/projects/${projectId}`, json({ name: 'Go-live check 2' })));
+    await check('GET /api/projects/:id', await api.get(`/api/projects/${projectId}`, { failOnStatusCode: false }));
+    await check('DELETE /api/projects/:id', await api.delete(`/api/projects/${projectId}`, { failOnStatusCode: false }));
+  }
+  const playlist = await api.post('/api/playlists', json({ name: 'Go-live list' }));
+  await check('POST /api/playlists', playlist);
+  await check('PATCH /api/tracks/:id', await api.patch(`/api/tracks/${TRACK_2}`, json({ rating: 5 })));
+  await check('POST /api/contacts', await api.post('/api/contacts', json({ name: 'Go-live contact', email: 'golive@contact.test' })));
+  await check('POST /api/profile', await api.post('/api/profile', json({ display_name: 'UCHE' })));
+  await check('GET /api/tracks (after writes)', await api.get('/api/tracks', { failOnStatusCode: false }));
+  expect(failures, 'producer writes that failed').toEqual([]);
+  await ctx.close();
+});
+
+test('a buyer can still favourite a beat and make an offer', async ({ browser, baseURL }) => {
+  const ctx = await signedIn(browser, baseURL!, BUYER_ID, 'buyer@local.test', { width: 1440, height: 900 });
+  const api = ctx.request;
+  const json = (data: unknown) => ({ data: JSON.stringify(data), headers: { 'content-type': 'application/json' }, failOnStatusCode: false });
+  const failures: string[] = [];
+  for (const [label, res] of [
+    ['POST /api/store/me set_favorite', await api.post('/api/store/me', json({ action: 'set_favorite', track_id: TRACK, favorited: true }))],
+    ['POST /api/store/offer', await api.post('/api/store/offer', json({ track_id: TRACK_2, buyer_email: 'buyer@local.test', offered_price_usd: 20, message: 'hi' }))],
+    ['GET /api/store/me', await api.get('/api/store/me', { failOnStatusCode: false })],
+  ] as const) {
+    if (res.status() >= 500) failures.push(`${label} → ${res.status()} ${(await res.text()).slice(0, 160)}`);
+  }
+  expect(failures, 'buyer calls that answered 5xx').toEqual([]);
+  await ctx.close();
+});
+
 test('with Label OS off its pages and routes are 404, not 500', async ({ browser, baseURL }) => {
   test.skip(!labelOsOff, 'only when the dev server runs without LABEL_OS_ENABLED (E2E_LABEL_OS=off)');
   const ctx = await signedIn(browser, baseURL!, PRODUCER_ID, 'producer@local.test', { width: 1440, height: 900 });
