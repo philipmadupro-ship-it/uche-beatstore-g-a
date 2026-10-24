@@ -9386,3 +9386,16 @@ Orchestrator: session_01U1hEgSEMBP1MAk65kDjAcW. Backlog: `docs/bstudio-label-os/
   - writes `docs/bstudio-label-os/go-live.md`.
 
   The phase-2 backlog continues on the Label OS branch.
+- 2026-10-19 — **LABEL-48 Done**: #143 squash-merged at the owner's request (`8e6fd7b`).
+  - The setup wizard extends #130's `/setup`. Migration 192 replaces 189's `labelos_setup_org` with a 4-argument version that validates settings in SQL (`labelos_validate_org_settings_patch`, shared with 172), and ships with 189.
+  - The done screen shows each team login's password once. A retry after a lost response says plainly what was not added.
+  - Gate: CI green on `060a962`; the orchestrator checked the preview (flag off: /setup and /api/org/setup 404); independent review found nothing blocking.
+- 2026-10-24 13:04 UTC — **LABEL-53 Done**: #142 squash-merged, `09e69a4`.
+  - Migration 173 adds the org-only recording metadata columns plus `metadata_updated_at`, the compare-and-set token.
+  - `PATCH /api/org/[orgId]/songs/[trackId]/metadata` gates each field by its own capability (ISRC needs `release.write`).
+  - `notes` and `master_owner` are omitted for viewers without `catalog.write` or `business.read.internal`, and always for role `artist`.
+  - The readiness "no ISRC" blocker links to the editor for `release.write`.
+  - The review's false 409 on a second save (Z vs +00:00) was fixed before merge.
+  - Follow-ups: no tray editor for org songs; no ISRC uniqueness within an org.
+- 2026-10-24 13:05 UTC — **Owner report: sign-out.** Main's `e2c0dd9` (another AI) added a sign-out only to the producer dashboard, so org members (marketing etc.) had none in the org shell, and on main a non-producer lands in the buyer account. The fix (sign-out for every org role, correct landing after sign-in, Playwright journeys) is added to the go-live session's scope.
+- 2026-10-24 13:05 UTC — LABEL-54 (migration 174) started, session_01VdMEG5FGhGT7BkditBEft4. LABEL-50 (no migration; 193 if needed) started, session_01J9Cs4e12d1Khurw8sTDw9P. Both on Sonnet.
