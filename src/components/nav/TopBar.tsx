@@ -26,6 +26,7 @@ import { ACCOUNT_GROUP, ALL_GROUPS, activeGroupFor, activeGroupIn, isItemActive,
 import { OrgSwitcher } from './OrgSwitcher';
 import { useOrgShell } from '@/components/labelos/OrgShellContext';
 import { Popover } from '@/components/ui/Popover';
+import { SignOutButton } from '@/components/auth/SignOutButton';
 import { SessionContextControl } from './SessionContextControl';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
@@ -489,21 +490,65 @@ export function TopBar() {
             <Menu size={22} />
           </button>
 
-          {/* Profile */}
-          {producerChrome && (<Link
-            href="/profile"
-            aria-label="Creator profile"
-            title="Profile"
-            aria-current={isItemActive('/profile', pathname) ? 'page' : undefined}
-            className={cn(
-              'tap flex items-center justify-center shrink-0 w-9 h-9 rounded-full transition-colors',
-              isItemActive('/profile', pathname)
-                ? 'bg-white/20 border border-white/40'
-                : 'bg-white/[0.05] border border-white/20 hover:border-white/30',
+          {/* Profile — account menu: profile + settings + sign out, so every
+              dashboard page (owner, admin, collaborator) reaches sign-out. A Label OS
+              member gets sign-out only: profile and settings are producer chrome. */}
+          <Popover
+            align="right"
+            width={212}
+            label="Account"
+            trigger={({ open, toggle, ref }) => (
+              <button
+                ref={ref as (el: HTMLButtonElement | null) => void}
+                onClick={toggle}
+                aria-expanded={open}
+                aria-haspopup="dialog"
+                aria-label="Open account menu"
+                title="Account"
+                className={cn(
+                  'tap flex items-center justify-center shrink-0 w-9 h-9 rounded-full border transition-colors',
+                  open || isItemActive('/profile', pathname) || isItemActive('/settings', pathname)
+                    ? 'bg-white/20 border-white/40'
+                    : 'bg-white/[0.05] border-white/20 hover:border-white/30',
+                )}
+              >
+                <User size={16} className={open || isItemActive('/profile', pathname) ? 'text-white' : 'text-white/60'} />
+              </button>
             )}
           >
-            <User size={16} className={isItemActive('/profile', pathname) ? 'text-white' : 'text-white/60'} />
-          </Link>)}
+            {(close) => (
+              <nav className="p-1" aria-label="Account">
+                {producerChrome && (<>
+                <Link
+                  href="/profile"
+                  onClick={close}
+                  aria-current={isItemActive('/profile', pathname) ? 'page' : undefined}
+                  className={cn(
+                    'tap flex min-h-10 items-center gap-3 rounded-lg px-2.5 text-[13px] font-medium tracking-tight transition-colors',
+                    isItemActive('/profile', pathname) ? 'bg-[#0D0D0A] text-white' : 'text-white/65 hover:bg-white/[0.06] hover:text-white',
+                  )}
+                >
+                  <User size={17} strokeWidth={1.75} className="shrink-0" />
+                  <span className="truncate">Profile</span>
+                </Link>
+                <Link
+                  href="/settings"
+                  onClick={close}
+                  aria-current={isItemActive('/settings', pathname) ? 'page' : undefined}
+                  className={cn(
+                    'tap flex min-h-10 items-center gap-3 rounded-lg px-2.5 text-[13px] font-medium tracking-tight transition-colors',
+                    isItemActive('/settings', pathname) ? 'bg-[#0D0D0A] text-white' : 'text-white/65 hover:bg-white/[0.06] hover:text-white',
+                  )}
+                >
+                  <Settings size={17} strokeWidth={1.75} className="shrink-0" />
+                  <span className="truncate">Settings</span>
+                </Link>
+                </>)}
+                {producerChrome && <div className="my-1 border-t border-white/10" />}
+                <SignOutButton onDone={close} />
+              </nav>
+            )}
+          </Popover>
         </div>
 
       </header>
@@ -573,6 +618,11 @@ export function TopBar() {
                 </div>
               ))}
             </nav>
+            {/* Sign-out belongs in the chrome, not two pages deep — otherwise
+                admin/collaborator roles have no visible way out on mobile. */}
+            <div className="px-3 py-3 border-t border-white/[0.06]">
+              <SignOutButton onDone={() => setMobileOpen(false)} />
+            </div>
           </aside>
         </>
       )}
