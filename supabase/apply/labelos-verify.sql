@@ -71,8 +71,10 @@ FROM (VALUES
   ('170_labelos_entitlements_platform', to_regclass('public.platform_admins') IS NOT NULL AND to_regclass('public.org_entitlements') IS NOT NULL),
   ('171_labelos_departments_capabilities', EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'public' AND p.proname = 'has_org_cap' AND pg_get_functiondef(p.oid) LIKE '%finance.approve%')),
   ('172_labelos_org_settings', EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'public' AND p.proname = 'labelos_audit_org_settings')),
+  ('173_labelos_track_metadata', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'tracks' AND column_name = 'metadata_updated_at')),
   ('189_labelos_setup_org', EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'public' AND p.proname = 'labelos_setup_org')),
   ('190_labelos_team_accounts', to_regclass('public.org_managed_accounts') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'public' AND p.proname = 'labelos_revoke_auth_sessions')),
+  ('192_labelos_setup_wizard', EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'public' AND p.proname = 'labelos_validate_org_settings_patch')),
   ('operator: producer is a platform admin', EXISTS (SELECT 1 FROM public.creator_profiles) AND NOT EXISTS (SELECT 1 FROM public.creator_profiles cp WHERE NOT EXISTS (SELECT 1 FROM public.platform_admins pa WHERE pa.user_id = cp.user_id)))
 ) AS m(migration, ok)
 ORDER BY m.migration;
