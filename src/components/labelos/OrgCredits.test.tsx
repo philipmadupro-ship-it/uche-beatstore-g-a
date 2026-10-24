@@ -19,7 +19,7 @@ const view = (over: Partial<CreditView> = {}): CreditView => ({
   source: 'manual', partyId: 'p1', contactId: null, mine: false, proposedByMe: false, confirmedAt: null, disputeNote: null,
   createdAt: '2026-10-01T10:00:00Z',
   party: { id: 'p1', kind: 'person', displayName: 'Pierre', contactId: null, legal: { legalName: 'Pierre Producteur', email: null, ipi: '00123456789', isni: null, pro: 'SACEM', proAffiliation: 'affiliated', publisherName: null, publisherIpi: null, address: null, country: null, confirmedAt: null } },
-  can: { confirm: true, dispute: true },
+  can: { confirm: true, dispute: true, withdraw: false },
   ...over,
 });
 const roles = CREDIT_ROLES.map((r) => ({ key: r.key, label: r.label, scope: r.scope, detail: r.detail ?? null }));
@@ -73,7 +73,7 @@ describe('OrgCredits', () => {
     responder = () => ({
       status: 200,
       body: payload({
-        credits: [view({ party: { id: 'p1', kind: 'person', displayName: 'Pierre', contactId: null }, can: { confirm: false, dispute: false } }), view({ id: 'c2', name: 'Ed', partyId: null, party: null, role: 'mastering_engineer', roleLabel: 'Mastering Engineer', status: 'confirmed', can: { confirm: false, dispute: false } })],
+        credits: [view({ party: { id: 'p1', kind: 'person', displayName: 'Pierre', contactId: null }, can: { confirm: false, dispute: false, withdraw: false } }), view({ id: 'c2', name: 'Ed', partyId: null, party: null, role: 'mastering_engineer', roleLabel: 'Mastering Engineer', status: 'confirmed', can: { confirm: false, dispute: false, withdraw: false } })],
       }),
     });
     render(<OrgCredits orgId="o1" trackId="t1" />);
@@ -89,7 +89,7 @@ describe('OrgCredits', () => {
   it('Confirm sends the decision and the pill’s status follows the answer', async () => {
     responder = (call) =>
       call.method === 'PATCH'
-        ? { status: 200, body: { credit: view({ status: 'confirmed', can: { confirm: false, dispute: true } }) } }
+        ? { status: 200, body: { credit: view({ status: 'confirmed', can: { confirm: false, dispute: true, withdraw: false } }) } }
         : { status: 200, body: payload() };
     render(<OrgCredits orgId="o1" trackId="t1" />);
     fireEvent.click(await screen.findByTestId('credit-person'));
@@ -113,6 +113,31 @@ describe('OrgCredits', () => {
     await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')).toBeTruthy());
     expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ action: 'dispute', note: 'wrong role' });
     await waitFor(() => expect(screen.getByTestId('credit-person').getAttribute('data-status')).toBe('disputed'));
+  });
+
+  it('Withdraw asks first, then removes the credit from the strip; a refusal leaves it', async () => {
+    responder = (call) =>
+      call.method === 'DELETE'
+        ? { status: 200, body: { withdrawn: true } }
+        : { status: 200, body: payload({ credits: [view({ can: { confirm: false, dispute: false, withdraw: true } })]
+        }) };
+    render(<OrgCredits orgId="o1" trackId="t1" />);
+    fireEvent.click(await screen.findByTestId('credit-person'));
+    fireEvent.click(screen.getByTestId('credit-withdraw'));
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false); // nothing is sent until confirmed
+    const ask = useToastStore.getState().toasts.find((t) => t.title === 'Withdraw this credit?')!;
+    expect(ask).toBeTruthy();
+    ask.actions!.find((a) => a.label === 'Withdraw')!.onClick();
+    await waitFor(() => expect(calls.find((c) => c.method === 'DELETE')).toMatchObject({ url: '/api/org/o1/tracks/t1/credits/c1' }));
+    await waitFor(() => expect(screen.queryByTestId('credit-person')).toBeNull());
+    expect(toasts()).toContain('success:Credit withdrawn');
+  });
+
+  it('a credit the viewer may not withdraw has no Withdraw button', async () => {
+    responder = () => ({ status: 200, body: payload() });
+    render(<OrgCredits orgId="o1" trackId="t1" />);
+    fireEvent.click(await screen.findByTestId('credit-person'));
+    expect(screen.queryByTestId('credit-withdraw')).toBeNull();
   });
 
   it('a refused decision toasts the server’s words and leaves the pill alone', async () => {

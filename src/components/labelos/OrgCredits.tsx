@@ -18,12 +18,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, Link2, Plus } from 'lucide-react';
 import { Dropdown, type DropdownOption } from '@/components/ui/Dropdown';
 import { Popover } from '@/components/ui/Popover';
-import { toast } from '@/hooks/useToast';
+import { confirmToast, toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import { creditRoleLabel } from '@/lib/labelos/credit-roles';
 import { personSummary, roleGroups, stripPeople, type StripPerson } from '@/lib/labelos/credit-strip';
 import { CREDIT_STATUS_LABEL, type CreditView, type PartyView } from '@/lib/labelos/credits';
-import { decideCredit, fetchCredits, fetchParties, proposeCredit, type CreditsPayload } from '@/lib/labelos/credits-client';
+import { decideCredit, fetchCredits, fetchParties, proposeCredit, withdrawCredit, type CreditsPayload } from '@/lib/labelos/credits-client';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
@@ -61,6 +61,8 @@ export function OrgCredits({ orgId, trackId }: { orgId: string; trackId: string 
   const replace = (credit: CreditView) =>
     setData((d) => (d ? { ...d, credits: d.credits.map((c) => (c.id === credit.id ? credit : c)) } : d));
 
+  const remove = (creditId: string) => setData((d) => (d ? { ...d, credits: d.credits.filter((c) => c.id !== creditId) } : d));
+
   if (hidden) return null;
   if (!data) return <div className="h-8" aria-hidden="true" data-testid="org-credits-loading" />;
 
@@ -71,7 +73,7 @@ export function OrgCredits({ orgId, trackId }: { orgId: string; trackId: string 
       <div className="flex flex-wrap items-center gap-1.5">
         {people.length === 0 && !data.me.canPropose && <p className="text-[11px] text-white/40">No credits you can see yet.</p>}
         {people.map((p) => (
-          <PersonPill key={p.key} orgId={orgId} trackId={trackId} person={p} onChanged={replace} />
+          <PersonPill key={p.key} orgId={orgId} trackId={trackId} person={p} onChanged={replace} onWithdrawn={remove} />
         ))}
         {data.me.canPropose && (
           <button
@@ -107,7 +109,7 @@ export function OrgCredits({ orgId, trackId }: { orgId: string; trackId: string 
   );
 }
 
-function PersonPill({ orgId, trackId, person, onChanged }: { orgId: string; trackId: string; person: StripPerson; onChanged: (c: CreditView) => void }) {
+function PersonPill({ orgId, trackId, person, onChanged, onWithdrawn }: { orgId: string; trackId: string; person: StripPerson; onChanged: (c: CreditView) => void; onWithdrawn: (creditId: string) => void }) {
   const [open, setOpen] = useState(false);
   const roles = person.roles.map(creditRoleLabel).join(', ');
   return (
@@ -141,7 +143,7 @@ function PersonPill({ orgId, trackId, person, onChanged }: { orgId: string; trac
     >
       <div className="space-y-3 p-3">
         {person.credits.map((c) => (
-          <CreditRowView key={c.id} orgId={orgId} trackId={trackId} credit={c} onChanged={onChanged} />
+          <CreditRowView key={c.id} orgId={orgId} trackId={trackId} credit={c} onChanged={onChanged} onWithdrawn={onWithdrawn} />
         ))}
       </div>
     </Popover>
@@ -160,7 +162,7 @@ function PartyLine({ party }: { party: PartyView }) {
   );
 }
 
-function CreditRowView({ orgId, trackId, credit, onChanged }: { orgId: string; trackId: string; credit: CreditView; onChanged: (c: CreditView) => void }) {
+function CreditRowView({ orgId, trackId, credit, onChanged, onWithdrawn }: { orgId: string; trackId: string; credit: CreditView; onChanged: (c: CreditView) => void; onWithdrawn: (creditId: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [disputing, setDisputing] = useState(false);
   const [note, setNote] = useState('');
@@ -179,6 +181,20 @@ function CreditRowView({ orgId, trackId, credit, onChanged }: { orgId: string; t
     toast.success(action === 'confirm' ? 'Credit confirmed' : 'Credit disputed');
   };
 
+  const withdraw = async () => {
+    const ok = await confirmToast('Withdraw this credit?', `${credit.roleLabel}. It comes off the song; the withdrawal stays in the activity record.`, { confirmLabel: 'Withdraw', danger: true });
+    if (!ok) return;
+    setBusy(true);
+    const res = await withdrawCredit(orgId, trackId, credit.id);
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    onWithdrawn(credit.id);
+    toast.success('Credit withdrawn');
+  };
+
   return (
     <div className="space-y-1.5" data-testid="credit-row" data-credit={credit.id}>
       <p className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-white/80">
@@ -189,7 +205,7 @@ function CreditRowView({ orgId, trackId, credit, onChanged }: { orgId: string; t
       </p>
       {credit.party && <PartyLine party={credit.party} />}
       {credit.status === 'disputed' && credit.disputeNote && <p className="text-[11px] text-red-400">“{credit.disputeNote}”</p>}
-      {(credit.can.confirm || credit.can.dispute) && (
+      {(credit.can.confirm || credit.can.dispute || credit.can.withdraw) && (
         <div className="flex flex-wrap items-center gap-1.5">
           {credit.can.confirm && (
             <button type="button" className={BTN} disabled={busy} onClick={() => void decide('confirm')} data-testid="credit-confirm">
@@ -198,6 +214,9 @@ function CreditRowView({ orgId, trackId, credit, onChanged }: { orgId: string; t
           )}
           {credit.can.dispute && !disputing && (
             <button type="button" className={BTN} disabled={busy} onClick={() => setDisputing(true)} data-testid="credit-dispute">Dispute</button>
+          )}
+          {credit.can.withdraw && (
+            <button type="button" className={BTN} disabled={busy} onClick={() => void withdraw()} data-testid="credit-withdraw">Withdraw</button>
           )}
         </div>
       )}

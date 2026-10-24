@@ -27,7 +27,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { CREDITS_NOT_READY } from '@/lib/labelos/audit-rpc';
-import { mayReadPayee, orgActor, partyView } from '@/lib/labelos/credits';
+import { mayReadPayee, orgActor, partyViewWithLink } from '@/lib/labelos/credits';
 import {
   accountBelongsToOrg,
   contactInOrg,
@@ -66,7 +66,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       readable = access.artistScope === null || (await scopedPartyIds(access.admin, access)).includes(party.id);
     }
     if (!readable) return json(404, { error: 'Not found' });
-    return json(200, { party: partyView(party, actor) });
+    return json(200, { party: partyViewWithLink(party, actor) });
   } catch (err) {
     if (err instanceof CreditsNotReadyError) return json(404, { error: 'Not found' });
     log.error('party read failed', { orgId: access.orgId, error: errorMessage(err) });
@@ -107,7 +107,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if ('duplicate' in result) return json(409, { error: 'That account already has a party in this organization' });
 
     await recordEvent(admin, { orgId: org, userId: access.userId }, 'party.updated', { type: 'party', id: partyId }, { fields: Object.keys(cols.columns).sort() });
-    return json(200, { party: partyView(result.party, orgActor(access.userId, access.capabilities, access.role)) });
+    return json(200, { party: partyViewWithLink(result.party, orgActor(access.userId, access.capabilities, access.role)) });
   } catch (err) {
     if (err instanceof CreditsNotReadyError) return json(503, { error: CREDITS_NOT_READY });
     log.error('party update failed', { orgId: org, error: errorMessage(err) });

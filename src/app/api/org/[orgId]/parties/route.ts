@@ -32,7 +32,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { CREDITS_NOT_READY } from '@/lib/labelos/audit-rpc';
-import { mayReadPayee, orgActor, partyView } from '@/lib/labelos/credits';
+import { mayReadPayee, orgActor, partyViewWithLink } from '@/lib/labelos/credits';
 import {
   accountBelongsToOrg,
   contactInOrg,
@@ -79,7 +79,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     }
     return json(200, {
       schemaReady: true,
-      parties: rows.map((p) => partyView(p, actor)),
+      parties: rows.map((p) => partyViewWithLink(p, actor)),
       canWrite,
       canSeePayee: read.payee,
       // Names only, so a rights writer can link a party to the account that will confirm it.
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     if ('duplicate' in result) return json(409, { error: 'That account already has a party in this organization' });
 
     await recordEvent(admin, { orgId: org, userId: access.userId }, 'party.created', { type: 'party', id: result.party.id }, { kind: result.party.kind });
-    return json(201, { party: partyView(result.party, orgActor(access.userId, access.capabilities, access.role)) });
+    return json(201, { party: partyViewWithLink(result.party, orgActor(access.userId, access.capabilities, access.role)) });
   } catch (err) {
     if (err instanceof CreditsNotReadyError) return json(503, { error: CREDITS_NOT_READY });
     log.error('party create failed', { orgId: org, error: errorMessage(err) });

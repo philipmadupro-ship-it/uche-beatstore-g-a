@@ -12,6 +12,7 @@ import {
   planWithdraw,
   orgActor,
   partyView,
+  partyViewWithLink,
   planDecision,
   planPropose,
   worstStatus,
@@ -216,6 +217,14 @@ describe('LABEL-54: what a roster artist, finance and legal read of a party', ()
   it('an external member and a roster artist never read payee data, whatever caps they hold', () => {
     expect(mayReadPayee(externalActor(U(9), 'editor'))).toBe(false);
     expect(mayReadPayee({ ...ARTIST, caps: new Set([...ARTIST.caps, 'finance.read', 'rights.write']) })).toBe(false);
+  });
+
+  it('only a rights writer is sent the linked account id', () => {
+    // partyView (credits, splits) never carries an account id; the Parties page's view adds it for a rights writer only.
+    expect(partyView(full, OWNER).linkedUserId).toBeUndefined();
+    expect(partyViewWithLink(full, OWNER).linkedUserId).toBe(U(3));
+    expect(partyViewWithLink(full, LEGAL).linkedUserId).toBe(U(3));
+    for (const who of [AR, PRODUCER, ARTIST]) expect(partyViewWithLink(full, who).linkedUserId, 'reader').toBeUndefined();
   });
 
   it('a roster artist cannot read a co-writer through mayReadLegal', () => {

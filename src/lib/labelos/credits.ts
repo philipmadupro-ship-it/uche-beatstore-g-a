@@ -245,6 +245,8 @@ export type PartyView = {
   payee?: { taxId: string | null; paymentInstructions: string | null };
   /** The party is the viewer's own account. */
   mine?: boolean;
+  /** The linked account (null = none): only a rights writer is sent it, to edit the link. */
+  linkedUserId?: string | null;
 };
 
 /** Built field by field: no account id, no creator id of a party. */
@@ -270,6 +272,17 @@ export function partyView(row: PartyRow, actor: CreditActor): PartyView {
   return view;
 }
 
+/**
+ * A party for the Parties page: the view plus the linked account id, which only
+ * a rights writer is sent (they edit the link). Everything else, credits and
+ * split sheets included, uses `partyView`, which never carries an account id.
+ */
+export function partyViewWithLink(row: PartyRow, actor: CreditActor): PartyView {
+  const view = partyView(row, actor);
+  if (canWriteRights(actor)) view.linkedUserId = row.user_id;
+  return view;
+}
+
 export type CreditView = {
   id: string;
   trackId: string;
@@ -289,7 +302,7 @@ export type CreditView = {
   disputeNote: string | null;
   createdAt: string;
   party: PartyView | null;
-  can: { confirm: boolean; dispute: boolean };
+  can: { confirm: boolean; dispute: boolean; withdraw: boolean };
 };
 
 export function creditView(row: CreditRow, party: PartyRow | null, actor: CreditActor): CreditView {
@@ -318,6 +331,7 @@ export function creditView(row: CreditRow, party: PartyRow | null, actor: Credit
     can: {
       confirm: planDecision(actor, 'confirmed', facts).ok,
       dispute: planDecision(actor, 'disputed', facts).ok,
+      withdraw: planWithdraw(actor, { partyUserId }).ok,
     },
   };
 }
