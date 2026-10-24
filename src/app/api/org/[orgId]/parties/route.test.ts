@@ -231,8 +231,9 @@ describe('PATCH / DELETE /parties/[partyId]', () => {
 });
 
 describe('LABEL-54: what each role reads of a party', () => {
-  const get = async (who: string, id?: string) => (await (await call('GET', who, L, id)).json()) as Record<string, any>;
-  const one = (body: Record<string, any>, name: string) => (body.parties as { displayName: string }[]).find((x) => x.displayName === name) as Record<string, any>;
+  type Json = Record<string, unknown> & { parties: Record<string, unknown>[]; party: Record<string, unknown>; members?: unknown };
+  const get = async (who: string, id?: string) => (await (await call('GET', who, L, id)).json()) as Json;
+  const one = (body: Json, name: string) => body.parties.find((x) => x.displayName === name) as { legal?: Record<string, unknown>; payee?: unknown };
 
   it('a roster artist reads the names of their own songs’ co-writers and nothing about them — no legal block, no payee block', async () => {
     const body = await get(ART);
@@ -264,7 +265,7 @@ describe('LABEL-54: what each role reads of a party', () => {
     }
     const ar = await get(AR);
     expect(ar.canSeePayee).toBe(false);
-    expect(one(ar, 'Pierre').legal.address).toBe('1 rue X');
+    expect(one(ar, 'Pierre').legal?.address).toBe('1 rue X');
     expect(JSON.stringify(ar)).not.toMatch(/FR-TAX-1|PayPal/);
   });
 
@@ -429,7 +430,7 @@ describe('LABEL-54: POST /parties/[partyId]/invite', () => {
   it('asks the one linked account, once, with a direct-ask notification and an internal event', async () => {
     const res = await invite(OWN, PP);
     expect(res.status).toBe(200);
-    const rows = db.tables.notifications as Record<string, any>[];
+    const rows = db.tables.notifications as Record<string, unknown>[];
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ user_id: PRD, org_id: L, kind: 'party_confirmation', read: false });
     expect(JSON.stringify(rows[0])).not.toMatch(/email|token/i);

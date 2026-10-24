@@ -165,8 +165,8 @@ describe('views', () => {
     expect(v).toMatchObject({ status: 'proposed', roleLabel: 'Producer', scope: 'recording', mine: false, proposedByMe: false, can: { confirm: false, dispute: false } });
     expect(JSON.stringify(v)).not.toContain(U(3));
     const own = creditView(credit({ created_by: U(2) }), party(), PRODUCER);
-    expect(own).toMatchObject({ mine: true, proposedByMe: false, can: { confirm: true, dispute: true } });
-    expect(creditView(credit(), party(), OWNER).can).toEqual({ confirm: true, dispute: true });
+    expect(own).toMatchObject({ mine: true, proposedByMe: false, can: { confirm: true, dispute: true, withdraw: true } });
+    expect(creditView(credit(), party(), OWNER).can).toEqual({ confirm: true, dispute: true, withdraw: true });
   });
   it('an unknown status reads as proposed, never as confirmed', () => {
     expect(creditView(credit({ status: 'weird' }), null, OWNER).status).toBe('proposed');

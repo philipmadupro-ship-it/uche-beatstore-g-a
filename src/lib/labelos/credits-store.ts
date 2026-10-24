@@ -312,3 +312,11 @@ export async function linkableMembers(admin: AdminClient, org: string): Promise<
     .map((id) => ({ userId: id, name: identities.get(id)?.name ?? 'Member' }))
     .sort((a, b) => a.name.localeCompare(b.name) || a.userId.localeCompare(b.userId));
 }
+
+/** Is this account a member of the org itself (not only of one of its projects)? A bell exists only for members. */
+export async function isOrgMember(admin: AdminClient, org: string, userId: string): Promise<boolean> {
+  if (!isUUID(userId)) return false;
+  const res = await admin.from('org_members').select('user_id').eq('org_id', org).eq('user_id', userId).maybeSingle();
+  if (res.error) throw new Error(`member read: ${res.error.message}`);
+  return !!res.data;
+}

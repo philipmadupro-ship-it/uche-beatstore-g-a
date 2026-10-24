@@ -16,7 +16,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { CREDITS_NOT_READY } from '@/lib/labelos/audit-rpc';
-import { CreditsNotReadyError, readParty } from '@/lib/labelos/credits-store';
+import { CreditsNotReadyError, isOrgMember, readParty } from '@/lib/labelos/credits-store';
 import { notifyDirectAsk } from '@/lib/labelos/notify';
 import { askerName } from '@/lib/labelos/tasks-store';
 
@@ -45,9 +45,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     }
     if (party.details_confirmed_at) return json(409, { error: 'These details are already confirmed.', code: 'already_confirmed' });
     // A person in the org's projects only has no bell here: the ask needs an org member.
-    const member = await admin.from('org_members').select('user_id').eq('org_id', org).eq('user_id', party.user_id).maybeSingle();
-    if (member.error) throw new Error(`member read: ${member.error.message}`);
-    if (!member.data) return json(409, { error: 'That account is not a member of the organization, so it cannot be asked here.', code: 'not_a_member' });
+    if (!(await isOrgMember(admin, org, party.user_id))) return json(409, { error: 'That account is not a member of the organization, so it cannot be asked here.', code: 'not_a_member' });
 
     await notifyDirectAsk(admin, {
       kind: 'party_confirmation',

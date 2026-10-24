@@ -315,7 +315,7 @@ function PartyEditor({ orgId, data, party, onSaved, onDeleted, onClose }: {
     <div className="space-y-5 rounded-xl border border-white/10 bg-[#0D0D0A] p-4 sm:p-5" data-testid="party-editor">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate text-[15px] text-white/80">{isNew ? 'New party' : party.displayName}</h2>
+          <h2 className="truncate text-[16px] text-white/80">{isNew ? 'New party' : party.displayName}</h2>
           {!isNew && state === 'confirmed' && <p className="mt-0.5 text-[11px] text-[#6DC6A4]">Confirmed by the person on {party.legal?.confirmedAt?.slice(0, 10)}</p>}
           {!isNew && state === 'unconfirmed' && <p className="mt-0.5 text-[11px] text-[#c8a47a]">Not confirmed by the person yet</p>}
         </div>
