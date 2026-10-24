@@ -107,7 +107,7 @@ describe('GET /api/portal/[token]', () => {
     const body = await (await GET(get(), params)).json();
     expect(body.files).toEqual([{
       id: 'f1', projectId: 'p1', kind: 'lyrics', label: 'Lyrics', fileName: 'lyrics.pdf', mime: 'application/pdf',
-      sizeBytes: 2048, isNew: true, url: '/api/portal/portaltoken1234567890abcd/files/f1',
+      sizeBytes: 2048, isNew: true, fromYou: false, url: '/api/portal/portaltoken1234567890abcd/files/f1',
     }]);
     expect(body.projects[0]).toMatchObject({ files: 1, canComment: true });
   });
