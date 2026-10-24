@@ -55,6 +55,16 @@ const PRODUCER_HUBS = [
   },
 ];
 
+describe('navGroupsFor: owner settings (LABEL-51)', () => {
+  const orgItems = (groups: NavGroup[]) => groups.find((g) => g.key === 'org')!.items.map((i) => i.label);
+  it('draws Settings only for the owner', () => {
+    const caps = new Set(ALL_CAPABILITIES);
+    expect(orgItems(navGroupsFor('label', caps, { slug: 'nsh', viewerIsProducer: false, isOwner: true }))).toContain('Settings');
+    expect(orgItems(navGroupsFor('label', caps, { slug: 'nsh', viewerIsProducer: false, isOwner: false }))).not.toContain('Settings');
+    expect(orgItems(navGroupsFor('label', caps, { slug: 'nsh', viewerIsProducer: false }))).not.toContain('Settings');
+  });
+});
+
 describe('navGroupsFor', () => {
   it('the producer dashboard renders exactly the hubs it always had', () => {
     expect(shape(NAV_GROUPS)).toEqual(PRODUCER_HUBS);
@@ -167,5 +177,20 @@ describe('navGroupsFor', () => {
     expect(activeGroupIn(groups, '/o/ns/settings/members')?.key).toBe('org');
     expect(activeGroupIn(groups, '/elsewhere')?.key).toBe('org');
     expect(activeGroupIn([], '/x')).toBeUndefined();
+  });
+});
+
+describe('the admin centre entry (doc 25, phase 3)', () => {
+  it('heads the Organization hub of a label or artist org for whoever manages members', () => {
+    for (const kind of ['label', 'artist'] as const) {
+      const org = navGroupsFor(kind, new Set(['catalog.read', 'members.manage']), { slug: 's', viewerIsProducer: false }).find((g) => g.key === 'org')!;
+      expect(org.items[0]).toMatchObject({ label: 'Admin', href: '/o/s/settings' });
+    }
+  });
+  it('is not drawn for a member who cannot manage the team, nor in a producer org', () => {
+    const member = navGroupsFor('label', new Set(['catalog.read']), { slug: 's', viewerIsProducer: false }).find((g) => g.key === 'org')!;
+    expect(member.items.map((i) => i.label)).not.toContain('Admin');
+    const producer = navGroupsFor('producer', new Set(['members.manage']), { slug: 's', viewerIsProducer: true }).find((g) => g.key === 'org')!;
+    expect(producer.items.map((i) => i.label)).not.toContain('Admin');
   });
 });

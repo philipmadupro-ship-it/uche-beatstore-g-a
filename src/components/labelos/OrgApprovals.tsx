@@ -44,6 +44,16 @@ export const changedText = (parts: readonly string[]): string => {
   return words.length === 0 ? 'what was approved' : words.join(' and ');
 };
 
+/** A song's legal gate with the song on a release: the release holds the authoritative approval. */
+export const legalOnRelease = (g: Pick<GateStateView, 'gate' | 'onRelease' | 'onReleases'>): boolean => g.gate === 'legal' && (g.onRelease === true || (g.onReleases?.length ?? 0) > 0);
+
+export const onReleaseText = (releases: readonly { title: string }[]): string => {
+  if (releases.length === 0) return 'This song is on a release. Legal is approved on the release; this song’s own approval no longer counts.';
+  const names = releases.slice(0, 2).map((r) => `“${r.title}”`).join(' and ');
+  const more = releases.length > 2 ? ` and ${releases.length - 2} more` : '';
+  return `This song is on ${names}${more}. Legal is approved on the release; this song’s own approval no longer counts.`;
+};
+
 const when = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
 export function OrgApprovals({ orgId, trackId, subject: given, onChanged }: { orgId: string; trackId?: string; subject?: ApprovalSubject; onChanged?: () => void }) {
@@ -137,6 +147,10 @@ function GateRow({ orgId, subject, gate, onChange, onStale }: { orgId: string; s
     done(res, decision === 'approved' ? 'Approved' : 'Changes requested');
   };
 
+  // Legal on a song that is on a release is given on the release (doc 21 #13): the song's own Approve is withdrawn.
+  const onRelease = legalOnRelease(gate);
+  const approveBlocked = gate.approveBlockedReason ?? (gate.selfApprovalBlocked ? 'You cannot approve a request you made yourself' : null);
+
   const options: DropdownOption<string>[] = gate.approvers.map((a) => ({ value: a.userId, label: a.name }));
   const legal = gate.gate === 'legal';
   const open = gate.status === 'requested';
@@ -188,12 +202,12 @@ function GateRow({ orgId, subject, gate, onChange, onStale }: { orgId: string; s
             />
           )}
           <div className="flex flex-wrap items-center gap-2">
-            {!deciding && (
+            {!deciding && !onRelease && (
               <button
                 type="button"
                 className={BTN}
-                disabled={busy || gate.selfApprovalBlocked || (gate.status === 'approved' && !gate.stale)}
-                title={gate.selfApprovalBlocked ? 'You cannot approve a request you made yourself' : undefined}
+                disabled={busy || !!approveBlocked || !gate.snapshotKey || (gate.status === 'approved' && !gate.stale)}
+                title={approveBlocked && !(gate.status === 'approved' && !gate.stale) ? approveBlocked : undefined}
                 onClick={() => void decide('approved')}
                 data-testid="org-approval-approve"
               >
@@ -213,7 +227,16 @@ function GateRow({ orgId, subject, gate, onChange, onStale }: { orgId: string; s
               </button>
             )}
           </div>
-          {gate.selfApprovalBlocked && !deciding && <p className="text-[11px] text-white/40">Someone else holding this gate has to approve a request you made.</p>}
+          {onRelease && !deciding && (
+            <p className="text-[11px] text-white/60" data-testid="org-approval-on-release">
+              {onReleaseText(gate.onReleases ?? [])}
+            </p>
+          )}
+          {!onRelease && approveBlocked && !deciding && !(gate.status === 'approved' && !gate.stale) && (
+            <p className="text-[11px] text-white/40" data-testid="org-approval-blocked">
+              {gate.selfApprovalBlocked ? 'Someone else holding this gate has to approve a request you made.' : approveBlocked}
+            </p>
+          )}
         </div>
       )}
 

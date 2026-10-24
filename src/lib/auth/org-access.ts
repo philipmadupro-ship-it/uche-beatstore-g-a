@@ -67,6 +67,8 @@
  * twin `public.can_see_artist` (migration 139).
  */
 import { NextResponse } from 'next/server';
+import { MUST_CHANGE_PASSWORD, sessionIdOf } from '@/lib/labelos/team-accounts';
+import { sessionMustChangePassword } from '@/lib/labelos/team-accounts-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createServiceClient, type AdminClient, type OwnershipFail } from '@/lib/auth/ownership';
 import {
@@ -82,6 +84,7 @@ import { artistScopeFilter, scopeAllowsAnyContact, scopeAllowsContact, toArtistS
 import { orgProjectScopeContacts } from '@/lib/labelos/org-read';
 import { capabilityEntitled, entitledCapabilities, orgEntitlements, type Entitlements, type Module } from '@/lib/labelos/entitlements';
 import { readEntitlementRow } from '@/lib/labelos/entitlements-store';
+import { effectiveModules, parseDepartmentsOff } from '@/lib/labelos/org-settings';
 import {
   CONNECTED_CAPABILITY,
   CONNECTION_COLUMNS,
@@ -144,6 +147,22 @@ export async function sessionIdentity(): Promise<SessionIdentity | null> {
   return session ? { userId: session.userId, email: session.email } : null;
 }
 
+/**
+ * The Supabase session the caller's request belongs to (its id, from the
+ * access token's `session_id` claim), or null. Only for keeping THIS session
+ * while ending the others (a team account's own password change, doc 25);
+ * call it after `sessionIdentity()` has validated the same token.
+ */
+export async function currentSessionId(): Promise<string | null> {
+  try {
+    const cookieClient = await createServerClient();
+    const { data } = await cookieClient.auth.getSession();
+    return sessionIdOf(data.session?.access_token);
+  } catch {
+    return null;
+  }
+}
+
 type SessionDetail = SessionIdentity & { lastSignInAt: string | null };
 
 async function readSession(): Promise<SessionDetail | null> {
@@ -161,13 +180,15 @@ async function sessionUserId(): Promise<string | null> {
   return (await sessionIdentity())?.userId ?? null;
 }
 
+type OrgJoin = { kind: string; deleted_at: string | null; settings?: { departments_off?: unknown } | null };
+
 type MembershipRow = {
   role: string;
   functions: string[] | null;
   scope: string;
   cap_grants: string[] | null;
   cap_revokes: string[] | null;
-  organizations: { kind: string; deleted_at: string | null } | { kind: string; deleted_at: string | null }[] | null;
+  organizations: OrgJoin | OrgJoin[] | null;
 };
 
 /**
@@ -184,7 +205,7 @@ async function readMembership(
   const [{ data, error }, entitlementRow] = await Promise.all([
     admin
       .from('org_members')
-      .select('role, functions, scope, cap_grants, cap_revokes, organizations!inner(kind, deleted_at)')
+      .select('role, functions, scope, cap_grants, cap_revokes, organizations!inner(kind, deleted_at, settings)')
       .eq('org_id', orgId)
       .eq('user_id', userId)
       .maybeSingle(),
@@ -204,7 +225,13 @@ async function readMembership(
   const role = ROLES.find((r) => r === row.role);
   if (!kind || !role || !ROLES_BY_ORG_KIND[kind].includes(role)) return null;
 
-  const entitlements = orgEntitlements({ kind }, entitlementRow);
+  // The licence, narrowed by the departments the owner switched off (LABEL-51):
+  // never wider than what the platform operator granted.
+  const licence = orgEntitlements({ kind }, entitlementRow);
+  const entitlements: Entitlements = {
+    ...licence,
+    modules: effectiveModules(licence.modules, parseDepartmentsOff(org.settings?.departments_off)),
+  };
   const capabilities = entitledCapabilities(
     capabilitiesFor(kind, role, row.functions, { grant: row.cap_grants, revoke: row.cap_revokes }),
     entitlements.modules,
@@ -227,13 +254,23 @@ async function memberContext(
 ): Promise<OrgAccessResult> {
   const admin = createServiceClient();
   let membership: Awaited<ReturnType<typeof readMembership>>;
+  let mustChangePassword: boolean;
   try {
-    membership = await readMembership(admin, orgId, userId);
+    // Doc 25: a team account still on its org-given password reaches no org
+    // route until it chooses its own (src/proxy.ts refuses first; this holds
+    // without the proxy). Read alongside the membership; any error reads as false.
+    [membership, mustChangePassword] = await Promise.all([
+      readMembership(admin, orgId, userId),
+      sessionMustChangePassword(userId, admin),
+    ]);
   } catch (err) {
     log.error('membership read failed', { orgId, error: err instanceof Error ? err.message : String(err) });
     return fail(500, 'Could not check organization access');
   }
   if (!membership) return missing();
+  if (mustChangePassword) {
+    return { ok: false, res: NextResponse.json({ error: MUST_CHANGE_PASSWORD, mustChangePassword: true }, { status: 403 }) };
+  }
   let artistScope: ArtistScope;
   try {
     artistScope = await readArtistScope(admin, orgId, userId, membership);

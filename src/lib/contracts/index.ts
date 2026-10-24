@@ -929,6 +929,32 @@ export const OrgInvitationCreateBodySchema = z.object({
 export type OrgInvitationCreateBody = z.infer<typeof OrgInvitationCreateBodySchema>;
 
 /**
+ * POST /api/org/[orgId]/team-accounts (doc 25): create a login for a person
+ * directly — what an invitation carries, plus their name and the password
+ * the creator chose (checked by lib/labelos/team-accounts#passwordProblem).
+ */
+export const TeamAccountCreateBodySchema = z.object({
+  email: z.string().trim().email('Enter a valid email address').max(200),
+  name: z.string().trim().min(1, 'Enter their name').max(80),
+  password: z.string().max(200),
+  role: z.string().min(1).max(40),
+  functions: z.array(z.string().min(1).max(40)).max(9).optional().default([]),
+  contact_ids: z.array(z.string().uuid()).max(100).optional().default([]),
+}).strict();
+export type TeamAccountCreateBody = z.infer<typeof TeamAccountCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/team-accounts/[userId]: reset the password, or switch the account off / on. */
+export const TeamAccountPatchBodySchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('reset_password'), password: z.string().max(200) }).strict(),
+  z.object({ action: z.literal('disable') }).strict(),
+  z.object({ action: z.literal('enable') }).strict(),
+]);
+export type TeamAccountPatchBody = z.infer<typeof TeamAccountPatchBodySchema>;
+
+/** POST /api/org/account/password: a team account sets its own password. */
+export const AccountPasswordBodySchema = z.object({ password: z.string().max(200) }).strict();
+
+/**
  * POST /api/org/join. The token travels in the body, never an API query
  * string (the join PAGE's own URL does carry it, as share links do). `preview` reads what the invitation is
  * for (no session needed); `accept` joins (session required).
@@ -938,6 +964,16 @@ export const OrgJoinBodySchema = z.object({
   action: z.enum(['preview', 'accept']).optional().default('accept'),
 }).strict();
 export type OrgJoinBody = z.infer<typeof OrgJoinBodySchema>;
+
+/**
+ * POST /api/org/setup (LABEL-48, first slice). What the new account is and
+ * what its organization is called (src/lib/labelos/setup.ts).
+ */
+export const OrgSetupBodySchema = z.object({
+  face: z.enum(['independent', 'label']),
+  name: z.string().min(1).max(200),
+}).strict();
+export type OrgSetupBody = z.infer<typeof OrgSetupBodySchema>;
 
 // ── Label OS org settings + members (LABEL-09) ───────────────────────────
 
@@ -977,6 +1013,8 @@ export const OrgReadinessSettingsSchema = z.object({
   legal_gate: z.enum(['on', 'off']).catch('on'),
   marketing_gate: z.enum(['on', 'off']).catch('on'),
   require_signed_master_split: z.boolean().catch(false),
+  /** The shorter side of cover art, in pixels (09 §4: 3000 is the common DSP minimum). Whole numbers 600-10000; anything else reads as 3000. */
+  artwork_min_px: z.number().int().min(600).max(10000).catch(3000),
 });
 export type OrgReadinessSettings = z.infer<typeof OrgReadinessSettingsSchema>;
 
@@ -1007,6 +1045,23 @@ export function parseAttentionSettings(raw: unknown): OrgAttentionSettings {
   const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   return OrgAttentionSettingsSchema.parse(obj);
 }
+
+/**
+ * PATCH /api/org/[orgId]/settings (LABEL-51): the owner-editable organization
+ * settings. Every key is optional; at least one is required. Whether a
+ * department named in `departments_off` is part of the org's licence is
+ * `planSettingsChange` (lib/labelos/org-settings), checked by the route;
+ * here the names are only bounded to the switchable departments.
+ */
+export const OrgSettingsPatchBodySchema = z.object({
+  legal_gate: z.enum(['on', 'off']).optional(),
+  marketing_gate: z.enum(['on', 'off']).optional(),
+  require_signed_master_split: z.boolean().optional(),
+  attention_release_days: z.number().int().min(1).max(365).optional(),
+  attention_stalled_days: z.number().int().min(1).max(365).optional(),
+  departments_off: z.array(z.enum(['contracts', 'finance', 'marketing', 'pr', 'executive', 'artistic', 'store', 'search', 'digest'])).max(9).optional(),
+}).strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
+export type OrgSettingsPatchBody = z.infer<typeof OrgSettingsPatchBodySchema>;
 
 /**
  * PATCH /api/org/[orgId]/members. Which roles, functions, scopes and
@@ -1560,7 +1615,11 @@ export const OrgApprovalDecideBodySchema = z.object({
   gate: z.enum(APPROVAL_GATES),
   decision: z.enum(APPROVAL_DECISIONS),
   note: z.string().max(APPROVAL_NOTE_MAX).nullable().optional(),
-  /** `snapshotKey` of the gate as the screen drew it. When given with "approved" and the facts moved since, 409 `changed_since_seen`. */
+  /**
+   * `snapshotKey` of the gate as the screen drew it. REQUIRED with "approved" (doc 21 #14; absent = 400 `seen_required`
+   * from `planDecide`, which says it in words); when the facts moved since, 409 `changed_since_seen`. Optional here so
+   * the refusal is that plain-spoken one, not a schema error.
+   */
   seen: z.string().max(64).nullable().optional(),
 }).strict();
 export type OrgApprovalDecideBody = z.infer<typeof OrgApprovalDecideBodySchema>;

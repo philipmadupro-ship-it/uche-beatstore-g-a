@@ -16,6 +16,7 @@
  * linking them through `project_contacts`, both of the org.
  */
 
+import { restrictedCountFor } from './restricted-counts';
 import type { ObjectAccessResult } from '@/lib/auth/org-access';
 import { orgProjectIdsInScope } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
@@ -310,7 +311,7 @@ export async function loadOrgArtistWorkspace(access: ObjectAccessOk): Promise<Or
       songs: new Set(placements.filter((pl) => pl.project_id === p.id && visibleIds.has(pl.track_id)).map((pl) => pl.track_id)).size,
     })),
     songs,
-    restrictedSongs: hidden,
+    restrictedSongs: restrictedCountFor(hidden, access),
     releases: releases.list,
     releasesReady: releases.ready,
     permissions: orgWorkspacePermissions(caps),
@@ -498,7 +499,7 @@ export async function loadOrgSong(access: ObjectAccessOk): Promise<OrgSongDetail
     artists: artistIds.filter((c) => names.has(c)).map((c) => ({ id: c, name: names.get(c)! })),
     projects: projects.map((p) => ({ id: p.id, name: p.name })),
     recordings,
-    restrictedRecordings: restricted,
+    restrictedRecordings: restrictedCountFor(restricted, access),
     releases,
   };
 }
@@ -542,6 +543,6 @@ export async function loadOrgProject(access: ObjectAccessOk): Promise<OrgProject
     songs: visible
       .map((t) => ({ id: t.id, title: t.title, stage: t.song_stage, cover_url: t.cover_url, created_at: t.created_at, projects: [{ id: project.id, name: project.name }] }))
       .sort((a, b) => b.created_at.localeCompare(a.created_at)),
-    restrictedSongs: hidden,
+    restrictedSongs: restrictedCountFor(hidden, access),
   };
 }

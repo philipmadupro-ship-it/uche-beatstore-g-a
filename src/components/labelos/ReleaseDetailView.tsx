@@ -40,6 +40,7 @@ import {
 } from '@/lib/labelos/release-client';
 import { OrgApprovals } from '@/components/labelos/OrgApprovals';
 import type { ReleaseDetail } from '@/lib/labelos/release-detail-store';
+import { gateSkipNotice } from '@/lib/labelos/org-settings';
 import { RELEASE_GATES, RELEASE_GATE_LABEL, type ReleaseGate } from '@/lib/labelos/release-readiness';
 import { moveBy, moveTo } from '@/lib/labelos/release-tracklist';
 
@@ -59,6 +60,7 @@ export function ReleaseDetailView({ orgId, orgSlug, detail, extraActions }: { or
   const router = useRouter();
   const { release, me } = detail;
   const draft = release.state === 'draft';
+  const gateNotice = gateSkipNotice(detail.gatesSkipped ?? [], release.state);
   // An import (LABEL-42) is entered delivered, but its tracklist is what is being entered:
   // editable until it is on the store, where each song's public preview was promoted for that list.
   const importedOpen = release.importedReleased && release.state === 'delivered' && !release.storeListed && me.canManagePublic;
@@ -134,6 +136,12 @@ export function ReleaseDetailView({ orgId, orgSlug, detail, extraActions }: { or
           </div>
         </div>
       </header>
+
+      {gateNotice && (
+        <p className="rounded-xl border border-white/20 bg-white/[0.06] px-4 py-3 text-[11px] leading-relaxed text-white/80" role="note" data-testid="release-gate-skipped">
+          {gateNotice}
+        </p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="space-y-6">

@@ -13,8 +13,10 @@
 import type { ObjectAccessResult } from '@/lib/auth/org-access';
 import { requireObjectAccess } from '@/lib/auth/org-access';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
+import { createLogger } from '@/lib/log';
 import { canReadOrgAsset } from './org-assets';
 import { loadOrgArtistWorkspace } from './org-workspace-store';
+import { parseOrgSettings, skippedGates } from './org-settings';
 import { evaluateReleaseReadiness, releaseReadinessView, type ReleaseReadinessView } from './release-readiness';
 import { loadReleaseReadinessFacts, ReleaseReadinessNotReadyError } from './release-readiness-store';
 import { RELEASE_COLUMNS, RELEASE_ITEM_COLUMNS, toReleaseView, type ReleaseItemRow, type ReleaseRow, type ReleaseView } from './releases';
@@ -44,9 +46,13 @@ export type ReleaseDetail = {
   candidates: { id: string; title: string }[];
   /** Null before migrations 153 / 155 / 157 or when the gates could not be worked out. */
   readiness: ReleaseReadinessView | null;
+  /** Approval gates the owner switched off (LABEL-51); shown as a banner on this release. */
+  gatesSkipped: ('legal' | 'marketing')[];
   artwork: { current: ArtworkOption | null; options: ArtworkOption[] };
   me: { canWrite: boolean; isOwner: boolean; /** owner or admin: the public-facing side of a release (LABEL-42) */ canManagePublic: boolean; mayReadRights: boolean };
 };
+
+const log = createLogger('labelos.release-detail');
 
 /** `access` is requireObjectAccess on `releases` (`catalog.read`). Null when the release is not there. */
 export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail | null> {
@@ -87,6 +93,13 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
     .map((s) => ({ id: s.id, title: s.title?.trim() || 'Untitled' }))
     .sort((a, b) => a.title.localeCompare(b.title));
 
+  // Read on its own: the switches live in organizations.settings (136), not behind the readiness migrations.
+  // A failed read must not take the page down: no banner is the answer, and it is logged.
+  let gatesSkipped: ('legal' | 'marketing')[] = [];
+  const settingsRes = await admin.from('organizations').select('settings').eq('id', org).maybeSingle();
+  if (settingsRes.error) log.error('org settings read failed', { org, error: settingsRes.error.message });
+  else gatesSkipped = skippedGates(parseOrgSettings((settingsRes.data as { settings?: unknown } | null)?.settings));
+
   // Gates, as this member may read them.
   let readiness: ReleaseReadinessView | null = null;
   try {
@@ -115,6 +128,7 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
     items,
     candidates,
     readiness,
+    gatesSkipped,
     artwork: { current, options },
     me: {
       canWrite: access.capabilities.has('release.write'),

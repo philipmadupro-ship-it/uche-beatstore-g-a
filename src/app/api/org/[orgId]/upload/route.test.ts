@@ -7,7 +7,7 @@
  *
  *   L (label): artists C1 (Nova) and C2 (Kilo). S1: Nova's song in LP1
  *   (C1 via project_contacts); B1: a beat in LP1. Members: owner, A&R,
- *   finance (no catalog.write), A&R scoped to C2.
+ *   operations (no catalog.write), A&R scoped to C2.
  *   L2: artist D1, song XS1. The producer: contact PC1 (org_id NULL).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -116,7 +116,7 @@ beforeEach(() => {
       org_members: [
         member(OWN, 'owner'),
         member(AR, 'member', ['a_and_r']),
-        member(FIN, 'member', ['finance']),
+        member(FIN, 'member', ['operations']),
         member(AR_C2, 'member', ['a_and_r'], 'artists'),
         member(X, 'owner', [], 'org', L2),
       ],
@@ -212,7 +212,7 @@ describe('init: who may upload what', () => {
   it.each([
     ['signed out', null, L, song(), 401],
     ['a stranger', STRANGER, L, song(), 404],
-    ['finance (no catalog.write)', FIN, L, song(), 403],
+    ['operations (no catalog.write)', FIN, L, song(), 403],
     ['an artist outside the member\'s scope', AR_C2, L, song(C1), 404],
     ['another org\'s artist', AR, L, song(D1), 404],
     ['a producer CRM contact', OWN, L, song(PC1), 404],

@@ -38,6 +38,11 @@ export const ORG_FUNCTIONS = [
   'producer',
   'engineer',
   'operations',
+  // LABEL-49: the departments doc 22 §8 (5) asks for on day one.
+  'pr',
+  'executive',
+  'artistic_director',
+  'contracts',
 ] as const;
 export type OrgFunction = (typeof ORG_FUNCTIONS)[number];
 
@@ -75,6 +80,21 @@ export const ALL_CAPABILITIES = [
   'org.manage',
   'finance.read',
   'business.read.internal',
+  // LABEL-49 department capabilities. Each belongs to a module
+  // (entitlements.ts CAPABILITY_MODULE), so an unlicensed module takes them
+  // away whatever the role. The contracts department REUSES `contracts.read`
+  // (the read the legal pack, legal queue and restricted files already check)
+  // and adds `contracts.write` / `contracts.sign` beside it: the backlog's
+  // `contract.read` / `.write` / `.sign` are these, one namespace, not two.
+  'finance.write',
+  'finance.approve',
+  'pr.read',
+  'pr.write',
+  'exec.read',
+  'creative.read',
+  'creative.approve',
+  'contracts.write',
+  'contracts.sign',
 ] as const;
 export type Capability = (typeof ALL_CAPABILITIES)[number];
 
@@ -89,7 +109,7 @@ export const ROLES_BY_ORG_KIND: Readonly<Record<OrgKind, readonly Role[]>> = {
 
 /** §2.4b — which functions each org kind offers. */
 export const FUNCTIONS_BY_ORG_KIND: Readonly<Record<OrgKind, readonly OrgFunction[]>> = {
-  artist: ['artist_manager', 'producer', 'engineer', 'marketing', 'legal', 'operations'],
+  artist: ['artist_manager', 'producer', 'engineer', 'marketing', 'legal', 'operations', 'finance', 'pr', 'contracts'],
   producer: ['producer', 'engineer', 'artist_manager', 'operations'],
   label: ORG_FUNCTIONS,
 };
@@ -109,9 +129,16 @@ export const KIND_CEILING: Readonly<Record<OrgKind, readonly Capability[]>> = {
 /**
  * §2.4 columns: the preset each function starts a member with. Implied
  * reads are added by `IMPLIES`. Every function with a column can create
- * tasks (`tasks.write`; which tasks each side sees is LABEL-23's). `finance`
- * and `operations` are deferred ("not for now") and start empty — an
- * owner can still switch single abilities on for such a member.
+ * tasks (`tasks.write`; which tasks each side sees is LABEL-23's) — except
+ * `executive`, which is read-only by definition (LABEL-49). `operations` is
+ * deferred ("not for now") and starts empty — an owner can still switch
+ * single abilities on for such a member.
+ *
+ * LABEL-49 departments. Approving money (`finance.approve`) and signing for
+ * the org (`contracts.sign`) are in NO preset: they are the owner's/admin's,
+ * or switched on for one named member, so drafting and approving are not one
+ * person by default. The business-side functions hear finished music only
+ * (D4); `executive` reads every department but writes nothing.
  */
 export const FUNCTION_PRESETS: Readonly<Record<OrgFunction, readonly Capability[]>> = {
   a_and_r: [
@@ -150,6 +177,7 @@ export const FUNCTION_PRESETS: Readonly<Record<OrgFunction, readonly Capability[
     'audio.finished',
     'rights.write',
     'contracts.read',
+    'contracts.write',
     'release.approve.legal',
     'business.read.internal',
     'tasks.write',
@@ -157,8 +185,29 @@ export const FUNCTION_PRESETS: Readonly<Record<OrgFunction, readonly Capability[
   artist_manager: ['catalog.write', 'audio.finished', 'audio.working', 'review.write', 'rights.read', 'tasks.write'],
   producer: ['catalog.write', 'audio.finished', 'audio.working', 'rights.read.own_line', 'tasks.write'],
   engineer: ['catalog.write', 'audio.finished', 'audio.working', 'rights.read.own_line', 'tasks.write'],
-  finance: [],
+  finance: ['catalog.read', 'finance.write', 'business.read.internal', 'tasks.write'],
   operations: [],
+  pr: ['catalog.read', 'audio.finished', 'pr.write', 'business.read.internal', 'tasks.write'],
+  executive: [
+    'catalog.read',
+    'audio.finished',
+    'exec.read',
+    'rights.read',
+    'contracts.read',
+    'finance.read',
+    'pr.read',
+    'creative.read',
+    'business.read.internal',
+  ],
+  artistic_director: [
+    'catalog.write',
+    'audio.finished',
+    'audio.working',
+    'review.write',
+    'creative.approve',
+    'tasks.write',
+  ],
+  contracts: ['catalog.read', 'rights.read', 'contracts.write', 'business.read.internal', 'tasks.write'],
 };
 
 /**
@@ -202,12 +251,31 @@ export const ROLE_TAKES_OVERRIDES: Readonly<Record<Role, boolean>> = {
  * - D5: a roster artist (role `artist` in a label org) never sees
  *   business-internal notes or contracts. An artist who OWNS an artist org
  *   is role `owner` there and sees everything in it.
+ * - LABEL-49: nor any department capability (finance, PR, executive,
+ *   artistic direction, contracts). What a roster artist sees of their own
+ *   contracts or statements (LABEL-57 / LABEL-63) is an own-row read those
+ *   tasks build, never one of these capabilities.
  */
 export const NEVER_GRANTABLE: Readonly<Record<Role, readonly Capability[]>> = {
   owner: [],
   admin: [],
   member: ['members.manage', 'org.manage'],
-  artist: ['members.manage', 'org.manage', 'business.read.internal', 'contracts.read'],
+  artist: [
+    'members.manage',
+    'org.manage',
+    'business.read.internal',
+    'contracts.read',
+    'contracts.write',
+    'contracts.sign',
+    'finance.read',
+    'finance.write',
+    'finance.approve',
+    'pr.read',
+    'pr.write',
+    'exec.read',
+    'creative.read',
+    'creative.approve',
+  ],
 };
 
 /**
@@ -236,6 +304,20 @@ export const IMPLIES: Readonly<Partial<Record<Capability, readonly Capability[]>
   'rights.write': ['rights.read'],
   'rights.read': ['rights.read.own_line'],
   'review.write': ['review.comment'],
+  // LABEL-49: write / approve / sign need the department's read; every read
+  // of a department needs the catalogue (statements, PR and contracts are all
+  // about songs and artists), 136's finance.read included — so revoking
+  // catalog.read still leaves a member with nothing.
+  'finance.read': NEEDS_CATALOG,
+  'finance.write': ['finance.read'],
+  'finance.approve': ['finance.read'],
+  'pr.read': NEEDS_CATALOG,
+  'pr.write': ['pr.read'],
+  'exec.read': NEEDS_CATALOG,
+  'creative.read': NEEDS_CATALOG,
+  'creative.approve': ['creative.read'],
+  'contracts.write': ['contracts.read'],
+  'contracts.sign': ['contracts.read'],
 };
 
 // ── Lookup helpers ──────────────────────────────────────────────────────

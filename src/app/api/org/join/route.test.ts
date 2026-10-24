@@ -50,6 +50,8 @@ vi.mock('@/lib/log', () => ({
   }),
 }));
 
+let managedRow: unknown = null;
+
 function answer(chain: Chain): Answer {
   if (chain.table === 'platform_admins') {
     const id = chain.ops.find((o) => o.op === 'eq')?.args[1] as string;
@@ -58,6 +60,7 @@ function answer(chain: Chain): Answer {
   if (chain.table === 'org_invitations') return { data: previewRow, error: null };
   if (chain.table === 'organizations') return { data: { name: 'Night Shift', slug: 'night-shift', kind: 'label' }, error: null };
   if (chain.table === 'projects') return { data: projectRow, error: null };
+  if (chain.table === 'org_managed_accounts') return { data: managedRow, error: null };
   return { data: null, error: null };
 }
 
@@ -73,6 +76,7 @@ beforeEach(() => {
   previewRow = null;
   operators = new Set();
   logged.length = 0;
+  managedRow = null;
   admin = fakeAdmin({ answer, rpc: () => rpcAnswer });
 });
 
@@ -373,5 +377,16 @@ describe('the token stays secret', () => {
     }
     expect(JSON.stringify(logged)).not.toContain(token);
     expect(JSON.stringify(logged)).not.toContain(hashInvitationToken(token));
+  });
+});
+
+describe('a team account stays in its organization (doc 25)', () => {
+  it('cannot accept an invitation anywhere: 409, and the accept function is never called', async () => {
+    session = { userId: 'u-team', email: 'mia@label.test' };
+    managedRow = { org_id: 'org-made-it', must_change_password: false, disabled_at: null };
+    const r = await post({ token, action: 'accept' });
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe('team_account');
+    expect(admin.rpcs).toEqual([]);
   });
 });

@@ -33,7 +33,8 @@ const AR = label('member', ['a_and_r']);
 const LEGAL = label('member', ['legal']);
 const OWNER = label('owner');
 const ARTIST = label('artist');
-const FINANCE = label('member', ['finance']);
+// operations is still deferred (empty preset): a member with no catalogue at all.
+const NO_CATALOG = label('member', ['operations']);
 
 const asset = (kind: string, sensitivity: 'normal' | 'restricted' = 'normal') => ({ kind, sensitivity });
 
@@ -139,7 +140,7 @@ describe('who reads what (06 §2.4, D4)', () => {
       expect(canReadOrgAsset(OWNER, asset(k, resolveSensitivity(k))), k).toBe(true);
       expect(canReadOrgAsset(new Set<Capability>(), asset(k)), k).toBe(false);
     }
-    expect(canReadOrgAsset(FINANCE, asset('artwork'))).toBe(false);
+    expect(canReadOrgAsset(NO_CATALOG, asset('artwork'))).toBe(false);
   });
 });
 

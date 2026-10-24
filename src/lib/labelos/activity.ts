@@ -52,6 +52,12 @@ export const VERBS = [
   'member.scope_changed',
   'member.capabilities_changed',
   'member.artists_changed',
+  // Team accounts an org creates for its people (doc 25, migration 190).
+  'member.account_created',
+  'member.password_reset',
+  'member.account_disabled',
+  'member.account_enabled',
+  'member.password_changed',
   'invitation.created',
   'invitation.revoked',
   // People directory + roster (LABEL-10; the subject is the contact)
@@ -143,6 +149,7 @@ export type Verb = (typeof VERBS)[number];
 
 /** 06 §6 + 14 (LABEL-13, LABEL-41): kept for the life of the org, never best effort. */
 export const AUDIT_VERBS: readonly Verb[] = [
+  'org.settings_changed',
   'org.exported',
   'org.entitlements_changed',
   'org.deletion_scheduled',
@@ -153,6 +160,10 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'member.scope_changed',
   'member.capabilities_changed',
   'member.artists_changed',
+  'member.account_created',
+  'member.password_reset',
+  'member.account_disabled',
+  'member.account_enabled',
   'invitation.created',
   'invitation.revoked',
   'project.member_added',
@@ -220,6 +231,11 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'member.scope_changed': 'internal',
   'member.capabilities_changed': 'internal',
   'member.artists_changed': 'internal',
+  'member.account_created': 'internal',
+  'member.password_reset': 'internal',
+  'member.account_disabled': 'internal',
+  'member.account_enabled': 'internal',
+  'member.password_changed': 'internal',
   'invitation.created': 'internal',
   'invitation.revoked': 'internal',
   'contact.created': 'internal',

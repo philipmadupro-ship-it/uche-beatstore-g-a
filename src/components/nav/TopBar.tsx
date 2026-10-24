@@ -101,6 +101,7 @@ export function TopBar() {
         slug: shell.org.slug,
         viewerIsProducer: shell.viewerIsProducer && shell.role === 'owner',
         modules: shell.modules,
+        isOwner: shell.role === 'owner',
       })
     : navGroupsFor('producer', null);
   const drawerGroups = !shell ? ALL_GROUPS : producerChrome ? [...hubs, ACCOUNT_GROUP] : hubs;

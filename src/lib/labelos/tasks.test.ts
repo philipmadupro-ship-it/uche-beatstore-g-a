@@ -101,9 +101,9 @@ describe('who sees and changes a task (D1: each side its own)', () => {
     expect(['owner', 'admin', 'member', 'artist'].filter((r) => holdsEverything(r as never))).toEqual(['owner', 'admin']);
   });
 
-  it('every function column that exists holds tasks.write (15 D1) — except the two deferred ones', () => {
+  it('every function column that exists holds tasks.write (15 D1) — except operations (deferred) and the read-only executive', () => {
     const withWrite = ORG_FUNCTIONS.filter((fn) => mayCreateTask(capabilitiesFor('label', 'member', [fn])));
-    expect(withWrite).toEqual(ORG_FUNCTIONS.filter((fn) => fn !== 'finance' && fn !== 'operations'));
+    expect(withWrite).toEqual(ORG_FUNCTIONS.filter((fn) => fn !== 'operations' && fn !== 'executive'));
     expect(ALL_CAPABILITIES).toContain('tasks.write');
     // A roster artist has none.
     expect(mayCreateTask(capabilitiesFor('label', 'artist', []))).toBe(false);

@@ -1,10 +1,13 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildCsp, cspHeaderName as cspHeaderNameFor } from '@/lib/security/csp';
-import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath, isLabelOsRestorePagePath, isPlatformApiPath, isPlatformPagePath } from '@/lib/security/api-gate';
+import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath, isLabelOsRestorePagePath, isLabelOsSetupPagePath, isPlatformApiPath, isPlatformPagePath } from '@/lib/security/api-gate';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
 import { memberLanding } from '@/lib/labelos/member-landing';
+import { MUST_CHANGE_PASSWORD, PASSWORD_PAGE, passwordGateExempt } from '@/lib/labelos/team-accounts';
+import { callerMustChangePassword } from '@/lib/labelos/team-accounts-store';
+import { nonMemberLanding } from '@/lib/labelos/setup';
 import { isSupabaseConfigured } from '@/lib/local-store';
 
 /**
@@ -68,9 +71,11 @@ export async function proxy(request: NextRequest) {
   const labelOsApi = isLabelOsApiPath(request.nextUrl.pathname) || isPlatformApiPath(request.nextUrl.pathname);
   const labelOsPage = isLabelOsPagePath(request.nextUrl.pathname);
   // `/restore/<org id>` (LABEL-39) likewise: the org it brings back is not live, so no live membership is required.
+  // `/setup` (LABEL-48) too: a new account sets up its first org there, so it has no membership yet.
   const labelOsJoinPage =
     isLabelOsJoinPagePath(request.nextUrl.pathname) ||
     isLabelOsRestorePagePath(request.nextUrl.pathname) ||
+    isLabelOsSetupPagePath(request.nextUrl.pathname) ||
     isPlatformPagePath(request.nextUrl.pathname);
   if (labelOsApi || labelOsPage || labelOsJoinPage) {
     if (!isLabelOsEnabled()) {
@@ -113,6 +118,21 @@ export async function proxy(request: NextRequest) {
   // getUser() — not getSession() — actually validates the JWT against the
   // auth server and triggers a refresh when needed.
   const { data: { user } } = await supabase.auth.getUser();
+
+  // Doc 25: a team account still on the password its organization gave it
+  // reaches nothing in Label OS but the request that saves its own password
+  // (the page for it, /account/password, is outside these namespaces). Asked
+  // on the caller's own session; the org routes check again (org-access).
+  if (
+    user &&
+    (labelOsApi || labelOsPage || labelOsJoinPage) &&
+    !passwordGateExempt(request.nextUrl.pathname, request.method) &&
+    (await callerMustChangePassword(supabase))
+  ) {
+    return labelOsApi
+      ? NextResponse.json({ error: MUST_CHANGE_PASSWORD, mustChangePassword: true }, { status: 403 })
+      : NextResponse.redirect(new URL(PASSWORD_PAGE, request.url));
+  }
 
   // The producer is the user with a creator_profiles row (RLS lets a session
   // read only its own). Buyers share this auth, so "signed in" is not enough.
@@ -211,9 +231,11 @@ export async function proxy(request: NextRequest) {
         const target = memberLanding(path, request.nextUrl.searchParams.get('next'));
         return NextResponse.redirect(new URL(target, request.url));
       }
-      const url = request.nextUrl.clone();
-      url.pathname = '/store/account/me';
-      return NextResponse.redirect(url);
+      // Neither the producer nor a member: with Label OS on, /setup, where a
+      // new artist or label creates its org (lib/labelos/setup.ts
+      // #nonMemberLanding). Flag off: the buyer account, as before.
+      const target = nonMemberLanding({ labelOsEnabled: isLabelOsEnabled(), metadata: user.user_metadata });
+      return NextResponse.redirect(new URL(target, request.url));
     }
   }
 
