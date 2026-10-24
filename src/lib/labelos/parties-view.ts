@@ -114,3 +114,11 @@ export function partyFormError(form: PartyForm): string | null {
   if (form.country.trim() && !normalizeCountry(form.country)) return 'Use the two-letter country code (FR, GB, US…).';
   return paymentInstructionsError(form.paymentInstructions);
 }
+
+/**
+ * Who has a Parties page (nav and page agree): anyone who reads a party at all —
+ * a rights reader, an own-line member (their own party) or finance (the payees).
+ */
+export function canSeeParties(caps: ReadonlySet<string>): boolean {
+  return caps.has('rights.read') || caps.has('rights.read.own_line') || caps.has('finance.read');
+}

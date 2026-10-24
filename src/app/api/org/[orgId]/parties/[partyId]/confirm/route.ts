@@ -19,7 +19,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { CREDITS_NOT_READY } from '@/lib/labelos/audit-rpc';
-import { orgActor, partyView } from '@/lib/labelos/credits';
+import { mayReadPayee, orgActor, partyViewWithLink } from '@/lib/labelos/credits';
 import { CreditsNotReadyError, markPartyConfirmed, readParty } from '@/lib/labelos/credits-store';
 import { partyColumns, pickSelfCorrections } from '@/lib/labelos/parties';
 
@@ -50,11 +50,13 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Not their party: it does not exist for them.
     if (!party || party.user_id !== access.userId) return json(404, { error: 'Not found' });
 
-    const updated = await markPartyConfirmed(admin, org, partyId, access.userId, corrections.columns);
+    // The same view the list gave them: a rights writer confirming themselves keeps their link and payee block.
+    const actor = orgActor(access.userId, access.capabilities, access.role);
+    const updated = await markPartyConfirmed(admin, org, partyId, access.userId, corrections.columns, { payee: mayReadPayee(actor) });
     if (!updated) return json(404, { error: 'Not found' });
 
     await recordEvent(admin, { orgId: org, userId: access.userId }, 'party.confirmed', { type: 'party', id: partyId }, { corrected: Object.keys(corrections.columns).sort() });
-    return json(200, { party: partyView(updated, orgActor(access.userId, access.capabilities, access.role)) });
+    return json(200, { party: partyViewWithLink(updated, actor) });
   } catch (err) {
     if (err instanceof CreditsNotReadyError) return json(503, { error: CREDITS_NOT_READY });
     log.error('party confirm failed', { orgId: org, error: errorMessage(err) });
