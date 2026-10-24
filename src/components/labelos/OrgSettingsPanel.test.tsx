@@ -13,7 +13,7 @@ const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const confirmToast = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/useToast', () => ({ toast, confirmToast }));
 
-const DEFAULTS = { legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, attention_release_days: 30, attention_stalled_days: 30, departments_off: [] };
+const DEFAULTS = { legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, attention_release_days: 30, attention_stalled_days: 30, departments_off: [], contract_types: [] };
 let calls: { url: string; method: string; body: unknown }[];
 let getReply: { status: number; body: unknown };
 let patchReply: { status: number; body: unknown };

@@ -6,15 +6,21 @@
  * gives exactly this path gate `session` (lib/security/api-gate.ts), because
  * the caller is not a member of anything until this request makes them one.
  *
- *  - `{ face: 'independent' | 'label', name }`, session required (401).
- *  - `labelos_setup_org` (migration 189, service role only) writes the org
- *    and the caller as owner in one transaction; for an independent artist,
- *    139's trigger adds the org's one roster artist in the same insert.
- *    One self-served org per account: a second call answers the first org
- *    with 200, not a new one.
+ *  - `{ face: 'independent' | 'label', name, settings? }`, session required
+ *    (401). `settings` is what the setup wizard collected (gates, departments
+ *    off, contract types); `planSetupSettings` judges it with the settings
+ *    screen's own rules (422), and keeps only what differs from the defaults.
+ *  - `labelos_setup_org` (migrations 189 + 192, service role only) writes the
+ *    org with those settings and the caller as owner in one transaction; for
+ *    an independent artist, 139's trigger adds the org's one roster artist in
+ *    the same insert. One self-served org per account: a second call answers
+ *    the first org with 200 (settings ignored: they are not an edit), not a
+ *    new one. A self-served org has no entitlement row: every module, no caps.
  *  - The answer is `{ org: { id, slug, kind }, home, created }`; `home` is
- *    where the page sends the caller next.
- *  - Before 189 is applied: 503 naming the migration.
+ *    where the page sends the caller next. Roster artists, invitations, team
+ *    logins and the first draft release are separate requests to their own
+ *    routes (src/lib/labelos/setup-wizard.ts).
+ *  - Before the migrations are applied: 503 naming them.
  *
  * The org id comes from the function, never from the body, and the user id
  * from the session, never from the body. Rate-limited per account.
@@ -32,6 +38,7 @@ import {
   interpretSetupResult,
   kindForFace,
 } from '@/lib/labelos/setup';
+import { planSetupSettings } from '@/lib/labelos/setup-wizard';
 import { MANAGED_ACCOUNT_STAYS } from '@/lib/labelos/team-accounts';
 import { ownManagedAccount } from '@/lib/labelos/team-accounts-store';
 import { createLogger } from '@/lib/log';
@@ -63,6 +70,8 @@ export async function POST(req: NextRequest) {
   const name = cleanOrgName(parsed.data.name);
   if (!name) return NextResponse.json({ error: 'Give it a name of 1 to 80 characters' }, { status: 400 });
   const kind = kindForFace(parsed.data.face);
+  const settings = planSetupSettings(parsed.data.settings);
+  if (!settings.ok) return NextResponse.json({ error: settings.error }, { status: 422 });
 
   if (!(await rateLimitDurable(`org-setup:u:${session.userId}`, 10, 60 * 1000))) {
     return NextResponse.json({ error: 'Too many attempts. Try again in a minute.' }, { status: 429 });
@@ -73,6 +82,7 @@ export async function POST(req: NextRequest) {
       p_user: session.userId,
       p_kind: kind,
       p_name: name,
+      p_settings: settings.patch,
     });
     const result = interpretSetupResult(data, error as { code?: string; message?: string } | null);
     if (result.status === 'schema_missing') return NextResponse.json({ error: SETUP_NOT_READY }, { status: 503 });
@@ -86,7 +96,7 @@ export async function POST(req: NextRequest) {
           { orgId: result.orgId, userId: session.userId },
           'org.created',
           { type: 'org', id: result.orgId },
-          { kind: result.kind, source: 'setup' },
+          { kind: result.kind, source: 'setup', settings: settings.keys },
         );
       } catch (err) {
         log.warn('org.created event not recorded', { orgId: result.orgId, error: errorMessage(err) });

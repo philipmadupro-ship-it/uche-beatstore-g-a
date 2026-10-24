@@ -49,9 +49,40 @@ describe('POST /api/org/setup', () => {
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ org: { id: ORG, slug: 'nova', kind: 'artist' }, home: '/o/nova', created: true });
     expect(admin.rpcs).toEqual([
-      { name: 'labelos_setup_org', args: { p_user: USER, p_kind: 'artist', p_name: 'Nova' } },
+      { name: 'labelos_setup_org', args: { p_user: USER, p_kind: 'artist', p_name: 'Nova', p_settings: {} } },
     ]);
     expect(admin.chains.some((c) => c.table === 'activity_events')).toBe(true);
+  });
+
+  it('the wizard\'s settings are stored with the org: only what differs from the defaults, and named in the event', async () => {
+    const res = await post({
+      face: 'independent',
+      name: 'Nova',
+      settings: { legal_gate: 'on', marketing_gate: 'on', departments_off: ['finance', 'pr'], contract_types: ['licence'] },
+    });
+    expect(res.status).toBe(201);
+    expect(admin.rpcs[0].args).toEqual({
+      p_user: USER,
+      p_kind: 'artist',
+      p_name: 'Nova',
+      p_settings: { departments_off: ['finance', 'pr'], contract_types: ['licence'] },
+    });
+    const event = admin.chains.find((c) => c.table === 'activity_events');
+    expect(JSON.stringify(event)).toContain('contract_types');
+  });
+
+  it('the settings screen\'s lockout rule holds here too: 422, nothing created', async () => {
+    const res = await post({ face: 'label', name: 'X', settings: { legal_gate: 'on', departments_off: ['contracts'] } });
+    expect(res.status).toBe(422);
+    expect((await res.json()).error).toMatch(/legal approval/i);
+    expect(admin.rpcs).toEqual([]);
+  });
+
+  it('refuses unknown settings keys and values', async () => {
+    expect((await post({ face: 'label', name: 'X', settings: { plan: 'gold' } })).status).toBe(400);
+    expect((await post({ face: 'label', name: 'X', settings: { contract_types: ['nope'] } })).status).toBe(400);
+    expect((await post({ face: 'label', name: 'X', settings: { departments_off: ['export'] } })).status).toBe(400);
+    expect(admin.rpcs).toEqual([]);
   });
 
   it('a label face asks for kind label', async () => {
@@ -86,7 +117,7 @@ describe('POST /api/org/setup', () => {
     rpcAnswer = { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } };
     const res = await post({ face: 'label', name: 'X' });
     expect(res.status).toBe(503);
-    expect((await res.json()).error).toMatch(/189/);
+    expect((await res.json()).error).toMatch(/189 and 192/);
   });
 
   it('a database error is a 500 without its text', async () => {

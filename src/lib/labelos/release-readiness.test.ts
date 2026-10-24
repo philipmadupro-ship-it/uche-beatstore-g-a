@@ -226,6 +226,12 @@ describe('tracklist, masters, artwork, metadata', () => {
     expect(g.blockers.map((b) => b.code).sort()).toEqual(['date', 'isrc', 'label_name', 'p_line', 'upc']);
     expect(status(ready({ release: { ...rel, targetDate: null, releaseDate: '2026-12-01' } }), 'metadata')).toBe('approved');
   });
+  it('the ISRC blocker names the recording, so the editor can open on it (LABEL-53)', () => {
+    const g = evaluateReleaseReadiness(ready({ items: [item(1, S1, { isrc: null }), item(2, S2)] })).gates.metadata;
+    expect(g.blockers).toHaveLength(1);
+    expect(g.blockers[0]).toMatchObject({ code: 'isrc', songId: S1, trackId: 'm1', itemId: 'i1' });
+    expect(g.blockers[0].message).toMatch(/has no ISRC/);
+  });
 });
 
 describe('release state', () => {
@@ -259,7 +265,7 @@ describe('what a caller may be told', () => {
   });
   it('is built field by field', () => {
     const v = releaseReadinessView(blocked, true);
-    expect(Object.keys(v.gates.credits_splits.blockers[0]).sort()).toEqual(['code', 'fixCapability', 'itemId', 'message', 'songId']);
+    expect(Object.keys(v.gates.credits_splits.blockers[0]).sort()).toEqual(['code', 'fixCapability', 'itemId', 'message', 'songId', 'trackId']);
     expect(Object.keys(v.gates.masters.approval ?? {}).sort()).toEqual(['decidedAt', 'gate', 'requestedAt', 'stale', 'status']);
   });
 });

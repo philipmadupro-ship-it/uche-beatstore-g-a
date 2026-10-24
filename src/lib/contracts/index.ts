@@ -21,6 +21,7 @@ import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
 import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
 import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers';
 import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
+import { CONTRACT_TYPE_IDS, type ContractTypeId } from '@/lib/labelos/contract-types';
 import { STORE_PLAYBACKS } from '@/lib/labelos/store-listing';
 import { CURSOR_RE } from '@/lib/labelos/activity-feed';
 import { DECISIONS as APPROVAL_DECISIONS, GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
@@ -965,6 +966,18 @@ export const OrgJoinBodySchema = z.object({
 }).strict();
 export type OrgJoinBody = z.infer<typeof OrgJoinBodySchema>;
 
+/** The owner-editable settings keys, shared by PATCH …/settings and the setup wizard's `settings`. */
+const OrgSettingsPatchFields = {
+  legal_gate: z.enum(['on', 'off']),
+  marketing_gate: z.enum(['on', 'off']),
+  require_signed_master_split: z.boolean(),
+  attention_release_days: z.number().int().min(1).max(365),
+  attention_stalled_days: z.number().int().min(1).max(365),
+  departments_off: z.array(z.enum(['contracts', 'finance', 'marketing', 'pr', 'executive', 'artistic', 'store', 'search', 'digest'])).max(9),
+  /** LABEL-48: the contract types the org works with (lib/labelos/contract-types). */
+  contract_types: z.array(z.enum(CONTRACT_TYPE_IDS as [ContractTypeId, ...ContractTypeId[]])).max(8),
+};
+
 /**
  * POST /api/org/setup (LABEL-48, first slice). What the new account is and
  * what its organization is called (src/lib/labelos/setup.ts).
@@ -972,6 +985,12 @@ export type OrgJoinBody = z.infer<typeof OrgJoinBodySchema>;
 export const OrgSetupBodySchema = z.object({
   face: z.enum(['independent', 'label']),
   name: z.string().min(1).max(200),
+  /**
+   * The wizard's choices (LABEL-48), written with the org in one transaction.
+   * Same keys and values as PATCH …/settings; `planSettingsChange` judges them
+   * in the route and migration 192's validator again in the database.
+   */
+  settings: z.object(OrgSettingsPatchFields).partial().strict().optional(),
 }).strict();
 export type OrgSetupBody = z.infer<typeof OrgSetupBodySchema>;
 
@@ -1053,14 +1072,7 @@ export function parseAttentionSettings(raw: unknown): OrgAttentionSettings {
  * `planSettingsChange` (lib/labelos/org-settings), checked by the route;
  * here the names are only bounded to the switchable departments.
  */
-export const OrgSettingsPatchBodySchema = z.object({
-  legal_gate: z.enum(['on', 'off']).optional(),
-  marketing_gate: z.enum(['on', 'off']).optional(),
-  require_signed_master_split: z.boolean().optional(),
-  attention_release_days: z.number().int().min(1).max(365).optional(),
-  attention_stalled_days: z.number().int().min(1).max(365).optional(),
-  departments_off: z.array(z.enum(['contracts', 'finance', 'marketing', 'pr', 'executive', 'artistic', 'store', 'search', 'digest'])).max(9).optional(),
-}).strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
+export const OrgSettingsPatchBodySchema = z.object(OrgSettingsPatchFields).partial().strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
 export type OrgSettingsPatchBody = z.infer<typeof OrgSettingsPatchBodySchema>;
 
 /**
@@ -1755,3 +1767,33 @@ export const PlatformEntitlementsBodySchema = z.object({
 export const PlatformOwnerInviteBodySchema = z.object({
   email: z.string().trim().email('Not a valid email').max(254),
 }).strict();
+
+/**
+ * PATCH /api/org/[orgId]/songs/[trackId] (LABEL-53): the recording / song
+ * metadata editor. Every field is optional: omitted keeps what is there,
+ * `null` (or a blank string) clears it — except the title. `expected` is the
+ * compare-and-set token the editor was loaded with (`metadata_updated_at`,
+ * `null` for a row nobody edited yet); a row that changed meanwhile is 409
+ * with the current values. The values themselves are judged by
+ * `planMetadataPatch` (lib/labelos/track-metadata.ts), which needs the
+ * caller's capabilities; this contract only fixes the shape.
+ */
+const metadataText = z.string().max(4000).nullable().optional();
+export const OrgTrackMetadataBodySchema = z.object({
+  expected: z.string().max(64).nullable(),
+  title: metadataText,
+  version_label: metadataText,
+  isrc: metadataText,
+  iswc: metadataText,
+  // A string is allowed so that "14o" reaches the planner, which names the field in its refusal.
+  bpm: z.union([z.number().finite(), z.string().max(20)]).nullable().optional(),
+  key: metadataText,
+  language: metadataText,
+  explicit: z.boolean().nullable().optional(),
+  genre: metadataText,
+  recorded_on: metadataText,
+  p_line: metadataText,
+  master_owner: metadataText,
+  notes: metadataText,
+}).strict();
+export type OrgTrackMetadataBody = z.infer<typeof OrgTrackMetadataBodySchema>;
