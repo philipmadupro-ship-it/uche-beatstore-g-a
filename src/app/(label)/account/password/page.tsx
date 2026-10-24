@@ -13,6 +13,7 @@ import { sessionIdentity } from '@/lib/auth/org-access';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { ownManagedAccount } from '@/lib/labelos/team-accounts-store';
+import { PageSignOut } from '@/components/auth/PageSignOut';
 import { AccountPasswordForm } from '@/components/labelos/AccountPasswordForm';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,7 @@ export default async function AccountPasswordPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#090907] px-4 py-10 text-white">
+      <PageSignOut />
       <AccountPasswordForm email={session.email} required={required} />
     </div>
   );

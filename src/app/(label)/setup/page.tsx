@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/server';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { SETUP_PATH, faceFromMetadata, isSetupFace } from '@/lib/labelos/setup';
+import { PageSignOut } from '@/components/auth/PageSignOut';
 import { OrgSetupWizard } from '@/components/labelos/OrgSetupWizard';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#090907] px-4 py-10 text-white">
+      <PageSignOut />
       <OrgSetupWizard userId={user.id} initialFace={initialFace} email={user.email ?? null} />
     </div>
   );

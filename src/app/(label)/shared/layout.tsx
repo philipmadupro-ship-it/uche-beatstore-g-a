@@ -19,6 +19,7 @@ import { WidgetErrorBoundary } from '@/components/system/WidgetErrorBoundary';
 import { UploadsTray } from '@/components/upload/UploadsTray';
 import { LabelOsFlagProvider } from '@/components/labelos/LabelOsFlag';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import { SignOutButton } from '@/components/auth/SignOutButton';
 import { OrgSwitcher } from '@/components/nav/OrgSwitcher';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 
@@ -36,10 +37,11 @@ export default function SharedLayout({ children }: { children: React.ReactNode }
               <Link href="/shared" className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 transition-colors hover:text-white">
                 Shared with me
               </Link>
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-2">
                 <WidgetErrorBoundary name="OrgSwitcher">
                   <OrgSwitcher />
                 </WidgetErrorBoundary>
+                <SignOutButton variant="button" />
               </div>
             </div>
           </header>
