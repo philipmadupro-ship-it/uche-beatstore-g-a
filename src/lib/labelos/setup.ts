@@ -132,4 +132,4 @@ export function interpretSetupResult(data: unknown, error: RpcError): SetupOrgRe
   return { status: 'failed', error: `unexpected ${SETUP_ORG_RPC} answer` };
 }
 
-export const SETUP_NOT_READY = 'Organization setup is not available yet (migration 189 has not been applied).';
+export const SETUP_NOT_READY = 'Organization setup is not available yet (migrations 189 and 192 have not been applied).';
