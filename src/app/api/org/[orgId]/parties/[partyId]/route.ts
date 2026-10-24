@@ -10,9 +10,16 @@
  *
  * The events carry WHICH fields changed, never their values: the legal name
  * and IPI are not for the activity feed.
+ *
+ * LABEL-54: once a split sheet that left draft names the party, `display_name`
+ * and an already-linked `user_id` are locked (409 `party_locked`; migration
+ * 174's `parties_identity_lock` is the same rule in the database) — start a new
+ * version of the sheet with a new party instead. Legal data stays editable.
+ * Tax id and payment instructions are read per `mayReadPayee` only.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOrgCapability } from '@/lib/auth/org-access';
+import { readsDirectory, requirePartiesReader } from '@/lib/labelos/parties-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { OrgPartyPatchBodySchema } from '@/lib/contracts';
@@ -20,18 +27,19 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { CREDITS_NOT_READY } from '@/lib/labelos/audit-rpc';
-import { orgActor, partyView } from '@/lib/labelos/credits';
+import { mayReadPayee, orgActor, partyView } from '@/lib/labelos/credits';
 import {
   accountBelongsToOrg,
   contactInOrg,
   creditsOfParty,
   CreditsNotReadyError,
   deleteParty,
+  partyOnNonDraftSheet,
   readParty,
   scopedPartyIds,
   updateParty,
 } from '@/lib/labelos/credits-store';
-import { partyColumns } from '@/lib/labelos/parties';
+import { partyColumns, partyLockViolation } from '@/lib/labelos/parties';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -46,18 +54,19 @@ const json = (status: number, body: Record<string, unknown>) => NextResponse.jso
 export async function GET(_req: NextRequest, { params }: Params) {
   const { orgId, partyId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'Parties need Supabase.' });
-  const access = await requireOrgCapability(orgId, 'rights.read.own_line');
+  const access = await requirePartiesReader(orgId);
   if (!access.ok) return access.res;
+  const actor = orgActor(access.userId, access.capabilities, access.role);
   try {
-    const party = await readParty(access.admin, access.orgId, partyId);
+    const party = await readParty(access.admin, access.orgId, partyId, { payee: mayReadPayee(actor) });
     if (!party) return json(404, { error: 'Not found' });
     const own = party.user_id === access.userId;
     let readable = own;
-    if (!readable && access.capabilities.has('rights.read')) {
+    if (!readable && readsDirectory(access.capabilities)) {
       readable = access.artistScope === null || (await scopedPartyIds(access.admin, access)).includes(party.id);
     }
     if (!readable) return json(404, { error: 'Not found' });
-    return json(200, { party: partyView(party, orgActor(access.userId, access.capabilities)) });
+    return json(200, { party: partyView(party, actor) });
   } catch (err) {
     if (err instanceof CreditsNotReadyError) return json(404, { error: 'Not found' });
     log.error('party read failed', { orgId: access.orgId, error: errorMessage(err) });
@@ -77,17 +86,28 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { admin, orgId: org } = access;
 
   try {
-    if (!(await readParty(admin, org, partyId))) return json(404, { error: 'Not found' });
+    const current = await readParty(admin, org, partyId);
+    if (!current) return json(404, { error: 'Not found' });
+    // The lock (G6 D-c): a name or account a circulated split sheet shows does not move. The database says the same.
+    if (cols.columns.display_name !== undefined || cols.columns.user_id !== undefined) {
+      const locked = partyLockViolation(
+        { display_name: cols.columns.display_name ?? undefined, user_id: cols.columns.user_id },
+        { display_name: current.display_name, user_id: current.user_id },
+        await partyOnNonDraftSheet(admin, org, partyId),
+      );
+      if (locked) return json(409, { error: locked, code: 'party_locked' });
+    }
     if (parsed.data.contact_id && !(await contactInOrg(admin, org, parsed.data.contact_id))) return json(404, { error: 'Contact not found' });
     if (parsed.data.user_id && !(await accountBelongsToOrg(admin, org, parsed.data.user_id))) {
       return json(400, { error: 'That account is not a member of this organization or one of its projects' });
     }
-    const result = await updateParty(admin, org, partyId, cols.columns);
+    const result = await updateParty(admin, org, partyId, cols.columns, { payee: true });
     if ('missing' in result) return json(404, { error: 'Not found' });
+    if ('locked' in result) return json(409, { error: 'This party is on a circulated split sheet, so its name and account cannot change.', code: 'party_locked' });
     if ('duplicate' in result) return json(409, { error: 'That account already has a party in this organization' });
 
     await recordEvent(admin, { orgId: org, userId: access.userId }, 'party.updated', { type: 'party', id: partyId }, { fields: Object.keys(cols.columns).sort() });
-    return json(200, { party: partyView(result.party, orgActor(access.userId, access.capabilities)) });
+    return json(200, { party: partyView(result.party, orgActor(access.userId, access.capabilities, access.role)) });
   } catch (err) {
     if (err instanceof CreditsNotReadyError) return json(503, { error: CREDITS_NOT_READY });
     log.error('party update failed', { orgId: org, error: errorMessage(err) });

@@ -473,7 +473,7 @@ describe('LABEL-42: putting a release on the store is not an external member\'s'
 describe('LABEL-27: credits and parties (route by route)', () => {
   const credits = '[orgId]/tracks/[id]/credits/route.ts';
   const decide = '[orgId]/tracks/[id]/credits/[creditId]/route.ts';
-  const parties = ['[orgId]/parties/route.ts', '[orgId]/parties/[partyId]/route.ts'];
+  const parties = ['[orgId]/parties/route.ts', '[orgId]/parties/[partyId]/route.ts', '[orgId]/parties/[partyId]/confirm/route.ts', '[orgId]/parties/[partyId]/invite/route.ts'];
 
   const propose = (user: string, body: unknown) => {
     current = user;
@@ -510,6 +510,15 @@ describe('LABEL-27: credits and parties (route by route)', () => {
         expect(res.status, action).toBe(404);
       }
       expect(db.tables.track_collaborators[0].status).toBe('confirmed');
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: cannot withdraw Nova’s credit (404) — nothing is deleted and no event is written`, async () => {
+      const res = await call(decide, 'DELETE', user);
+      expect(res.status).toBe(404);
+      expect(db.tables.track_collaborators).toHaveLength(1);
       expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
     });
   }

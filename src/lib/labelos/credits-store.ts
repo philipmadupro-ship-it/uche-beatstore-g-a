@@ -266,18 +266,24 @@ export async function contactInOrg(admin: AdminClient, org: string, contactId: s
  * (`partyLockViolation`). A database without 155 has no sheets.
  */
 export async function partyOnNonDraftSheet(admin: AdminClient, org: string, partyId: string): Promise<boolean> {
-  const res = await admin
-    .from('split_lines')
-    .select('id, split_sheets!inner(status)')
-    .eq('org_id', org)
-    .eq('party_id', partyId)
-    .neq('split_sheets.status', 'draft')
-    .limit(1);
-  if (res.error) {
-    if (isMissingCreditsSchema(res.error)) return false;
-    throw new Error(`party sheets: ${res.error.message}`);
+  try {
+    const lines = await pageAll<{ split_sheet_id: string }>(
+      (from, to) => admin.from('split_lines').select('split_sheet_id').eq('org_id', org).eq('party_id', partyId).order('id').range(from, to),
+      'party lines',
+    );
+    const sheetIds = [...new Set(lines.map((l) => l.split_sheet_id))];
+    if (sheetIds.length === 0) return false;
+    const left = await inChunks<{ id: string }>(
+      sheetIds,
+      (part, from, to) => admin.from('split_sheets').select('id').in('id', part).neq('status', 'draft').order('id').range(from, to),
+      'party sheets',
+    );
+    return left.length > 0;
+  } catch (err) {
+    const raw = (err as { raw?: { message: string; code?: string } }).raw;
+    if (raw && isMissingCreditsSchema(raw)) return false;
+    throw err;
   }
-  return ((res.data ?? []) as unknown[]).length > 0;
 }
 
 /** Stamp the party's details as confirmed by `userId` (the person, or a rights writer on their behalf). */
