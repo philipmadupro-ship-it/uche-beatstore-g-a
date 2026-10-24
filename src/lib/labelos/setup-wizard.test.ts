@@ -11,14 +11,12 @@ import {
   parseDraft,
   planSetupSettings,
   releaseRequest,
-  rosterRequests,
   saveDraft,
   clearDraft,
   serializeDraft,
   setupBodyFromDraft,
   settingsFromDraft,
   stepProblems,
-  teamRequests,
   withContractType,
   withDepartment,
   withFace,
@@ -179,7 +177,29 @@ describe('the saved draft', () => {
       step: 'who', face: 'label', name: '', contractTypes: ['recording'], departmentsOff: ['finance'], roster: [],
       release: { enabled: true, type: 'single', artistIndex: 0 },
     });
-    expect(d?.team).toEqual([{ email: 'a@x.test', role: 'member', fn: null, mode: 'invite', name: '', password: '' }]);
+    expect(d?.team).toEqual([{ email: 'a@x.test', role: 'member', fn: null, mode: 'invite', name: '', password: '', scope: 'org', artists: [] }]);
+    expect(d?.collaborators).toEqual([]);
+  });
+  it('keeps artist scope, artist logins and collaborators, and never a project (none exists yet)', () => {
+    const d = parseDraft({
+      version: 1, step: 'team', face: 'label', name: 'N',
+      roster: [{ name: 'Nova', email: 'n@x.test', invite: true }],
+      team: [
+        { email: 'a@x.test', role: 'member', fn: 'a_and_r', mode: 'invite', scope: 'artists', artists: ['Nova', 7, 'Kai'] },
+        { email: 'b@x.test', role: 'admin', mode: 'invite', scope: 'artists', artists: ['Nova'] },
+      ],
+      collaborators: [{ name: 'Kai', email: '', kind: 'rapper', projectId: 'abc', projectRole: 'editor' }, { name: 'Bo', kind: 'nope', projectRole: 'boss' }, 'x'],
+    });
+    expect(d?.roster).toEqual([{ name: 'Nova', email: 'n@x.test', invite: true }]);
+    expect(d?.team[0]).toMatchObject({ scope: 'artists', artists: ['Nova', 'Kai'] });
+    expect(d?.team[1]).toMatchObject({ role: 'admin', scope: 'org' });
+    expect(d?.collaborators).toEqual([
+      { name: 'Kai', email: '', kind: 'rapper', projectId: '', projectRole: 'editor' },
+      { name: 'Bo', email: '', kind: 'beatmaker', projectId: '', projectRole: 'viewer' },
+    ]);
+  });
+  it('an independent artist has no roster, even in an old draft', () => {
+    expect(parseDraft({ version: 1, step: 'team', face: 'independent', name: 'N', roster: [{ name: 'Me', email: '' }] })?.roster).toEqual([]);
   });
   it('knows an untouched draft', () => {
     expect(isUntouched(newDraft())).toBe(true);
@@ -187,29 +207,28 @@ describe('the saved draft', () => {
   });
 });
 
+describe('the team step', () => {
+  it('skipping it forgets artists, people and collaborators alike', () => {
+    const d = label({ roster: [{ name: 'Nova', email: '' }], team: [emptyEntry()], collaborators: [{ name: 'Kai', email: '', kind: 'rapper', projectId: '', projectRole: 'viewer' }] });
+    expect(skipStep(d, 'team')).toMatchObject({ roster: [], team: [], collaborators: [] });
+  });
+  it('shares the Team page rules: a member limited to artists must name one that is being added', () => {
+    const base = label({ roster: [{ name: 'Nova', email: '' }] });
+    const scoped = (artists: string[]) => ({ ...emptyEntry(), email: 'a@x.test', fn: 'a_and_r' as const, scope: 'artists' as const, artists });
+    expect(stepProblems({ ...base, team: [scoped([])] }, 'team').join()).toMatch(/choose at least one artist/);
+    expect(stepProblems({ ...base, team: [scoped(['Nova'])] }, 'team')).toEqual([]);
+  });
+  it('switching to the independent face drops the roster and any scope pointing at it', () => {
+    const d = withFace(label({ roster: [{ name: 'Nova', email: '' }], team: [{ ...emptyEntry(), email: 'a@x.test', fn: 'legal', scope: 'artists', artists: ['Nova'] }] }), 'independent');
+    expect(d.roster).toEqual([]);
+    expect(d.team[0]).toMatchObject({ scope: 'org', artists: [] });
+  });
+  it('collaborators count as touched', () => {
+    expect(isUntouched(label({ collaborators: [{ name: '', email: '', kind: 'rapper', projectId: '', projectRole: 'viewer' }] }))).toBe(false);
+  });
+});
+
 describe('requests after the org exists', () => {
-  it('a label creates its roster through the contacts route; an independent artist has none to create', () => {
-    const l = label({ roster: [{ name: ' Nova ', email: 'n@x.test' }, { name: '', email: '' }, { name: 'Kai', email: '' }] });
-    expect(rosterRequests(l).map((r) => r.body)).toEqual([
-      { name: 'Nova', category: 'artist', email: 'n@x.test' },
-      { name: 'Kai', category: 'artist' },
-    ]);
-    expect(rosterRequests({ ...solo(), roster: [{ name: 'Nova', email: '' }] })).toEqual([]);
-  });
-  it('invitations carry role and function, logins add name and password', () => {
-    const d = label({
-      team: [
-        { ...emptyEntry(), email: 'm@x.test', fn: 'marketing' },
-        { ...emptyEntry(), email: 'a@x.test', role: 'admin' },
-        { ...emptyEntry(), email: 'l@x.test', fn: 'legal', mode: 'login', name: 'Lee', password: 'a-good-password-1' },
-      ],
-    });
-    const r = teamRequests(d);
-    expect(r.map((x) => [x.kind, x.path])).toEqual([['invitation', '/invitations'], ['invitation', '/invitations'], ['login', '/team-accounts']]);
-    expect(r[0].body).toEqual({ email: 'm@x.test', role: 'member', functions: ['marketing'] });
-    expect(r[1].body).toEqual({ email: 'a@x.test', role: 'admin', functions: [] });
-    expect(r[2].body).toEqual({ email: 'l@x.test', name: 'Lee', password: 'a-good-password-1', role: 'member', functions: ['legal'] });
-  });
   it('the first release is the existing release route with the roster artist', () => {
     expect(releaseRequest(solo(), 'c1')).toBeNull();
     const d = solo({ release: { enabled: true, title: ' First ', type: 'ep', artistIndex: 0 } });
