@@ -111,9 +111,10 @@ export async function runTeamRoster(entries: TeamRosterEntries, fetchFn: FetchLi
     const [contactRequest] = artistRequests(entry);
     if (!contactRequest) continue;
     const r = await run(contactRequest);
+    // A 2xx is a created artist even if the answer carried no id: retrying it would duplicate the contact.
     const id = r.ok ? idOf(r.data, 'contact') : null;
     if (id) artistIds.set(name, id);
-    else failed.artists.push(entry);
+    if (!r.ok) failed.artists.push(entry);
     if (entry.invite && entry.email.trim()) {
       const [, invite] = artistRequests(entry, () => id);
       if (invite) await run(invite);
@@ -122,8 +123,10 @@ export async function runTeamRoster(entries: TeamRosterEntries, fetchFn: FetchLi
           kind: 'invitation',
           label: entry.email.trim(),
           ok: false,
-          message: `${name} was not added, so their login invitation was not sent.`,
-          fixIn: 'Team → Add artist',
+          message: r.ok
+            ? `${name} was added, but the server did not say which contact, so the login invitation was not sent. Use the artist's ⋯ menu.`
+            : `${name} was not added, so their login invitation was not sent.`,
+          fixIn: 'Team → the artist’s ⋯ menu',
         });
       }
     }

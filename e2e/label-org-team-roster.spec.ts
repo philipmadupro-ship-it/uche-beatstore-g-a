@@ -21,9 +21,11 @@ const run = randomUUID().slice(0, 6);
 const LABEL = randomUUID();
 const SOLO = randomUUID();
 const PROJECT = randomUUID();
+const PROJECT2 = randomUUID();
 const SLUG = `roster-win-${run}`;
 const SOLO_SLUG = `solo-win-${run}`;
 const PROJECT_NAME = `Night Shift ${run}`;
+const PROJECT2_NAME = `Late Shift ${run}`;
 const NOVA = `Nova ${run}`;
 const KAI = `Kai ${run}`;
 const REX = `Rex ${run}`;
@@ -67,7 +69,10 @@ test.beforeAll(async ({ request }) => {
     { org_id: LABEL, user_id: PRODUCER_ID, role: 'owner', scope: 'org' },
     { org_id: SOLO, user_id: ARTIST_A_ID, role: 'owner', scope: 'org' },
   ]);
-  await rest(request, 'POST', 'projects', { id: PROJECT, org_id: LABEL, user_id: null, name: PROJECT_NAME });
+  await rest(request, 'POST', 'projects', [
+    { id: PROJECT, org_id: LABEL, user_id: null, name: PROJECT_NAME },
+    { id: PROJECT2, org_id: LABEL, user_id: null, name: PROJECT2_NAME },
+  ]);
 });
 
 test.afterAll(async ({ request }) => {
@@ -217,6 +222,31 @@ test('3 · the owner renames and removes each kind of person; the last owner can
   expect(((await rest(request, 'GET', `contacts?org_id=eq.${LABEL}&name=eq.${encodeURIComponent(`${KAI} Jr`)}&select=id`)) as unknown[]).length).toBe(1);
 
   const confirm = (label: string) => page.getByRole('button', { name: label, exact: true }).click();
+
+  // A login for an artist who is ALREADY on the roster: an artist invitation limited to that contact,
+  // and no second contact (so no extra seat against max_artists and no duplicate artist).
+  const before = (await rest(request, 'GET', `contacts?org_id=eq.${LABEL}&select=id`)) as unknown[];
+  const kaiRow = (await rest(request, 'GET', `contacts?org_id=eq.${LABEL}&name=eq.${encodeURIComponent(`${KAI} Jr`)}&select=id`)) as { id: string }[];
+  await page.getByRole('button', { name: `Actions for ${KAI} Jr` }).click();
+  await page.getByRole('menuitem', { name: 'Invite to sign in…' }).click();
+  const loginDialog = page.getByRole('dialog', { name: `Invite ${KAI} Jr to sign in` });
+  await loginDialog.getByLabel('Email address').fill(`kai-${run}@artists.test`);
+  await loginDialog.getByRole('button', { name: 'Send invitation' }).click();
+  await expect(loginDialog).toHaveCount(0);
+  const kaiInvite = (await rest(request, 'GET', `org_invitations?org_id=eq.${LABEL}&email=eq.${encodeURIComponent(`kai-${run}@artists.test`)}&select=role,artist_ids,project_id`)) as { role: string; artist_ids: string[]; project_id: string | null }[];
+  expect(kaiInvite).toEqual([{ role: 'artist', artist_ids: [kaiRow[0].id], project_id: null }]);
+  expect(await rest(request, 'GET', `contacts?org_id=eq.${LABEL}&select=id`)).toHaveLength(before.length);
+
+  // An existing collaborator invited to a (second) project: no contact is created, so their known address does not hit the 409.
+  await page.getByRole('button', { name: `Actions for ${REX}` }).click();
+  await page.getByRole('menuitem', { name: 'Invite to a project…' }).click();
+  const projectDialog = page.getByRole('dialog', { name: `Invite ${REX} to a project` });
+  await projectDialog.getByRole('radio', { name: PROJECT2_NAME }).click();
+  await projectDialog.getByRole('button', { name: 'Send invitation' }).click();
+  await expect(projectDialog).toHaveCount(0);
+  const rexInvites = (await rest(request, 'GET', `org_invitations?org_id=eq.${LABEL}&email=eq.${encodeURIComponent(`rex-${run}@guest.test`)}&select=project_id,project_role&order=project_id`)) as { project_id: string; project_role: string }[];
+  expect(rexInvites.map((i) => i.project_id).sort()).toEqual([PROJECT, PROJECT2].sort());
+  expect(await rest(request, 'GET', `contacts?org_id=eq.${LABEL}&select=id`)).toHaveLength(before.length);
 
   // Remove a collaborator.
   await page.getByRole('button', { name: `Actions for ${REX}` }).click();

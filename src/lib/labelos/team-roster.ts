@@ -325,3 +325,35 @@ export function collaboratorRequests(entry: CollaboratorEntry): FollowUp[] {
   }
   return out;
 }
+
+/**
+ * A login for a roster artist who already exists: the invitation route with
+ * role `artist`, limited to that one contact. Never a new contact, so it does
+ * not count against `max_artists` and cannot duplicate the artist.
+ */
+export function existingArtistLoginRequest(contact: { id: string; name: string }, email: string): FollowUp | null {
+  const to = email.trim();
+  if (!to || !isEmail(to) || !contact.id) return null;
+  return {
+    kind: 'invitation',
+    label: to,
+    method: 'POST',
+    path: '/invitations',
+    body: { email: to, role: 'artist', functions: [], contact_ids: [contact.id] },
+    fixIn: 'Team → the artist’s ⋯ menu',
+  };
+}
+
+/** A collaborator who already is a contact, invited to one project as an external member (no new contact). */
+export function existingProjectInviteRequest(input: { projectId: string; email: string; role: ExternalProjectRole }): FollowUp | null {
+  const to = input.email.trim();
+  if (!input.projectId || !to || !isEmail(to) || !(EXTERNAL_PROJECT_ROLES as readonly string[]).includes(input.role)) return null;
+  return {
+    kind: 'project_invite',
+    label: to,
+    method: 'POST',
+    path: `/projects/${input.projectId}/members`,
+    body: { email: to, role: input.role, allow_downloads: false },
+    fixIn: 'the project’s members',
+  };
+}

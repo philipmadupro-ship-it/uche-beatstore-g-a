@@ -136,4 +136,13 @@ describe('runTeamRoster', () => {
     expect(s.calls.some((c) => c.url.endsWith('/invitations'))).toBe(false);
     expect(run.failed.people).toEqual([person]);
   });
+
+  it('a 2xx without a contact id still counts as created: the entry is not offered for retry (it would duplicate the artist)', async () => {
+    const s = server({ 'POST /contacts': () => ({ status: 201, body: {} }) });
+    const run = await runTeamRoster(entries({ artists: [{ name: 'Nova', email: 'n@x.test', invite: true }] }), s.fetchFn, { orgId: ORG, existingArtists: [] });
+    expect(run.failed.artists).toEqual([]);
+    expect(run.results[0].ok).toBe(true);
+    expect(run.results[1]).toMatchObject({ ok: false });
+    expect(run.results[1].message).toMatch(/was added, but/);
+  });
 });

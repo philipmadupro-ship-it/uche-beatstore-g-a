@@ -37,6 +37,7 @@ import { Dropdown } from '@/components/ui/Dropdown';
 import { InlineText } from '@/components/ui/InlineText';
 import { Popover } from '@/components/ui/Popover';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
+import { ContactInviteModal, type InviteTarget } from '@/components/labelos/ContactInviteModal';
 import { ResetPasswordModal } from '@/components/labelos/TeamAccountModals';
 import { TeamRosterEditor, type ProjectChoices } from '@/components/labelos/TeamRosterEditor';
 import { useOrgShell } from '@/components/labelos/OrgShellContext';
@@ -138,6 +139,7 @@ export function TeamRosterWindow() {
   const [adding, setAdding] = useState(false);
   const [results, setResults] = useState<StepResult[] | null>(null);
   const [projects, setProjects] = useState<ProjectChoices>(null);
+  const [inviteTarget, setInviteTarget] = useState<InviteTarget | null>(null);
 
   const orgId = shell?.org.id ?? '';
   const manage = shell?.can('members.manage') ?? false;
@@ -570,6 +572,7 @@ export function TeamRosterWindow() {
           canWrite={canWriteCatalog && wholeOrg}
           onRename={renameContact}
           onRemove={removeContact}
+          invite={adds.member ? { label: 'Invite to sign in…', mode: 'login', open: setInviteTarget } : undefined}
         />
       )}
       {canReadCatalog && org.kind !== 'producer' && Array.isArray(contacts) && (
@@ -581,6 +584,7 @@ export function TeamRosterWindow() {
           canWrite={canWriteCatalog && wholeOrg}
           onRename={renameContact}
           onRemove={removeContact}
+          invite={adds.projectInvite ? { label: 'Invite to a project…', mode: 'project', open: setInviteTarget } : undefined}
         />
       )}
       {canReadCatalog && org.kind !== 'producer' && contacts === 'failed' && (
@@ -616,6 +620,7 @@ export function TeamRosterWindow() {
         </section>
       )}
 
+      <ContactInviteModal orgId={org.id} target={inviteTarget} projects={projects} onClose={() => { setInviteTarget(null); void loadInvitations(); }} />
       {manage && (
         <ResetPasswordModal
           open={resetFor !== null}
@@ -966,6 +971,7 @@ function ContactList({
   canWrite,
   onRename,
   onRemove,
+  invite,
 }: {
   id: string;
   title: string;
@@ -974,6 +980,8 @@ function ContactList({
   canWrite: boolean;
   onRename: (c: OrgContactView, name: string) => Promise<boolean>;
   onRemove: (c: OrgContactView) => void;
+  /** An invitation for someone already in the list (a login for an artist, a project for a collaborator). */
+  invite?: { label: string; mode: InviteTarget['mode']; open: (t: InviteTarget) => void };
 }) {
   return (
     <section aria-labelledby={id} className="mt-10" data-testid={id}>
@@ -997,7 +1005,12 @@ function ContactList({
               {canWrite && (
                 <ActionMenu
                   label={`Actions for ${c.name}`}
-                  sections={[{ id: 'danger', danger: true, items: [{ id: 'remove', label: 'Remove', onSelect: () => onRemove(c) }] }]}
+                  sections={[
+                    ...(invite
+                      ? [{ id: 'invite', items: [{ id: 'invite', label: invite.label, onSelect: () => invite.open({ id: c.id, name: c.name, email: c.email, mode: invite.mode }) }] }]
+                      : []),
+                    { id: 'danger', danger: true, items: [{ id: 'remove', label: 'Remove', onSelect: () => onRemove(c) }] },
+                  ]}
                 />
               )}
             </div>

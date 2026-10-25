@@ -9,6 +9,8 @@ import {
   entryProblems,
   hasEntries,
   personRequest,
+  existingArtistLoginRequest,
+  existingProjectInviteRequest,
   artistRequests,
   rosterWording,
   type TeamRosterEntries,
@@ -195,5 +197,23 @@ describe('hasEntries', () => {
     expect(hasEntries({ ...none(), artists: [emptyArtist()] })).toBe(false);
     expect(hasEntries({ ...none(), artists: [{ ...emptyArtist(), name: 'Nova' }] })).toBe(true);
     expect(hasEntries({ ...none(), people: [{ ...emptyPerson(), email: 'a@x.test' }] })).toBe(true);
+  });
+});
+
+describe('requests for people who already exist', () => {
+  it('an artist already on the roster is invited as role artist, limited to that contact, with no new contact', () => {
+    const r = existingArtistLoginRequest({ id: ID, name: 'Nova' }, ' Nova@X.test ');
+    expect(r).toMatchObject({ kind: 'invitation', path: '/invitations', body: { email: 'Nova@X.test', role: 'artist', functions: [], contact_ids: [ID] } });
+    expect(r!.path).not.toContain('contacts');
+  });
+  it('needs a real address', () => {
+    expect(existingArtistLoginRequest({ id: ID, name: 'Nova' }, '')).toBeNull();
+    expect(existingArtistLoginRequest({ id: ID, name: 'Nova' }, 'nope')).toBeNull();
+  });
+  it('an existing collaborator is invited to a project without creating a contact', () => {
+    const r = existingProjectInviteRequest({ projectId: ID, email: 'k@x.test', role: 'commenter' });
+    expect(r).toMatchObject({ kind: 'project_invite', path: `/projects/${ID}/members`, body: { email: 'k@x.test', role: 'commenter', allow_downloads: false } });
+    expect(existingProjectInviteRequest({ projectId: '', email: 'k@x.test', role: 'viewer' })).toBeNull();
+    expect(existingProjectInviteRequest({ projectId: ID, email: 'k@x.test', role: 'boss' as never })).toBeNull();
   });
 });
