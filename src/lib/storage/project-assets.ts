@@ -55,6 +55,16 @@ export async function presignProjectAssetPut(key: string, mime: string): Promise
   return { uploadUrl, url: r2ObjectRef(Bucket, key) };
 }
 
+/**
+ * The stored reference of a key in the private bucket (what
+ * `presignProjectAssetPut` returns as `url`), for a caller that must not
+ * hand the reference itself to the browser. Null without R2.
+ */
+export function privateProjectAssetRef(key: string): string | null {
+  if (!isR2Configured()) return null;
+  return r2ObjectRef(privateAudioBucket(), key);
+}
+
 /** Size of a stored object, or null when it does not exist. */
 export async function projectAssetSize(ref: string): Promise<number | null> {
   if (ref.startsWith('local://')) {

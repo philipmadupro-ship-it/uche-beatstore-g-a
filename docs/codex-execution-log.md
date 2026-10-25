@@ -9399,3 +9399,20 @@ Orchestrator: session_01U1hEgSEMBP1MAk65kDjAcW. Backlog: `docs/bstudio-label-os/
   - Follow-ups: no tray editor for org songs; no ISRC uniqueness within an org.
 - 2026-10-24 13:05 UTC — **Owner report: sign-out.** Main's `e2c0dd9` (another AI) added a sign-out only to the producer dashboard, so org members (marketing etc.) had none in the org shell, and on main a non-producer lands in the buyer account. The fix (sign-out for every org role, correct landing after sign-in, Playwright journeys) is added to the go-live session's scope.
 - 2026-10-24 13:05 UTC — LABEL-54 (migration 174) started, session_01VdMEG5FGhGT7BkditBEft4. LABEL-50 (no migration; 193 if needed) started, session_01J9Cs4e12d1Khurw8sTDw9P. Both on Sonnet.
+
+## 2026-10-18 - PORTAL-UP: contact uploads through the portal link
+
+Owner request from the LABEL-47 decision round. Extends the artist portal (one contact, already has files, password, revocation, sign-in) rather than project shares (anonymous holder, no files). Plan: `docs/portal-contact-uploads.md`; PR #135 into `claude/happy-bardeen-rnosf3`.
+
+- Migration 191 (not applied; 189–190 are #130's): `project_contacts.can_upload`, `project_assets.uploaded_by_contact_id`, same-owner + linked-contact trigger. 172–187 are backlog reservations.
+- Routes: `POST /api/portal/[token]/files` (+ `/presign`, opaque upload id, never a storage reference in or out). PATCH link accepts `can_upload` (503 naming 191 before it).
+- UI: workspace Uploads switch and password set/remove; portal "Send a file" on the Files tab; "From <contact>" on the project page and workspace Files.
+- Notify / NEW / pulse ignore a contact's own uploads for that contact. Erasure deletes them.
+- Tests: `uploads.test.ts`, `files/route.test.ts`, local check 191, `e2e/portal-uploads.spec.ts` (3/3 on the local real-DB stack; artist-workspace 1–3 + portal-roles re-run green).
+- 2026-10-25 04:50 UTC — **Security: next 16.3.8 → 16.4.3** (GHSA-2464-fhr4-w9xw critical RCE in the image optimizer with SVG, plus GHSA-673q-mjm6-r5xr and GHSA-p3m5-59mp-jv5r). CI's `npm audit --audit-level=critical` step was failing on every PR.
+  - #146 merged into main (`81af0d3`, deploys production; production `/store` and `/login` answer 200 afterwards).
+  - #147 merged into this branch (`6034329`).
+  - `eslint-config-next` stays 16.3.8: 16.4 pulls eslint-plugin-react-hooks 7.1, which reports 138 errors and needs its own code pass. High and moderate audit items remain informational (`npm audit fix` crashes on an npm bug).
+  - Gate: 3 checks green on both heads; preview checked on both (`/store` 200, `/library` 307, `/o` and `/api/org` 404 with the flag off).
+- 2026-10-25 — PORTAL-UP (#135, migration 191) was merged into this branch by its own session (`96e9d94`). 191 is not applied; it joins the go-live bundle.
+- 2026-10-25 04:41 UTC — LABEL-54 opened #148 (migration 174, head `7b2a369`). It chose a lock trigger over a snapshot for party identity once a sheet has left draft. `finance.read` now opens Parties for the payee fields. Role `artist` loses legal data on credits, splits and parties.

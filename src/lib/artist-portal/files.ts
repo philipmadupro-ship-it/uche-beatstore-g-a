@@ -9,6 +9,7 @@
 import { selectIn } from '@/lib/db/chunked-in';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import type { PortalFileRow } from './new-items';
+import { loadAssetUploaders } from './uploads';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
@@ -24,12 +25,15 @@ export interface PortalAssetRow {
   position: number;
   portal_at: string | null;
   created_at: string;
+  /** Mig 191: the contact who uploaded it through their portal; null = the producer. */
+  uploaded_by_contact_id?: string | null;
 }
 
 export async function loadPortalAssets(admin: Admin, userId: string, projectIds: readonly string[]): Promise<PortalAssetRow[]> {
   if (projectIds.length === 0) return [];
+  let rows: PortalAssetRow[];
   try {
-    return await selectIn<PortalAssetRow>((ids) => admin
+    rows = await selectIn<PortalAssetRow>((ids) => admin
       .from('project_assets')
       .select('id, project_id, kind, label, file_name, mime, size_bytes, position, portal_at, created_at')
       .in('project_id', ids)
@@ -40,8 +44,10 @@ export async function loadPortalAssets(admin: Admin, userId: string, projectIds:
     if (isMissingSchema(err)) return [];
     throw err;
   }
+  const uploaders = await loadAssetUploaders(admin, userId, rows.map((r) => r.id));
+  return rows.map((r) => ({ ...r, uploaded_by_contact_id: uploaders.get(r.id) ?? null }));
 }
 
 export function toPortalFileRows(rows: readonly PortalAssetRow[]): PortalFileRow[] {
-  return rows.map((r) => ({ projectId: r.project_id, fileId: r.id, portalAt: r.portal_at ?? r.created_at }));
+  return rows.map((r) => ({ projectId: r.project_id, fileId: r.id, portalAt: r.portal_at ?? r.created_at, uploadedBy: r.uploaded_by_contact_id ?? null }));
 }
