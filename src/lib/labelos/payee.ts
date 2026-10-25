@@ -16,7 +16,8 @@ export const ADDRESS_MAX = 500;
 
 // The leading group keeps a word such as "ref GB29…" from hiding an IBAN and a
 // word such as "RCD-2026-04" from looking like one.
-const IBAN = /(^|[^A-Za-z0-9])[A-Za-z]{2}[0-9]{2}( ?[A-Za-z0-9]){11,30}/;
+// A real IBAN ends in a long digit run (the account number); requiring it keeps prose like "FY26 plan b is fine" out.
+const IBAN = /(^|[^A-Za-z0-9])[A-Za-z]{2}[0-9]{2}( ?[A-Za-z0-9]){3,7}( ?[0-9]){6,}/;
 // 13 to 19 digits, single spaces or dashes allowed between them.
 const CARD = /(^|[^0-9])([0-9][ -]?){12,18}[0-9]([^0-9]|$)/;
 
@@ -51,6 +52,7 @@ export const BANK_NUMBER_CORPUS: ReadonlyArray<readonly [string, boolean]> = [
   ['4111-1111-1111-1111', true],
   ['card 5500 0000 0000 0004 exp 12/30', true],
   ['378282246310005', true],
+  ['Pay via PayPal, FY26 plan b is fine', false],
   ['PayPal: nova@example.com', false],
   ['Invoice monthly, reference RCD-2026-04, net 30', false],
   ['Call +33 6 12 34 56 78 before paying', false],

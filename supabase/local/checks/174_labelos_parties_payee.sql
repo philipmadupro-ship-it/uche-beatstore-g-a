@@ -150,6 +150,7 @@ SELECT public.check_eq('card with spaces', public.labelos_looks_like_bank_number
 SELECT public.check_eq('card with dashes', public.labelos_looks_like_bank_number('4111-1111-1111-1111'), true);
 SELECT public.check_eq('card inside a sentence', public.labelos_looks_like_bank_number('card 5500 0000 0000 0004 exp 12/30'), true);
 SELECT public.check_eq('15-digit card', public.labelos_looks_like_bank_number('378282246310005'), true);
+SELECT public.check_eq('prose with letters and digits is fine', public.labelos_looks_like_bank_number('Pay via PayPal, FY26 plan b is fine'), false);
 SELECT public.check_eq('PayPal address is fine', public.labelos_looks_like_bank_number('PayPal: nova@example.com'), false);
 SELECT public.check_eq('invoice reference is fine', public.labelos_looks_like_bank_number('Invoice monthly, reference RCD-2026-04, net 30'), false);
 SELECT public.check_eq('a phone number is fine', public.labelos_looks_like_bank_number('Call +33 6 12 34 56 78 before paying'), false);

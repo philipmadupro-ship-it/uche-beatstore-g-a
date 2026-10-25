@@ -208,7 +208,7 @@ function Field({ label, value, onChange, disabled, hint, testid, placeholder, ar
   const id = `party-${testid}`;
   return (
     <div className="space-y-1">
-      <label htmlFor={id} className={LABEL}>{label}</label>
+      <label htmlFor={id} className={`${LABEL} block`}>{label}</label>
       {area ? (
         <textarea id={id} rows={2} className={FIELD} value={value} disabled={disabled} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} data-testid={testid} />
       ) : (

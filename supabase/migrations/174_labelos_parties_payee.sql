@@ -68,8 +68,8 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT p_text IS NOT NULL AND (
-    -- an IBAN: two letters, two digits, then 11 to 30 more letters / digits (single spaces allowed)
-    p_text ~ '(^|[^A-Za-z0-9])[A-Za-z]{2}[0-9]{2}( ?[A-Za-z0-9]){11,30}'
+    -- an IBAN: two letters, two digits, a short bank code, then the account digits (single spaces allowed)
+    p_text ~ '(^|[^A-Za-z0-9])[A-Za-z]{2}[0-9]{2}( ?[A-Za-z0-9]){3,7}( ?[0-9]){6,}'
     -- a card number: 13 to 19 digits, single spaces or dashes between them
     OR p_text ~ '(^|[^0-9])([0-9][ -]?){12,18}[0-9]([^0-9]|$)'
   );
