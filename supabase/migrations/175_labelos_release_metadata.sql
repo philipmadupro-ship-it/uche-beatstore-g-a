@@ -27,6 +27,7 @@ ALTER TABLE public.releases ADD CONSTRAINT releases_metadata_format CHECK (
   AND (language IS NULL OR language ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$')
   AND (territories IS NULL OR (
         cardinality(territories) BETWEEN 1 AND 250
+        AND array_position(territories, NULL) IS NULL
         AND array_to_string(territories, ',') ~ '^[A-Z]{2}(,[A-Z]{2})*$'
   ))
 );

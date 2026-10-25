@@ -43,7 +43,7 @@ export function ReleaseImportPanel({ orgId, orgSlug, artists }: { orgId: string;
 
   if (!open) {
     return (
-      <div className="mb-6">
+      <div>
         <button type="button" onClick={() => setOpen(true)} className={BTN} data-testid="release-import-open">
           Add released music
         </button>
@@ -52,7 +52,7 @@ export function ReleaseImportPanel({ orgId, orgSlug, artists }: { orgId: string;
   }
 
   return (
-    <form onSubmit={submit} className="mb-6 max-w-xl space-y-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid="release-import">
+    <form onSubmit={submit} className="max-w-xl space-y-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid="release-import">
       <p className="text-[11px] text-white/60">For music that is already out. It skips the release gates; add the songs on the next page.</p>
       <label className="block">
         <span className={LABEL}>Title</span>

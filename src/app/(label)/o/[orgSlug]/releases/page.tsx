@@ -7,6 +7,7 @@
 import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { FilteredReleaseBoard } from '@/components/labelos/FilteredReleaseBoard';
+import { NewReleasePanel } from '@/components/labelos/NewReleasePanel';
 import { ReleaseImportPanel } from '@/components/labelos/ReleaseImportPanel';
 import { orgShellFor, requireOrgCapability, scopedOrgQuery } from '@/lib/auth/org-access';
 import { isBoardFilter } from '@/lib/labelos/release-board';
@@ -30,7 +31,9 @@ export default async function ReleaseBoardPage({
   const board = await loadReleaseBoard(access);
   // LABEL-42: "already released" is the owner's or an admin's to enter (the route checks again).
   const mayImport = (shell.role === 'owner' || shell.role === 'admin') && shell.capabilities.includes('release.write');
-  const artists = mayImport
+  // LABEL-55: anyone who may write releases starts a draft; "already released" stays the owner's or an admin's.
+  const mayCreate = shell.capabilities.includes('release.write');
+  const artists = mayCreate
     ? (((await scopedOrgQuery(access.admin, 'contacts', access, 'id, name, category').eq('category', 'artist').order('name', { ascending: true }).limit(200)).data ?? []) as unknown as { id: string; name: string }[])
     : [];
   return (
@@ -44,7 +47,12 @@ export default async function ReleaseBoardPage({
           Every release and where its gates stand. Open one to work its tracklist and artwork, or to mark it delivered.
         </p>
       </header>
-      {mayImport && <ReleaseImportPanel orgId={shell.org.id} orgSlug={shell.org.slug} artists={artists} />}
+      {mayCreate && artists.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-start gap-2" data-testid="release-create-actions">
+          <NewReleasePanel orgId={shell.org.id} orgSlug={shell.org.slug} artists={artists} />
+          {mayImport && <ReleaseImportPanel orgId={shell.org.id} orgSlug={shell.org.slug} artists={artists} />}
+        </div>
+      )}
       <FilteredReleaseBoard
         orgSlug={shell.org.slug}
         releases={board.releases}
