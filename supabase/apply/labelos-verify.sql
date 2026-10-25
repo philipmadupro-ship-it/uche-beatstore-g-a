@@ -74,6 +74,7 @@ FROM (VALUES
   ('173_labelos_track_metadata', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'tracks' AND column_name = 'metadata_updated_at')),
   ('189_labelos_setup_org', EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'public' AND p.proname = 'labelos_setup_org')),
   ('190_labelos_team_accounts', to_regclass('public.org_managed_accounts') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'public' AND p.proname = 'labelos_revoke_auth_sessions')),
+  ('191_portal_contact_uploads', EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'project_assets_uploader_linked' AND NOT tgisinternal) AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_contacts' AND column_name = 'can_upload')),
   ('192_labelos_setup_wizard', EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'public' AND p.proname = 'labelos_validate_org_settings_patch')),
   ('operator: producer is a platform admin', EXISTS (SELECT 1 FROM public.creator_profiles) AND NOT EXISTS (SELECT 1 FROM public.creator_profiles cp WHERE NOT EXISTS (SELECT 1 FROM public.platform_admins pa WHERE pa.user_id = cp.user_id)))
 ) AS m(migration, ok)

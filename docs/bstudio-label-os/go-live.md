@@ -31,16 +31,19 @@ organization (migration 137) and its row in the operator list (step 1).
 3. It runs in one transaction: either all of it applies or none of it does.
    If it errors, copy the message to Claude; nothing was changed, and you can
    run the whole file again after the cause is fixed.
-4. The last result is a table with 60 rows. **Every row must say `applied`.**
+4. The last result is a table with 63 rows. **Every row must say `applied`.**
    Any `MISSING` row means that migration did not take: send the table to Claude.
    You can re-read the same table any time by running
    `supabase/apply/labelos-verify.sql` on its own.
 
-What the bundle contains, in order: the guard above; migrations 130–135 and
-`139_buyer_offer_email_verified` (still pending from main); every Label OS
-migration, 136–172 and 189–190 (`139_labelos_org_contacts` shares the number
-139 with the buyer one, they are independent); your row in `platform_admins`
+What the bundle contains, in order: the guard above; then every migration from
+130 up, in number order: 130–135 and `139_buyer_offer_email_verified` (still
+pending from main) and every Label OS migration (136–173, 189–192, including
+`191_portal_contact_uploads`; `139_labelos_org_contacts` shares the number 139
+with the buyer one, they are independent); your row in `platform_admins`
 (chosen from `creator_profiles`, never from a typed address); the check.
+Rebuild it after any later migration merges with
+`scripts/ops/bundle-labelos-go-live.sh > supabase/apply/labelos-go-live.sql`.
 
 It is safe to run again: every migration is idempotent.
 

@@ -8,10 +8,11 @@
 #
 # Order (the file order is the apply order):
 #   0. a guard: creator_profiles must hold EXACTLY ONE row (the producer);
-#   a. main's still-pending migrations: 130-135 and 139_buyer_offer_email_verified;
-#   b. every Label OS migration (*_labelos_*.sql) in number order — 136-172, 189,
-#      190 today. 139_labelos_org_contacts shares its number with (a)'s 139 and
-#      comes after it; the two are independent (see supabase/MIGRATIONS.md);
+#   a. every migration numbered 130 or above, in number order: main's
+#      still-pending 130-135 and 139_buyer_offer_email_verified, and every Label
+#      OS one (136-173, 189-192 today). 139_labelos_org_contacts shares its
+#      number with the buyer 139 and sorts after it; the two are independent
+#      (see supabase/MIGRATIONS.md);
 #   c. the platform-operator row for the producer, chosen by creator_profiles;
 #   d. the verify SELECT (supabase/apply/labelos-verify.sql), one row each.
 #
@@ -30,12 +31,17 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 MIG="$ROOT/supabase/migrations"
 EDITOR_DIR="$ROOT/supabase/apply/editor"
 
-main_pending=(130 131 132 133 134 135)
+# Every migration numbered 130 or above: main's still-pending 130-135 and
+# 139_buyer_offer_email_verified, then every Label OS one (136-172, 173, 189-192
+# today, including 191_portal_contact_uploads, which has no labelos_ prefix).
+# Number order; at the shared 139, buyer sorts before labelos. Nothing from
+# an open PR is on the branch, so nothing from one is in here.
 files=()
 shopt -s nullglob
-for n in "${main_pending[@]}"; do files+=("$MIG/${n}_"*.sql); done
-files+=("$MIG/139_buyer_offer_email_verified.sql")
-while IFS= read -r f; do files+=("$f"); done < <(ls "$MIG"/*_labelos_*.sql | sort)
+while IFS= read -r f; do
+  n=$((10#$(basename "$f" | cut -c1-3)))
+  [ "$n" -ge 130 ] && files+=("$f")
+done < <(ls "$MIG"/*.sql | sort)
 
 # Every file must exist, and every migration in the bundle needs its row in the
 # verify table (supabase/apply/labelos-verify.sql), so a migration merged later
