@@ -1356,6 +1356,19 @@ const releaseFields = {
   c_line: releaseText(200),
   p_line: releaseText(200),
   primary_genre: releaseText(80),
+  distributor: releaseText(120),
+  /** ISO 3166-1 alpha-2 codes (WW = worldwide), once each; null = not stated (migration 175). */
+  territories: z
+    .array(z.string().regex(/^[A-Z]{2}$/, 'Use two-letter country codes (WW for worldwide)'))
+    .min(1)
+    .max(250)
+    .refine((v) => new Set(v).size === v.length, 'List each territory once')
+    .nullable(),
+  language: z
+    .string()
+    .trim()
+    .regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/, 'Use a language code such as en or pt-BR')
+    .nullable(),
   target_date: releaseDate,
   release_date: releaseDate,
   artwork_asset_id: z.string().uuid().nullable(),
@@ -1372,6 +1385,9 @@ export const OrgReleaseCreateBodySchema = z.object({
   c_line: releaseFields.c_line.optional(),
   p_line: releaseFields.p_line.optional(),
   primary_genre: releaseFields.primary_genre.optional(),
+  distributor: releaseFields.distributor.optional(),
+  territories: releaseFields.territories.optional(),
+  language: releaseFields.language.optional(),
   target_date: releaseFields.target_date.optional(),
   release_date: releaseFields.release_date.optional(),
   artwork_asset_id: releaseFields.artwork_asset_id.optional(),
@@ -1401,6 +1417,9 @@ export const OrgReleasePatchBodySchema = z.object({
   c_line: releaseFields.c_line.optional(),
   p_line: releaseFields.p_line.optional(),
   primary_genre: releaseFields.primary_genre.optional(),
+  distributor: releaseFields.distributor.optional(),
+  territories: releaseFields.territories.optional(),
+  language: releaseFields.language.optional(),
   target_date: releaseFields.target_date.optional(),
   release_date: releaseFields.release_date.optional(),
   artwork_asset_id: releaseFields.artwork_asset_id.optional(),

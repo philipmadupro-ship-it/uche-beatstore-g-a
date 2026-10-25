@@ -54,7 +54,7 @@ const readiness = (over: Partial<Record<ReleaseGate, ReturnType<typeof gate>>> =
 });
 const detail = (over: Partial<ReleaseDetail> = {}): ReleaseDetail => ({
   release: {
-    id: REL, projectId: 'p1', contactId: 'c1', title: 'Midnight EP', type: 'ep', upc: null, labelName: null, cLine: null, pLine: null, primaryGenre: null,
+    id: REL, projectId: 'p1', contactId: 'c1', title: 'Midnight EP', type: 'ep', upc: null, labelName: null, cLine: null, pLine: null, primaryGenre: null, distributor: null, territories: null, language: null,
     targetDate: null, releaseDate: null, artworkAssetId: null, state: 'draft', deliveredAt: null, deliveredTo: null, importedReleased: false,
     storeListed: false, storeListedAt: null, createdBy: null, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
   },

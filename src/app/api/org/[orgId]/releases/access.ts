@@ -146,7 +146,7 @@ export async function itemsOf(access: ObjectAccessOk, releaseId: string): Promis
 type TrackRef = { id: string; type: string | null };
 
 /** An org track the member can see (catalog.read + scope), else the 404 / 403 of requireObjectAccess. */
-async function visibleTrack(orgId: string, trackId: string): Promise<{ ok: true; track: TrackRef } | OwnershipFail> {
+export async function visibleTrack(orgId: string, trackId: string): Promise<{ ok: true; track: TrackRef } | OwnershipFail> {
   const access = await requireObjectAccess({ table: 'tracks', id: trackId, cap: 'catalog.read', orgId });
   if (!access.ok) return access;
   const { data, error } = await access.admin

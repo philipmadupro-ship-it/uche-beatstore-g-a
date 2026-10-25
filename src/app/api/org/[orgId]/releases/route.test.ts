@@ -95,7 +95,7 @@ function track(id: string, org: string | null, type: string, title: string) {
 function release(id: string, org: string, project: string, contact: string, title: string, extra: Record<string, unknown> = {}) {
   return {
     id, org_id: org, project_id: project, contact_id: contact, title, type: 'single', upc: null, label_name: null, c_line: null,
-    p_line: null, primary_genre: null, target_date: null, release_date: null, artwork_asset_id: null, state: 'draft',
+    p_line: null, primary_genre: null, distributor: null, territories: null, language: null, target_date: null, release_date: null, artwork_asset_id: null, state: 'draft',
     delivered_at: null, delivered_to: null, imported_released: false, store_listed: false, store_listed_at: null,
     created_by: OWN, created_at: `2026-10-0${id.slice(-1)}`, updated_at: '2026-10-01', ...extra,
   };
@@ -229,6 +229,13 @@ const items = async (method: 'POST' | 'PATCH', as: string | null, org: string, r
 const anItem = async (method: 'PATCH' | 'DELETE', as: string | null, org: string, rel: string, itemId: string, body?: unknown) =>
   call(`${org}/releases/${rel}/items/${itemId}`, (await import('./[releaseId]/items/[itemId]/route')) as unknown as Record<string, Handler>, method, as, { orgId: org, releaseId: rel, itemId }, body);
 
+const masterOptions = async (as: string | null, org: string, rel: string, song?: string) => {
+  current = as;
+  const mod = (await import('./[releaseId]/master-options/route')) as unknown as Record<string, Handler>;
+  const url = `${BASE}/${org}/releases/${rel}/master-options${song ? `?song_track_id=${song}` : ''}`;
+  return mod.GET(new NextRequest(url), { params: Promise.resolve({ orgId: org, releaseId: rel }) });
+};
+
 const titles = async (res: Response) => ((await res.json()) as { releases: { title: string }[] }).releases.map((r) => r.title).sort();
 const tracklist = (rel: string) =>
   db.tables.release_items
@@ -342,6 +349,84 @@ describe('POST /releases: release.write', () => {
     for (const extra of [{ org_id: L2 }, { user_id: AR }, { state: 'delivered' }, { store_listed: true }]) {
       expect((await collection('POST', AR, L, { title: 'x', contact_id: C1, ...extra })).status).toBe(400);
     }
+  });
+});
+
+describe('LABEL-55: territories, language and the planned distributor (migration 175)', () => {
+  it('a release is created with them and sends them back', async () => {
+    const res = await collection('POST', AR, L, { title: 'Nova Album', contact_id: C1, distributor: 'DistroKid', territories: ['US', 'GB', 'WW'], language: 'pt-BR' });
+    expect(res.status).toBe(201);
+    expect((await res.json()).release).toMatchObject({ distributor: 'DistroKid', territories: ['US', 'GB', 'WW'], language: 'pt-BR' });
+  });
+
+  it('they are edited and cleared through PATCH; the event names the fields, never the values', async () => {
+    const set = await one('PATCH', AR, L, R1, { distributor: 'Believe', territories: ['FR'], language: 'fr' });
+    expect(set.status).toBe(200);
+    expect((await set.json()).release).toMatchObject({ distributor: 'Believe', territories: ['FR'], language: 'fr' });
+    const cleared = await one('PATCH', AR, L, R1, { distributor: null, territories: null, language: null });
+    expect((await cleared.json()).release).toMatchObject({ distributor: null, territories: null, language: null });
+    const ev = db.tables.activity_events.filter((e) => e.verb === 'release.updated');
+    expect(ev.map((e) => (e.payload as { fields: string[] }).fields)).toEqual([['distributor', 'language', 'territories'], ['distributor', 'language', 'territories']]);
+    expect(JSON.stringify(ev)).not.toMatch(/Believe|DistroKid/);
+  });
+
+  it('a bad territory, a duplicate, an empty list or a language word is a 400', async () => {
+    for (const body of [{ territories: ['usa'] }, { territories: ['US', 'US'] }, { territories: [] }, { language: 'English' }, { distributor: 'x'.repeat(121) }]) {
+      expect((await one('PATCH', AR, L, R1, body)).status, JSON.stringify(body)).toBe(400);
+    }
+    expect(db.tables.releases.find((r) => r.id === R1)).toMatchObject({ territories: null, language: null });
+  });
+
+  it('marketing cannot write them', async () => {
+    expect((await one('PATCH', MKT, L, R1, { distributor: 'x' })).status).toBe(403);
+  });
+});
+
+describe('GET /releases/[id]/master-options (LABEL-55)', () => {
+  it('a song with one linked master defaults to it, and offers the own mix, version and nothing else', async () => {
+    const res = await masterOptions(AR, L, R1, S1);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ songId: S1, defaultId: M1, ask: false });
+    expect(body.options).toEqual([
+      { id: M1, relation: 'master', title: 'Nova single (master)' },
+      { id: S1, relation: 'self', title: 'Nova single' },
+      { id: V1, relation: 'version', title: 'Nova single (radio)' },
+    ]);
+    // The demo is a working link, never a recording that goes out.
+    expect(JSON.stringify(body)).not.toContain(D1);
+  });
+
+  it('asks when the song has no master, and when it has several', async () => {
+    const none = await (await masterOptions(AR, L, R2, S2)).json();
+    expect(none).toMatchObject({ defaultId: null, ask: true, options: [{ id: S2, relation: 'self' }] });
+    db.tables.track_links.push({ from_track_id: S1, to_track_id: V1 === M1 ? D1 : B1, relation: 'master', user_id: null });
+    const several = await (await masterOptions(AR, L, R1, S1)).json();
+    expect(several).toMatchObject({ defaultId: null, ask: true });
+  });
+
+  it('a linked track the member cannot see is neither offered nor the default', async () => {
+    // Kilo's A&R reads Kilo's songs only: give Kilo's song a master that lives in Nova's project.
+    db.tables.track_links.push({ from_track_id: S2, to_track_id: M1, relation: 'master', user_id: null });
+    const body = await (await masterOptions(AR_C2, L, R2, S2)).json();
+    expect(body).toMatchObject({ defaultId: null, ask: true });
+    expect(JSON.stringify(body)).not.toContain(M1);
+  });
+
+  it('release.write only; scope and org are 404; a missing or non-song id is a 400', async () => {
+    expect((await masterOptions(MKT, L, R1, S1)).status).toBe(403);
+    expect((await masterOptions(AR_C2, L, R1, S1)).status).toBe(404);
+    expect((await masterOptions(X, L, R1, S1)).status).toBe(404);
+    expect((await masterOptions(null, L, R1, S1)).status).toBe(401);
+    expect((await masterOptions(AR, L, R1)).status).toBe(400);
+    expect((await masterOptions(AR, L, R1, B1)).status).toBe(400);
+    expect((await masterOptions(AR, L, R1, PS1)).status).toBe(404);
+    expect((await masterOptions(AR, L, R1, XS1)).status).toBe(404);
+  });
+
+  it('before migration 144 it says so (503)', async () => {
+    missing = new Set(['releases']);
+    expect((await masterOptions(AR, L, R1, S1)).status).toBe(503);
   });
 });
 

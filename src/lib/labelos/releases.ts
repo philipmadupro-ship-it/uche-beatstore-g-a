@@ -58,6 +58,9 @@ export type ReleaseRow = {
   c_line: string | null;
   p_line: string | null;
   primary_genre: string | null;
+  distributor: string | null;
+  territories: string[] | null;
+  language: string | null;
   target_date: string | null;
   release_date: string | null;
   artwork_asset_id: string | null;
@@ -73,7 +76,7 @@ export type ReleaseRow = {
 };
 
 export const RELEASE_COLUMNS =
-  'id, org_id, project_id, contact_id, title, type, upc, label_name, c_line, p_line, primary_genre, target_date, release_date, artwork_asset_id, state, delivered_at, delivered_to, imported_released, store_listed, store_listed_at, created_by, created_at, updated_at';
+  'id, org_id, project_id, contact_id, title, type, upc, label_name, c_line, p_line, primary_genre, distributor, territories, language, target_date, release_date, artwork_asset_id, state, delivered_at, delivered_to, imported_released, store_listed, store_listed_at, created_by, created_at, updated_at';
 
 export type ReleaseItemRow = {
   id: string;
@@ -98,6 +101,9 @@ export type ReleaseView = {
   cLine: string | null;
   pLine: string | null;
   primaryGenre: string | null;
+  distributor: string | null;
+  territories: string[] | null;
+  language: string | null;
   targetDate: string | null;
   releaseDate: string | null;
   artworkAssetId: string | null;
@@ -134,6 +140,9 @@ export function toReleaseView(r: ReleaseRow): ReleaseView {
     cLine: r.c_line,
     pLine: r.p_line,
     primaryGenre: r.primary_genre,
+    distributor: r.distributor,
+    territories: r.territories,
+    language: r.language,
     targetDate: r.target_date,
     releaseDate: r.release_date,
     artworkAssetId: r.artwork_asset_id,
