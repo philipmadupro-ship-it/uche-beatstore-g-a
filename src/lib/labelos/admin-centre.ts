@@ -79,8 +79,8 @@ export function adminSections(v: AdminViewer, slug: string): AdminSection[] {
   const out: AdminSection[] = [
     {
       key: 'team',
-      label: 'Team',
-      description: 'Create team accounts, invite people, set roles and departments, reset passwords.',
+      label: 'Team and roster',
+      description: 'Add artists, people and collaborators; create team accounts, set roles, functions and artist scope, reset passwords.',
       href: `${base}/settings/members`,
     },
   ];

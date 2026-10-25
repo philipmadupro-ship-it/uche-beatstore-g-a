@@ -9,72 +9,22 @@
  *     draft is not applied to it (settings are not an edit) and the caller
  *     just opens it.
  *  2. Then, each through the route that owns the rule, one at a time:
- *     roster artists (POST …/contacts), invitations and team logins
- *     (POST …/invitations, …/team-accounts) and the first draft release
- *     (POST …/releases, for the roster artist). Each reports its own
+ *     the team and roster entries (./team-roster-client, shared with the Team
+ *     page: roster artists, invitations, team logins, collaborators) and the
+ *     first draft release (POST …/releases, for the roster artist). Each reports its own
  *     outcome; one failing does not stop the others, and the org stays a
  *     whole, normal org either way.
  */
-import {
-  releaseRequest,
-  rosterNames,
-  rosterRequests,
-  setupBodyFromDraft,
-  teamRequests,
-  type FollowUp,
-  type FollowUpKind,
-  type WizardDraft,
-} from './setup-wizard';
+import { releaseRequest, rosterNames, setupBodyFromDraft, type WizardDraft } from './setup-wizard';
+import { errorOf, runFollowUp, runTeamRoster, send, type FetchLike, type StepResult } from './team-roster-client';
+import type { FollowUp } from './team-roster';
 
-export type FetchLike = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{
-  ok: boolean;
-  status: number;
-  json: () => Promise<unknown>;
-}>;
-
-export type StepResult = {
-  kind: FollowUpKind;
-  label: string;
-  ok: boolean;
-  message: string;
-  fixIn: string;
-  /** A login that was created: the password the creator chose, for the done screen to show ONCE (React state only, never saved). */
-  password?: string;
-};
+export type { FetchLike, StepResult };
 
 export type SetupRun =
   | { status: 'failed'; error: string }
   | { status: 'exists'; home: string }
   | { status: 'created'; home: string; orgId: string; results: StepResult[] };
-
-const JSON_HEADERS = { 'content-type': 'application/json' };
-
-async function send(fetchFn: FetchLike, url: string, method: string, body?: unknown) {
-  try {
-    const res = await fetchFn(url, { method, headers: JSON_HEADERS, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    return { ok: res.ok, status: res.status, data };
-  } catch {
-    return { ok: false, status: 0, data: { error: 'Could not reach the server.' } as Record<string, unknown> };
-  }
-}
-
-function errorOf(data: Record<string, unknown>, fallback: string): string {
-  return typeof data.error === 'string' && data.error ? data.error : fallback;
-}
-
-const DONE: Record<FollowUpKind, string> = {
-  roster: 'Added to the roster',
-  invitation: 'Invitation sent',
-  login: 'Login created. They are asked to choose their own password on first sign-in.',
-  release: 'Draft release created',
-};
-
-function idOf(data: Record<string, unknown>, key: string): string | null {
-  const row = data[key];
-  if (row && typeof row === 'object' && typeof (row as { id?: unknown }).id === 'string') return (row as { id: string }).id;
-  return null;
-}
 
 export async function runSetup(draft: WizardDraft, fetchFn: FetchLike): Promise<SetupRun> {
   const body = setupBodyFromDraft(draft);
@@ -90,28 +40,18 @@ export async function runSetup(draft: WizardDraft, fetchFn: FetchLike): Promise<
 
   const orgId = org.id;
   const base = `/api/org/${orgId}`;
-  const results: StepResult[] = [];
-  const run = async (f: FollowUp) => {
-    const r = await send(fetchFn, `${base}${f.path}`, f.method, f.body);
-    results.push({
-      kind: f.kind,
-      label: f.label,
-      ok: r.ok,
-      message: r.ok ? DONE[f.kind] : errorOf(r.data, `Could not do this (${r.status || 'no connection'}).`),
-      fixIn: f.fixIn,
-      ...(r.ok && f.kind === 'login' && typeof f.body.password === 'string' ? { password: f.body.password } : {}),
-    });
-    return r;
-  };
 
-  // Roster first: the release below is for one of these artists.
-  const artistIds = new Map<string, string>();
-  for (const f of rosterRequests(draft)) {
-    const r = await run(f);
-    const id = r.ok ? idOf(r.data, 'contact') : null;
-    if (id) artistIds.set(f.label, id);
-  }
-  for (const f of teamRequests(draft)) await run(f);
+  // Roster, people and collaborators: the same entries and the same runner as the Team page.
+  // An independent artist's one roster artist was made with the org, so there is no roster to add.
+  const team = await runTeamRoster(
+    { artists: draft.face === 'label' ? draft.roster : [], people: draft.team, collaborators: draft.collaborators },
+    fetchFn,
+    { orgId, existingArtists: [] },
+  );
+  const results: StepResult[] = [...team.results];
+  const artistIds = team.artistIds;
+
+  const run = (f: FollowUp) => runFollowUp(fetchFn, base, f, results);
 
   if (draft.release.enabled && draft.release.title.trim()) {
     let contactId: string | null = null;

@@ -16,7 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { AccountFacePicker } from '@/components/labelos/AccountFacePicker';
 import { OrgSetupDone } from '@/components/labelos/OrgSetupDone';
-import { OrgSetupTeamStep } from '@/components/labelos/OrgSetupTeamStep';
+import { TeamRosterEditor } from '@/components/labelos/TeamRosterEditor';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Dropdown } from '@/components/ui/Dropdown';
@@ -24,7 +24,8 @@ import { Field } from '@/components/ui/Field';
 import { cn } from '@/lib/utils';
 import { CONTRACT_TYPES, CONTRACT_TYPE_LABELS, TEMPLATES_LATER } from '@/lib/labelos/contract-types';
 import { RELEASE_TYPES } from '@/lib/labelos/releases';
-import { BUYER_HOME, FACE_COPY, SETUP_NAME_MAX, type SetupFace } from '@/lib/labelos/setup';
+import { BUYER_HOME, FACE_COPY, SETUP_NAME_MAX, kindForFace, type SetupFace } from '@/lib/labelos/setup';
+import { availableAdds, rosterWording } from '@/lib/labelos/team-roster';
 import {
   DEPARTMENT_CHOICES,
   WIZARD_STEPS,
@@ -245,7 +246,17 @@ export function OrgSetupWizard({ userId, initialFace, email }: { userId: string;
         </section>
       ) : null}
 
-      {draft.step === 'team' ? <OrgSetupTeamStep draft={draft} onChange={update} disabled={busy} /> : null}
+      {draft.step === 'team' && draft.face ? (
+        <TeamRosterEditor
+          orgKind={kindForFace(draft.face)}
+          entries={{ artists: draft.roster, people: draft.team, collaborators: draft.collaborators }}
+          onChange={(e) => update({ ...draft, roster: e.artists, team: e.people, collaborators: e.collaborators })}
+          disabled={busy}
+          adds={availableAdds(kindForFace(draft.face), { members: true, catalog: true, wholeOrg: true, external: false })}
+          testId="wizard-team"
+          soloNoteTestId="wizard-solo-note"
+        />
+      ) : null}
 
       {draft.step === 'departments' ? (
         <section aria-labelledby="dept-h">
@@ -278,6 +289,9 @@ export function OrgSetupWizard({ userId, initialFace, email }: { userId: string;
                   ? draft.team.filter((t) => t.email.trim()).map((t) => `${t.email.trim()} (${t.mode === 'login' ? 'login' : 'invitation'})`).join(', ')
                   : 'No one else yet'}
               </p>
+              {draft.collaborators.some((c) => c.name.trim()) ? (
+                <p>{`${rosterWording(kindForFace(draft.face ?? 'independent')).collaborators}: ${draft.collaborators.filter((c) => c.name.trim()).map((c) => c.name.trim()).join(', ')}`}</p>
+              ) : null}
             </Summary>
             <Summary label="Departments on" onEdit={() => go('departments')}>
               {departmentsOn(draft).map((m) => DEPARTMENT_CHOICES.find((d) => d.module === m)?.label).join(', ') || 'None'}
