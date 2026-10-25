@@ -267,6 +267,23 @@ SELECT public.check_eq('circulated: linking an account to an unlinked party is a
 UPDATE public.parties SET display_name = 'Unused Renamed', user_id = :FN WHERE id = :PD;
 SELECT public.check_eq('a party on no sheet is not locked', (SELECT display_name FROM public.parties WHERE id = :PD), 'Unused Renamed');
 
+-- ── 4b. A confirmation belongs to what was confirmed ───────────────────
+
+UPDATE public.parties SET details_confirmed_at = now(), details_confirmed_by = :AR WHERE id = :PB;
+SELECT public.check_eq('setup: PB is confirmed', (SELECT details_confirmed_at IS NOT NULL AND details_confirmed_by = :AR FROM public.parties WHERE id = :PB), true);
+UPDATE public.parties SET tax_id = 'GB-TAX-3', payment_instructions = 'Wise' WHERE id = :PB;
+SELECT public.check_eq('payee data is not what the person confirmed: the stamp stays', (SELECT details_confirmed_at IS NOT NULL FROM public.parties WHERE id = :PB), true);
+UPDATE public.parties SET legal_name = 'Nova Q. Okafor' WHERE id = :PB;
+SELECT public.check_eq('a changed legal name clears the stamp (both columns)', (SELECT details_confirmed_at IS NULL AND details_confirmed_by IS NULL FROM public.parties WHERE id = :PB), true);
+UPDATE public.parties SET details_confirmed_at = now(), details_confirmed_by = :MK, ipi = '00987654399', country = 'US' WHERE id = :PB;
+SELECT public.check_eq('the person confirming WITH corrections keeps the new stamp',
+  (SELECT details_confirmed_by = :MK AND ipi = '00987654399' FROM public.parties WHERE id = :PB), true);
+UPDATE public.parties SET address = 'moved' WHERE id = :PB;
+SELECT public.check_eq('a later address change clears it again', (SELECT details_confirmed_at IS NULL FROM public.parties WHERE id = :PB), true);
+UPDATE public.parties SET details_confirmed_at = now(), details_confirmed_by = :MK WHERE id = :PD;
+UPDATE public.parties SET user_id = :AR WHERE id = :PD;
+SELECT public.check_eq('re-linking the account clears the stamp (no inherited confirmation)', (SELECT details_confirmed_at IS NULL FROM public.parties WHERE id = :PD), true);
+
 -- Supersede: v2 (a copy, then PB taken off it) is circulated; v1 becomes `superseded`, which is not draft.
 SELECT public.labelos_split_create_draft(:L, :AR, :S1, 'composition', NULL, NULL, (SELECT id FROM public.split_sheets WHERE track_id = :S1 AND version = 1));
 DELETE FROM public.split_lines WHERE split_sheet_id = (SELECT id FROM public.split_sheets WHERE track_id = :S1 AND version = 2) AND party_id = :PB;
@@ -322,3 +339,17 @@ SELECT public.check_raises('anon neither',
   $$SELECT public.labelos_audit_credit_withdraw('b1740000-0000-4000-8000-000000000001', 'a1740000-0000-4000-8000-000000000001', 'a9740000-0000-4000-8000-000000000001', '{}'::jsonb, '{}'::jsonb)$$,
   'permission denied');
 RESET ROLE;
+
+-- ── 6. Deleting the linked account must not be blocked by the lock ──────
+-- PA names PRD and sits on circulated / superseded sheets: the FK's SET NULL is an UPDATE of user_id.
+
+SET ROLE service_role;
+UPDATE public.parties SET details_confirmed_at = now(), details_confirmed_by = :AR WHERE id = :PA;
+RESET ROLE;
+SELECT public.check_eq('setup: the party is still linked to PRD and on a non-draft sheet',
+  (SELECT user_id = :PRD FROM public.parties WHERE id = :PA)
+  AND EXISTS (SELECT 1 FROM public.split_lines l JOIN public.split_sheets s ON s.id = l.split_sheet_id WHERE l.party_id = :PA AND s.status <> 'draft'), true);
+DELETE FROM auth.users WHERE id = :PRD;
+SELECT public.check_eq('deleting the linked auth user succeeds: user_id goes NULL, the party and its name stay',
+  (SELECT user_id IS NULL AND display_name = 'Prd Person' FROM public.parties WHERE id = :PA), true);
+SELECT public.check_eq('… and the confirmation of that person goes with the account', (SELECT details_confirmed_at IS NULL FROM public.parties WHERE id = :PA), true);

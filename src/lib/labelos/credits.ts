@@ -88,6 +88,24 @@ export function mayReadPayee(actor: CreditActor): boolean {
   return actor.caps.has('rights.write') || actor.caps.has('finance.read');
 }
 
+/**
+ * May this member be TOLD which legal identifier is missing, or whose (a readiness blocker names a
+ * party and its IPI / PRO gaps)? `rights.read`, except a roster artist: they get counts, never which
+ * co-writer is incomplete (LABEL-54, doc 21 decision 4).
+ */
+export function mayReadRightsDetail(caps: ReadonlySet<string>, role: string): boolean {
+  return role !== 'artist' && caps.has('rights.read');
+}
+
+/**
+ * Payment instructions are finance's (doc 23 LABEL-54): `finance.read` only, never an external member
+ * or a roster artist. A rights writer without it reads and writes the tax id but not these.
+ */
+export function mayReadPayments(actor: CreditActor): boolean {
+  if (actor.externalRole || actor.rosterArtist) return false;
+  return actor.caps.has('finance.read');
+}
+
 export type WithdrawPlan = { ok: true } | { ok: false; status: 403 | 404; error: string };
 
 /**
@@ -242,7 +260,7 @@ export type PartyView = {
     confirmedAt: string | null;
   };
   /** Present only for `rights.write` / `finance.read` (mayReadPayee). Never a bank number. */
-  payee?: { taxId: string | null; paymentInstructions: string | null };
+  payee?: { taxId: string | null; /** Only with `finance.read` (mayReadPayments). */ paymentInstructions?: string | null };
   /** The party is the viewer's own account. */
   mine?: boolean;
   /** The linked account (null = none): only a rights writer is sent it, to edit the link. */
@@ -267,7 +285,10 @@ export function partyView(row: PartyRow, actor: CreditActor): PartyView {
       confirmedAt: row.details_confirmed_at ?? null,
     };
   }
-  if (mayReadPayee(actor)) view.payee = { taxId: row.tax_id ?? null, paymentInstructions: row.payment_instructions ?? null };
+  if (mayReadPayee(actor)) {
+    view.payee = { taxId: row.tax_id ?? null };
+    if (mayReadPayments(actor)) view.payee.paymentInstructions = row.payment_instructions ?? null;
+  }
   if (row.user_id && row.user_id === actor.userId) view.mine = true;
   return view;
 }

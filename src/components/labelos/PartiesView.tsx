@@ -365,6 +365,7 @@ function PartyEditor({ orgId, data, party, onSaved, onDeleted, onClose }: {
         <fieldset className="space-y-3" data-testid="party-payee">
           <legend className={`${LABEL} mb-2`}>Payee</legend>
           <Field label="Tax id" value={form.taxId} onChange={(v) => set('taxId', v)} disabled={!editable('taxId')} testid="tax-id" />
+          {data.canSeePayments && (
           <Field
             label="Payment instructions"
             value={form.paymentInstructions}
@@ -374,6 +375,7 @@ function PartyEditor({ orgId, data, party, onSaved, onDeleted, onClose }: {
             area
             hint="Say how finance should pay, in words. Never type a bank account, IBAN or card number: this app does not store them."
           />
+          )}
         </fieldset>
       )}
 

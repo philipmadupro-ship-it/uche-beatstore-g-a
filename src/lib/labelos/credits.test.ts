@@ -9,6 +9,7 @@ import {
   externalActor,
   mayReadLegal,
   mayReadPayee,
+  mayReadPayments,
   planWithdraw,
   orgActor,
   partyView,
@@ -204,6 +205,12 @@ describe('LABEL-54: what a roster artist, finance and legal read of a party', ()
     expect(mayReadPayee(OWNER)).toBe(true);
     expect(mayReadPayee(LEGAL)).toBe(true);
     expect(partyView(full, OWNER).payee).toEqual({ taxId: 'FR123', paymentInstructions: 'PayPal, ask finance' });
+    // Payment instructions are finance's: a rights writer without finance.read gets the tax id only.
+    expect(mayReadPayments(OWNER)).toBe(true);
+    expect(mayReadPayments(FINANCE)).toBe(true);
+    expect(mayReadPayments(LEGAL)).toBe(false);
+    expect(partyView(full, LEGAL).payee).toEqual({ taxId: 'FR123' });
+    expect(partyView(full, FINANCE).payee).toEqual({ taxId: 'FR123', paymentInstructions: 'PayPal, ask finance' });
   });
 
   it('a department with neither capability reads no payee data, even on its own party', () => {

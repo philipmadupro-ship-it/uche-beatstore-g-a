@@ -18,7 +18,8 @@
  * LABEL-54: a party also carries address, country, tax id and payment
  * instructions. Tax id / payment instructions are written with `rights.write`
  * and read only with `rights.write` or `finance.read` (`mayReadPayee`) — the
- * list says which of them this caller may see (`canSeePayee`). A roster
+ * list says which of them this caller may see (`canSeePayee` for the tax id, `canSeePayments` for the
+ * payment instructions, which are `finance.read` only — and so is writing them, 403 otherwise). A roster
  * artist reads names only (no `legal` block on any party but their own).
  * Payment instructions are free text; an IBAN- or card-looking value is 400.
  */
@@ -32,7 +33,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { CREDITS_NOT_READY } from '@/lib/labelos/audit-rpc';
-import { mayReadPayee, orgActor, partyViewWithLink } from '@/lib/labelos/credits';
+import { mayReadPayee, mayReadPayments, orgActor, partyViewWithLink } from '@/lib/labelos/credits';
 import {
   accountBelongsToOrg,
   contactInOrg,
@@ -82,6 +83,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       parties: rows.map((p) => partyViewWithLink(p, actor)),
       canWrite,
       canSeePayee: read.payee,
+      canSeePayments: mayReadPayments(actor),
       // Names only, so a rights writer can link a party to the account that will confirm it.
       ...(canWrite ? { members: await linkableMembers(access.admin, access.orgId) } : {}),
     });
@@ -100,6 +102,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const parsed = await readBody(req, OrgPartyCreateBodySchema);
   if (!parsed.ok) return parsed.res;
 
+  if (parsed.data.payment_instructions !== undefined && !access.capabilities.has('finance.read')) {
+    return json(403, { error: 'Payment instructions are finance’s: you need finance access to set them.' });
+  }
   const cols = partyColumns(parsed.data);
   if (!cols.ok) return json(400, { error: cols.error });
   const { admin, orgId: org } = access;

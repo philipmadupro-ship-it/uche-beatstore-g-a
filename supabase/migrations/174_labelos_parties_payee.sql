@@ -50,6 +50,9 @@
 --    person gets to see and acknowledge their own line. Legal data (legal
 --    name, codes, address) is not identity and stays editable.
 --
+-- 3b. `parties_confirmation_reset`: changing what the person confirmed, or re-linking the account,
+--    clears the confirmation stamp in the same statement.
+--
 -- 4. `labelos_audit_credit_withdraw`: the credited person, or a rights
 --    writer (the route decides who — `planWithdraw`), removes a credit; the
 --    row goes and the `credit.withdrawn` audit event is written in the same
@@ -147,8 +150,11 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  -- Deleting the linked auth user nulls `user_id` through the FK's SET NULL (an UPDATE): that is the
+  -- account going away, not a re-link, and it must not be refused (a GDPR erasure would fail).
   IF (NEW.display_name IS DISTINCT FROM OLD.display_name
-      OR (OLD.user_id IS NOT NULL AND NEW.user_id IS DISTINCT FROM OLD.user_id))
+      OR (OLD.user_id IS NOT NULL AND NEW.user_id IS DISTINCT FROM OLD.user_id
+          AND NOT (NEW.user_id IS NULL AND NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id = OLD.user_id))))
      AND EXISTS (
        SELECT 1
        FROM public.split_lines l
@@ -169,6 +175,48 @@ REVOKE ALL ON FUNCTION public.parties_identity_lock() FROM PUBLIC;
 DROP TRIGGER IF EXISTS parties_identity_lock ON public.parties;
 CREATE TRIGGER parties_identity_lock BEFORE UPDATE ON public.parties
   FOR EACH ROW EXECUTE FUNCTION public.parties_identity_lock();
+
+-- ── 3b. A confirmation belongs to what was confirmed ─────────────────────
+-- "Confirmed by the person" is a statement about the details as they were and the account they
+-- were confirmed by. When a writer later changes a field the person can correct (legal name,
+-- codes, address, country, PRO, publisher) or re-links `user_id`, the stamp is cleared in the same
+-- statement, so the page cannot keep saying "confirmed" and a newly linked account cannot inherit
+-- the previous person's confirmation. An UPDATE that itself sets the stamp (the person confirming,
+-- with corrections) is left alone.
+
+CREATE OR REPLACE FUNCTION public.parties_confirmation_reset()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.details_confirmed_at IS NOT DISTINCT FROM OLD.details_confirmed_at
+     AND NEW.details_confirmed_by IS NOT DISTINCT FROM OLD.details_confirmed_by
+     AND (NEW.legal_name IS DISTINCT FROM OLD.legal_name
+       OR NEW.ipi IS DISTINCT FROM OLD.ipi
+       OR NEW.isni IS DISTINCT FROM OLD.isni
+       OR NEW.pro IS DISTINCT FROM OLD.pro
+       OR NEW.pro_affiliation IS DISTINCT FROM OLD.pro_affiliation
+       OR NEW.publisher_name IS DISTINCT FROM OLD.publisher_name
+       OR NEW.publisher_ipi IS DISTINCT FROM OLD.publisher_ipi
+       OR NEW.address IS DISTINCT FROM OLD.address
+       OR NEW.country IS DISTINCT FROM OLD.country
+       OR NEW.user_id IS DISTINCT FROM OLD.user_id)
+  THEN
+    NEW.details_confirmed_at := NULL;
+    NEW.details_confirmed_by := NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+ALTER FUNCTION public.parties_confirmation_reset() OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.parties_confirmation_reset() FROM PUBLIC;
+
+DROP TRIGGER IF EXISTS parties_confirmation_reset ON public.parties;
+CREATE TRIGGER parties_confirmation_reset BEFORE UPDATE ON public.parties
+  FOR EACH ROW EXECUTE FUNCTION public.parties_confirmation_reset();
 
 -- ── 4. Withdraw a credit, with its audit event ───────────────────────────
 -- The route has decided WHO (planWithdraw). This does what the database can

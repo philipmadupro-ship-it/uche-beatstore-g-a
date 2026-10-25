@@ -21,6 +21,7 @@ const AR = u(2);
 const MKT = u(3);
 const AR_C2 = u(5);
 const X = u(7);
+const ART = u(11);
 const C1 = '30000000-0000-4000-8000-0000000000c1';
 const C2 = '30000000-0000-4000-8000-0000000000c2';
 const CX = '30000000-0000-4000-8000-0000000000c3';
@@ -114,8 +115,9 @@ beforeEach(() => {
         member(MKT, 'member', ['marketing']),
         member(AR_C2, 'member', ['a_and_r'], 'artists'),
         member(X, 'owner', [], 'org', L2),
+        member(ART, 'artist', [], 'artists'),
       ],
-      member_artist_scopes: [{ org_id: L, user_id: AR_C2, contact_id: C2 }],
+      member_artist_scopes: [{ org_id: L, user_id: AR_C2, contact_id: C2 }, { org_id: L, user_id: ART, contact_id: C1 }],
       contacts: [
         { id: C1, org_id: L, user_id: null, name: 'Nova', category: 'artist' },
         { id: C2, org_id: L, user_id: null, name: 'Kilo', category: 'artist' },
@@ -261,6 +263,19 @@ describe('redaction by capability', () => {
     expect(JSON.stringify(readiness)).not.toContain('Nova');
     // Non-rights blockers (tracklist, metadata) are still listed.
     expect(readiness.gates.metadata.blockers.length).toBeGreaterThan(0);
+  });
+});
+
+describe('a roster artist (role artist) gets the withheld shape for rights blockers (LABEL-54)', () => {
+  it('counts, no names, no IPI / PRO gaps — though the role holds rights.read', async () => {
+    const full = (await (await read(OWN, L, R1)).json()).readiness;
+    const res = await read(ART, L, R1);
+    expect(res.status).toBe(200);
+    const g = (await res.json()).readiness.gates.credits_splits;
+    expect(g.blockers).toEqual([]);
+    expect(g.blockerCount).toBe(full.gates.credits_splits.blockerCount);
+    expect(g.withheld).toBeGreaterThan(0);
+    expect(JSON.stringify(g)).not.toMatch(/Nova|IPI|PRO/);
   });
 });
 

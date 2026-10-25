@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeIsni, ownPartyName, partyColumns, partyLockViolation, pickSelfCorrections } from './parties';
+import { clearsConfirmation, normalizeIsni, ownPartyName, partyColumns, partyLockViolation, pickSelfCorrections } from './parties';
 
 describe('partyColumns', () => {
   it('keeps only the keys the body names', () => {
@@ -105,5 +105,17 @@ describe('partyLockViolation', () => {
   });
   it('never locks the legal data', () => {
     expect(partyLockViolation({}, cur, true)).toBeNull();
+  });
+});
+
+describe('clearsConfirmation', () => {
+  it('is true for a field the person can correct, and for re-linking the account', () => {
+    for (const key of ['legal_name', 'ipi', 'isni', 'pro', 'pro_affiliation', 'publisher_name', 'publisher_ipi', 'address', 'country', 'user_id']) {
+      expect(clearsConfirmation({ [key]: 'x' }), key).toBe(true);
+    }
+  });
+  it('is false for the display name, the kind, the contact link, the email and payee data', () => {
+    expect(clearsConfirmation({ display_name: 'x', kind: 'company', contact_id: 'c', email: 'e', tax_id: 't', payment_instructions: 'p' })).toBe(false);
+    expect(clearsConfirmation({})).toBe(false);
   });
 });

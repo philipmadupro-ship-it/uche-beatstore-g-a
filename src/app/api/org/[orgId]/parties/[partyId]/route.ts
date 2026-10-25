@@ -15,7 +15,7 @@
  * and an already-linked `user_id` are locked (409 `party_locked`; migration
  * 174's `parties_identity_lock` is the same rule in the database) — start a new
  * version of the sheet with a new party instead. Legal data stays editable.
- * Tax id and payment instructions are read per `mayReadPayee` only.
+ * Tax id is read per `mayReadPayee`, payment instructions per `mayReadPayments` (finance.read); writing either also needs those.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOrgCapability } from '@/lib/auth/org-access';
@@ -81,6 +81,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!access.ok) return access.res;
   const parsed = await readBody(req, OrgPartyPatchBodySchema);
   if (!parsed.ok) return parsed.res;
+  if (parsed.data.payment_instructions !== undefined && !access.capabilities.has('finance.read')) {
+    return json(403, { error: 'Payment instructions are finance’s: you need finance access to set them.' });
+  }
   const cols = partyColumns(parsed.data);
   if (!cols.ok) return json(400, { error: cols.error });
   const { admin, orgId: org } = access;

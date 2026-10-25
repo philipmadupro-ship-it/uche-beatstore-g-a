@@ -25,6 +25,7 @@ const payload = (over: Partial<PartiesPayload> = {}): PartiesPayload => ({
   parties: [party(), party({ id: 'p2', displayName: 'Kilo', legal: legal({ legalName: 'Kilo Writer', country: 'FR', pro: 'ASCAP' }), payee: { taxId: null, paymentInstructions: null }, linkedUserId: null })],
   canWrite: true,
   canSeePayee: true,
+  canSeePayments: true,
   members: [{ userId: 'u-nova', name: 'Nova M' }, { userId: 'u-kilo', name: 'Kilo M' }],
   ...over,
 });
@@ -67,6 +68,14 @@ describe('PartiesView — who sees what', () => {
     expect((within(editor).getByTestId('payment-instructions') as HTMLTextAreaElement).disabled).toBe(false);
     expect(screen.getByTestId('party-save')).toBeTruthy();
     expect(within(editor).getByText(/never type a bank account, iban or card number/i)).toBeTruthy();
+  });
+
+  it('a rights writer without finance access sees the tax id but no payment instructions field', async () => {
+    responder = () => ({ status: 200, body: payload({ canSeePayments: false, parties: [party({ payee: { taxId: 'GB-TAX-2' } })] }) });
+    render(<PartiesView orgId="o1" />);
+    const editor = await open('Nova');
+    expect((within(editor).getByTestId('tax-id') as HTMLInputElement).value).toBe('GB-TAX-2');
+    expect(screen.queryByTestId('payment-instructions')).toBeNull();
   });
 
   it('a roster artist gets names only — no legal fields, no payee block, no buttons', async () => {

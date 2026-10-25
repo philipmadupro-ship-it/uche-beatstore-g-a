@@ -15,7 +15,7 @@ import type { EventSubject } from './activity';
 import type { CreditRow, PartyRow } from './credits';
 import { memberIdentities, type IdentityAdmin } from './member-identity';
 import { inChunks, pageAll } from './overview-store';
-import { ownPartyName, PARTY_COLUMNS, PARTY_PAYEE_COLUMNS, type PartyColumns } from './parties';
+import { clearsConfirmation, ownPartyName, PARTY_COLUMNS, PARTY_PAYEE_COLUMNS, type PartyColumns } from './parties';
 import { orgProjectIdsInScope, type OrgContext } from '@/lib/auth/org-access';
 import { songEventSubject } from './song-stage-store';
 
@@ -207,7 +207,9 @@ export async function insertParty(admin: AdminClient, org: string, createdBy: st
 }
 
 export async function updateParty(admin: AdminClient, org: string, partyId: string, columns: PartyColumns, opts?: PartyReadOpts): Promise<{ party: PartyRow } | { duplicate: true } | { missing: true } | { locked: true }> {
-  const res = await admin.from('parties').update(columns).eq('org_id', org).eq('id', partyId).select(partyCols(opts)).maybeSingle();
+  // A change to what the person confirmed (or to the account) takes the confirmation with it.
+  const patch = clearsConfirmation(columns) ? { ...columns, details_confirmed_at: null, details_confirmed_by: null } : columns;
+  const res = await admin.from('parties').update(patch).eq('org_id', org).eq('id', partyId).select(partyCols(opts)).maybeSingle();
   if (isUniqueViolation(res.error)) return { duplicate: true };
   // Migration 174's parties_identity_lock (a rename / re-link after a sheet was circulated) raises check_violation.
   if (res.error?.code === '23514' && /circulated/i.test(res.error.message)) return { locked: true };

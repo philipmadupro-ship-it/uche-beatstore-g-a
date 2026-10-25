@@ -55,6 +55,8 @@ export type PartiesPayload = {
   canWrite: boolean;
   /** Tax id and payment instructions come with the parties only for `rights.write` / `finance.read`. */
   canSeePayee: boolean;
+  /** Payment instructions are `finance.read` only. */
+  canSeePayments: boolean;
   /** Names only, for a rights writer to link a party to the account that will confirm it. */
   members?: { userId: string; name: string }[];
 };

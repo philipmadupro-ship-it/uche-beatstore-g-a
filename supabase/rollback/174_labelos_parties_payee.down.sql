@@ -10,6 +10,8 @@
 
 DROP FUNCTION IF EXISTS public.labelos_audit_credit_withdraw(uuid, uuid, uuid, jsonb, jsonb);
 
+DROP TRIGGER IF EXISTS parties_confirmation_reset ON public.parties;
+DROP FUNCTION IF EXISTS public.parties_confirmation_reset();
 DROP TRIGGER IF EXISTS parties_identity_lock ON public.parties;
 DROP FUNCTION IF EXISTS public.parties_identity_lock();
 

@@ -19,6 +19,7 @@
  * overridden delivery's event is `internal`: its note and open gates are
  * business, not the artist's creative record.
  */
+import { mayReadRightsDetail } from '@/lib/labelos/credits';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireObjectAccess } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!plan.ok) {
     if (plan.status === 422) {
       // The gates, as this caller may read them (rights detail only with rights.read).
-      const view = releaseReadinessView(readiness, access.capabilities.has('rights.read'));
+      const view = releaseReadinessView(readiness, mayReadRightsDetail(access.capabilities, access.role));
       return json(422, { error: plan.error, field: plan.field, readiness: view });
     }
     return json(plan.status, { error: plan.error, ...(plan.field ? { field: plan.field } : {}) });

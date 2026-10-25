@@ -11,7 +11,9 @@ export async function requirePartiesReader(orgId: string): Promise<OrgAccessResu
   const rights = await requireOrgCapability(orgId, 'rights.read.own_line');
   if (rights.ok) return rights;
   const finance = await requireOrgCapability(orgId, 'finance.read');
-  return finance.ok ? finance : rights;
+  if (finance.ok) return finance;
+  // An org not licensed for the finance module answers 404 for its capability (LABEL-47): the page is not there for it.
+  return !finance.ok && finance.res.status === 404 ? finance : rights;
 }
 
 /** Does this member read the whole directory (within their artist scope), or only their own party? */

@@ -157,6 +157,15 @@ export const SELF_CORRECTABLE = [
   'country',
 ] as const;
 
+/**
+ * Does this write change what the person confirmed (a field they can correct) or the account they
+ * confirmed as? Then the "confirmed" stamp is cleared with it (migration 174's
+ * `parties_confirmation_reset` is the same rule in the database).
+ */
+export function clearsConfirmation(columns: Record<string, unknown>): boolean {
+  return [...SELF_CORRECTABLE, 'user_id'].some((key) => key in columns);
+}
+
 export function pickSelfCorrections(input: PartyInput): PartyInput {
   const out: Record<string, unknown> = {};
   for (const key of SELF_CORRECTABLE) if ((input as Record<string, unknown>)[key] !== undefined) out[key] = (input as Record<string, unknown>)[key];

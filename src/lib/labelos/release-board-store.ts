@@ -10,6 +10,7 @@
  * What a row carries is counts and statuses only: blocker TEXT (which may name
  * a party or a legal identifier) is the detail page's, behind `rights.read`.
  */
+import { mayReadRightsDetail } from '@/lib/labelos/credits';
 import { orgProjectIdsInScope, type OrgAccessOk } from '@/lib/auth/org-access';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { boardGates, type BoardRelease } from './release-board';
@@ -83,7 +84,7 @@ export async function loadReleaseBoard(access: OrgAccessOk, opts: BoardOptions =
   const names = new Map(((contacts.data ?? []) as { id: string; name: string | null }[]).map((c) => [c.id, c.name]));
 
   let schemaReady = true;
-  const mayReadRights = access.capabilities.has('rights.read');
+  const mayReadRights = mayReadRightsDetail(access.capabilities, access.role);
   const out = await inChunks(rows, CONCURRENCY, async (row): Promise<BoardRelease> => {
     const base: BoardRelease = {
       id: row.id,
