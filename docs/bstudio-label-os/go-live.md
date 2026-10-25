@@ -19,7 +19,8 @@ organization (migration 137) and its row in the operator list (step 1).
   row is possible. The bundle refuses to run on anything but exactly one row
   and says so; nothing changes if it refuses. If it says 2 or more, run
   `SELECT user_id, display_name, created_at FROM public.creator_profiles;`,
-  decide which row is real, and tell Claude before going on.
+  then **stop and tell the orchestrator**. Do not delete anything yourself and
+  do not run the bundle until it is back to exactly one row.
 
 ## 1. Paste the migration bundle
 
@@ -45,7 +46,10 @@ with the buyer one, they are independent); your row in `platform_admins`
 Rebuild it after any later migration merges with
 `scripts/ops/bundle-labelos-go-live.sh > supabase/apply/labelos-go-live.sql`.
 
-It is safe to run again: every migration is idempotent.
+It is safe to run again: every migration is idempotent. The first paste covers
+migrations up to 173 and 189–192. Anything that merges later (174 and up) ships
+as a second paste of the rebuilt bundle; running the rebuilt file over a database
+that already has the first paste applied changes nothing that is already there.
 
 ## 2. Turn Label OS on
 
@@ -74,7 +78,9 @@ the studio as always).
    modules it gets, seats / artists limits if you want them, and the **owner's
    email**. The owner gets an invitation email and becomes the org's owner
    when they accept at `/join/<token>`. To run the label yourself, use your own
-   sign-in email as the owner's email.
+   sign-in email as the owner's email. **This self-invite has not been tested
+   (manual step):** if the invitation does not arrive or cannot be accepted with
+   your own address, stop and tell the orchestrator rather than working around it.
 3. The org then shows in the org switcher (top bar) and under Settings →
    Organizations, and opens at `/o/<slug>`.
 
