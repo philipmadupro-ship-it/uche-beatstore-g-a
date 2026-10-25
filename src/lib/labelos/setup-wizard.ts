@@ -16,23 +16,36 @@
  * At the end, ONE request creates the org with its settings in a single
  * transaction (POST /api/org/setup → migration 192's `labelos_setup_org`).
  * What follows reuses the existing routes, so no member, contact or release
- * rule exists twice: roster artists (POST …/contacts), invitations and team
- * logins (POST …/invitations, …/team-accounts) and the first draft release
- * (POST …/releases). Those are separate requests; each reports its own
+ * rule exists twice: the team and roster entries (./team-roster, the same
+ * window the Team page uses, LABEL-50: roster artists, invitations, team
+ * logins, collaborators) and the first draft release (POST …/releases). Those are separate requests; each reports its own
  * outcome and a failure leaves a normal, complete org plus a line saying what
  * to do from its own screen.
  *
  * Pure: no I/O. The runner is ./setup-wizard-client.ts, the page
  * src/components/labelos/OrgSetupWizard.tsx.
  */
-import { FUNCTIONS_BY_ORG_KIND, ROLE_USES_FUNCTIONS, type OrgFunction, type OrgKind } from './capabilities';
+import { EXTERNAL_PROJECT_ROLES, FUNCTIONS_BY_ORG_KIND, type OrgFunction, type OrgKind } from './capabilities';
 import { parseContractTypes, type ContractTypeId } from './contract-types';
 import { MODULES, type Module } from './entitlements';
 import { invitableRoles, type InvitableRole } from './invitations';
 import { contractsLockout, parseDepartmentsOff, planSettingsChange } from './org-settings';
 import { RELEASE_TYPES, type ReleaseType } from './releases';
 import { SETUP_NAME_MAX, cleanOrgName, isSetupFace, kindForFace, type SetupFace } from './setup';
-import { passwordProblem } from './team-accounts';
+import {
+  COLLABORATOR_KINDS,
+  ENTRY_MAX,
+  entryProblems,
+  emptyPerson,
+  isEmail,
+  type ArtistEntry,
+  type CollaboratorEntry,
+  type FollowUp,
+  type FollowUpKind,
+  type PersonEntry,
+} from './team-roster';
+
+export { isEmail, type FollowUp, type FollowUpKind };
 
 // ── Steps ───────────────────────────────────────────────────────────────
 
@@ -97,20 +110,9 @@ export const FACE_PRESETS: Readonly<Record<SetupFace, { departmentsOff: Module[]
 
 // ── The draft ───────────────────────────────────────────────────────────
 
-export type RosterEntry = { name: string; email: string };
-
-export type TeamEntry = {
-  email: string;
-  role: Extract<InvitableRole, 'admin' | 'member'>;
-  /** The one function a `member` has; null for an admin. */
-  fn: OrgFunction | null;
-  /** `invite` sends the usual invitation; `login` creates the account directly (doc 25). */
-  mode: 'invite' | 'login';
-  /** Login only. */
-  name: string;
-  /** Login only. Held in memory, never saved with the draft. */
-  password: string;
-};
+/** The team step's entries are the Team page's (./team-roster): one set of types, one editor. */
+export type RosterEntry = ArtistEntry;
+export type TeamEntry = PersonEntry;
 
 export type ReleaseDraft = { enabled: boolean; title: string; type: ReleaseType; artistIndex: number };
 
@@ -122,6 +124,7 @@ export type WizardDraft = {
   contractTypes: ContractTypeId[];
   roster: RosterEntry[];
   team: TeamEntry[];
+  collaborators: CollaboratorEntry[];
   departmentsOff: Module[];
   /** True once the person changed a department: switching face then stops overwriting their choice. */
   departmentsTouched: boolean;
@@ -131,12 +134,7 @@ export type WizardDraft = {
   release: ReleaseDraft;
 };
 
-export const ROSTER_MAX = 20;
-export const TEAM_MAX = 20;
-
-export function emptyEntry(): TeamEntry {
-  return { email: '', role: 'member', fn: null, mode: 'invite', name: '', password: '' };
-}
+export const emptyEntry = emptyPerson;
 
 export function newDraft(face: SetupFace | null = null): WizardDraft {
   const preset = face ? FACE_PRESETS[face] : null;
@@ -148,6 +146,7 @@ export function newDraft(face: SetupFace | null = null): WizardDraft {
     contractTypes: preset ? [...preset.contractTypes] : [],
     roster: [],
     team: [],
+    collaborators: [],
     departmentsOff: preset ? [...preset.departmentsOff] : [],
     departmentsTouched: false,
     contractsTouched: false,
@@ -168,6 +167,8 @@ export function withFace(draft: WizardDraft, face: SetupFace): WizardDraft {
     contractTypes: draft.contractsTouched ? draft.contractTypes : [...preset.contractTypes],
     // An independent artist is the roster; a label's roster list does not carry over to it.
     roster: face === 'label' ? draft.roster : [],
+    // People pointed at roster artists lose that scope when the roster goes (their scope falls back to the whole org).
+    team: face === 'label' ? draft.team : draft.team.map((t) => ({ ...t, scope: 'org' as const, artists: [] })),
     release: { ...draft.release, artistIndex: 0 },
   };
 }
@@ -215,7 +216,7 @@ export function skipStep(draft: WizardDraft, step: WizardStepId): WizardDraft {
   const preset = draft.face ? FACE_PRESETS[draft.face] : null;
   if (step === 'work') return { ...draft, contractTypes: preset ? [...preset.contractTypes] : [], contractsTouched: false };
   if (step === 'departments') return { ...draft, departmentsOff: preset ? [...preset.departmentsOff] : [], departmentsTouched: false };
-  if (step === 'team') return { ...draft, roster: [], team: [], release: { ...draft.release, artistIndex: 0, enabled: draft.face === 'label' ? false : draft.release.enabled } };
+  if (step === 'team') return { ...draft, roster: [], team: [], collaborators: [], release: { ...draft.release, artistIndex: 0, enabled: draft.face === 'label' ? false : draft.release.enabled } };
   return draft;
 }
 
@@ -263,16 +264,6 @@ export function setupBodyFromDraft(draft: WizardDraft): { face: SetupFace; name:
 
 // ── Validation ──────────────────────────────────────────────────────────
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-export function isEmail(value: string): boolean {
-  return value.length <= 200 && EMAIL_RE.test(value.trim());
-}
-
-function dedupe(values: string[]): boolean {
-  return new Set(values).size !== values.length;
-}
-
 export function orgKindOf(face: SetupFace | null): OrgKind | null {
   return face ? kindForFace(face) : null;
 }
@@ -294,28 +285,12 @@ export function stepProblems(draft: WizardDraft, step: WizardStepId): string[] {
     if (!cleanOrgName(draft.name)) out.push(`Give it a name of 1 to ${SETUP_NAME_MAX} characters.`);
   }
   if (step === 'team' && draft.face) {
-    const roster = draft.roster.map((r) => r.name.trim()).filter(Boolean);
-    draft.roster.forEach((r, i) => {
-      if (!r.name.trim() && r.email.trim()) out.push(`Artist ${i + 1}: give them a name.`);
-      if (r.email.trim() && !isEmail(r.email)) out.push(`Artist ${i + 1}: that email address does not look right.`);
-    });
-    if (dedupe(roster.map((n) => n.toLowerCase()))) out.push('Two artists have the same name.');
-    const artistEmails = draft.roster.map((r) => r.email.trim().toLowerCase()).filter(Boolean);
-    if (dedupe(artistEmails)) out.push('Two artists have the same email address.');
-    if (draft.roster.length > ROSTER_MAX) out.push(`Add at most ${ROSTER_MAX} artists here; the rest can be added from the roster.`);
-    if (draft.team.length > TEAM_MAX) out.push(`Add at most ${TEAM_MAX} people here; the rest can be added from Members.`);
-    const emails = draft.team.map((t) => t.email.trim().toLowerCase()).filter(Boolean);
-    if (dedupe(emails)) out.push('Two people have the same email address.');
-    draft.team.forEach((t, i) => {
-      const who = `Person ${i + 1}`;
-      if (!isEmail(t.email)) out.push(`${who}: enter a valid email address.`);
-      if (t.role === 'member' && ROLE_USES_FUNCTIONS.member && !t.fn) out.push(`${who}: choose their function.`);
-      if (t.mode === 'login') {
-        if (!t.name.trim()) out.push(`${who}: enter their name.`);
-        const problem = passwordProblem(t.password, t.email);
-        if (problem) out.push(`${who}: ${problem}`);
-      }
-    });
+    out.push(
+      ...entryProblems(
+        { artists: draft.roster, people: draft.team, collaborators: draft.collaborators },
+        { orgKind: kindForFace(draft.face), existingArtists: [] },
+      ),
+    );
   }
   if (step === 'review' && draft.release.enabled) {
     if (!draft.release.title.trim()) out.push('Name the first release, or switch it off.');
@@ -399,12 +374,14 @@ export function parseDraft(raw: unknown): WizardDraft | null {
     step: isStepId(d.step) ? d.step : 'who',
     name: str(d.name, SETUP_NAME_MAX),
     contractTypes: d.contractTypes === undefined ? base.contractTypes : parseContractTypes(d.contractTypes),
-    roster: list(d.roster, ROSTER_MAX, (v) => {
-      if (!v || typeof v !== 'object') return null;
-      const r = v as Record<string, unknown>;
-      return { name: str(r.name, 200), email: str(r.email, 200) };
-    }),
-    team: list(d.team, TEAM_MAX, (v) => {
+    roster: face === 'label'
+      ? list(d.roster, ENTRY_MAX, (v) => {
+          if (!v || typeof v !== 'object') return null;
+          const r = v as Record<string, unknown>;
+          return { name: str(r.name, 200), email: str(r.email, 200), invite: r.invite === true } satisfies RosterEntry;
+        })
+      : [],
+    team: list(d.team, ENTRY_MAX, (v) => {
       if (!v || typeof v !== 'object') return null;
       const t = v as Record<string, unknown>;
       const role = roles.find((r) => r === t.role) ?? 'member';
@@ -416,7 +393,21 @@ export function parseDraft(raw: unknown): WizardDraft | null {
         mode: t.mode === 'login' ? 'login' : 'invite',
         name: str(t.name, 80),
         password: '',
+        scope: role === 'member' && t.scope === 'artists' ? 'artists' : 'org',
+        artists: Array.isArray(t.artists) ? t.artists.filter((a): a is string => typeof a === 'string').slice(0, ENTRY_MAX).map((a) => a.slice(0, 200)) : [],
       } satisfies TeamEntry;
+    }),
+    collaborators: list(d.collaborators, ENTRY_MAX, (v) => {
+      if (!v || typeof v !== 'object') return null;
+      const c = v as Record<string, unknown>;
+      return {
+        name: str(c.name, 200),
+        email: str(c.email, 200),
+        kind: COLLABORATOR_KINDS.find((k) => k.id === c.kind)?.id ?? 'beatmaker',
+        // A project does not exist before the org does: the wizard never offers one.
+        projectId: '',
+        projectRole: EXTERNAL_PROJECT_ROLES.find((r) => r === c.projectRole) ?? 'viewer',
+      } satisfies CollaboratorEntry;
     }),
     departmentsOff: d.departmentsOff === undefined ? base.departmentsOff : parseDepartmentsOff(d.departmentsOff),
     departmentsTouched: d.departmentsTouched === true,
@@ -469,6 +460,7 @@ export function isUntouched(draft: WizardDraft): boolean {
     draft.name.trim() === '' &&
     draft.roster.length === 0 &&
     draft.team.length === 0 &&
+    draft.collaborators.length === 0 &&
     !draft.departmentsTouched &&
     !draft.contractsTouched &&
     draft.legalGate === fresh.legalGate &&
@@ -478,62 +470,6 @@ export function isUntouched(draft: WizardDraft): boolean {
 }
 
 // ── Requests after the org exists ───────────────────────────────────────
-
-export type FollowUpKind = 'roster' | 'invitation' | 'login' | 'release';
-
-export type FollowUp = {
-  kind: FollowUpKind;
-  /** What the result list calls it. */
-  label: string;
-  method: 'POST';
-  /** Relative to `/api/org/<orgId>`. */
-  path: string;
-  body: Record<string, unknown>;
-  /** Where the person fixes it by hand when the request fails. */
-  fixIn: string;
-};
-
-/** The roster artist as POST …/contacts takes it. An independent artist's roster is created with the org. */
-export function rosterRequests(draft: WizardDraft): FollowUp[] {
-  if (draft.face !== 'label') return [];
-  return draft.roster
-    .filter((r) => r.name.trim())
-    .map((r) => ({
-      kind: 'roster' as const,
-      label: r.name.trim(),
-      method: 'POST' as const,
-      path: '/contacts',
-      body: { name: r.name.trim(), category: 'artist', ...(r.email.trim() ? { email: r.email.trim() } : {}) },
-      fixIn: 'the roster',
-    }));
-}
-
-/** Invitations and logins, as the existing routes take them. */
-export function teamRequests(draft: WizardDraft): FollowUp[] {
-  return draft.team
-    .filter((t) => t.email.trim())
-    .map((t) => {
-      const functions = t.role === 'member' && t.fn ? [t.fn] : [];
-      if (t.mode === 'login') {
-        return {
-          kind: 'login' as const,
-          label: t.email.trim(),
-          method: 'POST' as const,
-          path: '/team-accounts',
-          body: { email: t.email.trim(), name: t.name.trim(), password: t.password, role: t.role, functions },
-          fixIn: 'Members → Create account',
-        };
-      }
-      return {
-        kind: 'invitation' as const,
-        label: t.email.trim(),
-        method: 'POST' as const,
-        path: '/invitations',
-        body: { email: t.email.trim(), role: t.role, functions },
-        fixIn: 'Members → Invite',
-      };
-    });
-}
 
 /** The first draft release, for the artist `contactId` (the org's roster artist). */
 export function releaseRequest(draft: WizardDraft, contactId: string): FollowUp | null {

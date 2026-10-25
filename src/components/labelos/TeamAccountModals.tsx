@@ -2,36 +2,26 @@
 
 /**
  * Team accounts (docs/bstudio-label-os/25-team-accounts.md, phase 1): the
- * dialogs an owner or admin uses to create a login for a person directly, and
- * to give an account a new password.
+ * dialog an owner or admin uses to give an account a new password. Creating a
+ * login is part of the Team and roster window (LABEL-50, TeamRosterEditor).
  *
- * Both show the password ONCE, after it is set, with a Copy button — the app
- * never stores it and cannot show it again (Supabase keeps only a hash). The
- * role and function choices are the invitation's (`invitableRoles` /
- * `invitableFunctions`), so the form never offers what the route refuses.
+ * It shows the password ONCE, after it is set, with a Copy button — the app
+ * never stores it and cannot show it again (Supabase keeps only a hash).
  * Built on `ui/Modal` (focus trap, Escape, focus restore).
  */
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { CheckCircle2, Copy, KeyRound, RefreshCw, UserPlus } from 'lucide-react';
+import { CheckCircle2, Copy, KeyRound, RefreshCw } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from '@/lib/clipboard';
-import { ROLE_USES_FUNCTIONS, type OrgFunction, type OrgKind } from '@/lib/labelos/capabilities';
-import { FUNCTION_LABELS, ROLE_LABELS, invitableFunctions, invitableRoles, type InvitableRole } from '@/lib/labelos/invitations';
 import { PASSWORD_MIN, generatePassword, passwordProblem } from '@/lib/labelos/team-accounts';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function freshPassword(): string {
   return generatePassword((n) => crypto.getRandomValues(new Uint32Array(n)));
 }
 
-const CHIP = 'min-h-9 rounded-lg border px-3 text-xs transition-colors duration-[var(--dur-fast)] disabled:opacity-40';
-const CHIP_ON = 'border-white/30 bg-white/[0.14] text-white';
-const CHIP_OFF = 'border-white/10 bg-white/[0.06] text-white/80 hover:border-white/20 hover:bg-white/[0.10]';
-const LEGEND = 'mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/60';
 
 /** The password field with Generate; shows the text so the manager can read it out or copy it. */
 function PasswordInput({ value, onChange, disabled, email }: { value: string; onChange: (v: string) => void; disabled: boolean; email?: string }) {
@@ -94,169 +84,6 @@ function Handover({ title, email, password }: { title: string; email: string; pa
         If it is lost, reset it from the member’s menu.
       </p>
     </div>
-  );
-}
-
-export type CreatedTeamAccount = { user_id: string; email: string; name: string; role: string; functions: string[]; scope: string };
-
-export function CreateTeamAccountModal({
-  open,
-  onClose,
-  orgId,
-  orgKind,
-  orgName,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  orgId: string;
-  orgKind: OrgKind;
-  orgName: string;
-  onCreated?: (account: CreatedTeamAccount) => void;
-}) {
-  const roles = invitableRoles(orgKind);
-  const functions = invitableFunctions(orgKind);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState<InvitableRole>('member');
-  const [picked, setPicked] = useState<OrgFunction[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ email: string; password: string } | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setName('');
-    setEmail('');
-    setPassword(freshPassword());
-    setRole('member');
-    setPicked([]);
-    setError(null);
-    setDone(null);
-    setSubmitting(false);
-  }, [open]);
-
-  const usesFunctions = ROLE_USES_FUNCTIONS[role];
-  const ready = name.trim().length > 0 && EMAIL_RE.test(email.trim()) && !passwordProblem(password, email.trim());
-
-  const submit = async (e?: FormEvent) => {
-    e?.preventDefault();
-    if (!ready) {
-      setError('Fill in a name, a valid email address and an acceptable password.');
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/org/${orgId}/team-accounts`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, role, functions: usesFunctions ? picked : [] }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { error?: string; member?: CreatedTeamAccount };
-      if (!res.ok || !body.member) {
-        setError(body.error ?? 'Could not create the account.');
-        return;
-      }
-      setDone({ email: body.member.email, password });
-      onCreated?.(body.member);
-    } catch {
-      setError('Could not reach the server. Try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Create a team account"
-      description={`A login for someone at ${orgName}. They sign in with it straight away — no invitation to accept.`}
-      icon={<UserPlus size={16} aria-hidden="true" />}
-      size="md"
-      footer={
-        done ? (
-          <div className="flex justify-end">
-            <Button variant="secondary" size="sm" onClick={onClose}>
-              Done
-            </Button>
-          </div>
-        ) : (
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button variant="primary" size="sm" type="submit" form="team-account-form" loading={submitting} disabled={!ready}>
-              Create account
-            </Button>
-          </div>
-        )
-      }
-    >
-      {done ? (
-        <Handover title={`Account created for ${done.email}.`} email={done.email} password={done.password} />
-      ) : (
-        <form id="team-account-form" onSubmit={submit} className="space-y-6" noValidate>
-          <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} disabled={submitting} placeholder="Mia Okafor" />
-          <Field
-            label="Email address"
-            type="email"
-            autoComplete="off"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={submitting}
-            placeholder="name@yourlabel.com"
-            helperText="Use an address your organization controls. For someone's own address, invite them instead."
-          />
-          <PasswordInput value={password} onChange={setPassword} disabled={submitting} email={email.trim()} />
-
-          <fieldset>
-            <legend className={LEGEND}>Role</legend>
-            <div role="radiogroup" aria-label="Role" className="flex flex-wrap gap-2">
-              {roles.map((r) => (
-                <button key={r} type="button" role="radio" aria-checked={role === r} disabled={submitting} onClick={() => setRole(r)} className={cn(CHIP, role === r ? CHIP_ON : CHIP_OFF)}>
-                  {ROLE_LABELS[r]}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          {usesFunctions && functions.length > 0 && (
-            <fieldset>
-              <legend className={LEGEND}>What they work on</legend>
-              <div className="flex flex-wrap gap-2">
-                {functions.map((fn) => {
-                  const on = picked.includes(fn);
-                  return (
-                    <button
-                      key={fn}
-                      type="button"
-                      aria-pressed={on}
-                      disabled={submitting}
-                      onClick={() => setPicked((cur) => (on ? cur.filter((f) => f !== fn) : [...cur, fn]))}
-                      className={cn(CHIP, on ? CHIP_ON : CHIP_OFF)}
-                    >
-                      {FUNCTION_LABELS[fn]}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 text-xs leading-5 text-[var(--text-readable)]">
-                {picked.length === 0 ? 'Without one they sign in to an empty workspace until one is added.' : 'They see only what these need.'}
-              </p>
-            </fieldset>
-          )}
-
-          {error && (
-            <p role="alert" className="text-xs leading-5 text-[var(--error-text)]">
-              {error}
-            </p>
-          )}
-        </form>
-      )}
-    </Modal>
   );
 }
 
