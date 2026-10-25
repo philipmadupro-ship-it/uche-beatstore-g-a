@@ -101,9 +101,9 @@ export function hasEntries(e: TeamRosterEntries): boolean {
 
 // ── Wording and what may be added ───────────────────────────────────────
 
-export function rosterWording(orgKind: OrgKind): { artists: string; collaborators: string; canAddArtist: boolean } {
-  if (orgKind === 'artist') return { artists: 'You', collaborators: 'Your collaborators', canAddArtist: false };
-  return { artists: 'Roster artists', collaborators: 'Collaborators', canAddArtist: orgKind === 'label' };
+export function rosterWording(orgKind: OrgKind): { title: string; artists: string; collaborators: string; canAddArtist: boolean } {
+  if (orgKind === 'artist') return { title: 'Team and collaborators', artists: 'You', collaborators: 'Your collaborators', canAddArtist: false };
+  return { title: 'Team and roster', artists: 'Roster artists', collaborators: 'Collaborators', canAddArtist: orgKind === 'label' };
 }
 
 export type AddPermissions = {

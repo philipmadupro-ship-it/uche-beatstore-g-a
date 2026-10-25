@@ -152,7 +152,7 @@ export function TeamRosterEditor({
         </section>
       ) : orgKind === 'artist' ? (
         <p className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-[11px] leading-relaxed text-white/70" data-testid={soloNoteTestId}>
-          You are the artist of this workspace, so there is no roster to fill in. The people you make music with are {wording.collaborators.toLowerCase()}: add them below.
+          You are the artist of this workspace. The people you make music with are {wording.collaborators.toLowerCase()}: add them below.
         </p>
       ) : null}
 
@@ -293,8 +293,9 @@ export function TeamRosterEditor({
         <section aria-labelledby="collab-h">
           <h2 id="collab-h" className={LEGEND}>{wording.collaborators}</h2>
           <p className="mb-3 text-[11px] leading-relaxed text-white/60">
-            Beatmakers, producers, engineers, rappers and features you work with. They go in your directory with a role; they are not on the roster
-            {adds.projectInvite ? ', and can be invited to one project to listen, comment or upload' : ''}.
+            Beatmakers, producers, engineers, rappers and features you work with. They go in your directory with a role
+            {wording.canAddArtist ? ' and are not on the roster' : ''}
+            {adds.projectInvite ? '; you can invite them to one project to listen, comment or upload' : ''}.
           </p>
           <ul className="space-y-3">
             {entries.collaborators.map((c, i) => (

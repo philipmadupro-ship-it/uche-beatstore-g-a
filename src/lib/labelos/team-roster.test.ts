@@ -21,8 +21,8 @@ const ID = '11111111-1111-4111-8111-111111111111';
 
 describe('rosterWording', () => {
   it('a label has a roster; the independent face has collaborators and no roster to add to', () => {
-    expect(rosterWording('label')).toMatchObject({ artists: 'Roster artists', collaborators: 'Collaborators', canAddArtist: true });
-    expect(rosterWording('artist')).toMatchObject({ collaborators: 'Your collaborators', canAddArtist: false });
+    expect(rosterWording('label')).toMatchObject({ title: 'Team and roster', artists: 'Roster artists', collaborators: 'Collaborators', canAddArtist: true });
+    expect(rosterWording('artist')).toMatchObject({ title: 'Team and collaborators', collaborators: 'Your collaborators', canAddArtist: false });
     expect(JSON.stringify(rosterWording('artist'))).not.toMatch(/roster/i);
   });
 });

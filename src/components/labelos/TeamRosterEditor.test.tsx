@@ -21,12 +21,14 @@ let latest: TeamRosterEntries;
 function Harness(props: Partial<TeamRosterEditorProps> & { start?: TeamRosterEntries; orgKind?: 'label' | 'artist' }) {
   const kind = props.orgKind ?? 'label';
   const [entries, setEntries] = useState<TeamRosterEntries>(props.start ?? empty());
-  latest = entries;
   return (
     <TeamRosterEditor
       orgKind={kind}
       entries={entries}
-      onChange={setEntries}
+      onChange={(e) => {
+        latest = e;
+        setEntries(e);
+      }}
       disabled={false}
       adds={availableAdds(kind, FULL)}
       {...props}
@@ -49,7 +51,7 @@ describe('TeamRosterEditor', () => {
     expect(screen.getByRole('heading', { name: 'Your collaborators' })).toBeTruthy();
     const note = screen.getByTestId('roster-solo-note');
     expect(note.textContent).toMatch(/your collaborators/i);
-    expect(document.body.textContent).not.toMatch(/roster artists/i);
+    expect(document.body.textContent).not.toMatch(/roster/i);
   });
 
   it('shows only what the viewer may add', () => {

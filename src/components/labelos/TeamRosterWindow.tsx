@@ -436,7 +436,7 @@ export function TeamRosterWindow() {
       <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">
-            {ORG_KIND_LABELS[org.kind]} · Team and roster
+            {ORG_KIND_LABELS[org.kind]} · {wording.title}
           </p>
           {canRename ? (
             <InlineText
