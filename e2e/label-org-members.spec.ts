@@ -183,7 +183,8 @@ for (const width of [1440, 390]) {
       await expect(page.getByRole('button', { name: /^Notifications/ })).toHaveCount(1);
       await expect(page.getByRole('button', { name: /^Search/ })).toHaveCount(0);
       await expect(page.getByRole('link', { name: 'Open settings' })).toHaveCount(0);
-      await expect(page.getByRole('button', { name: 'Invite' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Add a person' })).toHaveCount(0);
+      await expect(page.getByTestId('team-add')).toHaveCount(0);
       await expect(page.getByRole('button', { name: /Actions for/ })).toHaveCount(0);
       expect(producerCalls).toEqual([]);
 
@@ -203,13 +204,14 @@ for (const width of [1440, 390]) {
       await page.goto(MEMBERS);
 
       const email = `engineer-${run}-${width}@local.test`;
-      await page.getByRole('button', { name: 'Invite' }).click();
-      const dialog = page.getByRole('dialog', { name: 'Invite to organization' });
-      await dialog.getByLabel('Email address').fill(email);
-      await dialog.getByRole('button', { name: 'Engineer' }).click();
-      await dialog.getByRole('button', { name: 'Send invitation' }).click();
-      await expect(dialog.getByRole('status')).toContainText(`Invitation created for ${email}`);
-      await dialog.getByRole('button', { name: 'Done' }).click();
+      await page.getByRole('button', { name: 'Add a person' }).click();
+      await page.getByLabel('Email address').fill(email);
+      await page.getByRole('button', { name: 'Function of person 1' }).click();
+      await page.getByRole('option', { name: 'Engineer' }).click();
+      await page.getByRole('button', { name: 'Add to the organization' }).click();
+      await expect(page.getByTestId('team-add-results')).toContainText(email);
+      await expect(page.getByTestId('result-ok')).toContainText('Invitation sent');
+      await page.getByRole('button', { name: 'Dismiss' }).click();
 
       const pending = page.getByRole('region', { name: 'Pending invitations' }).or(page.locator('section[aria-labelledby="invitations-heading"]'));
       await expect(pending).toContainText(email);

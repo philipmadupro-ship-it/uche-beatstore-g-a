@@ -119,6 +119,38 @@ describe('runSetup', () => {
     expect(run.results.map((r) => r.password)).toEqual([undefined, 'a-good-password-1', undefined]);
   });
 
+  it('an artist login, a member limited to that artist and a collaborator are sent through the same runner as the Team page', async () => {
+    const s = server({
+      'POST /api/org/setup': () => created,
+      'POST /contacts': (c) => ({ status: 201, body: { contact: { id: `id-${(c.body as { name: string }).name}` } } }),
+      'POST /invitations': () => ({ status: 201, body: {} }),
+    });
+    const run = await runSetup(
+      label({
+        roster: [{ name: 'Nova', email: 'n@x.test', invite: true }],
+        team: [{ ...emptyEntry(), email: 'a@x.test', fn: 'a_and_r', scope: 'artists', artists: ['Nova'] }],
+        collaborators: [{ name: 'Kai', email: '', kind: 'rapper', projectId: '', projectRole: 'viewer' }],
+      }),
+      s.fetchFn,
+    );
+    expect(s.calls.slice(1).map((c) => [c.url.replace(`/api/org/${ORG}`, ''), c.body])).toEqual([
+      ['/contacts', { name: 'Nova', category: 'artist', email: 'n@x.test' }],
+      ['/invitations', { email: 'n@x.test', role: 'artist', functions: [], contact_ids: ['id-Nova'] }],
+      ['/invitations', { email: 'a@x.test', role: 'member', functions: ['a_and_r'], contact_ids: ['id-Nova'] }],
+      ['/contacts', { name: 'Kai', category: 'other', role: 'Rapper' }],
+    ]);
+    if (run.status !== 'created') throw new Error('expected created');
+    expect(run.results.every((r) => r.ok)).toBe(true);
+  });
+
+  it('an independent artist never sends a roster, even from a stale draft', async () => {
+    const s = server({
+      'POST /api/org/setup': () => ({ status: 201, body: { org: { id: ORG, slug: 'n', kind: 'artist' }, home: '/o/n', created: true } }),
+    });
+    await runSetup({ ...withFace(newDraft(), 'independent'), name: 'Nova', roster: [{ name: 'Ghost', email: '' }] }, s.fetchFn);
+    expect(s.calls).toHaveLength(1);
+  });
+
   it('a network error is a line, not a throw', async () => {
     let n = 0;
     const fetchFn: FetchLike = async () => {

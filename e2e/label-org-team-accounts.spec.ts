@@ -1,7 +1,7 @@
 /**
  * Team accounts (docs/bstudio-label-os/25-team-accounts.md, phase 1), against
  * a REAL database (scripts/local-db, LABEL_OS_ENABLED=true from env.sh): the
- * owner creates a marketing login from the members page; the person signs in
+ * owner creates a marketing login from the Team and roster window; the person signs in
  * with it through the real /login form, is made to choose their own password,
  * and lands in the label; the owner can set a new password and switch the
  * account off, after which sign-in is refused. An address that already has an
@@ -63,18 +63,20 @@ test('the owner creates a marketing account from the members page', async ({ bro
   const page = await ctx.newPage();
   await page.goto(`/o/${SLUG}/settings/members`);
 
-  await page.getByRole('button', { name: 'Create account' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Create a team account' });
-  await dialog.getByLabel('Name').fill(STAFF_NAME);
-  await dialog.getByLabel('Email address').fill(STAFF_EMAIL);
-  await dialog.getByRole('button', { name: 'Marketing' }).click();
-  await dialog.getByRole('button', { name: 'Create account' }).click();
+  await page.getByRole('button', { name: 'Add a person' }).click();
+  await page.getByLabel('Email address').fill(STAFF_EMAIL);
+  await page.getByRole('button', { name: 'Function of person 1' }).click();
+  await page.getByRole('option', { name: 'Marketing' }).click();
+  await page.getByRole('radio', { name: 'Create their login' }).click();
+  await page.getByLabel('Their name').fill(STAFF_NAME);
+  await page.getByRole('button', { name: 'Add to the organization' }).click();
 
   // The password is shown once, to hand over.
-  await expect(dialog.getByTestId('team-account-handover')).toBeVisible();
-  issued = (await dialog.getByTestId('team-account-password').textContent())?.trim() ?? '';
+  await expect(page.getByTestId('wizard-logins')).toBeVisible();
+  issued = (await page.getByTestId('wizard-login-password').textContent())?.trim() ?? '';
   expect(issued).toMatch(/^[a-zA-Z2-9]{4}(-[a-zA-Z2-9]{4}){3}$/);
-  await dialog.getByRole('button', { name: 'Done' }).click();
+  await page.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(page.getByTestId('wizard-logins')).toHaveCount(0);
 
   const row = page.getByText(STAFF_NAME).locator('xpath=ancestor::*[starts-with(@data-testid, "member-")][1]');
   await expect(row).toContainText('Marketing');
@@ -92,11 +94,14 @@ test('the owner creates a marketing account from the members page', async ({ bro
   expect(JSON.stringify(events)).not.toContain(issued);
 
   // An address that already has an account is refused, and that account is untouched.
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await dialog.getByLabel('Name').fill('Someone');
-  await dialog.getByLabel('Email address').fill('buyer@local.test');
-  await dialog.getByRole('button', { name: 'Create account' }).click();
-  await expect(dialog.getByRole('alert')).toContainText('already has an account');
+  await page.getByRole('button', { name: 'Add a person' }).click();
+  await page.getByLabel('Email address').fill('buyer@local.test');
+  await page.getByRole('button', { name: 'Function of person 1' }).click();
+  await page.getByRole('option', { name: 'Marketing' }).click();
+  await page.getByRole('radio', { name: 'Create their login' }).click();
+  await page.getByLabel('Their name').fill('Someone');
+  await page.getByRole('button', { name: 'Add to the organization' }).click();
+  await expect(page.getByTestId('result-failed')).toContainText('already has an account');
   await ctx.close();
 });
 

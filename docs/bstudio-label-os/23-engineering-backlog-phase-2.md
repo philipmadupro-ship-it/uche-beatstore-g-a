@@ -110,7 +110,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - **Owner decision (2026-10-19):** an org created at sign-up (#130's `/setup`) gets every module and option (no `org_entitlements` row = everything). Default limits are chosen later, together with plans and prices.
 
 ### LABEL-48 — Create organization + setup wizard
-**Priority:** P0 · **Risk:** Medium · **Deps:** 47 · **Status:** In Progress (see execution log). Builds on #130 (merged `0f62ce2`: sign-up account type, `/setup`, `labelos_setup_org` mig 189, team accounts mig 190, admin centre): the wizard extends #130's `/setup` and `labelos_setup_org` instead of a second `POST /api/org`
+**Priority:** P0 · **Risk:** Medium · **Deps:** 47 · **Status:** Done — #143, squash `8e6fd7b5c2785eac60d03d18ccbce0f3c9f7cf98` (2026-10-19, merged at the owner's request; migration 192 replaces 189's function and ships with it)
 - `POST /api/org` (platform-licensed accounts only; independent creates kind `artist` + the owner's own artist contact, label creates kind `label`). First sign-in of a licensee with `setup_done = false` is redirected to `/setup`.
 - Wizard steps (each skippable except 1): **1 Who are you** (the faces the licensee is entitled to) → **2 How you work** (pick the contract types you use; every type has a template, LABEL-57) → **3 Team and roster** (LABEL-50 window embedded) → **4 Departments** (toggle finance, marketing/PR, legal, A&R, executive, artistic direction, producers, collaborators; preset per face) → **5 Review and create** (creates org, roster, default gates from LABEL-52, optional first draft release).
 - Acceptance: Playwright journeys for both faces at 1440 and 390 px; wizard is resumable; leaving mid-way creates nothing half-done (one transaction via audit RPC); `org.created` event.
@@ -122,7 +122,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Out of scope: the modules themselves.
 
 ### LABEL-50 — Roster and team window
-**Priority:** P0 · **Risk:** Medium · **Deps:** 48, 49 · **Status:** Not Started — after LABEL-48; builds on #130's team-accounts routes and admin centre, not a second copy
+**Priority:** P0 · **Risk:** Medium · **Deps:** 48, 49 · **Status:** In Progress (session_01J9Cs4e12d1Khurw8sTDw9P)
 - One window ("Team and roster") usable from the wizard and from Organization: **add artist** (creates the roster contact, optional login invite with role `artist`), **add member** with role + functions + artist scope, **add collaborator** (beatmaker, producer, rapper, feature: a contact with a role and optional external-project invite), edit/remove with `planMemberChange` rules (last owner is 409).
 - Reuses `POST /api/org/[orgId]/contacts` and invitations; adds the screens and the missing role pickers.
 - Acceptance: add/remove for each role in e2e; scoped member sees only their artists; independent face shows "Your collaborators" instead of roster wording.
@@ -142,12 +142,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## C. Real music-business data
 
 ### LABEL-53 — Recording and song metadata editor
-**Priority:** P0 · **Risk:** Medium · **Deps:** 49 · **Migration:** 173 · **Status:** In Progress (session_01MdzVrfyDLcpCD7bVXTgphD)
+**Priority:** P0 · **Risk:** Medium · **Deps:** 49 · **Migration:** 173 · **Status:** Done — #142, squash `09e69a43e2ed3f5ec58a47aced160fb9dcc5e1b9` (2026-10-24). Song page only: the uploads tray has no org-row editors. The compare-and-set token is the new `tracks.metadata_updated_at`
 - Editor on the song page and tray: title, version, **ISRC**, **ISWC**, BPM, key, language, explicit, genre, recording date, **P-line**, master owner, notes. `PATCH /api/org/[orgId]/songs/[trackId]` (today GET only); ISRC needs `release.write`, creative fields `catalog.write`; validators exist (ISRC/ISWC); ASCII-only identifiers; CAS on `updated_at`.
 - Acceptance: the release "Track has no ISRC" blocker offers a working link to this editor; a Playwright journey sets an ISRC with no service-key seeding; audit event names fields, never values of notes.
 
 ### LABEL-54 — Parties and payee data
-**Priority:** P1 · **Risk:** Medium · **Deps:** 49 · **Migration:** 174 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 49 · **Migration:** 174 · **Status:** In Progress (session_01VdMEG5FGhGT7BkditBEft4)
 - Parties page (G6 spec gap): legal name, stage name, address, country, tax id (restricted: `rights.write`/`finance.read` only), **PRO**, **IPI/CAE**, publisher, publisher IPI, payee details reference (no bank numbers stored in the app; a free-text "payment instructions" restricted to finance), invite-to-confirm. Credit **withdraw**. Lock `display_name`/`user_id` once a sheet naming the party is circulated, or snapshot names onto lines (G6 D-c).
 - Acceptance: scoped members only see parties in scope; roster artist sees names/roles/shares only (decision: no co-writer contact data); mutation check on the lock.
 

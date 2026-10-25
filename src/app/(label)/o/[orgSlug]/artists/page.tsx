@@ -12,6 +12,7 @@
  * /api/org/[orgId]/contacts routes; the page stays the roster list.
  */
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ArtistsCardView } from '@/components/artists/ArtistsCardView';
 import { OrgUploadPanel } from '@/components/labelos/OrgUploadPanel';
@@ -69,7 +70,21 @@ export default function OrgArtistsPage() {
           Artists
         </h1>
         <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-white/70">
-          {limited ? 'The artists you work on in this organization.' : 'Everyone on this organization’s roster.'}
+          {limited
+            ? 'The artists you work on in this organization.'
+            : shell.org.kind === 'artist'
+              ? 'Your artist workspace.'
+              : 'Everyone on this organization’s roster.'}
+          {shell.org.kind === 'artist' && shell.can('catalog.read') && (
+            <>
+              {' '}
+              The people you make music with are{' '}
+              <Link href={`/o/${shell.org.slug}/settings/members`} className="text-white/80 underline underline-offset-4 hover:text-white">
+                your collaborators
+              </Link>
+              .
+            </>
+          )}
         </p>
       </header>
       {/* LABEL-14: demos and material go straight into the roster (W3). */}
