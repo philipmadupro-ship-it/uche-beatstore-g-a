@@ -145,4 +145,17 @@ From `/o/<slug>/settings` (the admin centre) → **Members**:
 
 ## Order: code and bundle
 
-*(Filled in from the both-orders runs — see the PR description.)*
+Either order is safe, and it was checked in a running app (flag off and on,
+1440 and 390 wide, every page of the studio, storefront, buyer account, share
+pages and artist portal, plus writes):
+
+- **Code first, bundle later** (the database is as production is today): no
+  page or route returns a 5xx, with the flag off or on. One real break was found
+  and fixed on the way: the library, project and upload code asked for
+  `org_id`, a column migration 141 adds, and failed without it. They now carry
+  on without it when it does not exist yet.
+- **Bundle first, code later**: the old code does not know the new tables and
+  columns, which only add things.
+- Label OS itself only works once both are in and the flag is on.
+
+If you are unsure, paste the bundle first: it changes nothing you can see.
