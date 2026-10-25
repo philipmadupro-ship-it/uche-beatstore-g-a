@@ -13,6 +13,15 @@
  * scoped to Kilo only. The seed BUYER is marketing (reads, cannot write, no
  * rights.read).
  *
+ * LABEL-55: nothing a gate asks for is written with the service key any more.
+ * The ready release is CREATED through the "New release" form (UPC, label,
+ * ℗ / ©, genre, territories, language, distributor, planned date), its song is
+ * added through the master chooser (the one linked master is pre-selected; a
+ * song with none asks), the master is changed from the row, and the master
+ * recording's ISRC is typed in LABEL-53's metadata editor, reached from the
+ * Metadata gate's "Add the ISRC". The service key still seeds the cast (org,
+ * members, songs and their links) and reads the stored rows back.
+ *
  * Skipped unless E2E_REAL_DB=1. Run: `npm run e2e:real-db`.
  */
 import { test, expect, type APIRequestContext, type Browser, type BrowserContext } from '@playwright/test';
@@ -92,7 +101,7 @@ function solidPng(size: number): Buffer {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
-const shots = 'e2e-artifacts/LABEL-52';
+const shots = 'e2e-artifacts/LABEL-55';
 mkdirSync(shots, { recursive: true });
 
 const producer = { id: PRODUCER_ID, email: 'producer@local.test' };
@@ -137,7 +146,7 @@ test.beforeAll(async ({ request }) => {
     song(SONG_C, 'Charlie', 'selected'),
     song(KILO_SONG, 'Kilo Song', 'selected'),
   ]);
-  await rest(request, 'PATCH', `tracks?id=eq.${READY_MASTER}`, { isrc: 'USRC17607839' });
+  // The master's ISRC is NOT seeded: it is typed in the metadata editor (test 5b).
   await rest(request, 'POST', 'project_tracks', [READY_SONG, READY_MASTER, SONG_A, SONG_B, SONG_C].map((track_id, position) => ({ project_id: NOVA_INBOX, track_id, position })));
   await rest(request, 'POST', 'project_tracks', { project_id: KILO_INBOX, track_id: KILO_SONG, position: 0 });
   await rest(request, 'POST', 'track_links', { from_track_id: READY_SONG, to_track_id: READY_MASTER, user_id: null, relation: 'master' });
@@ -154,23 +163,65 @@ test.afterAll(async ({ request }) => {
 
 const releasePayload = (title: string, contact: string, extra: Record<string, unknown> = {}) => ({ title, contact_id: contact, type: 'single', ...extra });
 
-test('1 · the releases exist: a half-finished single, a fully-specified one, and Kilo’s', async ({ browser, baseURL }) => {
+test('1 · the releases exist: a half-finished single and Kilo’s through the route; the fully-specified one through the New release form', async ({ browser, baseURL, request }) => {
   const ctx = await as(browser, baseURL!, producer.id, producer.email);
   const blocked = await ctx.request.post(`${api}/releases`, { data: releasePayload(`Blocked Single ${run}`, NOVA) });
   expect(blocked.status(), await blocked.text()).toBe(201);
   ids.blocked = (await blocked.json()).release.id;
-  const ready = await ctx.request.post(`${api}/releases`, {
-    data: releasePayload(`Ready Single ${run}`, NOVA, {
-      upc: '036000291452', label_name: 'Board Records', p_line: '℗ 2026 Board Records', c_line: '© 2026 Board Records', primary_genre: 'Alt', target_date: '2026-12-01',
-    }),
-  });
-  expect(ready.status(), await ready.text()).toBe(201);
-  const view = (await ready.json()).release;
-  ids.ready = view.id;
-  ids.readyProject = view.projectId;
   const kilo = await ctx.request.post(`${api}/releases`, { data: releasePayload(`Kilo Single ${run}`, KILO) });
   expect(kilo.status(), await kilo.text()).toBe(201);
   ids.kilo = (await kilo.json()).release.id;
+
+  // The ready one: the form, as a person fills it. Artists list alphabetically (Kilo first), so Nova is chosen.
+  const page = await ctx.newPage();
+  await page.goto(`/o/${SLUG}/releases`);
+  await page.getByTestId('release-new-open').click({ timeout: 90_000 });
+  const form = page.getByTestId('release-new');
+  await expect(form).toBeVisible();
+  await expect(form.getByTestId('release-new-submit')).toBeDisabled();
+  await form.getByTestId('release-new-title').fill(`Ready Single ${run}`);
+  await form.getByRole('button', { name: 'Artist' }).click();
+  await page.getByRole('option', { name: `Nova ${run}` }).click();
+  await form.getByTestId('release-new-upc').fill('0 36000 29145 2');
+  await form.getByTestId('release-new-label').fill('Board Records');
+  await form.getByTestId('release-new-pline').fill('℗ 2026 Board Records');
+  await form.getByTestId('release-new-cline').fill('© 2026 Board Records');
+  await form.getByTestId('release-new-genre').fill('Alt');
+  await form.getByTestId('release-new-language').fill('EN');
+  await form.getByTestId('release-new-territories').fill('us gb');
+  await form.getByTestId('release-new-distributor').fill('DistroKid');
+  await form.getByTestId('release-new-date').fill('2026-12-01');
+  await page.screenshot({ path: `${shots}/new-release-form-1440.png`, fullPage: true });
+
+  // A UPC whose check digit fails is refused with the server's own words, and nothing is created.
+  await form.getByTestId('release-new-upc').fill('036000291453');
+  await form.getByTestId('release-new-submit').click();
+  await expect(form.getByTestId('release-new-error')).toContainText('UPC', { timeout: 30_000 });
+  expect(((await rest(request, 'GET', `releases?select=id&title=eq.Ready Single ${run}`)) as unknown[]).length).toBe(0);
+  // …and a territory that is not a country code is named before anything is sent.
+  await form.getByTestId('release-new-upc').fill('036000291452');
+  await form.getByTestId('release-new-territories').fill('us, usa');
+  await form.getByTestId('release-new-submit').click();
+  await expect(form.getByTestId('release-new-error')).toContainText('“usa” is not a two-letter country code');
+  await form.getByTestId('release-new-territories').fill('us gb');
+  await form.getByTestId('release-new-submit').click();
+
+  await expect(page).toHaveURL(new RegExp(`/o/${SLUG}/releases/[0-9a-f-]{36}$`), { timeout: 60_000 });
+  ids.ready = page.url().split('/').pop()!;
+  await expect(page.getByTestId('release-detail')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('release-field-upc')).toContainText('036000291452');
+  await expect(page.getByTestId('release-field-territories')).toContainText('US, GB');
+  await expect(page.getByTestId('release-field-language')).toContainText('en');
+  await expect(page.getByTestId('release-field-distributor')).toContainText('DistroKid');
+  const [row] = (await rest(request, 'GET', `releases?select=project_id,state,upc,label_name,p_line,c_line,primary_genre,territories,language,distributor,target_date,created_by&id=eq.${ids.ready}`)) as Record<string, unknown>[];
+  expect(row).toMatchObject({
+    state: 'draft', upc: '036000291452', label_name: 'Board Records', p_line: '℗ 2026 Board Records', c_line: '© 2026 Board Records', primary_genre: 'Alt',
+    territories: ['US', 'GB'], language: 'en', distributor: 'DistroKid', target_date: '2026-12-01', created_by: PRODUCER_ID,
+  });
+  ids.readyProject = row.project_id as string;
+  const events = (await rest(request, 'GET', `activity_events?select=verb,payload&release_id=eq.${ids.ready}&verb=eq.release.created`)) as { verb: string; payload: Record<string, unknown> }[];
+  expect(events).toHaveLength(1);
+  expect(JSON.stringify(events[0].payload)).not.toMatch(/DistroKid|036000291452/);
   await ctx.close();
 });
 
@@ -215,7 +266,14 @@ test('3 · the tracklist on the page: add, move with the buttons and with a posi
 
   const add = async (title: string) => {
     await page.getByRole('button', { name: 'Song to add' }).click();
-    await page.getByRole('option', { name: title }).click();
+    await page.getByRole('option', { name: title, exact: true }).click();
+    // No master is linked to these songs, so the chooser asks (nothing is guessed) and Add waits for the choice.
+    await expect(page.getByTestId('release-master-choice')).toHaveAttribute('data-ask', 'true', { timeout: 30_000 });
+    await expect(page.getByTestId('release-master-hint')).toContainText('No master is linked');
+    await expect(page.getByTestId('release-add-submit')).toBeDisabled();
+    await page.getByRole('button', { name: 'Master recording' }).click();
+    await page.getByRole('option', { name: new RegExp(`${title} · Own mix`) }).click();
+    await expect(page.getByTestId('release-add-submit')).toBeEnabled();
     await page.getByRole('button', { name: 'Add to tracklist' }).click();
     // The list item itself — the dropdown's own label shows the chosen title before anything is added.
     await expect(page.locator('[data-testid^="release-item-"]').filter({ hasText: title })).toBeVisible({ timeout: 30_000 });
@@ -272,6 +330,14 @@ test('4 · gates name their blockers; a member without rights.read is told how m
   // Read-only: no tracklist controls, no delivery button.
   await expect(view.getByLabel('Remove Bravo')).toHaveCount(0);
   await expect(view.getByTestId('release-deliver')).toHaveCount(0);
+  await expect(view.getByTestId('release-add-track')).toHaveCount(0);
+  await expect(view.locator('[data-testid^="release-item-master-"]')).toHaveCount(0);
+  // LABEL-55: no "New release" for a member without release.write, and the route agrees.
+  await view.goto(`/o/${SLUG}/releases`);
+  await expect(view.getByTestId('release-board')).toBeVisible({ timeout: 60_000 });
+  await expect(view.getByTestId('release-new-open')).toHaveCount(0);
+  expect((await mk.request.post(`${api}/releases`, { data: releasePayload('Nope', NOVA) })).status()).toBe(403);
+  expect((await mk.request.get(`${api}/releases/${ids.blocked}/master-options?song_track_id=${SONG_A}`)).status()).toBe(403);
   // LABEL-34: no export buttons or calendar link without release.write, and the route agrees.
   await expect(view.getByRole('button', { name: 'Download CSV' })).toHaveCount(0);
   await expect(view.getByRole('button', { name: 'Calendar link' })).toHaveCount(0);
@@ -309,6 +375,75 @@ test('5 · ACCEPTANCE: a blocked release is refused; an override needs an owner 
   await nonOwner.close();
 });
 
+test('5b · ACCEPTANCE: the master is chosen and the ISRC typed through the UI — the tracklist and metadata gates are satisfied by a person', async ({ browser, baseURL, request }) => {
+  const ctx = await as(browser, baseURL!, producer.id, producer.email);
+  const page = await ctx.newPage();
+  await page.goto(`/o/${SLUG}/releases/${ids.ready}`);
+  await expect(page.getByTestId('release-detail')).toBeVisible({ timeout: 90_000 });
+  const itemRows = async () => (await rest(request, 'GET', `release_items?select=id,song_track_id,master_track_id,explicit&release_id=eq.${ids.ready}&order=position`)) as { id: string; song_track_id: string; master_track_id: string; explicit: boolean }[];
+
+  // The master chooser: the song's single linked master is selected for it, Add is ready at once.
+  await page.getByRole('button', { name: 'Song to add' }).click();
+  await page.getByRole('option', { name: 'Ready Song', exact: true }).click();
+  const choice = page.getByTestId('release-master-choice');
+  await expect(choice).toHaveAttribute('data-ask', 'false', { timeout: 30_000 });
+  await expect(page.getByTestId('release-master-hint')).toHaveText('Its linked master is selected.');
+  await expect(choice.getByRole('button', { name: 'Master recording' })).toContainText('Ready Song (master)');
+  await expect(page.getByTestId('release-add-submit')).toBeEnabled();
+  await page.getByTestId('release-add-submit').click();
+  const itemRow = page.locator('[data-testid^="release-item-"][data-position="1"]');
+  await expect(itemRow).toContainText('Ready Song', { timeout: 30_000 });
+  const [item] = await itemRows();
+  expect(item).toMatchObject({ song_track_id: READY_SONG, master_track_id: READY_MASTER });
+  await expect(page.getByTestId(`release-item-info-${item.id}`)).toContainText('Separate master');
+
+  // The master is editable from the row: own mix, then back to the master (the options are read when it opens).
+  await page.getByTestId(`release-item-master-${item.id}`).click();
+  await expect(page.getByTestId(`release-item-master-option-${READY_MASTER}`)).toHaveAttribute('aria-pressed', 'true', { timeout: 30_000 });
+  await page.getByTestId(`release-item-master-option-${READY_SONG}`).click();
+  await expect.poll(async () => (await itemRows())[0].master_track_id).toBe(READY_SONG);
+  await expect(page.getByTestId(`release-item-info-${item.id}`)).toContainText('Own mix', { timeout: 30_000 });
+  await page.getByTestId('release-gate-open-masters').click();
+  await expect(page.getByTestId('release-gate-popover-masters')).toContainText('own mix');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId(`release-item-master-${item.id}`)).toBeEnabled();
+  await page.getByTestId(`release-item-master-${item.id}`).click();
+  await page.getByTestId(`release-item-master-option-${READY_MASTER}`).click();
+  await expect.poll(async () => (await itemRows())[0].master_track_id).toBe(READY_MASTER);
+  await expect(page.getByTestId('release-gate-tracklist')).toHaveAttribute('data-status', 'satisfied', { timeout: 30_000 });
+  await expect(page.getByTestId('release-gate-masters')).not.toContainText('own mix');
+  const edited = (await rest(request, 'GET', `activity_events?select=payload&release_id=eq.${ids.ready}&verb=eq.release.updated`)) as { payload: Record<string, unknown> }[];
+  expect(edited.some((e) => e.payload.items === 'edited' && JSON.stringify(e.payload.fields) === '["master_track_id"]')).toBe(true);
+
+  // Explicit, from the row.
+  await page.getByTestId(`release-item-explicit-${item.id}`).click();
+  await expect.poll(async () => (await itemRows())[0].explicit).toBe(true);
+  // The button is busy (disabled) until the write has settled and the page refreshed: wait for it, as a person would.
+  await expect(page.getByTestId(`release-item-explicit-${item.id}`)).toHaveAttribute('aria-pressed', 'true', { timeout: 30_000 });
+  await expect(page.getByTestId(`release-item-explicit-${item.id}`)).toBeEnabled();
+  await page.getByTestId(`release-item-explicit-${item.id}`).click();
+  await expect.poll(async () => (await itemRows())[0].explicit).toBe(false);
+
+  // The ISRC: the Metadata gate names it, "Add the ISRC" opens the master's editor, it is typed and saved there.
+  await page.getByTestId('release-gate-open-metadata').click();
+  await expect(page.getByTestId('release-gate-popover-metadata')).toContainText('has no ISRC');
+  await page.screenshot({ path: `${shots}/release-metadata-gate-isrc-1440.png`, fullPage: true });
+  await page.getByTestId(`release-fix-isrc-${READY_MASTER}`).click();
+  await expect(page.getByTestId('org-song')).toBeVisible({ timeout: 60_000 });
+  const editor = page.getByTestId(`org-rec-metadata-${READY_MASTER}`);
+  await editor.getByLabel('ISRC').fill('us-rc1-76-07839');
+  await editor.getByTestId(`org-rec-metadata-${READY_MASTER}-save`).click();
+  await expect(editor.getByTestId(`org-rec-metadata-${READY_MASTER}-save`)).toBeDisabled({ timeout: 25_000 });
+  await expect(editor.getByLabel('ISRC')).toHaveValue('USRC17607839');
+  expect(((await rest(request, 'GET', `tracks?select=isrc&id=eq.${READY_MASTER}`)) as { isrc: string }[])[0].isrc).toBe('USRC17607839');
+
+  await page.goto(`/o/${SLUG}/releases/${ids.ready}`);
+  await expect(page.getByTestId('release-gates')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('release-gate-open-metadata')).toHaveCount(0);
+  await page.screenshot({ path: `${shots}/release-master-isrc-done-1440.png`, fullPage: true });
+  await ctx.close();
+});
+
 test('6 · the ready release: gates are satisfied through the real routes (credits, splits, samples, approvals, artwork)', async ({ browser, baseURL, request }) => {
   const ctx = await as(browser, baseURL!, producer.id, producer.email);
   const a = ctx.request;
@@ -317,8 +452,7 @@ test('6 · the ready release: gates are satisfied through the real routes (credi
     return res;
   };
 
-  // Tracklist: the song, released as its master.
-  await ok(await a.post(`${api}/releases/${ids.ready}/items`, { data: { song_track_id: READY_SONG, master_track_id: READY_MASTER } }), 'add item');
+  // Tracklist and ISRC were done on the page (test 5b): the song goes out as its linked master.
   // Artwork, through the real file route: a cover that is too small blocks the gate (09 §4 size rule), a 3000 px square one satisfies it.
   const upload = async (size: number, name: string) => {
     const res = await a.post(`${api}/projects/${ids.readyProject}/assets`, {
@@ -414,6 +548,9 @@ test('7 · ACCEPTANCE: a release goes from draft to delivered — on the page, b
   await page.goto(`/o/${SLUG}/releases`);
   const row = page.getByTestId(`release-row-${ids.ready}`);
   await expect(row).toHaveAttribute('data-stage', 'ready', { timeout: 90_000 });
+  // LABEL-55: an A&R lead (release.write, not an owner) starts drafts, but "Add released music" stays the owner's and admins'.
+  await expect(page.getByTestId('release-new-open')).toBeVisible();
+  await expect(page.getByTestId('release-import-open')).toHaveCount(0);
   await page.getByTestId('release-filter-ready').click();
   await expect(page.getByTestId(`release-row-${ids.blocked}`)).toHaveCount(0);
 
@@ -515,5 +652,34 @@ test('10 · doc 21 #13: a song on a release has no Approve of its own — the so
   for (const g of ['master', 'artwork', 'legal', 'marketing', 'metadata']) await expect(page.getByTestId(`org-approval-${g}`)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: `${shots}/release-approvals-owner-390.png`, fullPage: true });
+  await ctx.close();
+});
+
+test('11 · LABEL-55 at a phone width: the New release form and a draft release’s tracklist controls stay usable (390 px)', async ({ browser, baseURL }) => {
+  const ctx = await as(browser, baseURL!, producer.id, producer.email);
+  const page = await ctx.newPage();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/o/${SLUG}/releases`);
+  await page.getByTestId('release-new-open').click({ timeout: 90_000 });
+  const form = page.getByTestId('release-new');
+  await expect(form).toBeVisible();
+  await expect(form.getByTestId('release-new-title')).toBeVisible();
+  await expect(form.getByTestId('release-new-submit')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: `${shots}/new-release-form-390.png`, fullPage: true });
+
+  // A draft with a tracklist: Kilo's release gets Kilo's song through the chooser.
+  await page.goto(`/o/${SLUG}/releases/${ids.kilo}`);
+  await expect(page.getByTestId('release-add-track')).toBeVisible({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Song to add' }).click();
+  await page.getByRole('option', { name: 'Kilo Song', exact: true }).click();
+  await expect(page.getByTestId('release-master-choice')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Master recording' }).click();
+  await page.getByRole('option', { name: /Kilo Song · Own mix/ }).click();
+  await page.getByTestId('release-add-submit').click();
+  await expect(page.locator('[data-testid^="release-item-"][data-position="1"]')).toContainText('Kilo Song', { timeout: 30_000 });
+  await expect(page.getByTestId('release-details')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: `${shots}/release-tracklist-controls-390.png`, fullPage: true });
   await ctx.close();
 });
