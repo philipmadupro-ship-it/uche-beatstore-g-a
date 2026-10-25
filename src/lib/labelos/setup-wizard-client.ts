@@ -16,7 +16,7 @@
  *     whole, normal org either way.
  */
 import { releaseRequest, rosterNames, setupBodyFromDraft, type WizardDraft } from './setup-wizard';
-import { DONE, errorOf, runTeamRoster, send, type FetchLike, type StepResult } from './team-roster-client';
+import { errorOf, runFollowUp, runTeamRoster, send, type FetchLike, type StepResult } from './team-roster-client';
 import type { FollowUp } from './team-roster';
 
 export type { FetchLike, StepResult };
@@ -51,17 +51,7 @@ export async function runSetup(draft: WizardDraft, fetchFn: FetchLike): Promise<
   const results: StepResult[] = [...team.results];
   const artistIds = team.artistIds;
 
-  const run = async (f: FollowUp) => {
-    const r = await send(fetchFn, `${base}${f.path}`, f.method, f.body);
-    results.push({
-      kind: f.kind,
-      label: f.label,
-      ok: r.ok,
-      message: r.ok ? DONE[f.kind] : errorOf(r.data, `Could not do this (${r.status || 'no connection'}).`),
-      fixIn: f.fixIn,
-    });
-    return r;
-  };
+  const run = (f: FollowUp) => runFollowUp(fetchFn, base, f, results);
 
   if (draft.release.enabled && draft.release.title.trim()) {
     let contactId: string | null = null;

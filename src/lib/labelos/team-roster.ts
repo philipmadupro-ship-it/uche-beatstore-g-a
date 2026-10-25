@@ -95,8 +95,13 @@ export function emptyCollaborator(): CollaboratorEntry {
   return { name: '', email: '', kind: 'beatmaker', projectId: '', projectRole: 'viewer' };
 }
 
+/** Is there anything real to add? A row nobody has typed into is not an entry. */
 export function hasEntries(e: TeamRosterEntries): boolean {
-  return e.artists.length + e.people.length + e.collaborators.length > 0;
+  return (
+    e.artists.some((a) => a.name.trim() || a.email.trim()) ||
+    e.people.some((p) => p.email.trim()) ||
+    e.collaborators.some((c) => c.name.trim() || c.email.trim())
+  );
 }
 
 // ── Wording and what may be added ───────────────────────────────────────

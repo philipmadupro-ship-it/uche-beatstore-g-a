@@ -66,6 +66,24 @@ export const DONE: Record<FollowUpKind, string> = {
   project_invite: 'Invited to the project',
 };
 
+export const INVITE_NOT_EMAILED =
+  'The invitation exists but its email could not be sent. Revoke it and invite again, or ask them to check with you.';
+
+/** One request, recorded as one result line. An invitation whose email did not go out says so (emailSent: false). */
+export async function runFollowUp(fetchFn: FetchLike, base: string, f: FollowUp, results: StepResult[]) {
+  const r = await send(fetchFn, `${base}${f.path}`, f.method, f.body);
+  const unsent = r.ok && (f.kind === 'invitation' || f.kind === 'project_invite') && r.data.emailSent === false;
+  results.push({
+    kind: f.kind,
+    label: f.label,
+    ok: r.ok,
+    message: !r.ok ? errorOf(r.data, `Could not do this (${r.status || 'no connection'}).`) : unsent ? INVITE_NOT_EMAILED : DONE[f.kind],
+    fixIn: f.fixIn,
+    ...(r.ok && f.kind === 'login' && typeof f.body.password === 'string' ? { password: f.body.password } : {}),
+  });
+  return r;
+}
+
 export type RunOptions = {
   orgId: string;
   /** Roster contact ids that already exist, which a limited member may be pointed at. */
@@ -76,6 +94,8 @@ export type TeamRosterRun = {
   results: StepResult[];
   /** Artist name → contact id, for the artists created by this run. */
   artistIds: Map<string, string>;
+  /** The entries that did not go through at all, so the page can keep them for another try. */
+  failed: TeamRosterEntries;
 };
 
 export async function runTeamRoster(entries: TeamRosterEntries, fetchFn: FetchLike, opts: RunOptions): Promise<TeamRosterRun> {
@@ -83,19 +103,8 @@ export async function runTeamRoster(entries: TeamRosterEntries, fetchFn: FetchLi
   const results: StepResult[] = [];
   const artistIds = new Map<string, string>();
   const existing = new Set(opts.existingArtists);
-
-  const run = async (f: FollowUp) => {
-    const r = await send(fetchFn, `${base}${f.path}`, f.method, f.body);
-    results.push({
-      kind: f.kind,
-      label: f.label,
-      ok: r.ok,
-      message: r.ok ? DONE[f.kind] : errorOf(r.data, `Could not do this (${r.status || 'no connection'}).`),
-      fixIn: f.fixIn,
-      ...(r.ok && f.kind === 'login' && typeof f.body.password === 'string' ? { password: f.body.password } : {}),
-    });
-    return r;
-  };
+  const failed: TeamRosterEntries = { artists: [], people: [], collaborators: [] };
+  const run = (f: FollowUp) => runFollowUp(fetchFn, base, f, results);
 
   for (const entry of entries.artists) {
     const name = entry.name.trim();
@@ -104,21 +113,39 @@ export async function runTeamRoster(entries: TeamRosterEntries, fetchFn: FetchLi
     const r = await run(contactRequest);
     const id = r.ok ? idOf(r.data, 'contact') : null;
     if (id) artistIds.set(name, id);
-    const [, invite] = artistRequests(entry, () => id);
-    if (invite) await run(invite);
+    else failed.artists.push(entry);
+    if (entry.invite && entry.email.trim()) {
+      const [, invite] = artistRequests(entry, () => id);
+      if (invite) await run(invite);
+      else {
+        results.push({
+          kind: 'invitation',
+          label: entry.email.trim(),
+          ok: false,
+          message: `${name} was not added, so their login invitation was not sent.`,
+          fixIn: 'Team → Add artist',
+        });
+      }
+    }
   }
 
   const resolveArtist = (key: string): string | null => artistIds.get(key.trim()) ?? (existing.has(key) ? key : null);
   for (const person of entries.people) {
-    const request = personRequest(person, resolveArtist);
+    const email = person.email.trim();
+    if (!email) continue;
+    // All of the artists a limited member was to see, or nobody: a narrower list would be a different grant.
+    const wanted = person.role === 'member' && person.scope === 'artists' ? (person.artists ?? []) : [];
+    const request = wanted.every((k) => resolveArtist(k)) ? personRequest(person, resolveArtist) : null;
     if (request) {
-      await run(request);
-    } else if (person.email.trim()) {
+      const r = await run(request);
+      if (!r.ok) failed.people.push(person);
+    } else {
+      failed.people.push(person);
       results.push({
         kind: person.mode === 'login' ? 'login' : 'invitation',
-        label: person.email.trim(),
+        label: email,
         ok: false,
-        message: 'The artists they were to see were not available, so nobody was added. Add them from Team.',
+        message: 'Not every artist they were to see was available, so nobody was added. Add them from Team.',
         fixIn: 'Team → Add member',
       });
     }
@@ -128,10 +155,13 @@ export async function runTeamRoster(entries: TeamRosterEntries, fetchFn: FetchLi
     const [contactRequest] = collaboratorRequests(entry);
     if (!contactRequest) continue;
     const r = await run(contactRequest);
-    if (!r.ok) continue;
+    if (!r.ok) {
+      failed.collaborators.push(entry);
+      continue;
+    }
     const [, invite] = collaboratorRequests(entry);
     if (invite) await run(invite);
   }
 
-  return { results, artistIds };
+  return { results, artistIds, failed };
 }

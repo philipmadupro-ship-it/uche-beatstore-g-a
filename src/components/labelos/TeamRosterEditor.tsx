@@ -15,6 +15,7 @@
  */
 import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Field } from '@/components/ui/Field';
 import { cn } from '@/lib/utils';
@@ -88,9 +89,11 @@ export function TeamRosterEditor({
 
   const patchArtist = (i: number, patch: Partial<ArtistEntry>) => {
     const before = entries.artists[i];
-    const artists = entries.artists.map((r, k) => (k === i ? { ...r, ...patch } : r));
-    // A member limited to this artist follows the artist's new name.
-    if (patch.name !== undefined && before.name.trim() && before.name.trim() !== patch.name.trim()) {
+    // Without an address there is nobody to send a login to.
+    const next = patch.email !== undefined && !patch.email.trim() ? { ...patch, invite: false } : patch;
+    const artists = entries.artists.map((r, k) => (k === i ? { ...r, ...next } : r));
+    // A member limited to this artist follows the artist's new name (not while the name is being retyped from empty).
+    if (patch.name !== undefined && patch.name.trim() && before.name.trim() && before.name.trim() !== patch.name.trim()) {
       const from = before.name.trim();
       const to = patch.name.trim();
       set({
@@ -129,8 +132,7 @@ export function TeamRosterEditor({
                 </div>
                 {adds.member ? (
                   <label className="flex min-h-9 items-center gap-2 text-xs text-white/80">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={r.invite === true}
                       disabled={disabled || !r.email.trim()}
                       onChange={(e) => patchArtist(i, { invite: e.target.checked })}

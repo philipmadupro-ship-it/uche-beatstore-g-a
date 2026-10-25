@@ -122,4 +122,22 @@ describe('TeamRosterEditor', () => {
     render(<Harness start={start} projects="failed" />);
     expect(screen.getByRole('alert').textContent).toMatch(/could not load the projects/i);
   });
+
+  it('clearing the address un-ticks the artist login, and retyping a name from empty keeps a member on that artist', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add artist' }));
+    fireEvent.change(screen.getByLabelText('Artist name'), { target: { value: 'Nova' } });
+    fireEvent.change(screen.getByLabelText('Email (optional)'), { target: { value: 'n@x.test' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Invite artist 1 to sign in' }));
+    fireEvent.change(screen.getByLabelText('Email (optional)'), { target: { value: '' } });
+    expect(latest.artists[0].invite).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a person' }));
+    const person = screen.getByTestId('team-row');
+    fireEvent.click(within(person).getByRole('radio', { name: 'Selected artists' }));
+    fireEvent.click(within(person).getByRole('switch', { name: 'Nova' }));
+    fireEvent.change(screen.getByLabelText('Artist name'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Artist name'), { target: { value: 'Nova' } });
+    expect(latest.people[0].artists).toEqual(['Nova']);
+  });
 });

@@ -230,7 +230,8 @@ export function TeamRosterWindow() {
     try {
       const run = await runTeamRoster(entries, (url, init) => fetch(url, init), { orgId: org.id, existingArtists: editorArtists.map((a) => a.key) });
       setResults(run.results);
-      setEntries({ artists: [], people: [], collaborators: [] });
+      // What went through is done; what did not stays in the form, passwords included, for another try.
+      setEntries(run.failed);
       setReloadKey((k) => k + 1);
       void loadContacts();
     } finally {

@@ -192,6 +192,8 @@ describe('request builders', () => {
 describe('hasEntries', () => {
   it('knows when there is anything to add', () => {
     expect(hasEntries(none())).toBe(false);
-    expect(hasEntries({ ...none(), artists: [emptyArtist()] })).toBe(true);
+    expect(hasEntries({ ...none(), artists: [emptyArtist()] })).toBe(false);
+    expect(hasEntries({ ...none(), artists: [{ ...emptyArtist(), name: 'Nova' }] })).toBe(true);
+    expect(hasEntries({ ...none(), people: [{ ...emptyPerson(), email: 'a@x.test' }] })).toBe(true);
   });
 });

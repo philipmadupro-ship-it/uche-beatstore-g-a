@@ -4,7 +4,9 @@
  * project as an external member (the Team page). Capability `share.external`
  * (the same one `POST …/projects/[id]/members` needs) and a member who sees
  * the whole organization — a limited member reaches projects through their
- * artists, and this list is not a way around that. Names and ids only.
+ * artists, and this list is not a way around that. Names and ids only. An
+ * artist's Inbox (the system project their loose songs land in) is not a
+ * project to invite anyone to, so it is left out.
  */
 import { NextResponse } from 'next/server';
 import { requireOrgCapability } from '@/lib/auth/org-access';
@@ -25,7 +27,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ orgId: 
   }
   try {
     const rows = await pageAll<{ id: string; name: string | null }>(
-      (from, to) => access.admin.from('projects').select('id, name').eq('org_id', access.orgId).order('name', { ascending: true }).order('id').range(from, to),
+      (from, to) => access.admin.from('projects').select('id, name').eq('org_id', access.orgId).is('inbox_for_contact_id', null).order('name', { ascending: true }).order('id').range(from, to),
       'project list',
     );
     return NextResponse.json(

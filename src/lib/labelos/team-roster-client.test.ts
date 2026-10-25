@@ -100,4 +100,40 @@ describe('runTeamRoster', () => {
     const run = await runTeamRoster(entries({ artists: [{ name: 'Nova', email: '' }] }), fetchFn, { orgId: ORG, existingArtists: [] });
     expect(run.results[0]).toMatchObject({ ok: false, message: 'Could not reach the server.' });
   });
+
+  it('an invitation whose email did not go out does not read as sent', async () => {
+    const s = server({ 'POST /invitations': () => ({ status: 201, body: { emailSent: false } }) });
+    const run = await runTeamRoster(entries({ people: [{ ...emptyPerson(), email: 'a@x.test', fn: 'legal' }] }), s.fetchFn, { orgId: ORG, existingArtists: [] });
+    expect(run.results[0]).toMatchObject({ ok: true });
+    expect(run.results[0].message).toMatch(/email could not be sent/);
+    expect(run.failed.people).toEqual([]);
+  });
+
+  it('what did not go through comes back for another try; what did does not', async () => {
+    const s = server({
+      'POST /contacts': (c) => (c.body.name === 'Nova' ? { status: 409, body: { error: 'x' } } : contact(c)),
+      'POST /invitations': () => ok,
+    });
+    const nova = { name: 'Nova', email: 'n@x.test', invite: true };
+    const run = await runTeamRoster(
+      entries({ artists: [nova, { name: 'Kai', email: '' }], people: [{ ...emptyPerson(), email: 'a@x.test', fn: 'legal' }] }),
+      s.fetchFn,
+      { orgId: ORG, existingArtists: [] },
+    );
+    expect(run.failed.artists).toEqual([nova]);
+    expect(run.failed.people).toEqual([]);
+    // The login the failed artist asked for says why it was not sent.
+    expect(run.results.find((r) => r.label === 'n@x.test')?.message).toMatch(/was not added/);
+  });
+
+  it('a member is never sent with fewer artists than they were given', async () => {
+    const s = server({
+      'POST /contacts': (c) => (c.body.name === 'Kai' ? { status: 409, body: { error: 'x' } } : contact(c)),
+      'POST /invitations': () => ok,
+    });
+    const person = { ...emptyPerson(), email: 'a@x.test', fn: 'legal' as const, scope: 'artists' as const, artists: ['Nova', 'Kai'] };
+    const run = await runTeamRoster(entries({ artists: [{ name: 'Nova', email: '' }, { name: 'Kai', email: '' }], people: [person] }), s.fetchFn, { orgId: ORG, existingArtists: [] });
+    expect(s.calls.some((c) => c.url.endsWith('/invitations'))).toBe(false);
+    expect(run.failed.people).toEqual([person]);
+  });
 });

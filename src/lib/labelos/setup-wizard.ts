@@ -25,7 +25,7 @@
  * Pure: no I/O. The runner is ./setup-wizard-client.ts, the page
  * src/components/labelos/OrgSetupWizard.tsx.
  */
-import { FUNCTIONS_BY_ORG_KIND, type OrgFunction, type OrgKind } from './capabilities';
+import { EXTERNAL_PROJECT_ROLES, FUNCTIONS_BY_ORG_KIND, type OrgFunction, type OrgKind } from './capabilities';
 import { parseContractTypes, type ContractTypeId } from './contract-types';
 import { MODULES, type Module } from './entitlements';
 import { invitableRoles, type InvitableRole } from './invitations';
@@ -44,7 +44,6 @@ import {
   type FollowUpKind,
   type PersonEntry,
 } from './team-roster';
-import { EXTERNAL_PROJECT_ROLES } from './capabilities';
 
 export { isEmail, type FollowUp, type FollowUpKind };
 
