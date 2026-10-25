@@ -17,6 +17,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { isUUID } from '@/lib/validate';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { RELEASE_MASTER_RELATIONS } from '@/lib/labelos/releases';
 import { masterChoice, type MasterCandidate } from '@/lib/labelos/master-choice';
 import { fail, releaseRow, schemaAware, visibleTrack } from '../../access';
 
@@ -47,13 +48,13 @@ export async function GET(req: NextRequest, { params }: Params) {
       .select('from_track_id, to_track_id, relation')
       .eq('from_track_id', song.track.id);
     if (error) throw new Error(error.message);
-    const links = (data ?? []) as { from_track_id: string; to_track_id: string; relation: string }[];
+    const relations = RELEASE_MASTER_RELATIONS as readonly string[];
+    const links = ((data ?? []) as { from_track_id: string; to_track_id: string; relation: string }[]).filter((l) => relations.includes(l.relation));
 
     // Only recordings this member may see take part, so a hidden master is neither offered nor the default.
-    const visible = new Set<string>();
-    for (const id of new Set(links.map((l) => l.to_track_id.toLowerCase()))) {
-      if ((await visibleTrack(access.orgId, id)).ok) visible.add(id);
-    }
+    const targets = [...new Set(links.map((l) => l.to_track_id.toLowerCase()))];
+    const checked = await Promise.all(targets.map(async (id) => ((await visibleTrack(access.orgId, id)).ok ? id : null)));
+    const visible = new Set(checked.filter((id): id is string => id !== null));
     const visibleLinks = links.filter((l) => visible.has(l.to_track_id.toLowerCase()));
     const choice = masterChoice(song.track.id, visibleLinks);
 

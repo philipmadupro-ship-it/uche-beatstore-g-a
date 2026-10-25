@@ -20,7 +20,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
-import { RELEASE_COLUMNS, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
+import { RELEASE_COLUMNS, RELEASE_DETAIL_COLUMNS, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
 import { importedDeliveredAt, planImport } from '@/lib/labelos/release-import';
 import { inChunks, pageAll, ReadError } from '@/lib/labelos/overview-store';
 import { checkArtwork, fail, notReady, writeError } from './access';
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           : { state: 'draft' }),
         created_by: access.userId,
       })
-      .select(RELEASE_COLUMNS)
+      .select(RELEASE_DETAIL_COLUMNS)
       .single();
     if (error || !data) {
       await removeProject(admin, org, createdProject ? projectId : null);

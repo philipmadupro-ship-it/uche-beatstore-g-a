@@ -28,6 +28,7 @@ export function parseTerritories(text: string): TerritoriesResult {
     if (!/^[A-Z]{2}$/.test(code)) return { ok: false, error: `“${part}” is not a two-letter country code (use WW for worldwide).` };
     if (!codes.includes(code)) codes.push(code);
   }
+  if (codes.includes('WW') && codes.length > 1) return { ok: false, error: 'WW means worldwide on its own; remove the other territories or WW.' };
   if (codes.length > MAX_TERRITORIES) return { ok: false, error: `A release names at most ${MAX_TERRITORIES} territories.` };
   return { ok: true, codes };
 }
@@ -40,11 +41,11 @@ export type LanguageResult = { ok: true; code: string | null } | { ok: false; er
 export function parseLanguage(text: string): LanguageResult {
   const v = text.trim();
   if (v === '') return { ok: true, code: null };
-  const m = /^([A-Za-z]{2,3})(?:[-_]([A-Za-z0-9]{2,8}))?$/.exec(v);
-  if (!m) return { ok: false, error: 'Use a language code such as “en” or “pt-BR”.' };
-  const region = m[2];
-  const regionOut = region ? (/^[A-Za-z]{2}$/.test(region) ? region.toUpperCase() : region) : null;
-  return { ok: true, code: regionOut ? `${m[1].toLowerCase()}-${regionOut}` : m[1].toLowerCase() };
+  if (!/^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$/.test(v)) return { ok: false, error: 'Use a language code such as “en”, “pt-BR” or “zh-Hant-TW”.' };
+  const [language, ...subtags] = v.split(/[-_]/);
+  // BCP 47 casing: language lower, a two-letter region upper, a four-letter script capitalised.
+  const tidy = (t: string) => (/^[A-Za-z]{2}$/.test(t) ? t.toUpperCase() : /^[A-Za-z]{4}$/.test(t) ? t[0].toUpperCase() + t.slice(1).toLowerCase() : t.toLowerCase());
+  return { ok: true, code: [language.toLowerCase(), ...subtags.map(tidy)].join('-') };
 }
 
 export type NewReleaseForm = {

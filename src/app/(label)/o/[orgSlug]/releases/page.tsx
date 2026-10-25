@@ -47,8 +47,8 @@ export default async function ReleaseBoardPage({
           Every release and where its gates stand. Open one to work its tracklist and artwork, or to mark it delivered.
         </p>
       </header>
-      {mayCreate && artists.length > 0 && (
-        <div className="mb-6 flex flex-wrap items-start gap-2" data-testid="release-create-actions">
+      {mayCreate && (
+        <div className="mb-6 flex empty:hidden flex-wrap items-start gap-2" data-testid="release-create-actions">
           <NewReleasePanel orgId={shell.org.id} orgSlug={shell.org.slug} artists={artists} />
           {mayImport && <ReleaseImportPanel orgId={shell.org.id} orgSlug={shell.org.slug} artists={artists} />}
         </div>

@@ -23,6 +23,7 @@ import {
   ARTWORK_PROBLEM_MESSAGES,
   MASTER_PROBLEM_MESSAGES,
   RELEASE_COLUMNS,
+  RELEASE_DETAIL_COLUMNS,
   RELEASE_ITEM_COLUMNS,
   releaseArtworkProblem,
   releaseMasterProblem,
@@ -119,10 +120,10 @@ export type ReleaseAccess = { ok: true; release: ReleaseRow };
  * After the route's `requireObjectAccess({ table: 'releases', … })`: the
  * release row, read by id and org.
  */
-export async function releaseRow(access: ObjectAccessOk): Promise<ReleaseAccess | OwnershipFail> {
+export async function releaseRow(access: ObjectAccessOk, opts: { details?: boolean } = {}): Promise<ReleaseAccess | OwnershipFail> {
   const { data, error } = await access.admin
     .from('releases')
-    .select(RELEASE_COLUMNS)
+    .select(opts.details ? RELEASE_DETAIL_COLUMNS : RELEASE_COLUMNS)
     .eq('id', access.object.id)
     .eq('org_id', access.object.orgId)
     .maybeSingle();

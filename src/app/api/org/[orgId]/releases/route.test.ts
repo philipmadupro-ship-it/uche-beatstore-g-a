@@ -354,9 +354,9 @@ describe('POST /releases: release.write', () => {
 
 describe('LABEL-55: territories, language and the planned distributor (migration 175)', () => {
   it('a release is created with them and sends them back', async () => {
-    const res = await collection('POST', AR, L, { title: 'Nova Album', contact_id: C1, distributor: 'DistroKid', territories: ['US', 'GB', 'WW'], language: 'pt-BR' });
+    const res = await collection('POST', AR, L, { title: 'Nova Album', contact_id: C1, distributor: 'DistroKid', territories: ['US', 'GB'], language: 'pt-BR' });
     expect(res.status).toBe(201);
-    expect((await res.json()).release).toMatchObject({ distributor: 'DistroKid', territories: ['US', 'GB', 'WW'], language: 'pt-BR' });
+    expect((await res.json()).release).toMatchObject({ distributor: 'DistroKid', territories: ['US', 'GB'], language: 'pt-BR' });
   });
 
   it('they are edited and cleared through PATCH; the event names the fields, never the values', async () => {
@@ -371,7 +371,7 @@ describe('LABEL-55: territories, language and the planned distributor (migration
   });
 
   it('a bad territory, a duplicate, an empty list or a language word is a 400', async () => {
-    for (const body of [{ territories: ['usa'] }, { territories: ['US', 'US'] }, { territories: [] }, { language: 'English' }, { distributor: 'x'.repeat(121) }]) {
+    for (const body of [{ territories: ['usa'] }, { territories: ['US', 'US'] }, { territories: ['WW', 'US'] }, { territories: [] }, { language: 'English' }, { distributor: 'x'.repeat(121) }]) {
       expect((await one('PATCH', AR, L, R1, body)).status, JSON.stringify(body)).toBe(400);
     }
     expect(db.tables.releases.find((r) => r.id === R1)).toMatchObject({ territories: null, language: null });

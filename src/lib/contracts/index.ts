@@ -1363,6 +1363,7 @@ const releaseFields = {
     .min(1)
     .max(250)
     .refine((v) => new Set(v).size === v.length, 'List each territory once')
+    .refine((v) => !v.includes('WW') || v.length === 1, 'WW means worldwide on its own')
     .nullable(),
   language: z
     .string()

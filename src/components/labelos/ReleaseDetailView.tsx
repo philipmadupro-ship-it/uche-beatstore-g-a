@@ -280,6 +280,7 @@ function AddTrack({ orgId, detail, busy, act }: { orgId: string; detail: Detail;
     setChoice(null);
     setMasterId('');
     setLoadError(null);
+    setLoading(false);
     if (!songId) return;
     setLoading(true);
     const res = await getMasterOptions(orgId, release.id, songId);

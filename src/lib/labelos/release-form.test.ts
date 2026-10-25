@@ -15,6 +15,10 @@ describe('parseTerritories', () => {
     expect(parseTerritories('US, USA')).toEqual({ ok: false, error: '“USA” is not a two-letter country code (use WW for worldwide).' });
     expect(parseTerritories('U5')).toMatchObject({ ok: false });
   });
+  it('WW is worldwide on its own, never beside a country', () => {
+    expect(parseTerritories('WW US')).toMatchObject({ ok: false });
+    expect(parseTerritories('us ww')).toMatchObject({ ok: false });
+  });
   it('refuses more than 250', () => {
     const many = Array.from({ length: 676 }, (_, i) => String.fromCharCode(65 + Math.floor(i / 26)) + String.fromCharCode(65 + (i % 26))).slice(0, 251).join(',');
     expect(parseTerritories(many)).toMatchObject({ ok: false });
@@ -33,6 +37,10 @@ describe('parseLanguage', () => {
     expect(parseLanguage('EN')).toEqual({ ok: true, code: 'en' });
     expect(parseLanguage('pt-br')).toEqual({ ok: true, code: 'pt-BR' });
     expect(parseLanguage('')).toEqual({ ok: true, code: null });
+  });
+  it('keeps every subtag, with BCP 47 casing', () => {
+    expect(parseLanguage('zh-hant-tw')).toEqual({ ok: true, code: 'zh-Hant-TW' });
+    expect(parseLanguage('PT_br')).toEqual({ ok: true, code: 'pt-BR' });
   });
   it('refuses a word', () => {
     expect(parseLanguage('English')).toMatchObject({ ok: false });

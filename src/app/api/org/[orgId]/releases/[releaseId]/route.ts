@@ -18,7 +18,7 @@ import { OrgReleasePatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
-import { RELEASE_COLUMNS, releaseEventSubject, toReleaseItemView, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
+import { RELEASE_DETAIL_COLUMNS, releaseEventSubject, toReleaseItemView, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
 import { checkArtwork, fail, itemsOf, releaseRow, schemaAware, writeError } from '../access';
 
 export const runtime = 'nodejs';
@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!isSupabaseConfigured()) return unconfigured();
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
   if (!access.ok) return (await schemaAware(access)).res;
-  const found = await releaseRow(access);
+  const found = await releaseRow(access, { details: true });
   if (!found.ok) return found.res;
   try {
     const items = await itemsOf(access, found.release.id);
@@ -98,7 +98,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .eq('org_id', access.object.orgId)
       .eq('state', release.state);
     guarded = release.release_date === null ? guarded.is('release_date', null) : guarded.eq('release_date', release.release_date);
-    const { data, error } = await guarded.select(RELEASE_COLUMNS).maybeSingle();
+    const { data, error } = await guarded.select(RELEASE_DETAIL_COLUMNS).maybeSingle();
     if (error) return writeError(error, 'Could not save the release').res;
     if (!data) return fail(409, 'The release changed while it was being saved; reload and try again', { field: 'state' }).res;
     await recordEvent(
