@@ -54,6 +54,7 @@ vi.mock('@/lib/storage/upload', () => ({
   uploadPeaksSidecar: storage.uploadPeaksSidecar,
   uploadPublicPreview: storage.uploadPublicPreview,
 }));
+vi.mock('@/lib/audio/mp3-deliverable.server', () => ({ realMp3Deps: {} }));
 vi.mock('@/lib/storage/org-media', () => ({
   uploadOrgPeaks: storage.uploadOrgPeaks,
   uploadOrgPreview: storage.uploadOrgPreview,

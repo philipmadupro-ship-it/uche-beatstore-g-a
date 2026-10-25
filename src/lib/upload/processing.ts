@@ -243,8 +243,10 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
     // The MP3 a lease on this track delivers, made now from the master already
     // in memory so the first buyer does not wait for it (it is otherwise made on
     // first download — lib/audio/mp3-deliverable). Non-fatal either way.
-    const mp3 = await prepareMp3Deliverable({ id: job.track_id, audio_url: job.audio_url }, audioBuffer, realMp3Deps);
-    if (!mp3 && job.audio_url && !/\.mp3(?:\?|$)/i.test(job.audio_url)) {
+    // Never for an org recording: it is not sold, and the derivative would sit
+    // under deliverables/, outside the orgs/<id>/ prefix the org export and purge cover.
+    const mp3 = orgId ? null : await prepareMp3Deliverable({ id: job.track_id, audio_url: job.audio_url }, audioBuffer, realMp3Deps);
+    if (!orgId && !mp3 && job.audio_url && !/\.mp3(?:\?|$)/i.test(job.audio_url)) {
       console.warn('Upload processing: delivery MP3 not made (ffmpeg unavailable?); it will be made on first download');
     }
 
