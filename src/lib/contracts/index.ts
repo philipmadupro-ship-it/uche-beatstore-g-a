@@ -713,6 +713,8 @@ export const ProjectContactPatchBodySchema = z.object({
   in_portal: z.boolean().optional(),
   allow_downloads: z.boolean().optional(),
   can_comment: z.boolean().optional(),
+  /** Mig 191: the contact may upload their own files into this project from their portal. */
+  can_upload: z.boolean().optional(),
   /** Mig 135: the pitch a label sees on this project in their portal. Empty clears it. */
   pitch_note: z.string().max(2000).nullable().optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
@@ -734,7 +736,7 @@ export const ArtistPortalActionBodySchema = z.object({
   auto_digest: z.boolean().optional(),
   /** settings: the artist must confirm their email before the portal opens (mig 131). */
   require_sign_in: z.boolean().optional(),
-}).strict().refine((b) => b.action !== 'settings' || b.auto_digest !== undefined || b.require_sign_in !== undefined, { message: 'Nothing to update' });
+}).strict().refine((b) => b.action !== 'settings' || b.auto_digest !== undefined || b.require_sign_in !== undefined || b.password !== undefined, { message: 'Nothing to update' });
 export type ArtistPortalActionBody = z.infer<typeof ArtistPortalActionBodySchema>;
 
 /** POST /api/contacts/[id]/notify — one digest email of what is new in the portal. */
@@ -792,6 +794,37 @@ export const ProjectAssetPatchBodySchema = z.object({
   position: z.number().int().min(0).max(100000).optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type ProjectAssetPatchBody = z.infer<typeof ProjectAssetPatchBodySchema>;
+
+// ── Contact uploads through the portal (PORTAL-UP, mig 191) ──────────────
+// The kind is guessed from the name and the file always lands in the portal
+// (the artist sees what they sent); the producer recategorises it later.
+
+/** POST /api/portal/[token]/files/presign */
+export const PortalUploadPresignBodySchema = z.object({
+  project_id: z.string().uuid(),
+  file_name: z.string().min(1).max(300),
+  size_bytes: z.number().int().positive(),
+}).strict();
+export type PortalUploadPresignBody = z.infer<typeof PortalUploadPresignBodySchema>;
+
+/**
+ * POST /api/portal/[token]/files (JSON) — register a file uploaded with a
+ * presigned PUT. `upload_id` is the opaque `<id>.<ext>` the presign returned:
+ * a public visitor never sees or sends a storage reference.
+ */
+export const PortalUploadRegisterBodySchema = z.object({
+  project_id: z.string().uuid(),
+  upload_id: z.string().regex(/^[A-Za-z0-9_-]{6,64}\.[a-z0-9]{1,8}$/, 'Invalid upload id'),
+  file_name: z.string().min(1).max(300),
+  label: z.string().max(200).optional(),
+}).strict();
+export type PortalUploadRegisterBody = z.infer<typeof PortalUploadRegisterBodySchema>;
+
+/** Fields of a multipart POST /api/portal/[token]/files besides the file. */
+export const PortalUploadFormFieldsSchema = z.object({
+  project_id: z.string().uuid(),
+  label: z.string().max(200).optional(),
+});
 
 const commentRegion = <T extends { region_start?: number | null; region_end?: number | null }>(b: T) =>
   (b.region_start == null) === (b.region_end == null)

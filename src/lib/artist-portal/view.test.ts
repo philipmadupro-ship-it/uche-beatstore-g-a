@@ -53,7 +53,7 @@ describe('toPortalProject', () => {
     );
     expect(out).toEqual({
       id: 'p1', name: 'New EP', cover_url: 'https://cdn.example.com/c.png', description: 'Six tracks',
-      isNew: true, newCount: 3, beats: 5, songs: 1, files: 2, allowDownloads: false, canComment: true, pitchNote: null,
+      isNew: true, newCount: 3, beats: 5, songs: 1, files: 2, allowDownloads: false, canComment: true, canUpload: false, pitchNote: null,
     });
   });
 });
@@ -64,7 +64,7 @@ describe('toPortalFile', () => {
     const out = toPortalFile(hostile, { token: 'tok', isNew: true });
     expect(out).toEqual({
       id: 'f1', projectId: 'p1', kind: 'lyrics', label: 'C:\\x\\Lyrics.pdf', fileName: 'Lyrics.pdf', mime: 'application/pdf',
-      sizeBytes: 2048, isNew: true, url: '/api/portal/tok/files/f1',
+      sizeBytes: 2048, isNew: true, fromYou: false, url: '/api/portal/tok/files/f1',
     });
     expect(JSON.stringify(out)).not.toContain('r2://');
     expect(JSON.stringify(out)).not.toContain('owner-1');

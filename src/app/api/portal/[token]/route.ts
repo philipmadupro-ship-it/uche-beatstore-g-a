@@ -12,6 +12,7 @@ import { portalProjectLinks } from '@/lib/artist-portal/membership';
 import { availableAt, isNewSince, nextVisitWatermarks } from '@/lib/artist-portal/new-items';
 import { publicUrlOrNull, toPortalArtworkTheme, toPortalFile, toPortalProject, toPortalTrack, type PortalTrack, type PortalView } from '@/lib/artist-portal/view';
 import { loadPortalAssets } from '@/lib/artist-portal/files';
+import { loadUploadableProjects } from '@/lib/artist-portal/uploads';
 import { assetAvailableAt } from '@/lib/projects/assets';
 import { isSchemaNotReady } from '@/lib/artists/http';
 import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
@@ -87,7 +88,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (statesRes.error) throw statesRes.error;
     // The portal's shape follows the contact's MAIN role (lib/artist-portal/audience).
     const audience = portalAudience((contactRes.data as { category?: string | null } | null)?.category);
-    const pitchNotes = audience === 'label' ? await loadPitchNotes(admin, portal, projectIds) : new Map<string, string>();
+    const [pitchNotes, uploadable] = await Promise.all([
+      audience === 'label' ? loadPitchNotes(admin, portal, projectIds) : Promise.resolve(new Map<string, string>()),
+      loadUploadableProjects(admin, portal, projectIds),
+    ]);
 
     const trackIds = [...new Set(projectTracks.map((pt) => pt.track_id))];
     const tracks = trackIds.length
@@ -152,6 +156,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       .map((a) => toPortalFile(a, {
         token: portal.token,
         isNew: isNewSince(assetAvailableAt(a, linkById.get(a.project_id)!.created_at), watermark),
+        fromYou: a.uploaded_by_contact_id === portal.contact_id,
       }));
 
     const view: PortalView = {
@@ -174,6 +179,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
             files: portalFiles.filter((f) => f.projectId === p.id).length,
             allowDownloads: link.allow_downloads,
             canComment: link.can_comment,
+            canUpload: uploadable.has(p.id),
             pitchNote: pitchNotes.get(p.id) ?? null,
           });
         }),
