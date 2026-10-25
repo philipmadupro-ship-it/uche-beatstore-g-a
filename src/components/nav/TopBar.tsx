@@ -18,7 +18,7 @@ import {
   Tag,
   MessageSquare,
   Heart,
-  MessageCircle, HandHelping,
+  MessageCircle, HandHelping, FileUp,
   ListChecks,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
@@ -61,6 +61,7 @@ function notifIcon(kind: string) {
   if (kind === 'artist_reaction') return <Heart size={13} className="text-[#6DC6A4]" />;
   if (kind === 'artist_message') return <MessageCircle size={13} className="text-white" />;
   if (kind === 'artist_request') return <HandHelping size={13} className="text-white" />;
+  if (kind === 'portal_upload') return <FileUp size={13} className="text-[#6DC6A4]" />;
   // Label OS direct asks (LABEL-23): somebody needs something from you.
   if (isDirectAskKind(kind)) return <ListChecks size={13} className="text-white" />;
   return <Bell size={13} className="text-white/60" />;

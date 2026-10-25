@@ -9553,3 +9553,13 @@ Orchestrator: session_01U1hEgSEMBP1MAk65kDjAcW. Backlog: `docs/bstudio-label-os/
 - 2026-10-19 05:38 UTC — LABEL-53 (migration 173) started on Sonnet, session_01MdzVrfyDLcpCD7bVXTgphD.
 - 2026-10-19 06:05 UTC — **#130 merged** (`0f62ce2`), the owner's own task. It adds the account type at sign-up, `/setup` + `POST /api/org/setup` (migration 189 `labelos_setup_org`), team accounts (migration 190 `org_managed_accounts` + its functions; server-side forced password change; team accounts cannot create or join another org; reset and switch-off revoke sessions; only an owner may reset an admin) and the admin centre `/o/<slug>/settings`. Gate: 3 checks green on `87fc28f` (after merging `cb191e7`); preview checked (flag off: `/setup`, `/account/password` and `/api/org/setup` 404); real-db e2e 44/44 reported. 189 and 190 are not applied (final merge, after 170–172). **Final-apply note:** confirm `postgres` may DELETE from `auth.sessions` on production. LABEL-48 starts on top of it.
 - 2026-10-19 06:05 UTC — LABEL-48 started on Sonnet, session_01SDgRGH4VkVHresRGGoh7sW. It builds on #130's `/setup` and `labelos_setup_org`; migration 192 may be used only if needed (next free number outside the backlog). LABEL-50 follows it.
+
+## 2026-10-18 - PORTAL-UP: contact uploads through the portal link
+
+Owner request from the LABEL-47 decision round. Extends the artist portal (one contact, already has files, password, revocation, sign-in) rather than project shares (anonymous holder, no files). Plan: `docs/portal-contact-uploads.md`; PR #135 into `claude/happy-bardeen-rnosf3`.
+
+- Migration 191 (not applied; 189–190 are #130's): `project_contacts.can_upload`, `project_assets.uploaded_by_contact_id`, same-owner + linked-contact trigger. 172–187 are backlog reservations.
+- Routes: `POST /api/portal/[token]/files` (+ `/presign`, opaque upload id, never a storage reference in or out). PATCH link accepts `can_upload` (503 naming 191 before it).
+- UI: workspace Uploads switch and password set/remove; portal "Send a file" on the Files tab; "From <contact>" on the project page and workspace Files.
+- Notify / NEW / pulse ignore a contact's own uploads for that contact. Erasure deletes them.
+- Tests: `uploads.test.ts`, `files/route.test.ts`, local check 191, `e2e/portal-uploads.spec.ts` (3/3 on the local real-DB stack; artist-workspace 1–3 + portal-roles re-run green).

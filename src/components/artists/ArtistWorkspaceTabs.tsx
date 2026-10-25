@@ -451,6 +451,7 @@ function ProjectsTab({ contactId, contactName, audience, workspace, onChanged }:
               <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-white/[0.06] pt-3">
                 <Toggle label="In portal" checked={p.link.in_portal} disabled={busy === p.id} onChange={(v) => patch(p.id, { in_portal: v })} />
                 <Toggle label="Downloads" checked={p.link.allow_downloads} disabled={busy === p.id || !p.link.in_portal} onChange={(v) => patch(p.id, { allow_downloads: v })} />
+                <Toggle label="Uploads" checked={!!p.link.can_upload} disabled={busy === p.id || !p.link.in_portal} onChange={(v) => patch(p.id, { can_upload: v })} />
                 <span className="ml-auto text-[11px] text-white/30">
                   {p.link.last_notified_at ? `Last notified ${relativeDays(p.link.last_notified_at)}` : p.link.in_portal ? 'Not notified yet' : ''}
                 </span>
@@ -746,9 +747,10 @@ function FilesTab({ contactName, workspace, onChanged }: { contactName: string; 
                         <p className="flex items-center gap-2 truncate text-[13px] text-white/80">
                           <span className="truncate">{f.label}</span>
                           {f.isNewForArtist && <span className="shrink-0 text-[10px] font-mono uppercase tracking-[0.2em] text-[#6DC6A4]">Not seen</span>}
+                          {f.fromArtist && <span className="shrink-0 text-[10px] font-mono uppercase tracking-[0.2em] text-[#6DC6A4]" data-testid={`ws-file-from-artist-${f.id}`}>From {contactName}</span>}
                         </p>
                         <p className="truncate text-[11px] text-white/40">
-                          {[ASSET_KIND_LABEL[f.kind as ProjectAssetKind] ?? 'File', formatBytes(f.size_bytes), f.downloadedAt ? `downloaded ${relativeDays(f.downloadedAt)}` : null].filter(Boolean).join(' · ')}
+                          {[f.uploadedByName ? `from ${f.uploadedByName}` : null, ASSET_KIND_LABEL[f.kind as ProjectAssetKind] ?? 'File', formatBytes(f.size_bytes), f.downloadedAt ? `downloaded ${relativeDays(f.downloadedAt)}` : null].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                       <Toggle label="In portal" checked={f.in_portal} disabled={busy === f.id} onChange={() => void togglePortal(f)} />

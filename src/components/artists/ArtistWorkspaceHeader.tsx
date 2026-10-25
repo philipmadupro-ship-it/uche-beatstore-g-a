@@ -3,11 +3,11 @@
 /**
  * The artist workspace's portal controls, in the contact's identity card:
  * relationship stage, "Portal live · opened 2d ago", Notify · N new, Copy
- * portal link, and a ⋯ menu for revoke / reissue. The link never changes
- * unless the producer reissues it.
+ * portal link, and a ⋯ menu for revoke / reissue and the link's optional
+ * password. The link never changes unless the producer reissues it.
  */
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { BellRing, Copy, DoorOpen } from 'lucide-react';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -28,7 +28,41 @@ export function ArtistWorkspaceHeader({
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordDraft, setPasswordDraft] = useState('');
   const { portal, relationship, notify, totals } = workspace;
+
+  /** Set (a string) or clear (null) the link's password; the token stays the same. */
+  const setPassword = async (password: string | null) => {
+    setBusy(true);
+    try {
+      await jsonOrThrow(await fetch(`/api/contacts/${contactId}/portal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'settings', password }),
+      }));
+      toast.success(
+        password ? 'Password set' : 'Password removed',
+        password ? `Send ${contactName} the password separately from the link.` : 'The link opens without a password again.',
+      );
+      setPasswordOpen(false);
+      setPasswordDraft('');
+      onChanged();
+    } catch (err) {
+      toast.error('Could not change the password', err instanceof Error ? err.message : 'Try again');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitPassword = (e: FormEvent) => {
+    e.preventDefault();
+    if (passwordDraft.trim().length < 4) {
+      toast.error('Password too short', 'Use at least 4 characters.');
+      return;
+    }
+    void setPassword(passwordDraft);
+  };
 
   const setAutoDigest = async (on: boolean) => {
     setBusy(true);
@@ -132,7 +166,32 @@ export function ArtistWorkspaceHeader({
         {live && (portal.last_viewed_at ? `Portal live · opened ${relativeDays(portal.last_viewed_at)}` : 'Portal live · not opened yet')}
         {live && portal.auto_digest && <span className="text-white/40"> · daily digest</span>}
         {live && portal.require_sign_in && <span className="text-white/40"> · email sign-in</span>}
+        {live && portal.hasPassword && <span className="text-white/40" data-testid="portal-has-password"> · password</span>}
       </p>
+
+      {passwordOpen && live && (
+        <form onSubmit={submitPassword} className="flex flex-wrap items-center gap-2" data-testid="portal-password-form">
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">Portal password</span>
+            <input
+              autoFocus
+              type="password"
+              autoComplete="new-password"
+              value={passwordDraft}
+              minLength={4}
+              maxLength={200}
+              onChange={(e) => setPasswordDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setPasswordOpen(false); setPasswordDraft(''); } }}
+              placeholder={`Password for ${contactName}’s link`}
+              className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+            />
+          </label>
+          <button type="submit" disabled={busy} className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40">
+            Save password
+          </button>
+          <button type="button" onClick={() => { setPasswordOpen(false); setPasswordDraft(''); }} className="px-2 text-[11px] text-white/50 hover:text-white">Cancel</button>
+        </form>
+      )}
 
       {(totals.plays > 0 || totals.downloads > 0) && (
         <p className="text-[11px] text-white/40" data-testid="artist-totals">
@@ -202,6 +261,19 @@ export function ArtistWorkspaceHeader({
                   checked: !!portal?.auto_digest,
                   hidden: !live,
                   onSelect: () => setAutoDigest(!portal?.auto_digest),
+                },
+                {
+                  id: 'set-password',
+                  label: portal?.hasPassword ? 'Change password…' : 'Set a password…',
+                  hint: 'Asked before the portal opens',
+                  hidden: !live,
+                  onSelect: () => { setPasswordOpen(true); },
+                },
+                {
+                  id: 'remove-password',
+                  label: 'Remove password',
+                  hidden: !live || !portal?.hasPassword,
+                  onSelect: () => setPassword(null),
                 },
                 {
                   id: 'require-sign-in',

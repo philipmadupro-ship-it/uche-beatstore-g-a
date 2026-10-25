@@ -216,6 +216,9 @@ export function ProjectFilesSection({ projectId, org }: { projectId: string; org
                   <span className="block truncate text-[13px] text-white/80">{a.label}</span>
                 )}
                 <p className="truncate text-[11px] text-white/40">
+                  {a.uploaded_by && (
+                    <span className="text-[#6DC6A4]" data-testid={`project-file-from-${a.id}`}>From {a.uploaded_by.name} · </span>
+                  )}
                   {[kindLabel(a.kind), formatBytes(a.size_bytes), a.file_name].filter(Boolean).join(' · ')}
                 </p>
               </div>
