@@ -10,6 +10,7 @@
  * listed as "restricted", never named (07 §3.4). The songs on offer to add are
  * the same list minus the ones already on the release.
  */
+import { mayReadRightsDetail } from '@/lib/labelos/credits';
 import type { ObjectAccessResult } from '@/lib/auth/org-access';
 import { requireObjectAccess } from '@/lib/auth/org-access';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
@@ -104,7 +105,7 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
   let readiness: ReleaseReadinessView | null = null;
   try {
     const facts = await loadReleaseReadinessFacts(admin, org, id);
-    if (facts) readiness = releaseReadinessView(evaluateReleaseReadiness(facts), access.capabilities.has('rights.read'));
+    if (facts) readiness = releaseReadinessView(evaluateReleaseReadiness(facts), mayReadRightsDetail(access.capabilities, access.role));
   } catch (err) {
     if (!(err instanceof ReleaseReadinessNotReadyError)) throw err;
   }
@@ -133,7 +134,7 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
     me: {
       canWrite: access.capabilities.has('release.write'),
       isOwner: access.role === 'owner', canManagePublic: access.role === 'owner' || access.role === 'admin',
-      mayReadRights: access.capabilities.has('rights.read'),
+      mayReadRights: mayReadRightsDetail(access.capabilities, access.role),
     },
   };
 }

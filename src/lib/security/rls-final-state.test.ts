@@ -569,6 +569,39 @@ describe('final RLS policy state', () => {
     });
   });
 
+  describe('Label OS party payee data (mig 174, LABEL-54)', () => {
+    const sql = () => readFileSync(join(DIR, '174_labelos_parties_payee.sql'), 'utf8').replace(/--[^\n]*/g, '');
+    const HIDDEN = ['tax_id', 'payment_instructions'];
+
+    it('takes the payee columns out of every API role’s SELECT: the table-wide grant goes, the column list omits them', () => {
+      expect(sql()).toMatch(/REVOKE SELECT ON public\.parties FROM anon, authenticated/);
+      for (const role of ['authenticated', 'anon']) {
+        const grant = sql().match(new RegExp(`GRANT SELECT \\(([^)]*)\\)\\s+ON public\\.parties TO ${role};`));
+        expect(grant, `column grant to ${role}`).not.toBeNull();
+        const cols = grant![1].split(',').map((c) => c.trim());
+        for (const hidden of HIDDEN) expect(cols, `${role}: ${hidden}`).not.toContain(hidden);
+        for (const shown of ['id', 'org_id', 'display_name', 'user_id', 'address', 'country']) expect(cols, `${role}: ${shown}`).toContain(shown);
+      }
+      // No later migration may bring the table-wide grant back (it would reopen the tax id).
+      for (const m of realMigrations().filter((x) => x.name > '174')) {
+        const body = readFileSync(join(DIR, m.name), 'utf8').replace(/--[^\n]*/g, '');
+        expect(body, m.name).not.toMatch(/GRANT\s+(SELECT|ALL)(\s+PRIVILEGES)?\s+ON\s+(TABLE\s+)?(public\.)?parties\b/i);
+      }
+    });
+
+    it('changes exactly one policy: the parties read, which now excludes role artist from the capability branch', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '174')).policies;
+      const changed = [...policies.keys()].filter((k) => policies.get(k) !== before.get(k)).sort();
+      expect(changed).toEqual(['parties.parties_member_read']);
+      const body = policies.get('parties.parties_member_read') ?? '';
+      expect(body).toMatch(/cm\.role <> 'artist'/);
+      // The caller’s own party stays readable (the own-line credits policy depends on it).
+      expect(body).toMatch(/user_id = \(SELECT auth\.uid\(\)\)/);
+      expect(body).not.toMatch(/has_org_cap\(\s*org_id/);
+      expect(body).not.toMatch(/WITH CHECK/i);
+    });
+  });
+
   describe('Label OS audit rows are immutable (mig 163, LABEL-43)', () => {
     const sql = () => readFileSync(join(DIR, '163_labelos_audit_events_immutable.sql'), 'utf8').replace(/--[^\n]*/g, '');
 

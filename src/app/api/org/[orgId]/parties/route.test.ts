@@ -24,6 +24,9 @@ const MKT = u(5);
 const ACCT = u(6);
 const STRANGER = u(7);
 const X = u(8);
+const ART = u(9);
+const FIN = u(10);
+const LEG = u(11);
 const C1 = '30000000-0000-4000-8000-0000000000c1';
 const C2 = '30000000-0000-4000-8000-0000000000c2';
 const CX = '30000000-0000-4000-8000-0000000000c3';
@@ -64,8 +67,9 @@ beforeEach(() => {
       org_members: [
         member(OWN, 'owner'), member(AR, 'member', ['a_and_r']), member(SC, 'member', ['a_and_r'], 'artists'),
         member(PRD, 'member', ['producer']), member(MKT, 'member', ['marketing']), member(X, 'owner', [], 'org', L2),
+        member(ART, 'artist', [], 'artists'), member(FIN, 'member', ['finance']), member(LEG, 'member', ['legal']),
       ],
-      member_artist_scopes: [{ org_id: L, user_id: SC, contact_id: C2 }],
+      member_artist_scopes: [{ org_id: L, user_id: SC, contact_id: C2 }, { org_id: L, user_id: ART, contact_id: C1 }],
       project_members: [{ org_id: L, project_id: LP1, user_id: ACCT, role: 'contributor', allow_downloads: false, expires_at: null, invitation_id: null, created_at: '2026-10-01' }],
       contacts: [
         { id: C1, org_id: L, user_id: null, name: 'Nova', category: 'artist' },
@@ -82,7 +86,12 @@ beforeEach(() => {
         { id: S1, org_id: L, user_id: null, type: 'song', title: 'Midnight', song_stage: 'inbox' },
         { id: S2, org_id: L, user_id: null, type: 'song', title: 'Dawn', song_stage: 'inbox' },
       ],
-      parties: [party(PN, 'Nova'), party(PK, 'Kilo Collab'), party(PP, 'Pierre', { user_id: PRD }), party(PU, 'Unused')],
+      parties: [
+        party(PN, 'Nova', { address: '2 road Y', country: 'GB', tax_id: 'GB-TAX-2', payment_instructions: 'Invoice monthly' }),
+        party(PK, 'Kilo Collab'),
+        party(PP, 'Pierre', { user_id: PRD, address: '1 rue X', country: 'FR', tax_id: 'FR-TAX-1', payment_instructions: 'PayPal, ask finance' }),
+        party(PU, 'Unused'),
+      ],
       track_collaborators: [
         { id: 'c-1', track_id: S1, org_id: L, name: 'Nova', role: 'songwriter', party_id: PN, status: 'confirmed' },
         { id: 'c-2', track_id: S2, org_id: L, name: 'Kilo Collab', role: 'mixer', party_id: PK, status: 'proposed' },
@@ -218,5 +227,295 @@ describe('PATCH / DELETE /parties/[partyId]', () => {
     expect((await call('DELETE', OWN, L, PU)).status).toBe(200);
     expect(db.tables.parties.some((r) => r.id === PU)).toBe(false);
     expect(events().map((e) => e.verb)).toEqual(['party.deleted']);
+  });
+});
+
+describe('LABEL-54: what each role reads of a party', () => {
+  type Json = Record<string, unknown> & { parties: Record<string, unknown>[]; party: Record<string, unknown>; members?: unknown };
+  const get = async (who: string, id?: string) => (await (await call('GET', who, L, id)).json()) as Json;
+  const one = (body: Json, name: string) => body.parties.find((x) => x.displayName === name) as { legal?: Record<string, unknown>; payee?: unknown };
+
+  it('a roster artist reads the names of their own songs’ co-writers and nothing about them — no legal block, no payee block', async () => {
+    const body = await get(ART);
+    expect((body.parties as { displayName: string }[]).map((x) => x.displayName)).toEqual(['Nova']);
+    expect(body.canSeePayee).toBe(false);
+    expect(one(body, 'Nova').legal).toBeUndefined();
+    expect(one(body, 'Nova').payee).toBeUndefined();
+    const wire = JSON.stringify(body);
+    for (const leak of ['Nova Legal', '00123456789', '2 road Y', 'GB-TAX-2', 'Invoice monthly']) expect(wire, leak).not.toContain(leak);
+    const single = await get(ART, PN);
+    expect(single.party).toMatchObject({ displayName: 'Nova' });
+    expect(single.party.legal).toBeUndefined();
+    expect((await call('GET', ART, L, PK)).status).toBe(404); // outside their scope
+  });
+
+  it('a roster artist reads their own party in full — except the payee block', async () => {
+    db.tables.parties.push(party(p(30), 'Art Ist', { user_id: ART, address: 'Home', tax_id: 'ART-1' }));
+    const own = one(await get(ART), 'Art Ist');
+    expect(own.legal).toMatchObject({ legalName: 'Art Ist Legal', address: 'Home' });
+    expect(own.payee).toBeUndefined();
+  });
+
+  it('the owner and legal (rights.write) read the payee block; A&R reads the legal block but not payee', async () => {
+    for (const who of [OWN, LEG]) {
+      const body = await get(who);
+      expect(body.canSeePayee, who).toBe(true);
+      expect(one(body, 'Pierre').legal).toMatchObject({ address: '1 rue X', country: 'FR' });
+    }
+    // Payment instructions need finance.read: the owner has it, legal (rights.write only) does not.
+    expect(one(await get(OWN), 'Pierre').payee).toEqual({ taxId: 'FR-TAX-1', paymentInstructions: 'PayPal, ask finance' });
+    expect((await get(OWN)).canSeePayments).toBe(true);
+    const legal = await get(LEG);
+    expect(legal.canSeePayments).toBe(false);
+    expect(one(legal, 'Pierre').payee).toEqual({ taxId: 'FR-TAX-1' });
+    expect(JSON.stringify(legal)).not.toContain('PayPal');
+    const ar = await get(AR);
+    expect(ar.canSeePayee).toBe(false);
+    expect(one(ar, 'Pierre').legal?.address).toBe('1 rue X');
+    expect(JSON.stringify(ar)).not.toMatch(/FR-TAX-1|PayPal/);
+  });
+
+  it('finance (finance.read) reads every payee and no legal block', async () => {
+    const body = await get(FIN);
+    expect(body.canWrite).toBe(false);
+    expect(body.canSeePayee).toBe(true);
+    expect(one(body, 'Nova').payee).toEqual({ taxId: 'GB-TAX-2', paymentInstructions: 'Invoice monthly' });
+    expect(one(body, 'Nova').legal).toBeUndefined();
+    expect((await call('GET', FIN, L, PN)).status).toBe(200);
+    expect((await call('POST', FIN, L, undefined, { display_name: 'Z' })).status).toBe(403);
+    expect((await call('PATCH', FIN, L, PN, { tax_id: 'x' })).status).toBe(403);
+  });
+
+  it('the person on a party reads their own legal data, never their payee data back', async () => {
+    const body = await get(PRD);
+    expect(one(body, 'Pierre').legal).toMatchObject({ address: '1 rue X' });
+    expect(one(body, 'Pierre').payee).toBeUndefined();
+    expect(body.canSeePayee).toBe(false);
+  });
+
+  it('only a rights writer is offered the members to link', async () => {
+    expect((await get(OWN)).members).toBeInstanceOf(Array);
+    expect((await get(AR)).members).toBeUndefined();
+    expect((await get(FIN)).members).toBeUndefined();
+  });
+});
+
+describe('LABEL-54: an org without the finance module', () => {
+  it('a finance-function member gets 404 (not 403) on the directory; rights readers are unaffected', async () => {
+    db.tables.org_entitlements = [{ org_id: L, modules: ['catalog'], max_seats: null, max_artists: null, setup_done: true }];
+    expect((await call('GET', FIN, L)).status).toBe(404);
+    expect((await call('GET', FIN, L, PN)).status).toBe(404);
+    expect((await call('GET', AR, L)).status).toBe(200);
+    expect((await call('GET', PRD, L)).status).toBe(200);
+  });
+});
+
+describe('LABEL-54: writing address, country, tax id and payment instructions', () => {
+  it('stores them (country upper-cased) and shows the writer the payee block', async () => {
+    const res = await call('POST', OWN, L, undefined, { display_name: 'Odile', address: ' 5 rue Z ', country: 'fr', tax_id: 'FR99', payment_instructions: 'Wise link in the contract' });
+    expect(res.status).toBe(201);
+    const { party: created } = await res.json();
+    expect(created.legal).toMatchObject({ address: '5 rue Z', country: 'FR' });
+    expect(created.payee).toEqual({ taxId: 'FR99', paymentInstructions: 'Wise link in the contract' });
+    expect(db.tables.parties.find((r) => r.id === created.id)).toMatchObject({ tax_id: 'FR99', payment_instructions: 'Wise link in the contract' });
+  });
+
+  it('payment instructions are finance’s to write too: rights.write without finance.read is 403, the tax id is fine', async () => {
+    const forbidden = await call('PATCH', LEG, L, PN, { payment_instructions: 'PayPal' });
+    expect(forbidden.status).toBe(403);
+    expect((await call('POST', LEG, L, undefined, { display_name: 'Z', payment_instructions: 'PayPal' })).status).toBe(403);
+    expect(db.tables.parties.find((r) => r.id === PN)!.payment_instructions).toBe('Invoice monthly');
+    expect((await call('PATCH', LEG, L, PN, { tax_id: 'NEW-TAX' })).status).toBe(200);
+  });
+
+  it('refuses an IBAN or a card number as payment instructions (400), plainly, without echoing it, and stores nothing', async () => {
+    for (const bad of ['GB29 NWBK 6016 1331 9268 19', 'card 4111 1111 1111 1111']) {
+      const res = await call('POST', OWN, L, undefined, { display_name: 'Z', payment_instructions: bad });
+      expect(res.status, bad).toBe(400);
+      const text = JSON.stringify(await res.json());
+      expect(text).toMatch(/bank or card number/i);
+      expect(text).not.toContain('NWBK');
+      expect(text).not.toContain('4111');
+      expect((await call('PATCH', OWN, L, PN, { payment_instructions: bad })).status, bad).toBe(400);
+    }
+    expect(db.tables.parties).toHaveLength(4);
+    expect(db.tables.parties.find((r) => r.id === PN)!.payment_instructions).toBe('Invoice monthly');
+  });
+
+  it('refuses a country that is not a two-letter code, and a bad tax id length', async () => {
+    expect((await call('PATCH', OWN, L, PN, { country: 'France' })).status).toBe(400);
+    expect((await call('PATCH', OWN, L, PN, { tax_id: 'x'.repeat(65) })).status).toBe(400);
+  });
+
+  it('the activity event names the fields that changed, never a tax id or a payment instruction', async () => {
+    await call('PATCH', OWN, L, PN, { tax_id: 'NEW-SECRET-TAX', payment_instructions: 'Pay Bob', address: 'Nowhere' });
+    expect(events()[0].payload).toEqual({ fields: ['address', 'payment_instructions', 'tax_id'] });
+    expect(JSON.stringify(events())).not.toMatch(/NEW-SECRET-TAX|Pay Bob|Nowhere/);
+  });
+});
+
+describe('LABEL-54: the lock on a name a circulated sheet shows', () => {
+  const sheet = (status: string) => ({ id: 'sh-1', org_id: L, track_id: S1, kind: 'composition', version: 1, status });
+  const line = (partyId: string) => ({ id: `ln-${partyId}`, split_sheet_id: 'sh-1', org_id: L, track_id: S1, party_id: partyId, role: 'writer', share: 50 });
+
+  it('a draft sheet does not lock: rename and re-link are allowed', async () => {
+    db.tables.split_sheets = [sheet('draft')];
+    db.tables.split_lines = [line(PN), line(PP)];
+    expect((await call('PATCH', OWN, L, PN, { display_name: 'Nova Okafor' })).status).toBe(200);
+    expect((await call('PATCH', OWN, L, PP, { user_id: AR })).status).toBe(200);
+  });
+
+  for (const status of ['circulated', 'signed', 'disputed', 'superseded']) {
+    it(`a ${status} sheet locks the name and an existing account — 409 party_locked, nothing changes`, async () => {
+      db.tables.split_sheets = [sheet(status)];
+      db.tables.split_lines = [line(PN), line(PP)];
+      const rename = await call('PATCH', OWN, L, PN, { display_name: 'Nova Okafor' });
+      expect(rename.status).toBe(409);
+      expect(await rename.json()).toMatchObject({ code: 'party_locked' });
+      expect((await call('PATCH', OWN, L, PP, { user_id: AR })).status).toBe(409);
+      expect((await call('PATCH', OWN, L, PP, { user_id: null })).status).toBe(409);
+      expect(db.tables.parties.find((r) => r.id === PN)!.display_name).toBe('Nova');
+      expect(db.tables.parties.find((r) => r.id === PP)!.user_id).toBe(PRD);
+      expect(db.tables.track_collaborators.find((c) => c.id === 'c-1')!.name).toBe('Nova');
+      expect(events()).toEqual([]);
+    });
+  }
+
+  it('on a circulated sheet the legal data stays editable, a no-op rename passes, and an unlinked party can be linked', async () => {
+    db.tables.split_sheets = [sheet('circulated')];
+    db.tables.split_lines = [line(PN), line(PP)];
+    expect((await call('PATCH', OWN, L, PN, { legal_name: 'Nova Okafor', ipi: '00987654321', address: 'New road' })).status).toBe(200);
+    expect((await call('PATCH', OWN, L, PN, { display_name: ' Nova ' })).status).toBe(200);
+    expect((await call('PATCH', OWN, L, PN, { user_id: AR })).status).toBe(200);
+    expect(db.tables.parties.find((r) => r.id === PN)).toMatchObject({ display_name: 'Nova', legal_name: 'Nova Okafor', user_id: AR });
+  });
+
+  it('a party on no sheet, or only on a sheet of another party, is not locked', async () => {
+    db.tables.split_sheets = [sheet('circulated')];
+    db.tables.split_lines = [line(PP)];
+    expect((await call('PATCH', OWN, L, PN, { display_name: 'Nova Okafor' })).status).toBe(200);
+  });
+});
+
+describe('LABEL-54: a confirmation belongs to what was confirmed', () => {
+  const confirmedPN = () => {
+    const r = db.tables.parties.find((x) => x.id === PN)!;
+    r.details_confirmed_at = '2026-10-02T10:00:00Z';
+    r.details_confirmed_by = PRD;
+    return r;
+  };
+
+  it('a writer changing a field the person can correct clears both stamp columns', async () => {
+    const r = confirmedPN();
+    expect((await call('PATCH', OWN, L, PN, { address: 'Elsewhere' })).status).toBe(200);
+    expect(r.details_confirmed_at).toBeNull();
+    expect(r.details_confirmed_by).toBeNull();
+    const body = await (await call('GET', OWN, L)).json();
+    expect(body.parties.find((x: { id: string }) => x.id === PN).legal.confirmedAt).toBeNull();
+  });
+
+  it('re-linking the account clears it too, so the new account inherits nothing', async () => {
+    const r = confirmedPN();
+    expect((await call('PATCH', OWN, L, PN, { user_id: AR })).status).toBe(200);
+    expect(r.details_confirmed_at).toBeNull();
+  });
+
+  it('a rename, the tax id and the payment instructions leave it alone', async () => {
+    const r = confirmedPN();
+    expect((await call('PATCH', OWN, L, PN, { display_name: 'Nova O.', tax_id: 'T', payment_instructions: 'Wise' })).status).toBe(200);
+    expect(r.details_confirmed_at).toBe('2026-10-02T10:00:00Z');
+  });
+
+  it('after the clear, the writer can ask the person to confirm again', async () => {
+    db.tables.parties.find((x) => x.id === PP)!.details_confirmed_at = '2026-10-02T10:00:00Z';
+    expect((await call('PATCH', OWN, L, PP, { legal_name: 'Pierre P.' })).status).toBe(200);
+    current = OWN;
+    const invite = (await import('./[partyId]/invite/route')) as unknown as Record<string, Handler>;
+    const res = await invite.POST(new NextRequest(`https://app.test/api/org/${L}/parties/${PP}/invite`, { method: 'POST' }), { params: Promise.resolve({ orgId: L, partyId: PP }) });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('LABEL-54: POST /parties/[partyId]/confirm', () => {
+  const confirm = async (as: string | null, partyId: string, body: unknown = {}) => {
+    current = as;
+    const mod = (await import('./[partyId]/confirm/route')) as unknown as Record<string, Handler>;
+    return mod.POST(
+      new NextRequest(`https://app.test/api/org/${L}/parties/${partyId}/confirm`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+      { params: Promise.resolve({ orgId: L, partyId }) },
+    );
+  };
+
+  it('the person confirms their own details: stamped, event names no values', async () => {
+    const res = await confirm(PRD, PP, {});
+    expect(res.status).toBe(200);
+    const stored = db.tables.parties.find((r) => r.id === PP)!;
+    expect(stored.details_confirmed_by).toBe(PRD);
+    expect(stored.details_confirmed_at).toBeTruthy();
+    expect((await res.json()).party.legal.confirmedAt).toBeTruthy();
+    expect(events()[0]).toMatchObject({ verb: 'party.confirmed', actor_id: PRD, visibility: 'internal' });
+    expect(events()[0].payload).toEqual({ corrected: [] });
+  });
+
+  it('they can correct the legal fields first (normalised), and only those', async () => {
+    const res = await confirm(PRD, PP, { legal_name: 'Pierre P.', ipi: '00 123.456-780', country: 'be', address: 'Rue 1' });
+    expect(res.status).toBe(200);
+    expect(db.tables.parties.find((r) => r.id === PP)).toMatchObject({ legal_name: 'Pierre P.', ipi: '00123456780', country: 'BE', address: 'Rue 1', tax_id: 'FR-TAX-1' });
+    expect(events()[0].payload).toEqual({ corrected: ['address', 'country', 'ipi', 'legal_name'] });
+    expect(JSON.stringify(events())).not.toMatch(/Pierre P\.|Rue 1|00123456780/);
+  });
+
+  it('identity, links and payee data cannot be sent (400), and an invalid IPI is refused', async () => {
+    for (const body of [{ display_name: 'X' }, { user_id: AR }, { tax_id: 'x' }, { payment_instructions: 'x' }, { contact_id: C1 }]) {
+      expect((await confirm(PRD, PP, body)).status, JSON.stringify(body)).toBe(400);
+    }
+    expect((await confirm(PRD, PP, { ipi: 'bad' })).status).toBe(400);
+    expect(db.tables.parties.find((r) => r.id === PP)!.details_confirmed_at).toBeUndefined();
+  });
+
+  it('nobody confirms for another person — a rights writer included (404); marketing 403; signed out 401', async () => {
+    expect((await confirm(OWN, PP)).status).toBe(404);
+    expect((await confirm(AR, PN)).status).toBe(404);
+    expect((await confirm(PRD, PN)).status).toBe(404);
+    expect((await confirm(MKT, PP)).status).toBe(403);
+    expect((await confirm(null, PP)).status).toBe(401);
+    expect(events()).toEqual([]);
+  });
+});
+
+describe('LABEL-54: POST /parties/[partyId]/invite', () => {
+  const invite = async (as: string | null, partyId: string) => {
+    current = as;
+    const mod = (await import('./[partyId]/invite/route')) as unknown as Record<string, Handler>;
+    return mod.POST(new NextRequest(`https://app.test/api/org/${L}/parties/${partyId}/invite`, { method: 'POST' }), { params: Promise.resolve({ orgId: L, partyId }) });
+  };
+
+  it('asks the one linked account, once, with a direct-ask notification and an internal event', async () => {
+    const res = await invite(OWN, PP);
+    expect(res.status).toBe(200);
+    const rows = db.tables.notifications as Record<string, unknown>[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ user_id: PRD, org_id: L, kind: 'party_confirmation', read: false });
+    expect(JSON.stringify(rows[0])).not.toMatch(/email|token/i);
+    expect(events()[0]).toMatchObject({ verb: 'party.confirmation_requested', visibility: 'internal', subject_id: PP });
+  });
+
+  it('a party with no account has nobody to ask (409 no_account); an already confirmed one is 409 too', async () => {
+    const none = await invite(OWN, PN);
+    expect(none.status).toBe(409);
+    expect(await none.json()).toMatchObject({ code: 'no_account' });
+    db.tables.parties.find((r) => r.id === PP)!.details_confirmed_at = '2026-10-02';
+    expect(await (await invite(OWN, PP)).json()).toMatchObject({ code: 'already_confirmed' });
+    expect(db.tables.notifications ?? []).toEqual([]);
+  });
+
+  it('an external project member cannot be asked here (409 not_a_member)', async () => {
+    db.tables.parties.find((r) => r.id === PU)!.user_id = ACCT;
+    expect(await (await invite(OWN, PU)).json()).toMatchObject({ code: 'not_a_member' });
+  });
+
+  it('needs rights.write; 404 for a missing party', async () => {
+    for (const who of [AR, PRD, FIN, ART, MKT]) expect((await invite(who, PP)).status, who).toBe(403);
+    expect((await invite(OWN, p(99))).status).toBe(404);
   });
 });

@@ -46,3 +46,28 @@ export const decideCredit = (orgId: string, trackId: string, creditId: string, a
   send<{ credit: CreditView }>(`${base(orgId, trackId)}/${creditId}`, 'PATCH', { action, ...(note ? { note } : {}) });
 
 export const fetchParties = (orgId: string) => send<{ parties: PartyView[] }>(`/api/org/${orgId}/parties`, 'GET');
+
+// ── Parties page (LABEL-54) ─────────────────────────────────────────────
+
+export type PartiesPayload = {
+  schemaReady: boolean;
+  parties: PartyView[];
+  canWrite: boolean;
+  /** Tax id and payment instructions come with the parties only for `rights.write` / `finance.read`. */
+  canSeePayee: boolean;
+  /** Payment instructions are `finance.read` only. */
+  canSeePayments: boolean;
+  /** Names only, for a rights writer to link a party to the account that will confirm it. */
+  members?: { userId: string; name: string }[];
+};
+
+export const loadParties = (orgId: string) => send<PartiesPayload>(`/api/org/${orgId}/parties`, 'GET');
+export const createParty = (orgId: string, body: Record<string, unknown>) => send<{ party: PartyView }>(`/api/org/${orgId}/parties`, 'POST', body);
+export const updateParty = (orgId: string, partyId: string, body: Record<string, unknown>) => send<{ party: PartyView }>(`/api/org/${orgId}/parties/${partyId}`, 'PATCH', body);
+export const removeParty = (orgId: string, partyId: string) => send<{ deleted: boolean }>(`/api/org/${orgId}/parties/${partyId}`, 'DELETE');
+export const confirmParty = (orgId: string, partyId: string, corrections: Record<string, unknown>) =>
+  send<{ party: PartyView }>(`/api/org/${orgId}/parties/${partyId}/confirm`, 'POST', corrections);
+export const askToConfirm = (orgId: string, partyId: string) => send<{ asked: boolean }>(`/api/org/${orgId}/parties/${partyId}/invite`, 'POST');
+
+export const withdrawCredit = (orgId: string, trackId: string, creditId: string) =>
+  send<{ withdrawn: boolean }>(`${base(orgId, trackId)}/${creditId}`, 'DELETE');

@@ -28,10 +28,17 @@ export type CreditActor = {
   caps: ReadonlySet<string>;
   /** Set for an external project member (LABEL-21): their role in the project. */
   externalRole?: string;
+  /**
+   * A roster artist (org role `artist`, LABEL-54): sees names, roles and shares
+   * of a song's co-writers and nothing else about them — no legal name, e-mail,
+   * codes, address or payee data (doc 21 decision 4). Their own party is the
+   * exception: it is theirs.
+   */
+  rosterArtist?: boolean;
 };
 
-export function orgActor(userId: string, caps: ReadonlySet<string>): CreditActor {
-  return { userId, caps };
+export function orgActor(userId: string, caps: ReadonlySet<string>, role?: string): CreditActor {
+  return role === 'artist' ? { userId, caps, rosterArtist: true } : { userId, caps };
 }
 
 export function externalActor(userId: string, role: string): CreditActor {
@@ -61,10 +68,58 @@ export function canPropose(actor: CreditActor): boolean {
   return canWriteRights(actor) || canProposeOwn(actor);
 }
 
-/** Legal name and IPI: `rights.read`, or the party is the actor's own. */
+/**
+ * Legal name, codes, e-mail, address: `rights.read` — except for a roster
+ * artist, who reads only their own party (LABEL-54, doc 21 decision 4).
+ */
 export function mayReadLegal(actor: CreditActor, partyUserId: string | null | undefined): boolean {
-  if (!actor.externalRole && actor.caps.has('rights.read')) return true;
+  if (!actor.externalRole && !actor.rosterArtist && actor.caps.has('rights.read')) return true;
   return !!partyUserId && partyUserId === actor.userId;
+}
+
+/**
+ * Tax id and payment instructions (LABEL-54): `rights.write` or
+ * `finance.read`, never an external member or a roster artist, and not even
+ * the person's own account — the app holds these for finance, not for the
+ * payee to read back.
+ */
+export function mayReadPayee(actor: CreditActor): boolean {
+  if (actor.externalRole || actor.rosterArtist) return false;
+  return actor.caps.has('rights.write') || actor.caps.has('finance.read');
+}
+
+/**
+ * May this member be TOLD which legal identifier is missing, or whose (a readiness blocker names a
+ * party and its IPI / PRO gaps)? `rights.read`, except a roster artist: they get counts, never which
+ * co-writer is incomplete (LABEL-54, doc 21 decision 4).
+ */
+export function mayReadRightsDetail(caps: ReadonlySet<string>, role: string): boolean {
+  return role !== 'artist' && caps.has('rights.read');
+}
+
+/**
+ * Payment instructions are finance's (doc 23 LABEL-54): `finance.read` only, never an external member
+ * or a roster artist. A rights writer without it reads and writes the tax id but not these.
+ */
+export function mayReadPayments(actor: CreditActor): boolean {
+  if (actor.externalRole || actor.rosterArtist) return false;
+  return actor.caps.has('finance.read');
+}
+
+export type WithdrawPlan = { ok: true } | { ok: false; status: 403 | 404; error: string };
+
+/**
+ * Withdraw a credit (LABEL-54): the credited person takes their name off a
+ * song, or a rights writer removes any credit. Either way the credit is gone
+ * from the song and an audit event keeps the fact. A credit that is not the
+ * actor's, and not a rights writer's to remove, does not exist for them (404).
+ */
+export function planWithdraw(actor: CreditActor, credit: { partyUserId: string | null }): WithdrawPlan {
+  if (canWriteRights(actor)) return { ok: true };
+  const own = !!credit.partyUserId && credit.partyUserId === actor.userId;
+  if (!own) return { ok: false, status: 404, error: 'Not found' };
+  if (!actor.caps.has('rights.read.own_line')) return { ok: false, status: 403, error: 'You cannot withdraw credits here' };
+  return { ok: true };
 }
 
 const norm = (v: string) => v.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -174,6 +229,14 @@ export type PartyRow = {
   contact_id: string | null;
   user_id: string | null;
   created_at: string;
+  /** Migration 174. Absent on a database without it. */
+  address?: string | null;
+  country?: string | null;
+  details_confirmed_by?: string | null;
+  details_confirmed_at?: string | null;
+  /** Payee data: loaded only for a reader who may have it (`PARTY_PAYEE_COLUMNS`). */
+  tax_id?: string | null;
+  payment_instructions?: string | null;
 };
 
 export type PartyView = {
@@ -191,7 +254,17 @@ export type PartyView = {
     proAffiliation: string;
     publisherName: string | null;
     publisherIpi: string | null;
+    address: string | null;
+    country: string | null;
+    /** When the person (or a rights writer for them) last confirmed these details. */
+    confirmedAt: string | null;
   };
+  /** Present only for `rights.write` / `finance.read` (mayReadPayee). Never a bank number. */
+  payee?: { taxId: string | null; /** Only with `finance.read` (mayReadPayments). */ paymentInstructions?: string | null };
+  /** The party is the viewer's own account. */
+  mine?: boolean;
+  /** The linked account (null = none): only a rights writer is sent it, to edit the link. */
+  linkedUserId?: string | null;
 };
 
 /** Built field by field: no account id, no creator id of a party. */
@@ -207,8 +280,27 @@ export function partyView(row: PartyRow, actor: CreditActor): PartyView {
       proAffiliation: row.pro_affiliation,
       publisherName: row.publisher_name,
       publisherIpi: row.publisher_ipi,
+      address: row.address ?? null,
+      country: row.country ?? null,
+      confirmedAt: row.details_confirmed_at ?? null,
     };
   }
+  if (mayReadPayee(actor)) {
+    view.payee = { taxId: row.tax_id ?? null };
+    if (mayReadPayments(actor)) view.payee.paymentInstructions = row.payment_instructions ?? null;
+  }
+  if (row.user_id && row.user_id === actor.userId) view.mine = true;
+  return view;
+}
+
+/**
+ * A party for the Parties page: the view plus the linked account id, which only
+ * a rights writer is sent (they edit the link). Everything else, credits and
+ * split sheets included, uses `partyView`, which never carries an account id.
+ */
+export function partyViewWithLink(row: PartyRow, actor: CreditActor): PartyView {
+  const view = partyView(row, actor);
+  if (canWriteRights(actor)) view.linkedUserId = row.user_id;
   return view;
 }
 
@@ -231,7 +323,7 @@ export type CreditView = {
   disputeNote: string | null;
   createdAt: string;
   party: PartyView | null;
-  can: { confirm: boolean; dispute: boolean };
+  can: { confirm: boolean; dispute: boolean; withdraw: boolean };
 };
 
 export function creditView(row: CreditRow, party: PartyRow | null, actor: CreditActor): CreditView {
@@ -260,6 +352,7 @@ export function creditView(row: CreditRow, party: PartyRow | null, actor: Credit
     can: {
       confirm: planDecision(actor, 'confirmed', facts).ok,
       dispute: planDecision(actor, 'disputed', facts).ok,
+      withdraw: planWithdraw(actor, { partyUserId }).ok,
     },
   };
 }

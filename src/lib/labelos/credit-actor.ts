@@ -9,6 +9,6 @@ import type { ProjectActor } from '@/lib/auth/org-access';
 import { externalActor, orgActor, strongestExternalRole, type CreditActor } from './credits';
 
 export function creditActorOf(access: Extract<ProjectActor, { ok: true }>): CreditActor {
-  if (access.kind === 'org') return orgActor(access.access.userId, access.access.capabilities);
+  if (access.kind === 'org') return orgActor(access.access.userId, access.access.capabilities, access.access.role);
   return externalActor(access.access.userId, strongestExternalRole(access.access.memberships) ?? 'viewer');
 }

@@ -307,9 +307,9 @@ RESET ROLE;
 SET ROLE authenticated;
 SELECT public.as_user(:AR);
 SELECT public.check_eq('the parties read plans its membership tests as hashed subplans',
-  public.plan_filters('SELECT * FROM public.parties') ~ 'hashed SubPlan', true);
+  public.plan_filters('SELECT id, display_name FROM public.parties') ~ 'hashed SubPlan', true);
 SELECT public.check_eq('… and no correlated (per-row) SubPlan or SECURITY DEFINER call remains in the filter',
-  public.plan_filters('SELECT * FROM public.parties') ~ '(?<!hashed )SubPlan|can_see_org_|has_org_cap|can_see_artist', false);
+  public.plan_filters('SELECT id, display_name FROM public.parties') ~ '(?<!hashed )SubPlan|can_see_org_|has_org_cap|can_see_artist', false);
 RESET ROLE;
 
 -- ── Confirm / dispute: the status and the event commit together ─────────

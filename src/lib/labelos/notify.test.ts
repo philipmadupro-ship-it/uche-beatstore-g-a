@@ -21,7 +21,7 @@ const ask = (over: Partial<DirectAsk> = {}): DirectAsk => ({ kind: 'task_assigne
 
 describe('the closed union', () => {
   it('is exactly the five direct asks of 08 §B6', () => {
-    expect([...DIRECT_ASK_KINDS]).toEqual(['task_assigned', 'approval_requested', 'mention', 'credit_named_you', 'invitation']);
+    expect([...DIRECT_ASK_KINDS]).toEqual(['task_assigned', 'approval_requested', 'mention', 'credit_named_you', 'invitation', 'party_confirmation']);
   });
 
   it('forbids broadcast kinds: nothing about uploads, stages, reviews, members or "everyone"', () => {
@@ -168,9 +168,10 @@ describe('nothing else writes org notifications', () => {
       .filter((f) => f !== 'lib/labelos/notify.ts')
       .sort();
     // Direct asks arise where one person asks another for something: assigning a task, or asking one
-    // member to decide an approval gate (LABEL-30; the route that takes the request, not the decision).
+    // member to decide an approval gate (LABEL-30; the route that takes the request, not the decision), or
+    // asking the one person a party names to confirm their own rights details (LABEL-54).
     // A new caller is a visible edit here, with a reason, not an upload hook.
-    expect(callers).toEqual(['app/api/org/[orgId]/approvals/route.ts', 'app/api/org/[orgId]/tasks/[taskId]/route.ts', 'app/api/org/[orgId]/tasks/route.ts']);
+    expect(callers).toEqual(['app/api/org/[orgId]/approvals/route.ts', 'app/api/org/[orgId]/parties/[partyId]/invite/route.ts', 'app/api/org/[orgId]/tasks/[taskId]/route.ts', 'app/api/org/[orgId]/tasks/route.ts']);
     for (const c of callers) expect(c).not.toMatch(/upload|song|stage|review|release/i);
   });
 });
