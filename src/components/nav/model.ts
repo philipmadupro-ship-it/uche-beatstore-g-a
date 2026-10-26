@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
+import { canSeeParties } from '@/lib/labelos/parties-view';
 import { ADMIN_CENTRE_CAPABILITY } from '@/lib/labelos/admin-centre';
 
 /**
@@ -163,14 +164,20 @@ function releasesGroup(slug: string): NavGroup {
 }
 
 /**
- * The rights hub (LABEL-31): the legal queue, for the members who work it —
- * the legal gate or the contracts, plus the catalogue (`canSeeLegalQueue`, the
- * page's own check). Label and artist orgs only. The IA's wider Rights hub
- * (splits overview, parties) grows here; a link to a page not built would be
- * a dead link.
+ * The rights hub: Parties (LABEL-54) — the rights holders and their payee data,
+ * for anyone who reads a party at all (`canSeeParties`; what they are shown is
+ * the server's call) — and the legal queue (LABEL-31), for the members who work
+ * it: the legal gate or the contracts, plus the catalogue (`canSeeLegalQueue`,
+ * the page's own check), in orgs licensed for the contracts module. Label and
+ * artist orgs only. The IA's wider Rights hub (splits overview) grows here; a
+ * link to a page not built would be a dead link.
  */
-function rightsGroup(slug: string): NavGroup {
-  return { key: 'rights', label: 'Rights', icon: Scale, items: [{ label: 'Legal queue', href: `/o/${slug}/rights/legal`, icon: Scale }] };
+function rightsGroup(slug: string, items: { parties: boolean; legal: boolean }): NavGroup | null {
+  const links = [
+    ...(items.parties ? [{ label: 'Parties', href: `/o/${slug}/rights/parties`, icon: UsersRound }] : []),
+    ...(items.legal ? [{ label: 'Legal queue', href: `/o/${slug}/rights/legal`, icon: Scale }] : []),
+  ];
+  return links.length === 0 ? null : { key: 'rights', label: 'Rights', icon: Scale, items: links };
 }
 
 /**
@@ -199,7 +206,11 @@ export function navGroupsFor(
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
   const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps)] : [];
   const releases = orgKind !== 'producer' && caps?.has('catalog.read') ? [releasesGroup(org.slug)] : [];
-  // The legal queue belongs to the contracts module (LABEL-47).
-  const rights = orgKind !== 'producer' && caps && canSeeLegalQueue(caps) && licensed(org, 'contracts') ? [rightsGroup(org.slug)] : [];
+  // The legal queue belongs to the contracts module (LABEL-47); Parties is for anyone who reads a party.
+  const rightsHub =
+    orgKind !== 'producer' && caps
+      ? rightsGroup(org.slug, { parties: canSeeParties(caps), legal: canSeeLegalQueue(caps) && licensed(org, 'contracts') })
+      : null;
+  const rights = rightsHub ? [rightsHub] : [];
   return [...producerHubs, ...roster, ...releases, ...rights, orgGroup(org.slug, orgKind, caps, org.isOwner === true)];
 }

@@ -40,6 +40,7 @@ const TITLE: Record<DirectAskKind, string> = {
   mention: 'mentioned you',
   credit_named_you: 'named you in a credit',
   invitation: 'invited you',
+  party_confirmation: 'asked you to confirm your rights details',
 };
 
 export const NOTIFICATION_TITLE_MAX = 160;

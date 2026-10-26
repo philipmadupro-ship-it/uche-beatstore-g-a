@@ -15,9 +15,13 @@ import type { EventSubject } from './activity';
 import type { CreditRow, PartyRow } from './credits';
 import { memberIdentities, type IdentityAdmin } from './member-identity';
 import { inChunks, pageAll } from './overview-store';
-import { ownPartyName, PARTY_COLUMNS, type PartyColumns } from './parties';
+import { clearsConfirmation, ownPartyName, PARTY_COLUMNS, PARTY_PAYEE_COLUMNS, type PartyColumns } from './parties';
 import { orgProjectIdsInScope, type OrgContext } from '@/lib/auth/org-access';
 import { songEventSubject } from './song-stage-store';
+
+/** Payee columns (tax id, payment instructions) are selected only when the caller may read them. */
+export type PartyReadOpts = { payee?: boolean };
+const partyCols = (opts?: PartyReadOpts) => (opts?.payee ? PARTY_PAYEE_COLUMNS : PARTY_COLUMNS);
 
 export const CREDIT_COLUMNS =
   'id, track_id, name, role, source, scope, status, role_detail, party_id, contact_id, created_by, confirmed_by, confirmed_at, dispute_note, created_at';
@@ -104,9 +108,9 @@ export async function creditEventSubject(admin: AdminClient, org: string, trackI
 
 // ── Parties ─────────────────────────────────────────────────────────────
 
-export async function readParty(admin: AdminClient, org: string, partyId: string): Promise<PartyRow | null> {
+export async function readParty(admin: AdminClient, org: string, partyId: string, opts?: PartyReadOpts): Promise<PartyRow | null> {
   if (!isUUID(partyId)) return null;
-  const res = await admin.from('parties').select(PARTY_COLUMNS).eq('org_id', org).eq('id', partyId).maybeSingle();
+  const res = await admin.from('parties').select(partyCols(opts)).eq('org_id', org).eq('id', partyId).maybeSingle();
   check('party read', res.error);
   return (res.data as unknown as PartyRow | null) ?? null;
 }
@@ -121,8 +125,8 @@ export async function partiesByIds(admin: AdminClient, org: string, ids: readonl
   return out;
 }
 
-export async function ownPartyRow(admin: AdminClient, org: string, userId: string): Promise<PartyRow | null> {
-  const res = await admin.from('parties').select(PARTY_COLUMNS).eq('org_id', org).eq('user_id', userId).maybeSingle();
+export async function ownPartyRow(admin: AdminClient, org: string, userId: string, opts?: PartyReadOpts): Promise<PartyRow | null> {
+  const res = await admin.from('parties').select(partyCols(opts)).eq('org_id', org).eq('user_id', userId).maybeSingle();
   check('own party read', res.error);
   return (res.data as unknown as PartyRow | null) ?? null;
 }
@@ -155,11 +159,11 @@ export async function ensureOwnParty(admin: AdminClient, org: string, userId: st
 }
 
 /** Every party of the org, by name. */
-export async function listParties(admin: AdminClient, org: string): Promise<PartyRow[]> {
+export async function listParties(admin: AdminClient, org: string, opts?: PartyReadOpts): Promise<PartyRow[]> {
   // Paged: PostgREST answers at most `max-rows` (1000) and says nothing when it cuts the list.
   try {
     return await pageAll<PartyRow>(
-      (from, to) => admin.from('parties').select(PARTY_COLUMNS).eq('org_id', org).order('display_name', { ascending: true }).order('id').range(from, to),
+      (from, to) => admin.from('parties').select(partyCols(opts)).eq('org_id', org).order('display_name', { ascending: true }).order('id').range(from, to),
       'party list',
     );
   } catch (err) {
@@ -195,16 +199,20 @@ export async function scopedPartyIds(admin: AdminClient, ctx: OrgContext): Promi
   return [...new Set(credits.map((r) => r.party_id).filter((p): p is string => !!p))];
 }
 
-export async function insertParty(admin: AdminClient, org: string, createdBy: string, columns: PartyColumns): Promise<{ party: PartyRow } | { duplicate: true }> {
-  const res = await admin.from('parties').insert({ org_id: org, kind: 'person', created_by: createdBy, ...columns }).select(PARTY_COLUMNS).single();
+export async function insertParty(admin: AdminClient, org: string, createdBy: string, columns: PartyColumns, opts?: PartyReadOpts): Promise<{ party: PartyRow } | { duplicate: true }> {
+  const res = await admin.from('parties').insert({ org_id: org, kind: 'person', created_by: createdBy, ...columns }).select(partyCols(opts)).single();
   if (isUniqueViolation(res.error)) return { duplicate: true };
   check('party insert', res.error);
   return { party: res.data as unknown as PartyRow };
 }
 
-export async function updateParty(admin: AdminClient, org: string, partyId: string, columns: PartyColumns): Promise<{ party: PartyRow } | { duplicate: true } | { missing: true }> {
-  const res = await admin.from('parties').update(columns).eq('org_id', org).eq('id', partyId).select(PARTY_COLUMNS).maybeSingle();
+export async function updateParty(admin: AdminClient, org: string, partyId: string, columns: PartyColumns, opts?: PartyReadOpts): Promise<{ party: PartyRow } | { duplicate: true } | { missing: true } | { locked: true }> {
+  // A change to what the person confirmed (or to the account) takes the confirmation with it.
+  const patch = clearsConfirmation(columns) ? { ...columns, details_confirmed_at: null, details_confirmed_by: null } : columns;
+  const res = await admin.from('parties').update(patch).eq('org_id', org).eq('id', partyId).select(partyCols(opts)).maybeSingle();
   if (isUniqueViolation(res.error)) return { duplicate: true };
+  // Migration 174's parties_identity_lock (a rename / re-link after a sheet was circulated) raises check_violation.
+  if (res.error?.code === '23514' && /circulated/i.test(res.error.message)) return { locked: true };
   check('party update', res.error);
   if (!res.data) return { missing: true };
   const party = res.data as unknown as PartyRow;
@@ -251,5 +259,66 @@ export async function contactInOrg(admin: AdminClient, org: string, contactId: s
   if (!isUUID(contactId)) return false;
   const res = await admin.from('contacts').select('id').eq('org_id', org).eq('id', contactId).maybeSingle();
   if (res.error) throw new Error(`contact read: ${res.error.message}`);
+  return !!res.data;
+}
+
+/**
+ * Is the party named on a split sheet that has left draft (circulated, signed,
+ * disputed or superseded)? Then its display name and linked account are locked
+ * (`partyLockViolation`). A database without 155 has no sheets.
+ */
+export async function partyOnNonDraftSheet(admin: AdminClient, org: string, partyId: string): Promise<boolean> {
+  try {
+    const lines = await pageAll<{ split_sheet_id: string }>(
+      (from, to) => admin.from('split_lines').select('split_sheet_id').eq('org_id', org).eq('party_id', partyId).order('id').range(from, to),
+      'party lines',
+    );
+    const sheetIds = [...new Set(lines.map((l) => l.split_sheet_id))];
+    if (sheetIds.length === 0) return false;
+    const left = await inChunks<{ id: string }>(
+      sheetIds,
+      (part, from, to) => admin.from('split_sheets').select('id').in('id', part).neq('status', 'draft').order('id').range(from, to),
+      'party sheets',
+    );
+    return left.length > 0;
+  } catch (err) {
+    const raw = (err as { raw?: { message: string; code?: string } }).raw;
+    if (raw && isMissingCreditsSchema(raw)) return false;
+    throw err;
+  }
+}
+
+/** Stamp the party's details as confirmed by `userId` (the person, or a rights writer on their behalf). */
+export async function markPartyConfirmed(admin: AdminClient, org: string, partyId: string, userId: string, corrections: PartyColumns, opts?: PartyReadOpts): Promise<PartyRow | null> {
+  const res = await admin
+    .from('parties')
+    .update({ ...corrections, details_confirmed_by: userId, details_confirmed_at: new Date().toISOString() })
+    .eq('org_id', org)
+    .eq('id', partyId)
+    .select(partyCols(opts))
+    .maybeSingle();
+  check('party confirm', res.error);
+  return (res.data as unknown as PartyRow | null) ?? null;
+}
+
+/** The org's members by name, for linking a party to the account that will confirm it. Names only: no e-mail leaves here. */
+export async function linkableMembers(admin: AdminClient, org: string): Promise<{ userId: string; name: string }[]> {
+  const rows = await pageAll<{ user_id: string }>(
+    (from, to) => admin.from('org_members').select('user_id').eq('org_id', org).order('user_id').range(from, to),
+    'member list',
+  );
+  const ids = rows.map((r) => r.user_id);
+  if (ids.length === 0) return [];
+  const identities = await memberIdentities(admin as unknown as IdentityAdmin, org, ids, { withEmail: false });
+  return ids
+    .map((id) => ({ userId: id, name: identities.get(id)?.name ?? 'Member' }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.userId.localeCompare(b.userId));
+}
+
+/** Is this account a member of the org itself (not only of one of its projects)? A bell exists only for members. */
+export async function isOrgMember(admin: AdminClient, org: string, userId: string): Promise<boolean> {
+  if (!isUUID(userId)) return false;
+  const res = await admin.from('org_members').select('user_id').eq('org_id', org).eq('user_id', userId).maybeSingle();
+  if (res.error) throw new Error(`member read: ${res.error.message}`);
   return !!res.data;
 }

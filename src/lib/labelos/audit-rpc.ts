@@ -19,6 +19,7 @@
  *   connectionEnd            connection.ended     (both orgs)
  *   connectionShare          share.created | share.revoked (the artist org)
  *   creditDecide             credit.confirmed | credit.disputed (153, LABEL-27)
+ *   creditWithdraw           credit.withdrawn (174, LABEL-54; the credit is removed with its event)
  *   splitCirculate           split_sheet.circulated (+ .superseded for the version it replaces) (155, LABEL-28)
  *   splitSign                split_sheet.signed (155, LABEL-28)
  *   platformCreateLicensee   org.created + org.entitlements_changed in the new org (170, LABEL-47)
@@ -61,6 +62,8 @@ export const AUDIT_RPCS = {
   connectionShare: 'labelos_audit_connection_share',
   // Migration 153 (LABEL-27): a credit is confirmed or disputed, with its event.
   creditDecide: 'labelos_audit_credit_decide',
+  // Migration 174 (LABEL-54): a credit is withdrawn (the credited person, or a rights writer), with its event.
+  creditWithdraw: 'labelos_audit_credit_withdraw',
   // Migration 155 (LABEL-28): a split sheet is circulated (superseding the live one) or signed, with its event.
   splitCirculate: 'labelos_audit_split_circulate',
   splitSign: 'labelos_audit_split_sign',
@@ -161,6 +164,14 @@ export type AuditRpcArgs = {
     p_decision: 'confirmed' | 'disputed';
     /** The reason given with a dispute; null for a confirmation. */
     p_note: string | null;
+    /** The song's context keys the event is filed under: { artist_id, project_id, song_id }. */
+    p_subject: { artist_id: string | null; project_id: string | null; song_id: string | null };
+    p_payload: EventPayload;
+  };
+  creditWithdraw: {
+    p_org: string;
+    p_actor: string;
+    p_credit: string;
     /** The song's context keys the event is filed under: { artist_id, project_id, song_id }. */
     p_subject: { artist_id: string | null; project_id: string | null; song_id: string | null };
     p_payload: EventPayload;

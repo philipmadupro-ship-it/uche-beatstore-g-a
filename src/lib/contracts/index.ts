@@ -1486,11 +1486,35 @@ const PartyFields = {
   publisher_ipi: PARTY_TEXT(32),
   contact_id: z.string().uuid().nullable().optional(),
   user_id: z.string().uuid().nullable().optional(),
+  // LABEL-54. Tax id and payment instructions are payee data: `rights.write` writes them, and
+  // lib/labelos/payee refuses anything that looks like a bank or card number.
+  address: PARTY_TEXT(500),
+  country: PARTY_TEXT(2),
+  tax_id: PARTY_TEXT(64),
+  payment_instructions: PARTY_TEXT(500),
 };
 export const OrgPartyCreateBodySchema = z.object({ ...PartyFields, display_name: z.string().trim().min(1).max(200) }).strict();
 export type OrgPartyCreateBody = z.infer<typeof OrgPartyCreateBodySchema>;
 export const OrgPartyPatchBodySchema = z.object(PartyFields).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type OrgPartyPatchBody = z.infer<typeof OrgPartyPatchBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/parties/[partyId]/confirm (LABEL-54): the person named by a party confirms
+ * their own rights details, optionally correcting the legal fields first. Identity, links and payee
+ * data are not here: the schema is strict, so they cannot be sent.
+ */
+export const OrgPartyConfirmBodySchema = z.object({
+  legal_name: PARTY_TEXT(200),
+  ipi: PARTY_TEXT(32),
+  isni: PARTY_TEXT(32),
+  pro: PARTY_TEXT(80),
+  pro_affiliation: z.enum(['affiliated', 'not_affiliated', 'unknown']).optional(),
+  publisher_name: PARTY_TEXT(200),
+  publisher_ipi: PARTY_TEXT(32),
+  address: PARTY_TEXT(500),
+  country: PARTY_TEXT(2),
+}).strict();
+export type OrgPartyConfirmBody = z.infer<typeof OrgPartyConfirmBodySchema>;
 
 /**
  * POST /api/org/[orgId]/tracks/[id]/credits (LABEL-27): propose a credit.

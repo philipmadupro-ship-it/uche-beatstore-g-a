@@ -105,7 +105,10 @@ export const VERBS = [
   'credit.proposed',
   'credit.confirmed',
   'credit.disputed',
+  'credit.withdrawn',
   // Rights identities (LABEL-27; the subject is the party)
+  'party.confirmed',
+  'party.confirmation_requested',
   'party.created',
   'party.updated',
   'party.deleted',
@@ -178,6 +181,7 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'file.restricted_downloaded',
   'credit.confirmed',
   'credit.disputed',
+  'credit.withdrawn',
   'split_sheet.circulated',
   'split_sheet.superseded',
   'split_sheet.signed',
@@ -284,6 +288,9 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'credit.proposed': 'artist',
   'credit.confirmed': 'artist',
   'credit.disputed': 'artist',
+  'credit.withdrawn': 'artist',
+  'party.confirmed': 'internal',
+  'party.confirmation_requested': 'internal',
   // A party carries legal names and IPIs: the business side, like contacts.
   'party.created': 'internal',
   'party.updated': 'internal',

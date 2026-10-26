@@ -23,6 +23,7 @@ const MKT = u(3);
 const PRODUCER_FN = u(4);
 const AR_C2 = u(5);
 const X = u(7);
+const ART = u(11);
 const C1 = '30000000-0000-4000-8000-0000000000c1';
 const C2 = '30000000-0000-4000-8000-0000000000c2';
 const CX = '30000000-0000-4000-8000-0000000000c3';
@@ -77,8 +78,9 @@ beforeEach(() => {
         member(PRODUCER_FN, 'member', ['producer']),
         member(AR_C2, 'member', ['a_and_r'], 'artists'),
         member(X, 'owner', [], 'org', L2),
+        member(ART, 'artist', [], 'artists'),
       ],
-      member_artist_scopes: [{ org_id: L, user_id: AR_C2, contact_id: C2 }],
+      member_artist_scopes: [{ org_id: L, user_id: AR_C2, contact_id: C2 }, { org_id: L, user_id: ART, contact_id: C1 }],
       contacts: [
         { id: C1, org_id: L, user_id: null, name: 'Nova', category: 'artist' },
         { id: C2, org_id: L, user_id: null, name: 'Kilo', category: 'artist' },
@@ -200,6 +202,17 @@ describe('without rights.read: counts only', () => {
       expect(readiness).toEqual({ detail: 'counts', ready: false, percent: full.percent, blockerCount: full.blockerCount, warningCount: full.warningCount });
       expect(JSON.stringify(readiness)).not.toContain('Nova');
     }
+  });
+});
+
+describe('a roster artist (role artist) is told counts, never which co-writer is incomplete (LABEL-54)', () => {
+  it('gets the counts only, though the role holds rights.read', async () => {
+    const full = (await (await read(OWN, L, S1)).json()).readiness;
+    const res = await read(ART, L, S1);
+    expect(res.status).toBe(200);
+    const { readiness } = await res.json();
+    expect(readiness).toEqual({ detail: 'counts', ready: false, percent: full.percent, blockerCount: full.blockerCount, warningCount: full.warningCount });
+    expect(JSON.stringify(readiness)).not.toMatch(/Nova|IPI|PRO/);
   });
 });
 

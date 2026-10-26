@@ -301,6 +301,15 @@ describe('identifier jump', () => {
     expect((await search(AR_C2, '00123456789')).body.jump).toBeNull(); // credited on Nova's song only
   });
 
+  it('a roster artist finds no party by legal name and no jump by IPI (LABEL-54: legal data is not discoverable)', async () => {
+    // Where the party's DISPLAY name matches there is still nothing: the index also holds the legal name.
+    expect(ids((await search(ART, 'runnin')).body, 'people')).not.toContain(PARTY1);
+    expect(ids((await search(ART, 'runnin')).body, 'people')).not.toContain(PARTY2);
+    expect(ids((await search(ART, 'hansen')).body, 'people')).toEqual([]);
+    expect((await search(ART, '00123456789')).body.jump).toBeNull();
+    expect((await search(ART, '001-234-567-89')).body.jump).toBeNull();
+  });
+
   it('an ISWC on a song jumps to it', async () => {
     db.tables.tracks.find((r) => r.id === S3)!.iswc = 'T-034.524.680-1';
     expect((await search(AR, 'T-034.524.680-1')).body.jump).toMatchObject({ group: 'songs', id: S3 });

@@ -268,6 +268,17 @@ describe('sheetView: who sees which lines', () => {
     expect(v.lines[0].can.acknowledge).toBe(true);
   });
 
+  it('a roster artist sees names, roles and shares of the whole sheet — no co-writer legal data, no note, no document', () => {
+    const artist = orgActor('u-art', capabilitiesFor('label', 'artist', []), 'artist');
+    const v = sheetView(sheet, lines, parties, artist);
+    expect(v.lines.map((l) => [l.name, l.role, l.share])).toEqual([['Prd Person', 'writer', '66.6667'], ['Nova', 'publisher', '33.3333']]);
+    expect(v.total).toBe('100');
+    expect(v.note).toBeNull();
+    expect(v.hasDocument).toBe(false);
+    const wire = JSON.stringify(v);
+    for (const leak of ['Okafor', 'Producteur', '00987654321', '00123456789', 'internal remark', 'asset-key-1']) expect(wire, leak).not.toContain(leak);
+  });
+
   it('their own legal identifiers are theirs to read', () => {
     const v = sheetView(sheet, lines, parties, producer);
     expect(v.lines[0]).toMatchObject({ legalName: 'Pierre Producteur', ipi: '00123456789' });

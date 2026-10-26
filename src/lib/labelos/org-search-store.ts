@@ -204,7 +204,9 @@ async function searchReleases(access: OrgAccessOk, scope: Scope, q: ParsedQuery)
 
 async function searchParties(access: OrgAccessOk, q: ParsedQuery): Promise<SearchHit[]> {
   // Parties carry legal names and IPI numbers: only a member who reads rights data searches them.
-  if (!access.capabilities.has('rights.read')) return [];
+  // A roster artist (role artist) reads co-writers' names only: the index holds legal names, so matching on it
+  // would confirm who a legal name or an IPI belongs to (LABEL-54).
+  if (!access.capabilities.has('rights.read') || access.role === 'artist') return [];
   type Row = { id: string; display_name: string; kind: string };
   const source = pageOf<Row>('party search', () => access.admin.from('parties').select('id, display_name, kind').eq('org_id', access.orgId)
     .textSearch('search_tsv', q.tsquery!, { config: 'simple' }).order('display_name').order('id'));
@@ -280,7 +282,7 @@ async function jumpToRelease(access: OrgAccessOk, scope: Scope, upc: string): Pr
 }
 
 async function jumpToParty(access: OrgAccessOk, ipi: string): Promise<SearchHit | null> {
-  if (!access.capabilities.has('rights.read')) return null;
+  if (!access.capabilities.has('rights.read') || access.role === 'artist') return null;
   const rows = rowsOf<{ id: string; display_name: string; kind: string }>(
     await access.admin.from('parties').select('id, display_name, kind').eq('org_id', access.orgId).eq('ipi', ipi).limit(5),
     'party identifier read',
