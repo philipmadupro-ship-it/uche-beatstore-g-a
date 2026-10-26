@@ -5,6 +5,8 @@
  * a generic failure. Nothing here decides anything: every rule is the
  * server's.
  */
+import type { MasterCandidate } from './master-choice';
+
 export type Result<T> = ({ ok: true } & T) | { ok: false; status: number; error: string; field?: string; body?: Record<string, unknown> };
 
 async function send<T extends object>(url: string, method: string, body?: unknown): Promise<Result<T>> {
@@ -32,8 +34,27 @@ async function send<T extends object>(url: string, method: string, body?: unknow
 
 const base = (orgId: string, releaseId: string) => `/api/org/${orgId}/releases/${releaseId}`;
 
-export const addReleaseItem = (orgId: string, releaseId: string, songId: string) =>
-  send<{ item: { id: string } }>(`${base(orgId, releaseId)}/items`, 'POST', { song_track_id: songId });
+/** `masterId` omitted = the song's own mix; the chooser (`master-choice`) decides what is sent. */
+export const addReleaseItem = (orgId: string, releaseId: string, songId: string, masterId?: string) =>
+  send<{ item: { id: string } }>(`${base(orgId, releaseId)}/items`, 'POST', { song_track_id: songId, ...(masterId ? { master_track_id: masterId } : {}) });
+
+export type MasterOptions = { songId: string; options: MasterCandidate[]; defaultId: string | null; ask: boolean };
+
+export const getMasterOptions = (orgId: string, releaseId: string, songId: string) =>
+  send<MasterOptions>(`${base(orgId, releaseId)}/master-options?song_track_id=${encodeURIComponent(songId)}`, 'GET');
+
+export const setItemMaster = (orgId: string, releaseId: string, itemId: string, masterId: string) =>
+  send<object>(`${base(orgId, releaseId)}/items/${itemId}`, 'PATCH', { master_track_id: masterId });
+
+export const setItemExplicit = (orgId: string, releaseId: string, itemId: string, explicit: boolean) =>
+  send<object>(`${base(orgId, releaseId)}/items/${itemId}`, 'PATCH', { explicit });
+
+/** One or more release fields; the server's words (and the field at fault) come back on a refusal. */
+export const patchRelease = (orgId: string, releaseId: string, body: Record<string, unknown>) => send<object>(base(orgId, releaseId), 'PATCH', body);
+
+/** "New release": a draft. Without a project the route makes one for it. */
+export const createRelease = (orgId: string, body: Record<string, unknown>) =>
+  send<{ release: { id: string } }>(`/api/org/${orgId}/releases`, 'POST', body);
 
 export const reorderReleaseItems = (orgId: string, releaseId: string, order: string[]) =>
   send<object>(`${base(orgId, releaseId)}/items`, 'PATCH', { order });
