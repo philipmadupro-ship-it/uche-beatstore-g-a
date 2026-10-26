@@ -12,6 +12,12 @@ export const r2 = new S3Client({
     accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
   },
+  // SDK >= 3.729 defaults to 'WHEN_SUPPORTED', which bakes
+  // `x-amz-checksum-crc32=AAAAAA==` (the CRC32 of an EMPTY body) into every
+  // presigned UploadPart/PutObject URL. The browser then PUTs a real body
+  // that cannot match it. Cloudflare documents 'WHEN_REQUIRED' for R2.
+  requestChecksumCalculation: 'WHEN_REQUIRED',
+  responseChecksumValidation: 'WHEN_REQUIRED',
 });
 
 /**

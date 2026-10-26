@@ -5,6 +5,7 @@ import {
   displayedBytes,
   computeSpeedBps,
   computeEtaSec,
+  describePartFailure,
   backoffMs,
   isRetriableStatus,
   isLiveStatus,
@@ -221,5 +222,20 @@ describe('presigned part URLs', () => {
 
   it('does not re-sign after a success', () => {
     expect(shouldResignPart({ fromBatch: true, status: 200 })).toBe(false);
+  });
+});
+
+describe('describePartFailure', () => {
+  it('names the status and the S3 error code, never the URL', () => {
+    const xml = '<?xml version="1.0"?><Error><Code>BadDigest</Code><Message>x https://a.r2.dev/k?X-Amz-Signature=s</Message></Error>';
+    expect(describePartFailure(400, xml)).toBe('HTTP 400 BadDigest');
+  });
+  it('falls back to the bare status when the body has no code', () => {
+    expect(describePartFailure(503, '')).toBe('HTTP 503');
+    expect(describePartFailure(413, null)).toBe('HTTP 413');
+  });
+  it('says status 0 means no response', () => {
+    expect(describePartFailure(0, null, 'network error')).toBe('no response (status 0)');
+    expect(describePartFailure(0, null, 'timeout')).toBe('no response (status 0): timeout');
   });
 });

@@ -18,7 +18,7 @@ import {
   parsePersistedUploads, bytesFromCompletedParts, type PersistedItem,
 } from './persisted-uploads';
 import {
-  findLiveDuplicate, bytesFromParts, displayedBytes, computeSpeedBps,
+  findLiveDuplicate, bytesFromParts, displayedBytes, computeSpeedBps, describePartFailure,
   computeEtaSec, backoffMs, isRetriableStatus,
   isPresignedUrlFresh, shouldResignPart,
 } from './progress';
@@ -72,6 +72,8 @@ export interface UploadItem {
   updatedAt: number;
   error: string | null;
   retries: number;
+  /** How parts travel, shown in the tray: straight to R2, or through the app. */
+  transport: 'direct' | 'proxied' | null;
   // Context to pass back to /complete and into the track record
   type: string;
   projectId: string | null;
@@ -189,13 +191,15 @@ function loadPersisted(): PersistedItem[] {
 
 /* ─────────── XHR helpers ─────────── */
 
+type PartResult = { ok: boolean; status: number; error?: string; transport?: 'direct' | 'proxied' };
+
 function xhrPart(opts: {
   sessionId: string;
   partNumber: number;
   blob: Blob;
   onProgress: (loadedBytes: number) => void;
   signal?: AbortSignal;
-}): Promise<{ ok: boolean; status: number; error?: string }> {
+}): Promise<PartResult> {
   return directOrProxiedPart(opts);
 }
 
@@ -205,7 +209,7 @@ async function directOrProxiedPart(opts: {
   blob: Blob;
   onProgress: (loadedBytes: number) => void;
   signal?: AbortSignal;
-}): Promise<{ ok: boolean; status: number; error?: string }> {
+}): Promise<PartResult> {
   try {
     const entry = presignedUrls[opts.sessionId]?.[opts.partNumber];
     // Taken out of the cache either way: a URL is good for one PUT, and a
@@ -228,7 +232,9 @@ async function directOrProxiedPart(opts: {
       if (!signRes.ok) {
         return { ok: false, status: signRes.status, error: signed.error || 'part signing failed' };
       }
-      if (!signed.direct || !signed.url) return proxiedPart(opts);
+      if (!signed.direct || !signed.url) {
+        return { ...(await proxiedPart(opts)), transport: 'proxied' };
+      }
       url = signed.url;
     }
 
@@ -245,7 +251,7 @@ async function directOrProxiedPart(opts: {
       if (!opts.signal?.aborted && shouldResignPart({ fromBatch: cached !== null, status: uploaded.status })) {
         return directOrProxiedPart(opts);
       }
-      return uploaded;
+      return { ...uploaded, transport: 'direct' };
     }
 
     const confirmRes = await fetch('/api/upload/part', {
@@ -261,8 +267,8 @@ async function directOrProxiedPart(opts: {
     });
     const confirmed = await confirmRes.json() as { error?: string };
     return confirmRes.ok
-      ? { ok: true, status: confirmRes.status }
-      : { ok: false, status: confirmRes.status, error: confirmed.error || 'part confirmation failed' };
+      ? { ok: true, status: confirmRes.status, transport: 'direct' }
+      : { ok: false, status: confirmRes.status, error: confirmed.error || 'part confirmation failed', transport: 'direct' };
   } catch (err) {
     if (isError(err) && err.name === 'AbortError') {
       return { ok: false, status: 0, error: 'aborted' };
@@ -292,12 +298,12 @@ function directPart(opts: {
       if (xhr.status >= 200 && xhr.status < 300) {
         const etag = xhr.getResponseHeader('ETag') || xhr.getResponseHeader('etag') || '';
         if (!etag) {
-          resolve({ ok: false, status: xhr.status, error: 'R2 did not expose ETag' });
+          resolve({ ok: false, status: xhr.status, error: 'R2 did not expose ETag (bucket CORS must expose ETag)' });
           return;
         }
         resolve({ ok: true, status: xhr.status, etag });
       } else {
-        let msg = `HTTP ${xhr.status}`;
+        let msg = describePartFailure(xhr.status, xhr.responseText);
         try {
           const j = JSON.parse(xhr.responseText);
           if (j.error) msg = j.error;
@@ -464,6 +470,7 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
       updatedAt: Date.now(),
       error: null,
       retries: 0,
+      transport: null,
       type: opts.type || 'instrumental',
       projectId: opts.projectId ?? null,
       replaceTrackId: opts.replaceTrackId ?? null,
@@ -594,6 +601,7 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
           updatedAt: Date.now(),
           error: null,
           retries: 0,
+          transport: null,
           type: p.type,
           projectId: p.projectId,
           replaceTrackId: p.replaceTrackId,
@@ -826,6 +834,9 @@ async function runUpload(id: string) {
               useUploadManager.getState()._registerBytes(id, partNumber, loaded);
             },
           });
+          if (res.transport && useUploadManager.getState().uploads[id]?.transport !== res.transport) {
+            useUploadManager.getState()._patch(id, { transport: res.transport });
+          }
           if (res.ok) {
             useUploadManager.getState()._registerPart(id, partNumber);
             break;
@@ -850,7 +861,7 @@ async function runUpload(id: string) {
           const latest = useUploadManager.getState().uploads[id];
           if (!latest) return;
           useUploadManager.getState()._patch(id, {
-            error: `Chunk ${partNumber} retrying (attempt ${attempt}/${MAX_CHUNK_RETRIES})…`,
+            error: `Chunk ${partNumber} retrying (attempt ${attempt}/${MAX_CHUNK_RETRIES}): ${res.status === 0 ? describePartFailure(0, null, res.error) : (res.error || describePartFailure(res.status, null))}`,
             retries: latest.retries + 1,
           });
           // Offline? Waiting on the `online` event beats spending the whole

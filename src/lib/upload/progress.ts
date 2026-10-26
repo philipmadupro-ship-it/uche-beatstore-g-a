@@ -189,3 +189,16 @@ export function shouldResignPart(opts: { fromBatch: boolean; status: number }): 
   if (!opts.fromBatch) return false;
   return opts.status === 0 || (opts.status >= 400 && opts.status < 600);
 }
+
+/**
+ * What went wrong with a part, in words that identify the cause without
+ * leaking anything: the HTTP status, plus the `<Code>` an S3-compatible store
+ * puts in its XML error body (`BadDigest`, `SignatureDoesNotMatch`,
+ * `EntityTooLarge`...). Status 0 means the browser never saw a response (offline,
+ * or a response without CORS headers, which looks identical).
+ */
+export function describePartFailure(status: number, body?: string | null, fallback?: string): string {
+  const code = body ? /<Code>\s*([A-Za-z0-9]{1,64})\s*<\/Code>/.exec(body)?.[1] : undefined;
+  if (status === 0) return `no response (status 0)${fallback && fallback !== 'network error' ? `: ${fallback}` : ''}`;
+  return `HTTP ${status}${code ? ` ${code}` : ''}`;
+}
