@@ -122,7 +122,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Out of scope: the modules themselves.
 
 ### LABEL-50 — Roster and team window
-**Priority:** P0 · **Risk:** Medium · **Deps:** 48, 49 · **Status:** In Progress (session_01J9Cs4e12d1Khurw8sTDw9P)
+**Priority:** P0 · **Risk:** Medium · **Deps:** 48, 49 · **Status:** Done — #145, squash `837ab51` (2026-10-25)
 - One window ("Team and roster") usable from the wizard and from Organization: **add artist** (creates the roster contact, optional login invite with role `artist`), **add member** with role + functions + artist scope, **add collaborator** (beatmaker, producer, rapper, feature: a contact with a role and optional external-project invite), edit/remove with `planMemberChange` rules (last owner is 409).
 - Reuses `POST /api/org/[orgId]/contacts` and invitations; adds the screens and the missing role pickers.
 - Acceptance: add/remove for each role in e2e; scoped member sees only their artists; independent face shows "Your collaborators" instead of roster wording.
@@ -147,12 +147,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: the release "Track has no ISRC" blocker offers a working link to this editor; a Playwright journey sets an ISRC with no service-key seeding; audit event names fields, never values of notes.
 
 ### LABEL-54 — Parties and payee data
-**Priority:** P1 · **Risk:** Medium · **Deps:** 49 · **Migration:** 174 · **Status:** In Progress (session_01VdMEG5FGhGT7BkditBEft4)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 49 · **Migration:** 174 · **Status:** Done — #148, squash `f7882dd` (2026-10-26)
 - Parties page (G6 spec gap): legal name, stage name, address, country, tax id (restricted: `rights.write`/`finance.read` only), **PRO**, **IPI/CAE**, publisher, publisher IPI, payee details reference (no bank numbers stored in the app; a free-text "payment instructions" restricted to finance), invite-to-confirm. Credit **withdraw**. Lock `display_name`/`user_id` once a sheet naming the party is circulated, or snapshot names onto lines (G6 D-c).
 - Acceptance: scoped members only see parties in scope; roster artist sees names/roles/shares only (decision: no co-writer contact data); mutation check on the lock.
 
 ### LABEL-55 — Create release, release metadata, master chooser
-**Priority:** P0 · **Risk:** Medium · **Deps:** 53 · **Migration:** 175 · **Status:** Not Started
+**Priority:** P0 · **Risk:** Medium · **Deps:** 53 · **Migration:** 175 · **Status:** In Progress (session_01B78NKcfVzPhjTMAuMGinJ2, #150)
 - "New release" (draft) from the releases board: title, type (single/EP/album), artists, label name, **UPC**, **C-line / P-line**, territories, distributor, genre, language, planned date, explicit. Tracklist add with **master chooser** (default = the single linked master; otherwise ask); `master_track_id` editable from the row (PATCH exists).
 - Acceptance: all seven gates are satisfiable by a human in the UI; `label-org-release-board.spec.ts` rewritten so ISRC and master are set through the UI, not the service key; "Deliver anyway" stays owner-only and audited.
 
