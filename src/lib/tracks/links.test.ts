@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bundleFileNames, bundleReadme, linkLabel, linkSearchParams, mergeLinks, rankCandidates, relationChoices, suggestRelation } from './links';
+import { bundleFileNames, bundleReadme, isStoredRelation, linkLabel, linkSearchParams, mergeLinks, rankCandidates, relationChoices, suggestRelation } from './links';
+import { TrackLinkBodySchema, TrackUnlinkBodySchema } from '@/lib/contracts';
 
 const t = (id: string, type: string) => ({ id, title: id.toUpperCase(), type });
 const tracks = new Map([t('song', 'song'), t('b1', 'beat'), t('b2', 'beat'), t('inst', 'instrumental'), t('loop', 'loop'), t('top', 'topline')].map((x) => [x.id, x]));
@@ -84,5 +85,85 @@ describe('the Linked picker', () => {
     const rows = [{ id: 'a', type: 'song' }, { id: 'b', type: 'loop' }, { id: 'c', type: 'beat' }, { id: 'd', type: 'loop' }];
     expect(rankCandidates('song', rows).map((r) => r.id)).toEqual(['c', 'b', 'd', 'a']);
     expect(rankCandidates('beat', rows).map((r) => r.id)).toEqual(['b', 'd', 'a', 'c']);
+  });
+});
+
+describe('master / demo (Label OS, mig 140)', () => {
+  const lt = new Map([t('song', 'song'), t('b1', 'beat'), t('mst', 'song'), t('dmo', 'song'), t('inst', 'instrumental'), t('loop', 'loop')].map((x) => [x.id, x]));
+
+  it('reads master and demo links, labelled from both sides, in display order', () => {
+    const items = mergeLinks('song', {
+      mainBeatId: 'b1',
+      songBeats: [],
+      links: [
+        { from_track_id: 'song', to_track_id: 'dmo', relation: 'demo', position: 0 },
+        { from_track_id: 'song', to_track_id: 'loop', relation: 'loop', position: 0 },
+        { from_track_id: 'song', to_track_id: 'mst', relation: 'master', position: 0 },
+        { from_track_id: 'song', to_track_id: 'inst', relation: 'instrumental', position: 0 },
+      ],
+    }, lt);
+    expect(items.map((i) => [linkLabel(i.relation, i.direction), i.track.id])).toEqual([
+      ['Beat', 'b1'], ['Master', 'mst'], ['Instrumental', 'inst'], ['Loop', 'loop'], ['Demo', 'dmo'],
+    ]);
+    const fromMaster = mergeLinks('mst', { songBeats: [], links: [{ from_track_id: 'song', to_track_id: 'mst', relation: 'master', position: 0 }] }, lt);
+    expect(fromMaster.map((i) => linkLabel(i.relation, i.direction))).toEqual(['Master of']);
+    const fromDemo = mergeLinks('dmo', { songBeats: [], links: [{ from_track_id: 'song', to_track_id: 'dmo', relation: 'demo', position: 0 }] }, lt);
+    expect(fromDemo.map((i) => linkLabel(i.relation, i.direction))).toEqual(['Demo of']);
+  });
+
+  it('leaves the order of the existing relations exactly as before', () => {
+    const fromBeat = mergeLinks('b1', {
+      songBeats: [{ song_track_id: 'song', beat_track_id: 'b1', position: 0 }],
+      links: [{ from_track_id: 'b1', to_track_id: 'loop', relation: 'loop', position: 0 }, { from_track_id: 'b1', to_track_id: 'top', relation: 'topline', position: 0 }],
+    }, tracks);
+    expect(fromBeat.map((i) => [linkLabel(i.relation, i.direction), i.track.id])).toEqual([['Topline', 'top'], ['Loop', 'loop'], ['Song on it', 'song']]);
+  });
+
+  it('never guesses master or demo: both are audio of the song, the type cannot tell them apart', () => {
+    for (const from of ['song', 'beat', 'loop', 'topline', 'instrumental', 'remix', null]) {
+      for (const to of ['song', 'beat', 'loop', 'topline', 'instrumental', 'remix', null]) {
+        expect(['master', 'demo']).not.toContain(suggestRelation(from, to));
+      }
+    }
+  });
+
+  it("keeps the producer's relation choices unchanged; Label OS songs add master and demo", () => {
+    expect(relationChoices('song')).toEqual(['beat', 'instrumental', 'topline', 'loop', 'version']);
+    expect(relationChoices('beat')).toEqual(['loop', 'topline', 'instrumental', 'version']);
+    expect(relationChoices('song', { labelOs: true })).toEqual(['beat', 'master', 'instrumental', 'topline', 'loop', 'version', 'demo']);
+    expect(relationChoices('beat', { labelOs: true })).toEqual(['loop', 'topline', 'instrumental', 'version']);
+  });
+
+  it('ranks songs first in the picker for a master or a demo, and leaves every other ranking alone', () => {
+    const rows = [{ id: 'a', type: 'song' }, { id: 'b', type: 'loop' }, { id: 'c', type: 'beat' }, { id: 'd', type: 'loop' }];
+    expect(rankCandidates('song', rows, 'master').map((r) => r.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(rankCandidates('song', rows, 'demo').map((r) => r.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(rankCandidates('song', rows, 'auto').map((r) => r.id)).toEqual(['c', 'b', 'd', 'a']);
+    expect(rankCandidates('song', rows, 'loop').map((r) => r.id)).toEqual(['c', 'b', 'd', 'a']);
+  });
+
+  it('does not narrow the picker by type for a master or a demo', () => {
+    expect(Object.fromEntries(linkSearchParams('', 'master'))).toEqual({ limit: '40', lean: '1' });
+    expect(Object.fromEntries(linkSearchParams('', 'demo'))).toEqual({ limit: '40', lean: '1' });
+  });
+
+  it('stores master and demo in track_links', () => {
+    expect(isStoredRelation('master')).toBe(true);
+    expect(isStoredRelation('demo')).toBe(true);
+    expect(isStoredRelation('beat')).toBe(false);
+  });
+});
+
+describe('the producer link route (unchanged by Label OS)', () => {
+  it('still accepts exactly the five producer relations, so it cannot write a master or a demo', () => {
+    const body = (relation: string) => TrackLinkBodySchema.safeParse({ track_id: '0b0e1a57-0000-4000-8000-000000000001', relation });
+    for (const r of ['beat', 'instrumental', 'loop', 'topline', 'version']) expect(body(r).success).toBe(true);
+    expect(body('master').success).toBe(false);
+    expect(body('demo').success).toBe(false);
+  });
+  it('can still remove any link the drawer shows, master and demo included', () => {
+    const body = (relation: string) => TrackUnlinkBodySchema.safeParse({ track_id: '0b0e1a57-0000-4000-8000-000000000001', relation });
+    for (const r of ['beat', 'instrumental', 'loop', 'topline', 'version', 'master', 'demo']) expect(body(r).success).toBe(true);
+    expect(body('stem').success).toBe(false);
   });
 });

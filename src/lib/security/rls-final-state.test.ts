@@ -1,8 +1,14 @@
 /**
- * Replays every migration's CREATE/DROP POLICY in order and asserts on the
- * resulting policy set. RLS is only as strong as the LAST migration that
- * touched a policy, and a single missed table (arrangements survived 097's
- * owner-only sweep for 100 migrations) is invisible in a file-by-file review.
+ * Replays every migration's CREATE/DROP POLICY and RLS switches in order and
+ * asserts on the resulting state. RLS is only as strong as the LAST migration
+ * that touched a policy, and a single missed table (arrangements survived
+ * 097's owner-only sweep for 100 migrations) is invisible in a file-by-file
+ * review.
+ *
+ * The replay is static: it sees policies written literally in a migration,
+ * not ones built with EXECUTE format(...). Label OS migrations write theirs
+ * literally so these guards can see them. Runtime behaviour is proven on a
+ * real database by `npm run db:local:check` (supabase/local/checks/).
  */
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -10,20 +16,207 @@ import { join } from 'node:path';
 
 const DIR = join(process.cwd(), 'supabase/migrations');
 
+type Migration = { name: string; sql: string };
+type ReplayState = {
+  /** `table.policy` → normalised body (FOR … USING … WITH CHECK …). */
+  policies: Map<string, string>;
+  /** Final RLS switch per table: true = ENABLE, false = DISABLE. */
+  rls: Map<string, boolean>;
+  /** Tables some migration creates. */
+  created: Set<string>;
+  /** Migrations that call is_team_member(), the dormant 001 team model. */
+  teamMemberCallers: string[];
+  /** `table.policy` for every ALTER POLICY; the replay cannot model its effect. */
+  altered: Set<string>;
+};
+
+function realMigrations(): Migration[] {
+  return readdirSync(DIR)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((name) => ({ name, sql: readFileSync(join(DIR, name), 'utf8') }));
+}
+
+const POLICY_RE = /(DROP POLICY IF EXISTS|DROP POLICY|CREATE POLICY)\s+("[^"]+"|\S+)\s+ON\s+(?:public\.)?(\w+)([\s\S]*?);/gi;
+const RLS_RE =
+  /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:public\.)?"?(\w+)"?\s+(ENABLE|DISABLE)\s+ROW\s+LEVEL\s+SECURITY/gi;
+const ALTER_POLICY_RE = /ALTER\s+POLICY\s+("[^"]+"|\S+)\s+ON\s+(?:public\.)?"?(\w+)"?/gi;
+const CREATE_TABLE_RE = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?"?(\w+)"?/gi;
+
+/** Replays migrations in order; later statements win, as they do in Postgres. */
+function replay(migrations: Migration[]): ReplayState {
+  const state: ReplayState = { policies: new Map(), rls: new Map(), created: new Set(), teamMemberCallers: [], altered: new Set() };
+  for (const { name, sql: raw } of migrations) {
+    const sql = raw.replace(/--[^\n]*/g, '');
+    if (/\bis_team_member\s*\(/i.test(sql)) state.teamMemberCallers.push(name);
+    for (const m of sql.matchAll(CREATE_TABLE_RE)) state.created.add(m[1]);
+    for (const m of sql.matchAll(ALTER_POLICY_RE)) state.altered.add(`${m[2]}.${m[1].replace(/"/g, '')}`);
+    // Policies and RLS switches interleave within a file; apply them in source order.
+    const events = [
+      ...[...sql.matchAll(POLICY_RE)].map((m) => ({ at: m.index ?? 0, apply: () => applyPolicy(state, m) })),
+      ...[...sql.matchAll(RLS_RE)].map((m) => ({
+        at: m.index ?? 0,
+        apply: () => state.rls.set(m[1], m[2].toUpperCase() === 'ENABLE'),
+      })),
+    ].sort((a, b) => a.at - b.at);
+    for (const e of events) e.apply();
+  }
+  return state;
+}
+
+function applyPolicy(state: ReplayState, m: RegExpMatchArray) {
+  const key = `${m[3]}.${m[2].replace(/"/g, '')}`;
+  if (m[1].toUpperCase().startsWith('DROP')) state.policies.delete(key);
+  else state.policies.set(key, m[4].replace(/\s+/g, ' '));
+}
+
 function finalPolicies(): Map<string, string> {
-  const policies = new Map<string, string>();
-  const files = readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort();
-  const re = /(DROP POLICY IF EXISTS|DROP POLICY|CREATE POLICY)\s+("[^"]+"|\S+)\s+ON\s+(?:public\.)?(\w+)([\s\S]*?);/gi;
-  for (const f of files) {
-    const sql = readFileSync(join(DIR, f), 'utf8').replace(/--[^\n]*/g, '');
-    for (const m of sql.matchAll(re)) {
-      const key = `${m[3]}.${m[2].replace(/"/g, '')}`;
-      if (m[1].toUpperCase().startsWith('DROP')) policies.delete(key);
-      else policies.set(key, m[4].replace(/\s+/g, ' '));
+  return replay(realMigrations()).policies;
+}
+
+// ── Label OS guards (LABEL-04) ───────────────────────────────────────────
+
+/**
+ * Every table Label OS creates. ADD A TABLE HERE IN THE MIGRATION'S OWN PR —
+ * a table missing from this list is not guarded. A listed table that no
+ * migration creates fails, so a typo cannot silently guard nothing.
+ */
+function labelOsTables(): string[] {
+  return [
+    // 136_labelos_org_core.sql (LABEL-03)
+    'organizations',
+    'org_members',
+    'org_invitations',
+    'user_profiles',
+    'activity_events',
+    // 139_labelos_org_contacts.sql (LABEL-10)
+    'member_artist_scopes',
+    // 144_labelos_releases.sql (LABEL-16)
+    'releases',
+    'release_items',
+    // 148_labelos_project_members.sql (LABEL-21)
+    'project_members',
+    // 149_labelos_song_reviews.sql (LABEL-25)
+    'song_reviews',
+    // 151_labelos_tasks_notifications.sql (LABEL-23)
+    'tasks',
+    // 152_labelos_creative_direction.sql (LABEL-26)
+    'artist_direction',
+    'artist_references',
+    // 153_labelos_parties_credits.sql (LABEL-27)
+    'parties',
+    // 154_labelos_artist_label_connection.sql (LABEL-41)
+    'org_connections',
+    'connection_projects',
+    // 155_labelos_split_sheets.sql (LABEL-28)
+    'split_sheets',
+    'split_lines',
+    // 157_labelos_approvals.sql (LABEL-30)
+    'approvals',
+    // 161_labelos_saved_views.sql (LABEL-37)
+    'org_saved_views',
+    // 160_labelos_weekly_digest.sql (LABEL-38)
+    'org_digest_members',
+    'org_digest_channels',
+    // 169_labelos_overview_seen_per_org.sql (LABEL-46)
+    'org_overview_seen',
+    // 170_labelos_entitlements_platform.sql (LABEL-47)
+    'org_entitlements',
+    'platform_admins',
+    // 190_labelos_team_accounts.sql (doc 25): service-role only, no policy.
+    'org_managed_accounts',
+  ];
+}
+
+/**
+ * The SQL membership helpers a Label OS policy may key on
+ * (06-permission-model.md §3.1). can_see_artist arrived with LABEL-10;
+ * can_see_org_project / can_see_org_track / can_read_org_track with LABEL-12;
+ * can_see_project with LABEL-21.
+ */
+const ORG_HELPERS = [
+  'org_role',
+  'has_org_cap',
+  'can_see_artist',
+  'can_see_org_project',
+  'can_see_org_track',
+  'can_read_org_track',
+  'can_see_project',
+  // 147 (LABEL-20): the projects an artists-scoped member's scope reaches, for activity_events.
+  'labelos_scoped_projects',
+  // 149 (LABEL-25): the songs of the scoped projects, for song_reviews.
+  'labelos_scoped_tracks',
+  // 151 (LABEL-23): the releases of the scoped projects, for tasks.
+  'labelos_scoped_releases',
+  // 153 (LABEL-27): the parties credited on songs of the scoped projects, for parties.
+  'labelos_scoped_parties',
+  // 155 (LABEL-28): the caller's own split lines, one uncorrelated call, for split_sheets / split_lines.
+  'labelos_my_split_lines',
+  // 164 (LABEL-43): the (org, member) pairs the caller may see, one uncorrelated call, for org_members / user_profiles.
+  'labelos_visible_members',
+  // 164 (LABEL-43): the caller's own live orgs, the own-row fast path of org_members_member_read.
+  'labelos_my_live_orgs',
+];
+const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
+
+/**
+ * A Label OS policy must key on the tenant: a membership helper on the row's
+ * `org_id` (or on a parent row's, inside an EXISTS — a child table such as
+ * release_items reaches its org through its parent), or, without a helper,
+ * `org_id` tied to the caller through `auth.uid()`. A policy keyed only on
+ * `user_id = auth.uid()` is the producer app's tenancy and is wrong here: it
+ * ignores which org the row is in. A bare `org_id` mention is not enough:
+ * `org_id IS NOT NULL` admits everyone.
+ */
+function keysOnOrg(body: string): boolean {
+  // A policy that grants nothing (`USING (false)`, and no WITH CHECK other than false) has no tenancy to get
+  // wrong: LABEL-37's org_saved_views uses one to write "the API roles read this through the route or not at all".
+  if (DENY_ALL.test(body)) return true;
+  if (ORG_HELPERS.some((h) => new RegExp(`\\b${h}\\s*\\(`, 'i').test(body))) return true;
+  // A bare org_id mention is not tenancy (`org_id IS NOT NULL` lets every
+  // user in); without a helper it must be tied to the caller via auth.uid().
+  return /\borg_id\b/i.test(body) && /\bauth\.uid\s*\(/i.test(body);
+}
+
+/**
+ * Platform tables (LABEL-47) are not org-tenant: `platform_admins` says who
+ * operates the whole platform, so the right key is the caller's own row and
+ * nothing else. Only these tables may key on `user_id = auth.uid()`, and only
+ * in a SELECT policy (the 'platform_admins is self-read only' test pins it).
+ */
+const PLATFORM_SELF_TABLES = new Set(['platform_admins']);
+const SELF_ROW = /\buser_id\s*=\s*\(\s*SELECT\s+auth\.uid\s*\(\s*\)\s*\)/i;
+
+const DENY_ALL = /\bUSING\s*\(\s*false\s*\)(?![\s\S]*\bWITH CHECK\s*\(\s*(?!false\s*\)))/i;
+// `USING (true)` and its disguises: a helper call OR-ed with a constant is still open to everyone, and the
+// "keys on a helper" check below would pass it because the helper IS named in the body.
+const OPEN_PREDICATE = /(USING|WITH CHECK)\s*\(\s*true\s*\)|\bOR\s+\(?\s*true\b|\btrue\s*\)?\s+OR\b|\b1\s*=\s*1\b/i;
+
+/** Every way the listed tables break the Label OS rules; empty = clean. */
+function labelOsViolations(state: ReplayState, tables: string[]): string[] {
+  const out: string[] = [];
+  for (const table of tables) {
+    if (!state.created.has(table)) out.push(`${table}: no migration creates it (typo in labelOsTables()?)`);
+    if (state.rls.get(table) !== true) out.push(`${table}: row level security is not enabled`);
+    for (const key of state.altered) {
+      if (key.startsWith(`${table}.`)) out.push(`${key}: ALTER POLICY (write DROP POLICY + CREATE POLICY so the replay sees it)`);
+    }
+    for (const [key, body] of state.policies) {
+      if (!key.startsWith(`${table}.`)) continue;
+      if (OPEN_PREDICATE.test(body)) out.push(`${key}: USING (true) / WITH CHECK (true)`);
+      const platformSelf = PLATFORM_SELF_TABLES.has(table) && /FOR\s+SELECT/i.test(body) && SELF_ROW.test(body);
+      if (!keysOnOrg(body) && !platformSelf) out.push(`${key}: no org_id, membership helper or parent-EXISTS predicate`);
     }
   }
-  return policies;
+  return out;
 }
+
+/**
+ * The only migrations allowed to call is_team_member(): the dormant 001 team
+ * model and 003, from before owner-only RLS. Label OS replaces that model; a
+ * new caller would revive "any team member sees everything".
+ */
+const TEAM_MEMBER_CALLERS_ALLOWED = ['001_init.sql', '003_vault_domain.sql'];
 
 describe('final RLS policy state', () => {
   const policies = finalPolicies();
@@ -67,9 +260,773 @@ describe('final RLS policy state', () => {
     }
   });
 
+  describe('Label OS org core (mig 136)', () => {
+    const onTable = (table: string) => [...policies].filter(([k]) => k.startsWith(`${table}.`));
+
+    // Tables only the service role touches (RLS on, no policy, no grant): a policy would only invite a read. Each is asserted policy-less in its own block.
+    const SERVICE_ONLY = ['org_digest_members', 'org_digest_channels', 'org_managed_accounts'];
+
+    it('every org-core table has at least one policy, except the service-role-only ones, which have none', () => {
+      for (const table of labelOsTables()) {
+        if (SERVICE_ONLY.includes(table)) expect(onTable(table).length, table).toBe(0);
+        else expect(onTable(table).length, table).toBeGreaterThan(0);
+      }
+    });
+
+    it('activity_events is append-only: no UPDATE, DELETE or ALL policy', () => {
+      const writes = onTable('activity_events')
+        .filter(([, body]) => /FOR\s+(UPDATE|DELETE|ALL)\b/i.test(body))
+        .map(([k]) => k);
+      expect(writes).toEqual([]);
+    });
+
+    it('activity_events has ONE policy, a SELECT, and it carries catalog.read, the internal class AND the artist scope (147, LABEL-20)', () => {
+      expect(onTable('activity_events').map(([k]) => k)).toEqual(['activity_events.activity_events_member_read']);
+      const body = policies.get('activity_events.activity_events_member_read') ?? '';
+      expect(body).toMatch(/^\s*FOR SELECT\b/i);
+      expect(body).toMatch(/has_org_cap\(org_id, 'catalog\.read'\)/);
+      expect(body).toMatch(/visibility = 'artist' OR[\s\S]*has_org_cap\(org_id, 'business\.read\.internal'\)/);
+      // Without these a member limited to some artists (or a roster artist) reads every artist's events with their own JWT.
+      expect(body).toMatch(/\(org_id, artist_id\) IN \(\s*SELECT s\.org_id, s\.contact_id FROM public\.member_artist_scopes s WHERE s\.user_id = \(SELECT auth\.uid\(\)\)/);
+      expect(body).toMatch(/artist_id IS NULL AND project_id IS NOT NULL AND \(org_id, project_id\) IN \(SELECT sp\.org_id, sp\.project_id FROM public\.labelos_scoped_projects\(\) sp\)/);
+      expect(body).not.toMatch(/WITH CHECK/i);
+    });
+
+    it('activity_events scope makes no per-row SECURITY DEFINER call: every scope disjunct is an uncorrelated subquery (R-08)', () => {
+      const body = policies.get('activity_events.activity_events_member_read') ?? '';
+      expect(body).toMatch(/org_id IN \(\s*SELECT om\.org_id FROM public\.org_members om WHERE om\.user_id = \(SELECT auth\.uid\(\)\)/);
+      // The only has_org_cap calls are 136's two capability tests; scope adds no helper call keyed on the row.
+      expect([...body.matchAll(/has_org_cap\(/g)]).toHaveLength(2);
+      expect(body).not.toMatch(/can_see_artist\(|can_see_org_project\(|can_see_org_track\(/);
+    });
+
+    it('org_members has no insert policy: joining is the service-role accept route only', () => {
+      const inserts = onTable('org_members')
+        .filter(([, body]) => /FOR\s+(INSERT|ALL)\b/i.test(body))
+        .map(([k]) => k);
+      expect(inserts).toEqual([]);
+    });
+
+    it('org_members writes require members.manage', () => {
+      const writes = onTable('org_members').filter(([, body]) => /FOR\s+(UPDATE|DELETE)\b/i.test(body));
+      expect(writes.length).toBeGreaterThan(0);
+      for (const [k, body] of writes) expect(body, k).toMatch(/has_org_cap\s*\(\s*org_id\s*,\s*'members\.manage'\s*\)/);
+    });
+  });
+
+  describe('Label OS org contacts (mig 139, R-04)', () => {
+    const before139 = replay(realMigrations().filter((m) => m.name < '139')).policies;
+    const onContacts = () => [...policies].filter(([k]) => k.startsWith('contacts.'));
+
+    it('contacts has exactly the producer policy and the one additive org policy', () => {
+      expect(onContacts().map(([k]) => k).sort()).toEqual(['contacts.org_member_read', 'contacts.owner_only']);
+    });
+
+    it("the producer's owner_only policy is exactly what it was before Label OS touched contacts", () => {
+      expect(policies.get('contacts.owner_only')).toBe(before139.get('contacts.owner_only'));
+      expect(policies.get('contacts.owner_only')).toMatch(/FOR ALL USING \(\(SELECT auth\.uid\(\)\) = user_id\)/);
+    });
+
+    it('org_member_read is read-only and requires org_id IS NOT NULL, catalog.read and the artist scope', () => {
+      const body = policies.get('contacts.org_member_read') ?? '';
+      expect(body).toMatch(/^\s*FOR SELECT\b/i);
+      expect(body).toMatch(/USING \(\s*org_id IS NOT NULL\s+AND/i);
+      expect(body).toMatch(/has_org_cap\(org_id, 'catalog\.read'\)/);
+      expect(body).toMatch(/can_see_artist\(org_id, id\)/);
+      expect(body).not.toMatch(/\bOR\b/i);
+      expect(body).not.toMatch(/WITH CHECK/i);
+    });
+
+    it('member_artist_scopes has no write policy: scope changes only through the service role', () => {
+      const writes = [...policies]
+        .filter(([k, body]) => k.startsWith('member_artist_scopes.') && /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body))
+        .map(([k]) => k);
+      expect(writes).toEqual([]);
+    });
+
+    it('every org policy on a table that predates Label OS requires org_id IS NOT NULL (R-04)', () => {
+      // A permissive policy is OR-combined with the producer's: on tracks,
+      // projects, contacts… an org predicate that does not rule out producer
+      // rows (org_id IS NULL) would hand them to members.
+      const guarded = new Set(labelOsTables());
+      const offenders = [...policies]
+        .filter(([k, body]) => !guarded.has(k.split('.')[0]) && ORG_HELPER_CALL.test(body) && !/\borg_id IS NOT NULL\b/i.test(body))
+        .map(([k]) => k);
+      expect(offenders).toEqual([]);
+    });
+  });
+
+  describe('Label OS org catalogue (mig 141, R-04)', () => {
+    const before141 = replay(realMigrations().filter((m) => m.name < '141')).policies;
+    const ORG_READ_TABLES = [
+      'tracks',
+      'projects',
+      'project_contacts',
+      'artist_portals',
+      'project_assets',
+      'song_beats',
+      'track_links',
+      'artist_messages',
+      'contact_track_states',
+      'project_comments',
+    ];
+    /** Every table with an org read path is guarded with its predicate. */
+    const GUARDED_TABLES = ORG_READ_TABLES;
+    /**
+     * track_collaborators had no org read path in 141 and was hidden like the tables below;
+     * 153 (LABEL-27) gives it one (credits) and REPLACES its guard — see the 153 block.
+     */
+    const GAINED_READ_PATH_IN_153 = ['track_collaborators'];
+    /** Keyed through a track's / project's user_id, with no org read path: org rows hidden. */
+    const HIDDEN_TABLES = [
+      'project_tracks',
+      'project_shares',
+      'track_versions',
+      'track_licenses',
+      'play_head_pings',
+      'store_free_downloads',
+      'project_tags',
+      'project_folder_items',
+      'project_access_links',
+    ];
+    const ALL_141 = [...ORG_READ_TABLES, ...HIDDEN_TABLES, ...GAINED_READ_PATH_IN_153];
+
+    it('every producer policy on these tables is exactly what it was before 141', () => {
+      for (const [key, body] of before141) {
+        if (!ALL_141.includes(key.split('.')[0])) continue;
+        if (key === 'track_collaborators.org_member_guard') continue; // replaced by 153, asserted below
+        expect(policies.get(key), key).toBe(body);
+      }
+    });
+
+    it('141 adds exactly org_member_read on each org-readable table and org_member_guard wherever an owner policy could reach an org row', () => {
+      const added = [...policies.keys()].filter((k) => ALL_141.includes(k.split('.')[0]) && !before141.has(k)).sort();
+      expect(added).toEqual(
+        [
+          ...ORG_READ_TABLES.map((t) => `${t}.org_member_read`),
+          ...ALL_141.map((t) => `${t}.org_member_guard`),
+          // 153 (LABEL-27): the credits' org read policy.
+          'track_collaborators.track_collaborators_org_member_read',
+        ].sort(),
+      );
+    });
+
+    it('every org_member_read is a permissive SELECT keyed on org_id IS NOT NULL (on the row or, in EXISTS, its parent) and a membership helper', () => {
+      for (const table of ORG_READ_TABLES) {
+        const body = policies.get(`${table}.org_member_read`) ?? '';
+        expect(body, table).toMatch(/^\s*FOR SELECT\s+TO authenticated\s+USING\b/i);
+        expect(body, table).toMatch(/\borg_id IS NOT NULL\b/i);
+        expect(body, table).toMatch(ORG_HELPER_CALL);
+        expect(body, table).not.toMatch(/WITH CHECK/i);
+        expect(body, table).not.toMatch(/auth\.uid\s*\(/i);
+        if (!['tracks', 'projects'].includes(table)) expect(body, table).toMatch(/^[^(]*USING \(\s*EXISTS\s*\(/i);
+      }
+    });
+
+    it('tracks and projects test org_id IS NOT NULL on the row itself, first', () => {
+      for (const table of ['tracks', 'projects']) {
+        expect(policies.get(`${table}.org_member_read`)).toMatch(/USING \(\s*org_id IS NOT NULL\s+AND/i);
+      }
+      expect(policies.get('tracks.org_member_read')).toMatch(/can_read_org_track\(org_id, id\)/);
+      expect(policies.get('projects.org_member_read')).toMatch(/can_see_org_project\(org_id, id\)/);
+    });
+
+    it('every guard is a RESTRICTIVE SELECT that lets a producer row through and holds an org row to the read predicate', () => {
+      for (const table of GUARDED_TABLES) {
+        const body = policies.get(`${table}.org_member_guard`) ?? '';
+        expect(body, table).toMatch(/^\s*AS RESTRICTIVE\s+FOR SELECT\s+USING\b/i);
+        expect(body, table).toMatch(/\borg_id IS NOT NULL\b/i);
+        expect(body, table).toMatch(ORG_HELPER_CALL);
+        expect(body, table).not.toMatch(/WITH CHECK/i);
+        // Producer rows pass: the row's own org_id IS NULL, or a SECURITY
+        // DEFINER "is it an org row" helper (never an EXISTS under RLS).
+        expect(body, table).toMatch(/USING \(\s*(org_id IS NULL\s+OR|\(?NOT public\.labelos_is_org_(project|track|contact)\()/i);
+      }
+    });
+
+    it('on tables with no org read path, the guard hides org rows outright', () => {
+      for (const table of HIDDEN_TABLES) {
+        const body = policies.get(`${table}.org_member_guard`) ?? '';
+        expect(body, table).toMatch(/^\s*AS RESTRICTIVE\s+FOR SELECT\s+USING \(\s*NOT public\.labelos_is_org_(project|track)\(/i);
+        expect(body, table).not.toMatch(/\bOR\b/i);
+      }
+    });
+
+    it('no org policy writes: nothing new is FOR INSERT / UPDATE / DELETE / ALL', () => {
+      const writes = [...policies]
+        .filter(([k, body]) => /\.org_member_(read|guard)$/.test(k) && /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body))
+        .map(([k]) => k);
+      expect(writes).toEqual([]);
+    });
+  });
+
+  describe('Label OS parties + credits (mig 153, LABEL-27)', () => {
+    const before153 = replay(realMigrations().filter((m) => m.name < '153')).policies;
+
+    it('the producer policy on track_collaborators is exactly what it was', () => {
+      expect(policies.get('track_collaborators.track_collaborators_via_parent')).toBe(before153.get('track_collaborators.track_collaborators_via_parent'));
+    });
+
+    it('153 changes only the guard (replaced, still a RESTRICTIVE SELECT) and adds the org read policy and the parties policy', () => {
+      const added = [...policies.keys()].filter((k) => !before153.has(k) && /^(track_collaborators|parties)\./.test(k)).sort();
+      expect(added).toEqual(['parties.parties_member_read', 'track_collaborators.track_collaborators_org_member_read']);
+      const changed = [...before153.keys()].filter((k) => policies.get(k) !== before153.get(k) && /^(track_collaborators|parties)\./.test(k));
+      expect(changed).toEqual(['track_collaborators.org_member_guard']);
+    });
+
+    it('the guard lets an org credit through to the org policy and still holds every producer row to the old rule', () => {
+      const body = policies.get('track_collaborators.org_member_guard') ?? '';
+      expect(body).toMatch(/^\s*AS RESTRICTIVE\s+FOR SELECT\s+USING \(\s*org_id IS NOT NULL\s+OR\s+NOT public\.labelos_is_org_track\(track_id\)\s*\)\s*$/i);
+      // The predicate that admits a row is the org policy's alone: the guard cannot be what shows a credit.
+      expect(body).not.toMatch(/has_org_cap|auth\.uid/i);
+    });
+
+    it('the credits org read policy is a SELECT keyed on org_id IS NOT NULL, rights.read and a membership — no per-row definer helper (R-08)', () => {
+      const body = policies.get('track_collaborators.track_collaborators_org_member_read') ?? '';
+      expect(body).toMatch(/^\s*FOR SELECT\s+USING \(\s*org_id IS NOT NULL\s+AND/i);
+      expect(body).toMatch(/has_org_cap\(cm\.org_id, 'rights\.read'\)/);
+      expect(body).toMatch(/FROM public\.org_members/);
+      expect(body).toMatch(/labelos_scoped_tracks\(\)/);
+      expect(body).not.toMatch(/WITH CHECK/i);
+      expect(body).not.toMatch(/can_see_org_|can_read_org_track|labelos_is_org_/);
+      // Not the row's own org_id: the capability is asked of the caller's few memberships (an uncorrelated subplan).
+      expect(body).not.toMatch(/has_org_cap\(\s*org_id/);
+    });
+
+    it('the parties policy: rights.read in a whole-org / scoped reach, or the party is the caller’s own — never open', () => {
+      const body = policies.get('parties.parties_member_read') ?? '';
+      expect(body).toMatch(/^\s*FOR SELECT\s+USING\b/i);
+      expect(body).toMatch(/has_org_cap\(cm\.org_id, 'rights\.read'\)/);
+      expect(body).toMatch(/labelos_scoped_parties\(\)/);
+      expect(body).toMatch(/user_id = \(SELECT auth\.uid\(\)\)/);
+      expect(body).not.toMatch(/has_org_cap\(\s*org_id/);
+      expect(body).not.toMatch(/WITH CHECK/i);
+    });
+
+    it('no policy on either table writes', () => {
+      const writes = [...policies]
+        .filter(([k, body]) => /^(parties|track_collaborators)\./.test(k) && /FOR\s+(INSERT|UPDATE|DELETE)\b/i.test(body))
+        .map(([k]) => k);
+      expect(writes).toEqual([]);
+    });
+  });
+
+  describe('Label OS split sheets (mig 155, LABEL-28)', () => {
+    const onSplit = () => [...policies].filter(([k]) => /^(split_sheets|split_lines)\./.test(k));
+
+    it('each table has exactly one policy, a SELECT: rights.read in a whole-org / scoped reach, or the caller’s own non-draft line', () => {
+      expect(onSplit().map(([k]) => k).sort()).toEqual(['split_lines.split_lines_member_read', 'split_sheets.split_sheets_member_read']);
+      for (const [k, body] of onSplit()) {
+        expect(body, k).toMatch(/^\s*FOR SELECT\s+USING\b/i);
+        expect(body, k).toMatch(/has_org_cap\(cm\.org_id, 'rights\.read'\)/);
+        expect(body, k).toMatch(/labelos_scoped_tracks\(\)/);
+        expect(body, k).toMatch(/labelos_my_split_lines\(\)/);
+        // Asked of the caller's few memberships (an uncorrelated subplan), never of the row's own org: R-08.
+        expect(body, k).not.toMatch(/has_org_cap\(\s*org_id/);
+        expect(body, k).not.toMatch(/can_see_org_|can_read_org_track|labelos_is_org_/);
+        expect(body, k).not.toMatch(/WITH CHECK/i);
+      }
+    });
+
+    it('the two policies never read each other’s table (no recursion): the own-line set is a function', () => {
+      expect(policies.get('split_sheets.split_sheets_member_read')).not.toMatch(/FROM public\.split_lines/);
+      expect(policies.get('split_lines.split_lines_member_read')).not.toMatch(/FROM public\.split_sheets/);
+    });
+
+    it('no policy on either table writes', () => {
+      const writes = onSplit().filter(([, body]) => /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body)).map(([k]) => k);
+      expect(writes).toEqual([]);
+    });
+  });
+
+  describe('Label OS split sheet column grants (mig 162, LABEL-43)', () => {
+    const sql = () => readFileSync(join(DIR, '162_labelos_split_sheets_column_grants.sql'), 'utf8').replace(/--[^\n]*/g, '');
+    // The columns an own-line reader (D2) may see; never the negotiation note or who did what.
+    const GRANTED = ['id', 'org_id', 'track_id', 'kind', 'version', 'status', 'circulated_at', 'signed_at', 'superseded_at', 'created_at'];
+    const HIDDEN = ['note', 'created_by', 'circulated_by', 'document_asset_id', 'superseded_by', 'updated_at'];
+
+    it('revokes the table-wide SELECT from the API roles and grants back only the listed columns', () => {
+      expect(sql()).toMatch(/REVOKE SELECT ON public\.split_sheets FROM anon, authenticated/);
+      for (const role of ['authenticated', 'anon']) {
+        const grant = sql().match(new RegExp(`GRANT SELECT \\(([^)]*)\\)\\s+ON public\\.split_sheets TO ${role};`));
+        expect(grant, `column grant to ${role}`).not.toBeNull();
+        const cols = grant![1].split(',').map((c) => c.trim());
+        expect(cols.sort(), role).toEqual([...GRANTED].sort());
+        for (const hidden of HIDDEN) expect(cols, `${role}: ${hidden}`).not.toContain(hidden);
+      }
+      // No table-wide grant comes back — here or in any later migration (a re-grant would reopen the note).
+      const later = realMigrations().filter((m) => m.name >= '162');
+      for (const m of later) {
+        const body = readFileSync(join(DIR, m.name), 'utf8').replace(/--[^\n]*/g, '');
+        expect(body, m.name).not.toMatch(/GRANT\s+(SELECT|ALL)(\s+PRIVILEGES)?\s+ON\s+(TABLE\s+)?(public\.)?split_sheets\b/i);
+        expect(body, m.name).not.toMatch(/GRANT\s+(SELECT|ALL)(\s+PRIVILEGES)?\s+ON\s+ALL\s+TABLES\s+IN\s+SCHEMA\s+public\s+TO[^;]*\b(anon|authenticated)\b/i);
+      }
+    });
+
+    it('changes no policy: the row rule stays 155’s, only the columns narrow', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '162')).policies;
+      expect(policies.get('split_sheets.split_sheets_member_read')).toBe(before.get('split_sheets.split_sheets_member_read'));
+    });
+  });
+
+  describe('Label OS audit rows are immutable (mig 163, LABEL-43)', () => {
+    const sql = () => readFileSync(join(DIR, '163_labelos_audit_events_immutable.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('a BEFORE UPDATE OR DELETE row trigger guards activity_events, for every role (a trigger, not a policy or a grant)', () => {
+      expect(sql()).toMatch(/CREATE TRIGGER activity_events_audit_immutable\s+BEFORE UPDATE OR DELETE ON public\.activity_events\s+FOR EACH ROW EXECUTE FUNCTION public\.activity_events_audit_immutable\(\)/);
+    });
+
+    it('lets through only the cascade from a deleted organization and the actor FK being nulled', () => {
+      const body = sql();
+      expect(body).toMatch(/OLD\.audit/);
+      expect(body).toMatch(/NOT EXISTS \(SELECT 1 FROM public\.organizations o WHERE o\.id = OLD\.org_id\)/);
+      expect(body).toMatch(/NOT EXISTS \(SELECT 1 FROM auth\.users u WHERE u\.id = OLD\.actor_id\)/);
+      // No session switch can turn it off: nothing reads a GUC or the role name.
+      expect(body).not.toMatch(/current_setting|current_user|session_user|auth\.role\(/i);
+    });
+
+    it('changes no activity_events policy', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '163')).policies;
+      expect(policies.get('activity_events.activity_events_member_read')).toBe(before.get('activity_events.activity_events_member_read'));
+    });
+  });
+
+  describe('Label OS member and profile reads (mig 164, LABEL-43)', () => {
+    it('org_members_member_read and user_profiles_self_or_co_member_read both read the one uncorrelated helper', () => {
+      const members = policies.get('org_members.org_members_member_read') ?? '';
+      const profiles = policies.get('user_profiles.user_profiles_self_or_co_member_read') ?? '';
+      expect(members).toMatch(/^\s*FOR SELECT\s+USING\b/i);
+      expect(members).toMatch(/\(org_id, user_id\) IN \(\s*SELECT v\.org_id, v\.user_id FROM public\.labelos_visible_members\(\) v\s*\)/);
+      // The own-row fast path still requires a LIVE org (a soft-deleted org's row is hidden from its own member).
+      expect(members).toMatch(/user_id = \(SELECT auth\.uid\(\)\) AND org_id IN \(SELECT lo\.org_id FROM public\.labelos_my_live_orgs\(\) lo\)/);
+      expect(profiles).toMatch(/^\s*FOR SELECT\s+USING\b/i);
+      expect(profiles).toMatch(/user_id = \(SELECT auth\.uid\(\)\)/);
+      expect(profiles).toMatch(/user_id IN \(\s*SELECT v\.user_id FROM public\.labelos_visible_members\(\) v\s*\)/);
+    });
+
+    it('neither policy calls a helper keyed on the row (R-08): no org_role(org_id), no correlated EXISTS', () => {
+      for (const key of ['org_members.org_members_member_read', 'user_profiles.user_profiles_self_or_co_member_read']) {
+        const body = policies.get(key) ?? '';
+        expect(body, key).not.toMatch(/org_role\(|has_org_cap\(|can_see_/);
+        expect(body, key).not.toMatch(/EXISTS/i);
+        expect(body, key).not.toMatch(/WITH CHECK/i);
+      }
+    });
+
+    it('the write policies on org_members are 136’s, untouched', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '164')).policies;
+      for (const key of ['org_members.org_members_manage_update', 'org_members.org_members_manage_delete']) {
+        expect(policies.get(key), key).toBe(before.get(key));
+      }
+    });
+  });
+
+  describe('Label OS playlist_tracks same owner (mig 165, LABEL-44)', () => {
+    const sql = () => readFileSync(join(DIR, '165_labelos_playlist_tracks_same_owner.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('a BEFORE INSERT OR UPDATE OF playlist_id, track_id trigger joins only the playlist owner’s own producer tracks', () => {
+      expect(sql()).toMatch(/CREATE TRIGGER playlist_tracks_same_owner\s+BEFORE INSERT OR UPDATE OF playlist_id, track_id ON public\.playlist_tracks/);
+      expect(sql()).toMatch(/t\.user_id = p\.user_id AND t\.org_id IS NULL/);
+    });
+
+    it('changes no playlist policy (097’s owner_via_playlist stays the producer’s rule)', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '165')).policies;
+      expect(policies.get('playlist_tracks.owner_via_playlist')).toBe(before.get('playlist_tracks.owner_via_playlist'));
+      expect(policies.get('playlists.owner_only')).toBe(before.get('playlists.owner_only'));
+      expect(sql()).not.toMatch(/CREATE POLICY|GRANT /i);
+    });
+  });
+
+  describe('Label OS one artist per artist org (mig 166, LABEL-44)', () => {
+    const sql = () => readFileSync(join(DIR, '166_labelos_one_artist_per_artist_org.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('a partial unique index on the trigger-kept flag, and no policy or grant', () => {
+      expect(sql()).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS contacts_one_artist_per_artist_org\s+ON public\.contacts \(org_id\)\s+WHERE org_self_artist/);
+      // The flag is computed from the row and its org on every write; the writer's value is never kept.
+      expect(sql()).toMatch(/NEW\.org_self_artist := \(public\.labelos_is_artist_category/);
+      expect(sql()).not.toMatch(/CREATE POLICY|GRANT /i);
+    });
+
+    it('leaves every contacts policy as it was', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '166')).policies;
+      for (const [key, body] of policies) if (key.startsWith('contacts.')) expect(body, key).toBe(before.get(key));
+    });
+  });
+
+  describe('Label OS tracklist lock + member compare-and-set (mig 167, LABEL-44)', () => {
+    const sql = () => readFileSync(join(DIR, '167_labelos_release_items_lock_member_cas.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('the tracklist trigger takes FOR SHARE on the release and allows only a draft or an unlisted import', () => {
+      expect(sql()).toMatch(/FOR SHARE OF r;/);
+      expect(sql()).toMatch(/IF v_state = 'draft' OR \(v_imported AND v_state = 'delivered'\) THEN/);
+      expect(sql()).toMatch(/CREATE TRIGGER release_items_store_lock BEFORE INSERT OR UPDATE OR DELETE ON public\.release_items/);
+    });
+
+    it('the member update keeps service_role-only EXECUTE and drops the old signature', () => {
+      expect(sql()).toMatch(/DROP FUNCTION IF EXISTS public\.labelos_audit_member_update\(uuid, uuid, uuid, jsonb, text, jsonb\);/);
+      expect(sql()).toMatch(/REVOKE ALL ON FUNCTION public\.labelos_audit_member_update\(uuid, uuid, uuid, jsonb, text, jsonb, jsonb\) FROM PUBLIC, anon, authenticated;/);
+      expect(sql()).toMatch(/GRANT EXECUTE ON FUNCTION public\.labelos_audit_member_update\(uuid, uuid, uuid, jsonb, text, jsonb, jsonb\) TO service_role;/);
+      expect(sql()).not.toMatch(/TO (anon|authenticated)\b/);
+    });
+
+    it('the item edit locks the release before the item (144’s order), service_role only', () => {
+      const body = sql();
+      const fn = body.slice(body.indexOf('FUNCTION public.labelos_release_item_update('));
+      expect(fn.indexOf('FROM public.releases WHERE id = p_release AND org_id = p_org FOR UPDATE')).toBeGreaterThan(-1);
+      expect(fn.indexOf('FOR UPDATE')).toBeLessThan(fn.indexOf('UPDATE public.release_items'));
+      expect(body).toMatch(/REVOKE ALL ON FUNCTION public\.labelos_release_item_update\(uuid, uuid, uuid, jsonb\) FROM PUBLIC, anon, authenticated;/);
+      expect(body).toMatch(/GRANT EXECUTE ON FUNCTION public\.labelos_release_item_update\(uuid, uuid, uuid, jsonb\) TO service_role;/);
+    });
+
+    it('changes no policy on releases, release_items or org_members', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '167')).policies;
+      for (const [key, body] of policies) {
+        if (/^(releases|release_items|org_members)\./.test(key)) expect(body, key).toBe(before.get(key));
+      }
+      expect(sql()).not.toMatch(/CREATE POLICY/i);
+    });
+  });
+
+  describe('Label OS approvals (mig 157, LABEL-30)', () => {
+    const onApprovals = () => [...policies].filter(([k]) => k.startsWith('approvals.'));
+
+    it('has exactly one policy, a SELECT: a release ability in the row’s org, then a whole-org or scoped reach', () => {
+      expect(onApprovals().map(([k]) => k)).toEqual(['approvals.approvals_member_read']);
+      const body = policies.get('approvals.approvals_member_read') ?? '';
+      expect(body).toMatch(/^\s*FOR SELECT\s+TO authenticated\s+USING\b/i);
+      expect(body).toMatch(/has_org_cap\(cm\.org_id, 'release\.write'\)/);
+      for (const gate of ['master', 'artwork', 'legal', 'marketing', 'metadata']) {
+        expect(body, gate).toMatch(new RegExp(`has_org_cap\\(cm\\.org_id, 'release\\.approve\\.${gate}'\\)`));
+      }
+      expect(body).toMatch(/labelos_scoped_tracks\(\)/);
+      expect(body).toMatch(/labelos_scoped_releases\(\)/);
+      // Asked of the caller's few memberships (an uncorrelated subplan), never of the row's own org: R-08.
+      expect(body).not.toMatch(/has_org_cap\(\s*org_id/);
+      expect(body).not.toMatch(/can_see_org_|can_read_org_track|labelos_is_org_/);
+      expect(body).not.toMatch(/WITH CHECK/i);
+    });
+
+    it('no policy writes: approvals are appended by the audit functions only', () => {
+      expect(onApprovals().filter(([, body]) => /FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i.test(body))).toEqual([]);
+    });
+  });
+
+  describe('Label OS saved views (mig 161, LABEL-37)', () => {
+    it('has exactly one policy and it says no: a definition carries artist ids, so the API roles read it through the route or not at all', () => {
+      const own = [...policies].filter(([k]) => k.startsWith('org_saved_views.'));
+      expect(own.map(([k]) => k)).toEqual(['org_saved_views.org_saved_views_no_direct_access']);
+      const body = own[0][1];
+      expect(body).toMatch(/FOR ALL TO anon, authenticated\s+USING \(false\)\s+WITH CHECK \(false\)/i);
+      // …and no policy that grants anything, to any role
+      expect(own.filter(([, b]) => /USING\s*\((?!false\))/i.test(b))).toEqual([]);
+    });
+
+    it('row level security is on, the API roles hold no privilege and the service-only trigger is attached', () => {
+      const sql = readFileSync(join(DIR, '161_labelos_saved_views.sql'), 'utf8').replace(/--[^\n]*/g, '');
+      expect(sql).toMatch(/ALTER TABLE public\.org_saved_views ENABLE ROW LEVEL SECURITY/);
+      expect(sql).toMatch(/REVOKE ALL ON public\.org_saved_views FROM anon, authenticated/);
+      expect(sql).toMatch(/labelos_org_rows_service_only\('self', 'org_id'\)/);
+      // org-only: no user_id (every producer route filters on it), and it cascades from the organization
+      expect(sql).not.toMatch(/\buser_id\b/);
+      expect(sql).toMatch(/org_id\s+uuid NOT NULL REFERENCES public\.organizations\(id\) ON DELETE CASCADE/);
+    });
+  });
+
+  describe('Label OS weekly digest (mig 160, LABEL-38)', () => {
+    it('has NO policy on either table: both are service-role only, so a member’s own JWT reads nothing (the Slack URL is a secret)', () => {
+      expect([...policies].filter(([k]) => k.startsWith('org_digest_members.') || k.startsWith('org_digest_channels.'))).toEqual([]);
+    });
+  });
+
+  describe('Label OS org files (mig 143, LABEL-15)', () => {
+    const before143 = replay(realMigrations().filter((m) => m.name < '143')).policies;
+
+    it('project_assets keeps its producer policies; read and guard hold sensitivity and the kind class', () => {
+      for (const name of ['project_assets_owner_select', 'project_assets_owner_write']) {
+        expect(policies.get(`project_assets.${name}`), name).toBe(before143.get(`project_assets.${name}`));
+      }
+      for (const name of ['org_member_read', 'org_member_guard']) {
+        const body = policies.get(`project_assets.${name}`) ?? '';
+        expect(body, name).toMatch(/labelos_org_asset_allowed\(p\.org_id, project_assets\.kind, project_assets\.sensitivity\)/);
+        expect(body, name).toMatch(/can_see_org_project\(p\.org_id, p\.id\)/);
+        expect(body, name).not.toMatch(/kind IN \('artwork', 'lyrics'\)/);
+      }
+    });
+
+    it('track_stem_files gains only a guard that hides org rows; its owner policy is unchanged', () => {
+      expect(policies.get('track_stem_files.track_stem_files_owner')).toBe(before143.get('track_stem_files.track_stem_files_owner'));
+      expect(before143.has('track_stem_files.org_member_guard')).toBe(false);
+      expect(policies.get('track_stem_files.org_member_guard')).toMatch(
+        /^\s*AS RESTRICTIVE\s+FOR SELECT\s+USING \(\s*NOT public\.labelos_is_org_track\(track_id\)\s*\)\s*$/i,
+      );
+    });
+  });
+
+  describe('Label OS external project members (mig 148, LABEL-21)', () => {
+    const before148 = replay(realMigrations().filter((m) => m.name < '148')).policies;
+    const onMembers = () => [...policies].filter(([k]) => k.startsWith('project_members.'));
+
+    it('project_members has exactly two policies, both SELECT: own live row, or share.external on the row\'s org', () => {
+      expect(onMembers().map(([k]) => k).sort()).toEqual(['project_members.project_members_manage_read', 'project_members.project_members_self_read']);
+      for (const [k, body] of onMembers()) {
+        expect(body, k).toMatch(/^\s*FOR SELECT\b/i);
+        expect(body, k).not.toMatch(/FOR\s+(INSERT|UPDATE|DELETE|ALL)\b/i);
+        expect(body, k).not.toMatch(/WITH CHECK/i);
+      }
+      expect(policies.get('project_members.project_members_self_read')).toMatch(/user_id = \(SELECT auth\.uid\(\)\)\s+AND \(SELECT public\.can_see_project\(project_id\)\)/);
+      expect(policies.get('project_members.project_members_manage_read')).toMatch(/has_org_cap\(org_id, 'share\.external'\)/);
+    });
+
+    it('148 gives an external member NO read path to anything: every other policy is exactly what it was', () => {
+      // The material an external member works on is read through the service
+      // role routes (externalCan); no policy on any other table mentions
+      // project_members or can_see_project, so their own JWT reads none of it.
+      // Through 148 only: later migrations (149 song_reviews, 150 comments, 151 tasks + the notifications guard)
+      // add their own policies, and the mentions check below holds each of them to give an external member no path either.
+      const through148 = replay(realMigrations().filter((m) => m.name < '149')).policies;
+      for (const [key, body] of before148) expect(through148.get(key), key).toBe(body);
+      const added = [...through148.keys()].filter((k) => !before148.has(k) && !k.startsWith('project_members.'));
+      expect(added).toEqual([]);
+      // ...and nothing later (LABEL-22's 150 included) hands them one either.
+      const mentions = [...policies]
+        .filter(([k, body]) => !k.startsWith('project_members.') && /project_members|can_see_project\s*\(/.test(body))
+        .map(([k]) => k);
+      expect(mentions).toEqual([]);
+    });
+  });
+
+  describe('Label OS org comments (mig 150, LABEL-22)', () => {
+    const through149 = replay(realMigrations().filter((m) => m.name < '150')).policies;
+    const through150 = replay(realMigrations().filter((m) => m.name < '151')).policies;
+    const comments = (name: string) => through150.get(`project_comments.${name}`) ?? '';
+
+    it('150 changes exactly the two org policies on project_comments and nothing anywhere else', () => {
+      const changed = [...through150.keys()].filter((k) => !through149.has(k) || through149.get(k) !== through150.get(k)).sort();
+      expect(changed).toEqual(['project_comments.org_member_guard', 'project_comments.org_member_read']);
+      for (const key of through149.keys()) expect(through150.has(key), `${key} was dropped`).toBe(true);
+    });
+
+    it('both keep every 141 condition and add the visibility rule: internal comments need the team helper', () => {
+      for (const name of ['org_member_read', 'org_member_guard']) {
+        const body = comments(name);
+        expect(body, name).toMatch(/p\.org_id IS NOT NULL/);
+        expect(body, name).toMatch(/has_org_cap\(p\.org_id, 'catalog\.read'\)/);
+        expect(body, name).toMatch(/can_see_org_project\(p\.org_id, p\.id\)/);
+        expect(body, name).toMatch(/can_see_artist\(p\.org_id, project_comments\.contact_id\)/);
+        expect(body, name).toMatch(/has_org_cap\(p\.org_id, 'share\.external'\)/);
+        expect(body, name).toMatch(/project_comments\.visibility = 'artist' OR public\.labelos_can_read_internal_comments\(p\.org_id\)/);
+      }
+      expect(comments('org_member_guard')).toMatch(/^\s*AS RESTRICTIVE\s+FOR SELECT/i);
+      expect(comments('org_member_read')).toMatch(/FOR SELECT\s+TO authenticated/i);
+    });
+
+    it('no write policy is added; the producer-era owner policy is untouched', () => {
+      const onComments = [...through150.keys()].filter((k) => k.startsWith('project_comments.')).sort();
+      expect(onComments.filter((k) => !through149.has(k))).toEqual([]);
+      expect(through150.get('project_comments.owner_via_project')).toBe(through149.get('project_comments.owner_via_project'));
+    });
+  });
+
   it('share_links writes through RLS require the producer', () => {
     for (const name of ['share_links_owner_insert', 'share_links_owner_update']) {
       expect(policies.get(`share_links.${name}`) ?? '', name).toMatch(/WITH CHECK[\s\S]*is_producer\(\)/i);
     }
+  });
+});
+
+describe('Label OS RLS guards (LABEL-04)', () => {
+  const real = realMigrations();
+  const realState = replay(real);
+
+  /** Real migrations plus fixture files that sort after them. */
+  const withFixture = (...files: Migration[]) => replay([...real, ...files]);
+  const fx = (name: string, sql: string): Migration => ({ name: `999_fixture_${name}.sql`, sql });
+
+  it('the real migrations pass every Label OS guard', () => {
+    expect(labelOsViolations(realState, labelOsTables())).toEqual([]);
+  });
+
+  it('platform_admins is self-read only, and org_entitlements is read by members only (170)', () => {
+    const admins = [...realState.policies].filter(([k]) => k.startsWith('platform_admins.'));
+    expect(admins.map(([k]) => k)).toEqual(['platform_admins.platform_admins_self_read']);
+    expect(admins[0][1]).toMatch(/FOR\s+SELECT/i);
+    expect(admins[0][1]).toMatch(SELF_ROW);
+    const ent = [...realState.policies].filter(([k]) => k.startsWith('org_entitlements.'));
+    expect(ent.map(([k]) => k)).toEqual(['org_entitlements.org_entitlements_member_read']);
+    expect(ent[0][1]).toMatch(/FOR\s+SELECT/i);
+    expect(ent[0][1]).toMatch(/org_role\s*\(\s*org_id\s*\)/i);
+  });
+
+  it('a self-row policy is accepted only on a platform table', () => {
+    const body = 'CREATE POLICY x ON public.org_members FOR SELECT TO authenticated USING (user_id = (SELECT auth.uid()));';
+    const state = { ...realState, policies: new Map([...realState.policies, ['org_members.self_only', body]]) };
+    expect(labelOsViolations(state as typeof realState, ['org_members'])).toContain('org_members.self_only: no org_id, membership helper or parent-EXISTS predicate');
+  });
+
+  it('the replay sees the real RLS switches (sanity)', () => {
+    for (const table of labelOsTables()) expect(realState.rls.get(table), table).toBe(true);
+    expect(realState.rls.get('tracks')).toBe(true);
+  });
+
+  it('no new migration calls is_team_member()', () => {
+    expect(realState.teamMemberCallers).toEqual(TEAM_MEMBER_CALLERS_ALLOWED);
+  });
+
+  describe('a deliberately bad fixture migration fails each guard', () => {
+    const GOOD = `
+      CREATE TABLE IF NOT EXISTS public.lo_fixture (id uuid PRIMARY KEY, org_id uuid NOT NULL, user_id uuid);
+      ALTER TABLE public.lo_fixture ENABLE ROW LEVEL SECURITY;
+      CREATE POLICY lo_fixture_read ON public.lo_fixture
+        FOR SELECT USING ((SELECT public.org_role(org_id)) IS NOT NULL);
+    `;
+    // Fixture assertions look at the fixture tables only, so a problem in a
+    // real migration fails one test (above), not every fixture case.
+    const tables = ['lo_fixture'];
+
+    it('control: a well-formed Label OS table passes', () => {
+      expect(labelOsViolations(withFixture(fx('good', GOOD)), tables)).toEqual([]);
+    });
+
+    it('a deny-all policy (USING (false)) is the one policy that needs no tenancy; a deny that also grants a WITH CHECK does not', () => {
+      const deny = `
+        CREATE TABLE IF NOT EXISTS public.lo_fixture (id uuid PRIMARY KEY, org_id uuid NOT NULL);
+        ALTER TABLE public.lo_fixture ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY lo_fixture_no ON public.lo_fixture FOR ALL TO anon, authenticated USING (false) WITH CHECK (false);
+      `;
+      expect(labelOsViolations(withFixture(fx('deny', deny)), tables)).toEqual([]);
+      const sneaky = deny.replace('WITH CHECK (false)', 'WITH CHECK (user_id = auth.uid())');
+      expect(labelOsViolations(withFixture(fx('sneaky', sneaky)), tables)).toHaveLength(1);
+    });
+
+    it('RLS never enabled', () => {
+      const state = withFixture(
+        fx('no_rls', GOOD.replace('ALTER TABLE public.lo_fixture ENABLE ROW LEVEL SECURITY;', '')),
+      );
+      expect(labelOsViolations(state, tables)).toEqual(['lo_fixture: row level security is not enabled']);
+    });
+
+    it('RLS enabled, then disabled by a later migration', () => {
+      const state = withFixture(fx('a_good', GOOD), fx('b_disable', 'ALTER TABLE lo_fixture DISABLE ROW LEVEL SECURITY;'));
+      expect(labelOsViolations(state, tables)).toEqual(['lo_fixture: row level security is not enabled']);
+    });
+
+    it('a USING (true) policy', () => {
+      const state = withFixture(
+        fx('a_good', GOOD),
+        fx('b_open', `CREATE POLICY lo_fixture_open ON public.lo_fixture FOR SELECT USING (true);`),
+      );
+      expect(labelOsViolations(state, tables)).toContain('lo_fixture.lo_fixture_open: USING (true) / WITH CHECK (true)');
+    });
+
+    it('an open predicate OR-ed with a membership helper is still open', () => {
+      for (const body of [
+        'USING (true OR (SELECT public.org_role(org_id)) IS NOT NULL)',
+        'USING ((SELECT public.org_role(org_id)) IS NOT NULL OR true)',
+        'USING ((SELECT public.org_role(org_id)) IS NOT NULL OR (true))',
+        'USING (1 = 1 OR (SELECT public.org_role(org_id)) IS NOT NULL)',
+      ]) {
+        const state = withFixture(
+          fx('a_good', GOOD),
+          fx('b_or', `CREATE POLICY lo_fixture_or ON public.lo_fixture FOR SELECT ${body};`),
+        );
+        expect(labelOsViolations(state, tables), body).toContain('lo_fixture.lo_fixture_or: USING (true) / WITH CHECK (true)');
+      }
+    });
+
+    it('a WITH CHECK (true) policy keyed on org_id elsewhere', () => {
+      const state = withFixture(
+        fx('a_good', GOOD),
+        fx(
+          'b_open_check',
+          `CREATE POLICY lo_fixture_ins ON public.lo_fixture FOR INSERT
+             WITH CHECK (true);
+           CREATE POLICY lo_fixture_upd ON public.lo_fixture FOR UPDATE
+             USING (org_id IS NOT NULL) WITH CHECK ( true );`,
+        ),
+      );
+      const v = labelOsViolations(state, tables);
+      expect(v).toContain('lo_fixture.lo_fixture_ins: USING (true) / WITH CHECK (true)');
+      expect(v).toContain('lo_fixture.lo_fixture_upd: USING (true) / WITH CHECK (true)');
+    });
+
+    it('a policy that mentions org_id without tying it to the caller', () => {
+      const state = withFixture(
+        fx('a_good', GOOD),
+        fx('b_any', `CREATE POLICY lo_fixture_any ON public.lo_fixture FOR SELECT USING (org_id IS NOT NULL);`),
+      );
+      expect(labelOsViolations(state, tables)).toEqual([
+        'lo_fixture.lo_fixture_any: no org_id, membership helper or parent-EXISTS predicate',
+      ]);
+    });
+
+    it('an ALTER POLICY on a guarded table', () => {
+      const state = withFixture(
+        fx('a_good', GOOD),
+        fx('b_alter', `ALTER POLICY lo_fixture_read ON public.lo_fixture USING (true);`),
+      );
+      expect(labelOsViolations(state, tables)).toEqual([
+        'lo_fixture.lo_fixture_read: ALTER POLICY (write DROP POLICY + CREATE POLICY so the replay sees it)',
+      ]);
+    });
+
+    it('a policy keyed on user_id only (producer-app tenancy)', () => {
+      const state = withFixture(
+        fx('a_good', GOOD),
+        fx('b_user', `CREATE POLICY lo_fixture_mine ON public.lo_fixture FOR ALL USING (auth.uid() = user_id);`),
+      );
+      expect(labelOsViolations(state, tables)).toEqual([
+        'lo_fixture.lo_fixture_mine: no org_id, membership helper or parent-EXISTS predicate',
+      ]);
+    });
+
+    it('a good policy replaced by a bad one under the same name (last write wins)', () => {
+      const state = withFixture(
+        fx('a_good', GOOD),
+        fx(
+          'b_replace',
+          `DROP POLICY IF EXISTS lo_fixture_read ON public.lo_fixture;
+           CREATE POLICY lo_fixture_read ON public.lo_fixture FOR SELECT USING (auth.uid() IS NOT NULL);`,
+        ),
+      );
+      expect(labelOsViolations(state, tables)).toEqual([
+        'lo_fixture.lo_fixture_read: no org_id, membership helper or parent-EXISTS predicate',
+      ]);
+    });
+
+    it('a child table keyed through its parent passes; one keyed through a producer table does not', () => {
+      const child = `
+        CREATE TABLE public.lo_child (id uuid PRIMARY KEY, parent_id uuid, track_id uuid);
+        ALTER TABLE public.lo_child ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY lo_child_via_parent ON public.lo_child FOR SELECT USING (EXISTS (
+          SELECT 1 FROM public.lo_fixture p
+          WHERE p.id = lo_child.parent_id AND (SELECT public.has_org_cap(p.org_id, 'catalog.read'))));
+        CREATE POLICY lo_child_via_track ON public.lo_child FOR SELECT USING (EXISTS (
+          SELECT 1 FROM public.tracks t WHERE t.id = lo_child.track_id AND t.user_id = auth.uid()));
+      `;
+      const state = withFixture(fx('a_good', GOOD), fx('b_child', child));
+      expect(labelOsViolations(state, [...tables, 'lo_child'])).toEqual([
+        'lo_child.lo_child_via_track: no org_id, membership helper or parent-EXISTS predicate',
+      ]);
+    });
+
+    it('a listed table no migration creates (a typo in labelOsTables())', () => {
+      expect(labelOsViolations(realState, ['org_memebers'])).toEqual([
+        'org_memebers: no migration creates it (typo in labelOsTables()?)',
+        'org_memebers: row level security is not enabled',
+      ]);
+    });
+
+    it('a new migration calling is_team_member()', () => {
+      const state = withFixture(
+        fx('team', `CREATE POLICY lo_fixture_team ON public.lo_fixture FOR ALL USING (public.is_team_member());`),
+      );
+      expect(state.teamMemberCallers).not.toEqual(TEAM_MEMBER_CALLERS_ALLOWED);
+      expect(state.teamMemberCallers).toContain('999_fixture_team.sql');
+    });
+
+    it('is_team_member() mentioned only in a comment is not a call', () => {
+      const state = withFixture(fx('comment', `-- we no longer use is_team_member() here\nSELECT 1;`));
+      expect(state.teamMemberCallers).toEqual(TEAM_MEMBER_CALLERS_ALLOWED);
+    });
   });
 });

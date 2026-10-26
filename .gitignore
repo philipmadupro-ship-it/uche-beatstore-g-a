@@ -77,3 +77,5 @@ public/uploads/e2e-local-db/
 public/uploads/covers/
 scripts/local-db/.cache/
 data/project-assets/
+data/upload-staging/
+public/uploads/labelos-e2e-*

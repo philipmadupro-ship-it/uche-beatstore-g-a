@@ -6,6 +6,8 @@ import crypto from 'node:crypto';
 export const SECRET = 'local-db-jwt-secret-for-verification-only-000';
 export const PRODUCER_ID = '0b0e1a57-0000-4000-8000-000000000001';
 export const BUYER_ID = '0b0e1a57-0000-4000-8000-0000000000b1';
+export const ARTIST_A_ID = '0b0e1a57-0000-4000-8000-0000000000b2';
+export const ARTIST_B_ID = '0b0e1a57-0000-4000-8000-0000000000b3';
 
 const b64 = (o) => Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url');
 
@@ -29,13 +31,14 @@ export function verify(token) {
 export const ANON_KEY = sign({ role: 'anon', iss: 'supabase' });
 export const SERVICE_KEY = sign({ role: 'service_role', iss: 'supabase' });
 
-export function userToken(id, email) {
-  return sign({ sub: id, role: 'authenticated', aud: 'authenticated', email });
+/** `iat` (seconds) is when the person signed in: the gateway reports it as `last_sign_in_at`, which re-authentication (LABEL-39) reads. */
+export function userToken(id, email, iat) {
+  return sign({ sub: id, role: 'authenticated', aud: 'authenticated', email, ...(iat ? { iat } : {}) });
 }
 
 /** The @supabase/ssr session cookie for a user (project ref "127" = 127.0.0.1). */
-export function sessionCookie(id, email) {
-  const token = userToken(id, email);
+export function sessionCookie(id, email, iat) {
+  const token = userToken(id, email, iat);
   const now = Math.floor(Date.now() / 1000);
   const session = {
     access_token: token, refresh_token: token, token_type: 'bearer', expires_in: 60 * 60 * 24 * 30, expires_at: now + 60 * 60 * 24 * 30,

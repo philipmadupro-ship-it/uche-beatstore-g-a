@@ -17,11 +17,13 @@ export function SignOutButton({
   onDone,
   className,
   label = 'Sign out',
+  redirectTo,
 }: {
   variant?: 'menu' | 'button' | 'link';
   onDone?: () => void;
   className?: string;
   label?: string;
+  redirectTo?: string;
 }) {
   const { signOut } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -29,7 +31,7 @@ export function SignOutButton({
   const handle = async () => {
     if (busy) return;
     setBusy(true);
-    const { error } = await signOut();
+    const { error } = await signOut(redirectTo ? { redirectTo } : undefined);
     if (error) {
       setBusy(false);
       toast.error('Sign out failed', error);

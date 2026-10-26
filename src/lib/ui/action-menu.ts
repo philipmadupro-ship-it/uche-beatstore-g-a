@@ -110,3 +110,43 @@ export function indexForShortcutKey(items: MenuAction[], key: string): number {
     (i) => i.shortcutKey?.toLowerCase() === k && !i.disabled && !i.busy,
   );
 }
+
+export interface MenuPlacement {
+  /** Viewport-relative `top` for a `position: fixed` panel. */
+  top: number;
+  openUp: boolean;
+  /** The panel's `max-height` in px; past it the panel scrolls inside itself. */
+  maxHeight: number;
+}
+
+const EDGE = 8;
+const GAP = 6;
+const MIN_MENU_HEIGHT = 160;
+
+/**
+ * Where an anchored menu goes: below its trigger, or above when below is too
+ * short and above is roomier, and never taller than the room on the side it
+ * took. The old rule only chose a side, so a menu taller than both sides
+ * (the members page's ⋯ menu once it listed every function) hung off the
+ * bottom of the window with its last items unreachable and nothing to scroll.
+ * `maxHeight` makes the panel scroll inside itself instead. The 70vh cap
+ * stays for menus that fit.
+ */
+export function placeMenu(args: {
+  trigger: { top: number; bottom: number };
+  menuHeight: number;
+  view: { width: number; height: number };
+}): MenuPlacement {
+  const { trigger, menuHeight, view } = args;
+  const spaceBelow = view.height - trigger.bottom;
+  const spaceAbove = trigger.top;
+  const openUp = spaceBelow < menuHeight + EDGE && spaceAbove > spaceBelow;
+  const room = (openUp ? spaceAbove : spaceBelow) - GAP - EDGE;
+  const maxHeight = Math.max(MIN_MENU_HEIGHT, Math.min(Math.round(view.height * 0.7), room));
+  const height = Math.min(menuHeight, maxHeight);
+  return {
+    top: openUp ? Math.max(EDGE, trigger.top - height - GAP) : trigger.bottom + GAP,
+    openUp,
+    maxHeight,
+  };
+}

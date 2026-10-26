@@ -65,9 +65,16 @@ export function toPortalComment(row: CommentRow, names: { artistName: string; pr
   };
 }
 
-export interface CommentThread {
-  root: PortalComment;
-  replies: PortalComment[];
+/** What threading needs of a comment, so org comments (LABEL-22) share the same rule. */
+export interface Threadable {
+  id: string;
+  parentId: string | null;
+  createdAt: string;
+}
+
+export interface CommentThread<T extends Threadable = PortalComment> {
+  root: T;
+  replies: T[];
 }
 
 /**
@@ -75,9 +82,9 @@ export interface CommentThread {
  * missing (deleted, or outside the rows given) is shown as a root rather than
  * dropped, so nothing the artist wrote disappears.
  */
-export function threadComments(comments: readonly PortalComment[]): CommentThread[] {
+export function threadComments<T extends Threadable = PortalComment>(comments: readonly T[]): CommentThread<T>[] {
   const byId = new Map(comments.map((c) => [c.id, c]));
-  const threads = new Map<string, CommentThread>();
+  const threads = new Map<string, CommentThread<T>>();
   const sorted = [...comments].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   for (const c of sorted) {
     if (!c.parentId || !byId.has(c.parentId)) threads.set(c.id, { root: c, replies: [] });

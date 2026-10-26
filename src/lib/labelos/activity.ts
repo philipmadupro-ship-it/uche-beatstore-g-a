@@ -1,0 +1,520 @@
+/**
+ * The one writer for `activity_events` (migration 136; 08-search-and-
+ * activity.md Part B). Every Label OS mutation records what happened, who
+ * did it and which artist / project / song / release it concerns, in the
+ * same route as the mutation, after it succeeds. No bus, no queue, no
+ * triggers.
+ *
+ * Two classes of event:
+ *  - everyday (song uploaded, stage moved): best effort. A failed write is
+ *    logged and returned as `{ ok: false }`, never thrown — the producer's
+ *    work already happened and must not be reported as failed.
+ *  - audit (06 §6: membership, sharing, restricted downloads, credit and
+ *    split decisions, approvals, delivery): NOT best effort. A failed write
+ *    throws `AuditEventError`, so a route that forgets to check still fails.
+ *    LABEL-19 puts the audit verbs that have a mutating route behind one
+ *    Postgres function each (lib/labelos/audit-rpc.ts, migration 146), so the
+ *    mutation and its event commit or roll back together. recordEvent stays
+ *    the writer for everything else, and for audit verbs whose mutation does
+ *    not exist yet (downloads of restricted files, which only read).
+ *
+ * `visibility` defaults per verb (`defaultVisibility`, LABEL-19): `internal`
+ * rows are read only by members with `business.read.internal` under 136's
+ * RLS, `artist` rows by everyone who can read the catalogue (and then only
+ * inside their artist scope). A route passes `visibility` only when the
+ * verb's default is wrong for THIS event (a restricted file's upload).
+ *
+ * The verb list is closed: a new kind of event is an edit here, and the
+ * activity_events CHECK (`^[a-z_]+\.[a-z_]+$`) is held by a test.
+ */
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+import { isUUID } from '@/lib/validate';
+
+const log = createLogger('lib.labelos.activity');
+
+// ── Vocabulary ──────────────────────────────────────────────────────────
+
+export const VERBS = [
+  // Organization + membership
+  'org.created',
+  'org.settings_changed',
+  // Owner-only lifecycle acts (LABEL-39): an export, the start of the grace period, a restore.
+  'org.exported',
+  'org.deletion_scheduled',
+  'org.restored',
+  // The platform operator's licence for the org (LABEL-47): modules and caps.
+  'org.entitlements_changed',
+  'member.joined',
+  'member.removed',
+  'member.role_changed',
+  'member.scope_changed',
+  'member.capabilities_changed',
+  'member.artists_changed',
+  // Team accounts an org creates for its people (doc 25, migration 190).
+  'member.account_created',
+  'member.password_reset',
+  'member.account_disabled',
+  'member.account_enabled',
+  'member.password_changed',
+  'invitation.created',
+  'invitation.revoked',
+  // People directory + roster (LABEL-10; the subject is the contact)
+  'contact.created',
+  'contact.updated',
+  'contact.deleted',
+  // Projects + sharing
+  'project.created',
+  'project.member_added',
+  'project.member_changed',
+  'project.member_removed',
+  'share.created',
+  'share.revoked',
+  // Music
+  'song.created',
+  'song.stage_changed',
+  'song.reviewed',
+  'song.samples_declared',
+  'recording.uploaded',
+  'recording.downloaded',
+  'recording.copied',
+  // The metadata editor (LABEL-53): the payload lists changed FIELD NAMES, never values.
+  'recording.metadata_updated',
+  // Comments (LABEL-22; the subject is the comment, never its words)
+  'comment.created',
+  'comment.updated',
+  'comment.resolved',
+  'comment.deleted',
+  // Tasks (LABEL-23)
+  'task.created',
+  'task.updated',
+  'task.completed',
+  'task.deleted',
+  // Creative direction (LABEL-26; the payload names fields and kinds, never the words)
+  'direction.updated',
+  'reference.added',
+  'reference.updated',
+  'reference.removed',
+  // Files
+  'file.uploaded',
+  'file.updated',
+  'file.deleted',
+  'file.restricted_downloaded',
+  // Rights
+  'credit.proposed',
+  'credit.confirmed',
+  'credit.disputed',
+  // Rights identities (LABEL-27; the subject is the party)
+  'party.created',
+  'party.updated',
+  'party.deleted',
+  // Split sheets (LABEL-28; the subject is the sheet)
+  'split_sheet.created',
+  'split_sheet.updated',
+  'split_sheet.deleted',
+  'split_sheet.circulated',
+  'split_sheet.superseded',
+  'split_sheet.signed',
+  // Releases
+  'approval.requested',
+  'approval.decided',
+  'release.created',
+  'release.updated',
+  'release.deleted',
+  'release.delivered',
+  // Distributor metadata export + release calendar feed (LABEL-34)
+  'release.metadata_exported',
+  'calendar_feed.issued',
+  'calendar_feed.revoked',
+  // The legal pack left the building (LABEL-31): who took the contracts and rights data of a release
+  'release.legal_pack_exported',
+  // The store bridge (LABEL-42): a release put on / taken off the public store, and one entered as already out
+  'release.store_listed',
+  'release.store_unlisted',
+  'release.imported',
+  // Label ↔ artist connections (LABEL-41)
+  'connection.requested',
+  'connection.accepted',
+  'connection.ended',
+  // Saved filter views (LABEL-37; the subject is the view, the payload never carries the filter or its name)
+  'view.created',
+  'view.updated',
+  'view.deleted',
+  // Weekly digest (LABEL-38): a member's own opt-in, and the org's Slack channel
+  'digest.subscribed',
+  'digest.unsubscribed',
+  'digest.channel_set',
+  'digest.channel_removed',
+] as const;
+export type Verb = (typeof VERBS)[number];
+
+/** 06 §6 + 14 (LABEL-13, LABEL-41): kept for the life of the org, never best effort. */
+export const AUDIT_VERBS: readonly Verb[] = [
+  'org.settings_changed',
+  'org.exported',
+  'org.entitlements_changed',
+  'org.deletion_scheduled',
+  'org.restored',
+  'member.joined',
+  'member.removed',
+  'member.role_changed',
+  'member.scope_changed',
+  'member.capabilities_changed',
+  'member.artists_changed',
+  'member.account_created',
+  'member.password_reset',
+  'member.account_disabled',
+  'member.account_enabled',
+  'invitation.created',
+  'invitation.revoked',
+  'project.member_added',
+  'project.member_changed',
+  'project.member_removed',
+  'share.created',
+  'share.revoked',
+  'recording.downloaded',
+  'recording.copied',
+  'file.restricted_downloaded',
+  'credit.confirmed',
+  'credit.disputed',
+  'split_sheet.circulated',
+  'split_sheet.superseded',
+  'split_sheet.signed',
+  'approval.requested',
+  'approval.decided',
+  'release.delivered',
+  // The feed verbs ARE the token's revocation state (feed-token.ts): pruning one would revive a revoked URL.
+  'release.metadata_exported',
+  'calendar_feed.issued',
+  'calendar_feed.revoked',
+  'release.legal_pack_exported',
+  'release.store_listed',
+  'release.store_unlisted',
+  'release.imported',
+  'connection.requested',
+  'connection.accepted',
+  'connection.ended',
+  // Where the org's digest goes is a security setting.
+  'digest.channel_set',
+  'digest.channel_removed',
+];
+
+export type EventVisibility = 'internal' | 'artist';
+
+/**
+ * Who reads an event when the route does not say (LABEL-19, D4 + D5 + 08 §B4).
+ *
+ *  - `artist`: the creative record of a song, a project or a release — what
+ *    was made, moved on, reviewed, credited. Visible to every member who can
+ *    read the catalogue, inside their artist scope, and to the song's artist
+ *    (D5: an artist sees everything about their own songs except business-
+ *    internal notes). A&R, producers and engineers hold `catalog.read` but
+ *    not `business.read.internal`, so they see only these.
+ *  - `internal`: the business side — who the members are and what they may
+ *    do, invitations, the contact directory, sharing, who downloaded what,
+ *    split sheets and approvals (contracts and release gates), the org's own
+ *    settings, label ↔ artist connections. Also files: a file's sensitivity
+ *    decides, and the file routes override to `artist` for anything that is
+ *    not restricted (D4: contracts never reach the creative side).
+ *
+ * Total over `Verb` (a test holds it), so a new verb forces a decision.
+ */
+export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
+  'org.created': 'internal',
+  'org.settings_changed': 'internal',
+  'org.exported': 'internal',
+  'org.deletion_scheduled': 'internal',
+  'org.restored': 'internal',
+  'org.entitlements_changed': 'internal',
+  'member.joined': 'internal',
+  'member.removed': 'internal',
+  'member.role_changed': 'internal',
+  'member.scope_changed': 'internal',
+  'member.capabilities_changed': 'internal',
+  'member.artists_changed': 'internal',
+  'member.account_created': 'internal',
+  'member.password_reset': 'internal',
+  'member.account_disabled': 'internal',
+  'member.account_enabled': 'internal',
+  'member.password_changed': 'internal',
+  'invitation.created': 'internal',
+  'invitation.revoked': 'internal',
+  'contact.created': 'internal',
+  'contact.updated': 'internal',
+  'contact.deleted': 'internal',
+  'project.created': 'artist',
+  'project.member_added': 'internal',
+  'project.member_changed': 'internal',
+  'project.member_removed': 'internal',
+  'share.created': 'internal',
+  'share.revoked': 'internal',
+  'song.created': 'artist',
+  'song.stage_changed': 'artist',
+  'song.reviewed': 'artist',
+  // Samples and their clearance are rights business (LABEL-29): the payload carries the declaration, never the note.
+  'song.samples_declared': 'internal',
+  'recording.uploaded': 'artist',
+  'recording.downloaded': 'internal',
+  'recording.copied': 'internal',
+  // Codes, ownership and P-lines are rights business; the payload is field names only.
+  'recording.metadata_updated': 'internal',
+  // The creative record (a note on a mix). A route overrides to `internal` for
+  // an internal comment — the event of a team-only note is team-only too.
+  'comment.created': 'artist',
+  'comment.updated': 'artist',
+  'comment.resolved': 'artist',
+  'comment.deleted': 'artist',
+  // Tasks are the business side: each function keeps its own (D1), so A&R / producers / engineers
+  // (catalog.read, no business.read.internal) do not read another side's task history.
+  'task.created': 'internal',
+  'task.updated': 'internal',
+  'task.completed': 'internal',
+  'task.deleted': 'internal',
+  // The direction is what the artist is told; a reference route overrides to `internal` for an
+  // internal reference — the event of a team-only reference is team-only too.
+  'direction.updated': 'artist',
+  'reference.added': 'artist',
+  'reference.updated': 'artist',
+  'reference.removed': 'artist',
+  'file.uploaded': 'internal',
+  'file.updated': 'internal',
+  'file.deleted': 'internal',
+  'file.restricted_downloaded': 'internal',
+  'credit.proposed': 'artist',
+  'credit.confirmed': 'artist',
+  'credit.disputed': 'artist',
+  // A party carries legal names and IPIs: the business side, like contacts.
+  'party.created': 'internal',
+  'party.updated': 'internal',
+  'party.deleted': 'internal',
+  'split_sheet.created': 'internal',
+  'split_sheet.updated': 'internal',
+  'split_sheet.deleted': 'internal',
+  'split_sheet.circulated': 'internal',
+  'split_sheet.superseded': 'internal',
+  'split_sheet.signed': 'internal',
+  'approval.requested': 'internal',
+  'approval.decided': 'internal',
+  'release.created': 'artist',
+  'release.updated': 'artist',
+  'release.deleted': 'artist',
+  'release.delivered': 'artist',
+  'release.metadata_exported': 'internal',
+  'calendar_feed.issued': 'internal',
+  'calendar_feed.revoked': 'internal',
+  // Contracts and legal names: the business side only.
+  'release.legal_pack_exported': 'internal',
+  // Putting the artist's record on the public store (or taking it off) is part of its story: the artist side reads it.
+  'release.store_listed': 'artist',
+  'release.store_unlisted': 'artist',
+  // "Already out" skips every gate on the owner's word: who said so, and when, is business, not the creative record.
+  'release.imported': 'internal',
+  'connection.requested': 'internal',
+  'connection.accepted': 'internal',
+  'connection.ended': 'internal',
+  // A saved view is a person's way of looking at the catalogue, not part of the creative record: the
+  // business side. It names no artist, project or song, so a scoped member's feed never carries it.
+  'view.created': 'internal',
+  'view.updated': 'internal',
+  'view.deleted': 'internal',
+  'digest.subscribed': 'internal',
+  'digest.unsubscribed': 'internal',
+  'digest.channel_set': 'internal',
+  'digest.channel_removed': 'internal',
+};
+
+export function defaultVisibility(verb: Verb): EventVisibility {
+  return DEFAULT_VISIBILITY[verb];
+}
+
+/**
+ * A file event's visibility, from the sensitivity of the file before and
+ * after the change (pass each one that applies). A restricted file — a
+ * contract, 06 §2.4 — keeps its history business-internal, and so does one
+ * that WAS restricted when it changed: the one rule behind file.uploaded,
+ * file.updated and file.deleted. Everything else is creative-side work the
+ * project's artist may see (D5). Unknown sensitivity reads as restricted:
+ * fail closed.
+ */
+export function fileEventVisibility(...sensitivities: (string | null | undefined)[]): EventVisibility {
+  return sensitivities.every((s) => s === 'normal') ? 'artist' : 'internal';
+}
+
+export function isAuditVerb(verb: string): boolean {
+  return (AUDIT_VERBS as readonly string[]).includes(verb);
+}
+
+export const SUBJECT_TYPES = [
+  'org',
+  'member',
+  'invitation',
+  'contact',
+  'project',
+  'share',
+  'track',
+  'asset',
+  'comment',
+  'credit',
+  'party',
+  'split_sheet',
+  'approval',
+  'release',
+  'connection',
+  'task',
+  'view',
+] as const;
+export type SubjectType = (typeof SUBJECT_TYPES)[number];
+
+/**
+ * What the event is about. `id` is the subject row; the four context keys
+ * are denormalised so feeds filter by index without joins (08 §B3).
+ * `artistId` is the roster artist's CONTACT id (17 R3); the column is still
+ * named `artist_id` in migration 136.
+ */
+export type EventSubject = {
+  type: SubjectType;
+  id: string | null;
+  artistId?: string | null;
+  projectId?: string | null;
+  songId?: string | null;
+  releaseId?: string | null;
+};
+
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+export type EventPayload = { [key: string]: Json };
+
+export type EventOptions = {
+  /** Force an everyday verb into the audit class. An audit verb cannot be downgraded. */
+  audit?: boolean;
+  /** Overrides `defaultVisibility(verb)`; only for an event the default misjudges. */
+  visibility?: EventVisibility;
+};
+
+/** Who is acting in which org. `userId` null = the system (cron). */
+export type EventContext = { orgId: string; userId: string | null };
+
+export type RecordEventResult = { ok: true; id: string } | { ok: false; error: string };
+
+export class AuditEventError extends Error {
+  constructor(verb: string, cause: string) {
+    super(`audit event ${verb} was not recorded: ${cause}`);
+    this.name = 'AuditEventError';
+  }
+}
+
+/** Only `.from(table).insert(row).select().single()` is used. */
+export type ActivityAdmin = Pick<SupabaseClient, 'from'>;
+
+// ── Validation ──────────────────────────────────────────────────────────
+
+const PAYLOAD_MAX_BYTES = 16 * 1024;
+/** Bearer secrets must never land in a log anyone can read (06 §5). */
+const SECRET_KEY = /token|password|secret/i;
+
+function secretKeyIn(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      const hit = secretKeyIn(v);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) {
+      if (SECRET_KEY.test(k)) return k;
+      const hit = secretKeyIn(v);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+function invalid(ctx: EventContext, verb: string, subject: EventSubject, payload: unknown): string | null {
+  if (!(VERBS as readonly string[]).includes(verb)) return `unknown verb ${verb}`;
+  if (!(SUBJECT_TYPES as readonly string[]).includes(subject.type)) return `unknown subject type ${subject.type}`;
+  if (!isUUID(ctx.orgId)) return 'orgId is not a uuid';
+  if (ctx.userId !== null && !isUUID(ctx.userId)) return 'userId is not a uuid';
+  for (const [name, v] of Object.entries({
+    id: subject.id,
+    artistId: subject.artistId,
+    projectId: subject.projectId,
+    songId: subject.songId,
+    releaseId: subject.releaseId,
+  })) {
+    if (v != null && !isUUID(v)) return `subject ${name} is not a uuid`;
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return 'payload must be an object';
+  let size: number;
+  try {
+    size = Buffer.byteLength(JSON.stringify(payload));
+  } catch {
+    return 'payload is not JSON-serialisable';
+  }
+  if (size > PAYLOAD_MAX_BYTES) return `payload is ${size} bytes (max ${PAYLOAD_MAX_BYTES})`;
+  return null;
+}
+
+// ── Writer ──────────────────────────────────────────────────────────────
+
+/**
+ * Record one event in the context's org. Call it after the mutation
+ * succeeded, with the service-role client the access helper returned.
+ * A secret-looking payload key is a programming error and always throws.
+ */
+export async function recordEvent(
+  admin: ActivityAdmin,
+  ctx: EventContext,
+  verb: Verb,
+  subject: EventSubject,
+  payload: EventPayload = {},
+  opts: EventOptions = {},
+): Promise<RecordEventResult> {
+  const audit = isAuditVerb(verb) || opts.audit === true;
+
+  const secret = secretKeyIn(payload);
+  if (secret) throw new AuditEventError(verb, `payload key "${secret}" looks like a secret`);
+
+  const problem = invalid(ctx, verb, subject, payload);
+  if (problem) {
+    if (audit) throw new AuditEventError(verb, problem);
+    log.error('event refused', { verb, orgId: ctx.orgId, problem });
+    return { ok: false, error: problem };
+  }
+
+  const row = {
+    org_id: ctx.orgId,
+    actor_id: ctx.userId,
+    verb,
+    subject_type: subject.type,
+    subject_id: subject.id,
+    artist_id: subject.artistId ?? null,
+    project_id: subject.projectId ?? null,
+    song_id: subject.songId ?? null,
+    release_id: subject.releaseId ?? null,
+    payload,
+    audit,
+    visibility: opts.visibility ?? defaultVisibility(verb),
+  };
+
+  let error: string | null = null;
+  let id: string | null = null;
+  try {
+    const res = await admin.from('activity_events').insert(row).select('id').single();
+    if (res.error) error = res.error.message;
+    else id = (res.data as { id?: string } | null)?.id ?? null;
+    if (!error && !id) error = 'insert returned no id';
+  } catch (err) {
+    error = errorMessage(err);
+  }
+
+  if (error) {
+    if (audit) {
+      log.error('audit event write failed', { verb, orgId: ctx.orgId, error });
+      throw new AuditEventError(verb, error);
+    }
+    log.warn('event write failed', { verb, orgId: ctx.orgId, error });
+    return { ok: false, error };
+  }
+  return { ok: true, id: id! };
+}

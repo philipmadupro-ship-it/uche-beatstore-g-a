@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRowOwnership } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { readBody } from '@/lib/validate';
-import { TrackLinkBodySchema } from '@/lib/contracts';
+import { TrackLinkBodySchema, TrackUnlinkBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { addLink, loadLinks, removeLink, TrackLinksNotReadyError } from '@/lib/tracks/links-store';
@@ -36,7 +36,8 @@ function failure(err: unknown, id: string) {
  *        its beats (song_beats), instrumental, loops, toplines, versions, and
  *        the tracks that link to it, each labelled from this track's side.
  * POST   { track_id, relation, direction? } — link another of your tracks.
- * DELETE { track_id, relation, direction? } — unlink it.
+ * DELETE { track_id, relation, direction? } — unlink it (master / demo too, so
+ *        any link the drawer shows can be removed; POST cannot create them).
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -54,7 +55,7 @@ async function mutate(req: NextRequest, id: string, op: 'add' | 'remove') {
   if (!isSupabaseConfigured()) return NextResponse.json({ error: 'Linking needs Supabase.' }, { status: 501 });
   const auth = await requireRowOwnership('tracks', id);
   if (!auth.ok) return auth.res;
-  const parsed = await readBody(req, TrackLinkBodySchema);
+  const parsed = op === 'add' ? await readBody(req, TrackLinkBodySchema) : await readBody(req, TrackUnlinkBodySchema);
   if (!parsed.ok) return parsed.res;
   const { track_id, relation, direction } = parsed.data;
   if (track_id === id) return NextResponse.json({ error: 'A track cannot be linked to itself.' }, { status: 400 });

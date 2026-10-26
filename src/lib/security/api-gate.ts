@@ -44,7 +44,133 @@ export function isPublicApiPath(pathname: string): boolean {
   return PUBLIC_PATTERNS.some((re) => re.test(pathname));
 }
 
+/**
+ * The Label OS API namespace: `/api/org` and everything under `/api/org/`.
+ * Look-alikes (`/api/organizations`, `/api/orgs`) are NOT in it and stay
+ * producer-only like any other dashboard path.
+ */
+export function isLabelOsApiPath(pathname: string): boolean {
+  return pathname === '/api/org' || pathname.startsWith('/api/org/');
+}
+
+/**
+ * The one Label OS API path a signed-in NON-member may reach: accepting an
+ * invitation (LABEL-08). The invitee is usually not a member of anything
+ * yet, so the membership gate would refuse the very request that makes them
+ * one. Exact match only — nothing below it, nothing beside it. The route
+ * itself requires a session and checks token hash + email + expiry + revoked
+ * + used (lib/labelos/invitations.ts, migration 138).
+ */
+export function isLabelOsJoinApiPath(pathname: string): boolean {
+  return pathname === '/api/org/join';
+}
+
+/**
+ * `/api/org/setup` (LABEL-48): a new account creating its own organization.
+ * Gate `session` for the same reason as join — the caller is a member of
+ * nothing until this request makes them one. Exact match only; the route
+ * requires a session and takes the user from it.
+ */
+export function isLabelOsSetupApiPath(pathname: string): boolean {
+  return pathname === '/api/org/setup';
+}
+
+/**
+ * `/api/org/<uuid>/restore` (LABEL-39): bringing back an org inside its grace
+ * period. Gate `session`, for the same reason as join: a soft-deleted org's
+ * owner may have no other membership left, so the membership gate (which
+ * reads through RLS, where a deleted org is gone) would refuse the very
+ * request that undoes it. The route answers 404 to anyone who is not an owner
+ * of a soft-deleted org with that id. Exact shape, nothing below or beside it.
+ */
+export function isLabelOsRestoreApiPath(pathname: string): boolean {
+  return /^\/api\/org\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/restore$/.test(pathname);
+}
+
+/**
+ * The restore page, `/restore/<uuid>`: where an owner lands to undo a
+ * deletion. Behind the flag like `/o/*`, but reachable without any live
+ * membership (the org it restores is, by definition, not live).
+ */
+export function isLabelOsRestorePagePath(pathname: string): boolean {
+  return /^\/restore\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/.test(pathname);
+}
+
+/**
+ * The platform console's API (LABEL-47): `/api/platform` and everything under
+ * `/api/platform/`. Behind LABEL_OS_ENABLED like `/api/org/*`, but NOT an org
+ * namespace: org membership neither admits to it nor is needed. Gate
+ * `session`: the route itself answers 404 to anyone who is not a platform
+ * operator (lib/auth/platform-access), org owners included. Look-alikes
+ * (`/api/platforms`, `/api/platform-x`) are not in it.
+ */
+export function isPlatformApiPath(pathname: string): boolean {
+  return pathname === '/api/platform' || pathname.startsWith('/api/platform/');
+}
+
+/**
+ * The platform console page, `/platform` and below (LABEL-47): behind the
+ * flag, no membership redirect — the page answers 404 to anyone who is not
+ * an operator. Exact segment match (`/platforms`, `/platformer` are not it).
+ */
+export function isPlatformPagePath(pathname: string): boolean {
+  return pathname === '/platform' || pathname.startsWith('/platform/');
+}
+
+/**
+ * The invitation page, `/join/<token>`: behind the flag like `/o/*`, but
+ * open to signed-out visitors (it signs them in itself) and to non-members.
+ */
+export function isLabelOsJoinPagePath(pathname: string): boolean {
+  return /^\/join\/[^/]+\/?$/.test(pathname);
+}
+
+/**
+ * The setup page, `/setup` (LABEL-48): behind the flag like `/o/*`, but for
+ * a signed-in account that is a member of nothing yet. The page sends a
+ * signed-out visitor to /login and a member to /o itself.
+ */
+export function isLabelOsSetupPagePath(pathname: string): boolean {
+  return pathname === '/setup' || pathname === '/setup/';
+}
+
+/**
+ * The Label OS page namespaces: `/o` and everything under `/o/`, and
+ * `/shared` (LABEL-21, "Shared with me" — the external project member's own
+ * pages, outside any org shell). Exact segment match, because `/offline`,
+ * `/orders` and `/share` (the legacy track share page) look alike.
+ */
+export function isLabelOsPagePath(pathname: string): boolean {
+  return pathname === '/o' || pathname.startsWith('/o/') || pathname === '/shared' || pathname.startsWith('/shared/');
+}
+
+/**
+ * Which check the proxy runs on an /api request from this caller:
+ *  - `none`     signed out, a public route, or not an /api path at all;
+ *  - `member`   a Label OS path: the caller must belong to some org or (LABEL-21)
+ *               some project. This is coarse admission only; the
+ *               routes check org and capability (lib/auth/org-access.ts);
+ *  - `session`  `/api/org/join`, `/api/org/setup` (LABEL-48), `/api/org/<id>/restore` and `/api/platform/*` (LABEL-47)
+ *               only: being signed in is enough to reach the route, which does all of the authorisation itself;
+ *  - `producer` everything else: the caller must be the producer.
+ *
+ * Membership NEVER admits anyone to a `producer` path. That isolation is the
+ * point of the separate namespace (06-permission-model.md §3.3, risk R-03).
+ */
+export type ApiGate = 'none' | 'session' | 'member' | 'producer';
+
+export function apiGateFor(pathname: string, signedIn: boolean): ApiGate {
+  if (!signedIn || !pathname.startsWith('/api/')) return 'none';
+  if (isLabelOsJoinApiPath(pathname)) return 'session';
+  if (isLabelOsSetupApiPath(pathname)) return 'session';
+  if (isLabelOsRestoreApiPath(pathname)) return 'session';
+  if (isPlatformApiPath(pathname)) return 'session';
+  if (isLabelOsApiPath(pathname)) return 'member';
+  if (isPublicApiPath(pathname)) return 'none';
+  return 'producer';
+}
+
 /** True when the proxy must check the caller is the producer. */
 export function requiresProducerForApi(pathname: string, signedIn: boolean): boolean {
-  return signedIn && pathname.startsWith('/api/') && !isPublicApiPath(pathname);
+  return apiGateFor(pathname, signedIn) === 'producer';
 }

@@ -7,6 +7,7 @@
 
 import { MAX_DIRECT_UPLOAD_BYTES, type ProjectAssetKind } from './assets';
 import type { ProjectAssetView } from './asset-view';
+import type { AssetSensitivity, OrgAssetKind, OrgAssetView } from '@/lib/labelos/org-assets';
 
 async function errorOf(res: Response, fallback: string): Promise<Error> {
   const body = await res.json().catch(() => ({})) as { error?: string };
@@ -18,18 +19,45 @@ export async function uploadProjectAsset(
   file: File,
   opts: { inPortal: boolean; kind?: ProjectAssetKind; label?: string; fetchImpl?: typeof fetch } ,
 ): Promise<ProjectAssetView> {
-  const f = opts.fetchImpl ?? fetch;
-  const base = `/api/projects/${projectId}/assets`;
+  return uploadTo(`/api/projects/${projectId}/assets`, file, opts.fetchImpl ?? fetch, [
+    ['in_portal', String(opts.inPortal)],
+    ['kind', opts.kind],
+    ['label', opts.label],
+  ], { in_portal: opts.inPortal, kind: opts.kind, label: opts.label });
+}
 
+/**
+ * The same upload into an ORGANIZATION project (LABEL-15): the org routes,
+ * an org kind and a sensitivity instead of a portal switch (org files are
+ * never in a portal).
+ */
+export async function uploadOrgProjectAsset(
+  orgId: string,
+  projectId: string,
+  file: File,
+  opts: { kind?: OrgAssetKind; label?: string; sensitivity?: AssetSensitivity; fetchImpl?: typeof fetch } = {},
+): Promise<OrgAssetView> {
+  return uploadTo(`/api/org/${orgId}/projects/${projectId}/assets`, file, opts.fetchImpl ?? fetch, [
+    ['kind', opts.kind],
+    ['label', opts.label],
+    ['sensitivity', opts.sensitivity],
+  ], { kind: opts.kind, label: opts.label, sensitivity: opts.sensitivity });
+}
+
+async function uploadTo<T>(
+  base: string,
+  file: File,
+  f: typeof fetch,
+  formFields: Array<[string, string | undefined]>,
+  jsonFields: Record<string, unknown>,
+): Promise<T> {
   if (file.size <= MAX_DIRECT_UPLOAD_BYTES) {
     const form = new FormData();
     form.append('file', file);
-    form.append('in_portal', String(opts.inPortal));
-    if (opts.kind) form.append('kind', opts.kind);
-    if (opts.label) form.append('label', opts.label);
+    for (const [k, v] of formFields) if (v) form.append(k, v);
     const res = await f(base, { method: 'POST', body: form });
     if (!res.ok) throw await errorOf(res, 'Upload failed');
-    return ((await res.json()) as { asset: ProjectAssetView }).asset;
+    return ((await res.json()) as { asset: T }).asset;
   }
 
   const pre = await f(`${base}/presign`, {
@@ -46,8 +74,8 @@ export async function uploadProjectAsset(
   const reg = await f(base, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, file_name: file.name, in_portal: opts.inPortal, kind: opts.kind, label: opts.label }),
+    body: JSON.stringify({ url, file_name: file.name, ...jsonFields }),
   });
   if (!reg.ok) throw await errorOf(reg, 'Upload failed');
-  return ((await reg.json()) as { asset: ProjectAssetView }).asset;
+  return ((await reg.json()) as { asset: T }).asset;
 }

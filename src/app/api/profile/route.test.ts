@@ -14,7 +14,18 @@ vi.mock('@/lib/actions/profile', () => ({
   updateCreatorProfile: (payload: Record<string, unknown>) => mockUpdate(payload),
 }));
 
+const mockEnsure = vi.fn();
+const serviceClient = { tag: 'service-role' };
+vi.mock('@/lib/labelos/personal-org', () => ({
+  ensurePersonalOrg: (admin: unknown, userId: string) => mockEnsure(admin, userId),
+}));
+vi.mock('@/lib/auth/ownership', () => ({
+  createServiceClient: () => serviceClient,
+}));
+
 import { POST } from './route';
+
+const PRODUCER = '00000000-0000-4000-8000-000000000001';
 
 const form: ProfileFormState = {
   display_name: 'U2C',
@@ -46,6 +57,7 @@ const post = (body: unknown) =>
 beforeEach(() => {
   vi.clearAllMocks();
   mockUpdate.mockImplementation(async (payload: Record<string, unknown>) => ({ profile: { user_id: 'u1', ...payload } }));
+  mockEnsure.mockResolvedValue({ status: 'exists', orgId: 'org-1' });
 });
 
 describe('POST /api/profile', () => {
@@ -134,5 +146,57 @@ describe('POST /api/profile', () => {
     expect((await post(profileSaveBody(form))).status).toBe(403);
     mockUpdate.mockResolvedValueOnce({ error: 'Not authenticated', profile: null });
     expect((await post(profileSaveBody(form))).status).toBe(401);
+  });
+});
+
+describe('POST /api/profile → personal org (LABEL-07)', () => {
+  beforeEach(() => {
+    mockUpdate.mockImplementation(async (payload: Record<string, unknown>) => ({ profile: { user_id: PRODUCER, ...payload } }));
+  });
+
+  it('ensures the saved producer\'s org with the service-role client', async () => {
+    mockEnsure.mockResolvedValueOnce({ status: 'created', orgId: 'org-1' });
+    const res = await post(profileSaveBody(form));
+    expect(res.status).toBe(200);
+    expect(mockEnsure).toHaveBeenCalledTimes(1);
+    expect(mockEnsure).toHaveBeenCalledWith(serviceClient, PRODUCER);
+  });
+
+  it('uses the saved row\'s owner, never one from the body', async () => {
+    await post({ ...profileSaveBody(form), user_id: '00000000-0000-4000-8000-0000000000ff' });
+    expect(mockEnsure).toHaveBeenCalledWith(serviceClient, PRODUCER);
+  });
+
+  it.each([
+    ['skipped (136/137 not applied)', { status: 'skipped', reason: 'schema_missing' }],
+    ['failed', { status: 'failed', error: 'boom' }],
+  ])('still saves the profile when the helper is %s', async (_label, outcome) => {
+    mockEnsure.mockResolvedValueOnce(outcome);
+    const res = await post(profileSaveBody(form));
+    expect(res.status).toBe(200);
+    expect((await res.json()).profile.bio).toBe('New bio');
+  });
+
+  it('still saves the profile when the helper throws', async () => {
+    mockEnsure.mockRejectedValueOnce(new Error('unexpected'));
+    const res = await post(profileSaveBody(form));
+    expect(res.status).toBe(200);
+    expect((await res.json()).profile.bio).toBe('New bio');
+  });
+
+  it('does not run for a buyer, a signed-out caller or a failed save', async () => {
+    mockUpdate.mockResolvedValueOnce({ error: 'Producer account required', profile: null, forbidden: true });
+    expect((await post(profileSaveBody(form))).status).toBe(403);
+    mockUpdate.mockResolvedValueOnce({ error: 'Not authenticated', profile: null });
+    expect((await post(profileSaveBody(form))).status).toBe(401);
+    mockUpdate.mockResolvedValueOnce({ error: 'db down', profile: null });
+    expect((await post(profileSaveBody(form))).status).toBe(500);
+    expect(mockEnsure).not.toHaveBeenCalled();
+  });
+
+  it('does not run in local-store mode (no database user id)', async () => {
+    mockUpdate.mockImplementationOnce(async (payload: Record<string, unknown>) => ({ profile: { user_id: 'local-user', ...payload } }));
+    expect((await post(profileSaveBody(form))).status).toBe(200);
+    expect(mockEnsure).not.toHaveBeenCalled();
   });
 });

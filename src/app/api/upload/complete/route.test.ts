@@ -399,3 +399,13 @@ describe('POST /api/upload/complete', () => {
     );
   });
 });
+
+describe('POST /api/upload/complete — org sessions (LABEL-14)', () => {
+  it('never finishes an org upload as a producer track', async () => {
+    mockGetSession.mockReturnValue(session({ key: 'orgs/10000000-0000-4000-8000-000000000001/tracks/abc.wav' }));
+    const { POST } = await loadRoute();
+    const res = await POST(post({ sessionId: 'sess-1' }));
+    expect(res.status).toBe(404);
+    expect(mockCompleteMultipart).not.toHaveBeenCalled();
+  });
+});

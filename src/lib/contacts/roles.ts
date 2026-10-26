@@ -33,6 +33,11 @@ const GROUP_OF: Record<string, RoleGroup> = {
   label: 'label', 'a&r': 'label', ar: 'label', manager: 'label', publisher: 'label',
 };
 
+/** The categories that make a contact an artist (Label OS migration 166 holds the same list in SQL). */
+export const ARTIST_GROUP_CATEGORIES: readonly string[] = Object.freeze(
+  Object.keys(GROUP_OF).filter((c) => GROUP_OF[c] === 'artist'),
+);
+
 export function groupOfCategory(category: string | null | undefined): RoleGroup | null {
   const c = (category ?? '').trim().toLowerCase();
   if (!c) return null;

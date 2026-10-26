@@ -11,6 +11,8 @@
  *   - the same failing rows were re-picked first on every run.
  */
 
+import { isOrgMasterRef } from '@/lib/labelos/org-upload';
+
 /** Formats the upload path accepts (see /api/upload/init ALLOWED_EXT). */
 const AUDIO_EXT_RE = /\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i;
 /** Formats byte-truncation can clip without ffmpeg. */
@@ -50,7 +52,9 @@ export function pickPreviewBatch<T extends PreviewCandidateRow>(rows: T[], batch
   // behind it; it is still retried when nothing else is waiting.
   const rank = (r: T) => (r.preview_status === 'failed' ? 4 : 0) + (needsPreview(r) ? 0 : 2) + (r.store_listed ? 0 : 1);
   return rows
-    .filter((r) => isPreviewableMaster(r.audio_url) && (needsPreview(r) || !r.peaks_url))
+    // An org recording's preview lives in the private bucket (LABEL-14, D8);
+    // this backfill only writes public clips, so it never touches one.
+    .filter((r) => isPreviewableMaster(r.audio_url) && !isOrgMasterRef(r.audio_url) && (needsPreview(r) || !r.peaks_url))
     .sort((a, b) => rank(a) - rank(b) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))
     .slice(0, Math.max(0, batch));
 }

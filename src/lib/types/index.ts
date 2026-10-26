@@ -171,27 +171,6 @@ export interface CalendarEvent {
   created_at: string;
 }
 
-export type TeamRole = 'owner' | 'admin' | 'collaborator';
-
-export interface TeamMember {
-  user_id: string;
-  role: TeamRole;
-  email?: string | null;
-  name?: string | null;
-  avatar_url?: string | null;
-  joined_at: string;
-}
-
-export interface Invite {
-  id: string;
-  email: string;
-  role: 'admin' | 'collaborator';
-  token: string;
-  invited_by?: string | null;
-  expires_at: string;
-  used_at?: string | null;
-}
-
 export interface TrackTag {
   track_id: string;
   tag: string;

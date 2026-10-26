@@ -1,0 +1,80 @@
+/**
+ * The Label OS org shell, `/o/<slug>/…` (LABEL-09, 07 §1). Physically apart
+ * from (dashboard): the proxy admits only signed-in users with some org
+ * membership (and 404s the whole namespace while LABEL_OS_ENABLED is off);
+ * this layout then resolves WHICH org and the viewer's standing in it, and
+ * answers 404 to anyone who is not a member — the same answer as an org that
+ * does not exist.
+ *
+ * Mounts PlayerBar (CLAUDE.md player rule: any page that plays through
+ * `usePlayer` must sit under a layout that mounts it). It renders per
+ * request, never prerendered: the org depends on the session.
+ *
+ * A soft-deleted org (LABEL-39) is gone here: 404 — except to its owner, who
+ * is sent to `/restore/<id>` while the grace period lasts.
+ */
+import { notFound, redirect } from 'next/navigation';
+import { TopBar } from '@/components/nav/TopBar';
+import { PlayerBar } from '@/components/player/PlayerBar';
+import { MediaSessionBridge } from '@/components/player/MediaSessionBridge';
+import { WidgetErrorBoundary } from '@/components/system/WidgetErrorBoundary';
+import { UploadsTray } from '@/components/upload/UploadsTray';
+import { LabelOsFlagProvider } from '@/components/labelos/LabelOsFlag';
+import { OrgShellProvider } from '@/components/labelos/OrgShellContext';
+import { OrgCommandPalette } from '@/components/labelos/OrgCommandPalette';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import { orgShellFor, ownedDeletedOrgFor, sessionIdentity } from '@/lib/auth/org-access';
+import { createServiceClient } from '@/lib/auth/ownership';
+import { sessionMustChangePassword } from '@/lib/labelos/team-accounts-store';
+import { isLabelOsEnabled } from '@/lib/labelos/flag';
+
+export const dynamic = 'force-dynamic';
+
+export default async function OrgShellLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ orgSlug: string }>;
+}) {
+  // The proxy already 404s /o/* with the flag off; this is belt and braces.
+  if (!isLabelOsEnabled()) notFound();
+  const { orgSlug } = await params;
+  const shell = await orgShellFor(orgSlug);
+  if (!shell) {
+    // An owner whose org is inside its 30-day grace period (LABEL-39) is sent
+    // to where it can be restored; everyone else gets the same 404 as ever.
+    const pending = await ownedDeletedOrgFor(orgSlug);
+    if (pending) redirect(`/restore/${pending.id}`);
+    notFound();
+  }
+  // Doc 25: a team account on the password its org gave it chooses its own before anything else.
+  const session = await sessionIdentity();
+  if (await sessionMustChangePassword(session?.userId ?? null, createServiceClient())) redirect('/account/password');
+
+  const body = (
+    <div className="min-h-screen bg-[#090907]">
+      <WidgetErrorBoundary name="TopBar"><TopBar /></WidgetErrorBoundary>
+      <main className="pt-14 pb-28 min-h-screen">{children}</main>
+      <WidgetErrorBoundary name="PlayerBar"><PlayerBar /></WidgetErrorBoundary>
+      {/* LABEL-14: org uploads run in the same tray as the producer's. */}
+      <WidgetErrorBoundary name="UploadsTray"><UploadsTray /></WidgetErrorBoundary>
+      <WidgetErrorBoundary name="MediaSessionBridge"><MediaSessionBridge /></WidgetErrorBoundary>
+      {/* LABEL-36: the org's own ⌘K search; the dashboard palette steps aside under /o/*. */}
+      {/* Search is a licensed module (LABEL-47): without it the palette, which only searches, is not mounted. */}
+      {shell.modules.includes('search') && <WidgetErrorBoundary name="OrgCommandPalette"><OrgCommandPalette /></WidgetErrorBoundary>}
+    </div>
+  );
+
+  return (
+    <LabelOsFlagProvider enabled>
+      <OrgShellProvider value={shell}>
+        {/* A member who is not the producer cannot read the producer's
+            profile or tag colours (/api/profile, /api/tags/colors are
+            producer-only); a supplied theme stops the artwork hooks fetching
+            them, as on the public pages. */}
+        {shell.viewerIsProducer ? body : <ArtworkThemeProvider theme={null}>{body}</ArtworkThemeProvider>}
+      </OrgShellProvider>
+    </LabelOsFlagProvider>
+  );
+}

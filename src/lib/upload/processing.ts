@@ -7,9 +7,11 @@ import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { readStoredObject, uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
+import { uploadOrgPeaks, uploadOrgPreview } from '@/lib/storage/org-media';
 import { prepareMp3Deliverable } from '@/lib/audio/mp3-deliverable';
 import { realMp3Deps } from '@/lib/audio/mp3-deliverable.server';
 import { errorMessage } from '@/lib/errors';
+import { isMissingOrgColumn } from '@/lib/auth/org-column';
 import { parseTitleMetadata } from '@/lib/upload/title-metadata';
 import { compareFilenameWithDetected } from '@/lib/audio/metadata-agreement';
 
@@ -161,6 +163,11 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
 }> {
   const admin = createServiceClient();
   try {
+    // An org track changes two things here (LABEL-14, D8): its preview and
+    // peaks go to the private bucket under orgs/<org>/ (a producer track's to
+    // the public one exactly as before), and its bytes never go to AudD. Read from the row, not inferred from the key, and a failed
+    // read fails the job (retried) rather than defaulting to public.
+    const orgId = await trackOrgId(admin, job.track_id);
     const audioBuffer = await readStoredObject(job.audio_url);
     const sniff = sniffAudioBuffer(audioBuffer);
     if (!sniff.ok) {
@@ -177,7 +184,9 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
 
     let audd = { danceability: 0, energy: 0, valence: 0, acousticness: 0, tempo: 0 };
     try {
-      audd = await getAuddFeatures(audioBuffer, job.file_name);
+      // AudD is a third-party service: an unreleased org recording is never
+      // sent to it (D8). Its features stay at the same zeros a failure gives.
+      if (!orgId) audd = await getAuddFeatures(audioBuffer, job.file_name);
     } catch (err) {
       console.warn('Upload processing AudD failed:', err);
     }
@@ -185,7 +194,11 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
     let peaksUrl: string | null = null;
     try {
       const peaks = await extractPeaks(audioBuffer);
-      if (peaks) peaksUrl = await uploadPeaksSidecar(job.audio_url, JSON.stringify(peaks));
+      if (peaks) {
+        peaksUrl = orgId
+          ? await uploadOrgPeaks(orgId, JSON.stringify(peaks))
+          : await uploadPeaksSidecar(job.audio_url, JSON.stringify(peaks));
+      }
     } catch (err) {
       console.warn('Upload processing peaks failed:', err);
     }
@@ -219,7 +232,9 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
     // backfill and "Analyze N" retry any track left without one.
     let previewUrl: string | null = null;
     try {
-      previewUrl = await uploadPublicPreview(audioBuffer, job.audio_url, merged.duration_seconds);
+      previewUrl = orgId
+        ? await uploadOrgPreview(orgId, audioBuffer, job.audio_url, merged.duration_seconds)
+        : await uploadPublicPreview(audioBuffer, job.audio_url, merged.duration_seconds);
       if (!previewUrl) console.warn('Upload processing: no preview clip (ffmpeg unavailable and master not mp3/wav)');
     } catch (err) {
       console.warn('Upload processing preview failed:', err);
@@ -228,8 +243,10 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
     // The MP3 a lease on this track delivers, made now from the master already
     // in memory so the first buyer does not wait for it (it is otherwise made on
     // first download — lib/audio/mp3-deliverable). Non-fatal either way.
-    const mp3 = await prepareMp3Deliverable({ id: job.track_id, audio_url: job.audio_url }, audioBuffer, realMp3Deps);
-    if (!mp3 && job.audio_url && !/\.mp3(?:\?|$)/i.test(job.audio_url)) {
+    // Never for an org recording: it is not sold, and the derivative would sit
+    // under deliverables/, outside the orgs/<id>/ prefix the org export and purge cover.
+    const mp3 = orgId ? null : await prepareMp3Deliverable({ id: job.track_id, audio_url: job.audio_url }, audioBuffer, realMp3Deps);
+    if (!orgId && !mp3 && job.audio_url && !/\.mp3(?:\?|$)/i.test(job.audio_url)) {
       console.warn('Upload processing: delivery MP3 not made (ffmpeg unavailable?); it will be made on first download');
     }
 
@@ -245,7 +262,8 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
         preview_status: previewUrl ? 'ready' : 'none',
       })
       .eq('id', job.track_id)
-      .eq('user_id', job.user_id);
+      // An org track has no owner (142): it is addressed by its org instead.
+      .match(orgId ? { org_id: orgId } : { user_id: job.user_id });
     if (trackError) throw new Error(`Track update failed: ${trackError.message}`);
 
     // Tempo and harmony are compare-and-set: written only if the row still
@@ -254,8 +272,9 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
     // BPM or key themselves — one click in the uploads tray, or the track
     // drawer. Overwriting that with a detector's reading is exactly the
     // silent guess this pipeline must not make.
-    await compareAndSet(admin, job, { bpm }, { bpm: written.bpm });
-    await compareAndSet(admin, job, { key, scale }, { key: written.key, scale: written.scale });
+    const target = { ...job, org_id: orgId };
+    await compareAndSet(admin, target, { bpm }, { bpm: written.bpm });
+    await compareAndSet(admin, target, { key, scale }, { key: written.key, scale: written.scale });
 
     const { error: doneError } = await admin
       .from('upload_processing_jobs')
@@ -287,20 +306,32 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
 type ServiceClient = ReturnType<typeof createServiceClient>;
 type Scalar = string | number | null;
 
+/** The track's organization (LABEL-12 `tracks.org_id`), or null for a producer track. Throws on a read error. */
+async function trackOrgId(admin: ServiceClient, trackId: string): Promise<string | null> {
+  const { data, error } = await admin.from('tracks').select('org_id').eq('id', trackId).maybeSingle();
+  // Before migration 141 no track has an org.
+  if (error && isMissingOrgColumn(error)) return null;
+  if (error) throw new Error(`Track lookup failed: ${error.message}`);
+  const orgId = (data as { org_id?: unknown } | null)?.org_id;
+  return typeof orgId === 'string' && orgId ? orgId : null;
+}
+
 /**
- * `UPDATE tracks SET <next> WHERE id AND user_id AND <each column = expected>`.
+ * `UPDATE tracks SET <next> WHERE id AND user_id AND <each column = expected>`
+ * (an org track, which has no owner, by `org_id` instead of `user_id`).
  * One statement, so there is no read-then-write window. A null expectation
  * matches with `IS NULL` (`= NULL` matches nothing in SQL).
  */
 export async function compareAndSet(
   admin: ServiceClient,
-  job: Pick<UploadProcessingJob, 'track_id' | 'user_id'>,
+  job: Pick<UploadProcessingJob, 'track_id' | 'user_id'> & { org_id?: string | null },
   next: Record<string, Scalar>,
   expected: Record<string, Scalar>,
 ): Promise<boolean> {
   const unchanged = Object.keys(next).every((k) => next[k] === expected[k]);
   if (unchanged) return true;
-  let query = admin.from('tracks').update(next).eq('id', job.track_id).eq('user_id', job.user_id);
+  let query = admin.from('tracks').update(next).eq('id', job.track_id);
+  query = job.org_id ? query.eq('org_id', job.org_id) : query.eq('user_id', job.user_id);
   for (const [column, value] of Object.entries(expected)) {
     query = value == null ? query.is(column, null) : query.eq(column, value);
   }

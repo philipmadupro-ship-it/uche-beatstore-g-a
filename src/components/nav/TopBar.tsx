@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import {
   Settings,
@@ -18,10 +18,13 @@ import {
   Tag,
   MessageSquare,
   Heart,
-  MessageCircle, HandHelping,
+  MessageCircle, HandHelping, FileUp,
+  ListChecks,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
-import { NAV_GROUPS, ALL_GROUPS, activeGroupFor, isItemActive, type NavGroup } from './model';
+import { ACCOUNT_GROUP, ALL_GROUPS, activeGroupFor, activeGroupIn, isItemActive, navGroupsFor, type NavGroup } from './model';
+import { OrgSwitcher } from './OrgSwitcher';
+import { useOrgShell } from '@/components/labelos/OrgShellContext';
 import { Popover } from '@/components/ui/Popover';
 import { SignOutButton } from '@/components/auth/SignOutButton';
 import { SessionContextControl } from './SessionContextControl';
@@ -31,6 +34,8 @@ import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { cn } from '@/lib/utils';
 import { useBrandArtwork } from '@/hooks/useBrandArtwork';
 import { planMarkAllRead, planMarkRead } from '@/lib/notifications/read-state';
+import { notificationHref } from '@/lib/labelos/notify-links';
+import { isDirectAskKind } from '@/lib/labelos/notify-kinds';
 import {
   desktopNotificationsActive,
   selectDesktopNotifications,
@@ -42,6 +47,7 @@ interface Notification {
   kind: string;
   title: string;
   body?: string | null;
+  data?: unknown;
   read: boolean;
   created_at: string;
 }
@@ -55,6 +61,9 @@ function notifIcon(kind: string) {
   if (kind === 'artist_reaction') return <Heart size={13} className="text-[#6DC6A4]" />;
   if (kind === 'artist_message') return <MessageCircle size={13} className="text-white" />;
   if (kind === 'artist_request') return <HandHelping size={13} className="text-white" />;
+  if (kind === 'portal_upload') return <FileUp size={13} className="text-[#6DC6A4]" />;
+  // Label OS direct asks (LABEL-23): somebody needs something from you.
+  if (isDirectAskKind(kind)) return <ListChecks size={13} className="text-white" />;
   return <Bell size={13} className="text-white/60" />;
 }
 
@@ -70,15 +79,44 @@ function timeAgo(iso: string) {
 
 export function TopBar() {
   const pathname = usePathname();
+  const router = useRouter();
   const openPalette = useCommandPalette((s) => s.setOpen);
   const { logoUrl } = useBrandArtwork();
   const [activityOpen, setActivityOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobilePanelRef = useDialogBehavior({ open: mobileOpen, onClose: () => setMobileOpen(false) });
 
-  const group = activeGroupFor(pathname);
+  // Inside a Label OS org shell (/o/<slug>) the hubs come from the org; on
+  // the producer dashboard they are the producer's own, exactly as before
+  // (navGroupsFor('producer', …) is NAV_GROUPS itself). Producer-only chrome
+  // — search, store attention, session tempo, storefront, settings and
+  // profile — calls producer-only routes, so a member who is not the
+  // producer gets none of it and none of its requests. The bell is the one
+  // exception: under an org it is that org's own (see Notifications below). The producer hubs
+  // show only in the producer org the viewer owns: those links open the
+  // viewer's own dashboard, which is that org only when it is theirs.
+  const shell = useOrgShell();
+  const producerChrome = !shell || shell.viewerIsProducer;
+  const hubs = shell
+    ? navGroupsFor(shell.org.kind, new Set(shell.capabilities), {
+        slug: shell.org.slug,
+        viewerIsProducer: shell.viewerIsProducer && shell.role === 'owner',
+        modules: shell.modules,
+        isOwner: shell.role === 'owner',
+      })
+    : navGroupsFor('producer', null);
+  const drawerGroups = !shell ? ALL_GROUPS : producerChrome ? [...hubs, ACCOUNT_GROUP] : hubs;
+  const group = shell ? activeGroupIn(hubs, pathname) : activeGroupFor(pathname);
+  const homeHref = producerChrome ? '/library' : `/o/${shell.org.slug}`;
 
   // ── Notifications ──────────────────────────────────────────────
+  // On the producer dashboard the bell is the producer's (064, `/api/notifications`, exactly
+  // as before). Inside an org shell it is that org's: this member's own direct asks there
+  // (LABEL-23, `/api/org/<id>/notifications`) — a member who is not the producer gets a bell
+  // too, but never the producer's store attention or activity log, which are producer routes.
+  const orgBell = shell !== null;
+  const bellEnabled = producerChrome || orgBell;
+  const notifBase = shell ? `/api/org/${shell.org.id}/notifications` : '/api/notifications';
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   /** The panel renders a page of rows; the badge counts every unread row. */
@@ -97,7 +135,7 @@ export function TopBar() {
 
   const fetchNotifs = async () => {
     try {
-      const res = await fetch('/api/notifications');
+      const res = await fetch(notifBase);
       if (!res.ok) return;
       const j = await res.json();
       const rows: Notification[] = j.notifications ?? [];
@@ -158,21 +196,26 @@ export function TopBar() {
   };
 
   useEffect(() => {
+    if (!bellEnabled) return;
     const id = window.setTimeout(() => {
       void fetchNotifs();
-      void fetchAttention();
+      if (!orgBell) void fetchAttention();
     }, 0);
     return () => window.clearTimeout(id);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchNotifs reads notifBase, which is in the deps
+  }, [bellEnabled, orgBell, notifBase]);
   // 60-second polling fallback in case the realtime subscription doesn't fire
   // (e.g. the notifications table isn't in the realtime publication yet).
   useEffect(() => {
+    if (!bellEnabled) return;
     const id = setInterval(fetchNotifs, 60_000);
     return () => clearInterval(id);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchNotifs reads notifBase, which is in the deps
+  }, [bellEnabled, notifBase]);
 
   useRealtimeTable({
     table: 'notifications',
+    enabled: bellEnabled,
     onChange: fetchNotifs,
   });
 
@@ -191,7 +234,7 @@ export function TopBar() {
     if (!plan.changed) return;
     setNotifs(plan.next);
     setUnread(plan.unread);
-    fetch('/api/notifications?action=read', {
+    fetch(`${notifBase}?action=read`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: plan.ids }),
@@ -203,7 +246,7 @@ export function TopBar() {
     if (!plan.changed) return;
     setNotifs(plan.next);
     setUnread(plan.unread);
-    fetch('/api/notifications?action=read_all', { method: 'PATCH' }).catch(() => undefined);
+    fetch(`${notifBase}?action=read_all`, { method: 'PATCH' }).catch(() => undefined);
   };
 
   return (
@@ -215,7 +258,7 @@ export function TopBar() {
               rather than covered: a wide wordmark cropped to fill loses its
               ends, and this is the one place the mark has to stay legible at
               24px. */}
-          <Link href="/library" className="flex items-center gap-2.5 group shrink-0">
+          <Link href={homeHref} className="flex items-center gap-2.5 group shrink-0">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -233,20 +276,24 @@ export function TopBar() {
             </span>
           </Link>
 
+          {/* Organization switcher (Label OS). Renders nothing with the flag
+              off or when the user has only one place to be. */}
+          <OrgSwitcher />
+
           {/* Primary hubs — each opens its surfaces as a dropdown, so every
               destination is one click from a single row. This is what replaced
               the permanent second row of sub-tabs. */}
           <nav className="hidden md:flex items-center gap-1 flex-1">
-            {NAV_GROUPS.map((g) => (
-              <HubMenu key={g.key} group={g} active={group.key === g.key} pathname={pathname} />
+            {hubs.map((g) => (
+              <HubMenu key={g.key} group={g} active={group?.key === g.key} pathname={pathname} />
             ))}
           </nav>
 
           {/* Spacer on mobile so the right cluster hugs the edge */}
           <div className="flex-1 md:hidden" />
 
-          {/* Search (⌘K) — desktop */}
-          <button
+          {/* Search (⌘K) — desktop. /api/search is producer-only. */}
+          {producerChrome && (<button
             onClick={() => openPalette(true)}
             className="hidden md:flex items-center gap-2 w-48 lg:w-56 bg-white/[0.04] border border-white/10 rounded-md py-1.5 px-3 text-[11px] text-white/60 hover:border-white/20 hover:text-white transition-colors shrink-0"
             title="Search (⌘K)"
@@ -254,30 +301,30 @@ export function TopBar() {
             <Search size={14} />
             <span className="flex-1 text-left">Search</span>
             <kbd className="text-[9px] font-mono border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
-          </button>
+          </button>)}
 
           {/* Session tempo + key. The only always-visible chrome that can host
               it: a second TopBar row is not available (the hub dropdowns
               replaced one), so it is a pill that states the session and opens
               a popover to change it. The pill narrows to its icon on a phone
               rather than disappearing — mobile mirrors web. */}
-          <SessionContextControl />
+          {producerChrome && <SessionContextControl />}
 
           {/* Search icon — mobile (opens ⌘K palette) */}
-          <button
+          {producerChrome && (<button
             onClick={() => openPalette(true)}
             className="tap md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
             aria-label="Search"
           >
             <Search size={19} />
-          </button>
+          </button>)}
 
           {/* Notifications — the panel was `absolute`, alone among the app's
               overlays, so it clipped inside any ancestor with overflow or a
               backdrop-blur stacking context. `ui/Popover` portals to <body>,
               positions with viewport rect coords, clamps to the screen, and
               already closes on Escape and outside click. */}
-          <Popover
+          {bellEnabled && (<Popover
             width={320}
             align="right"
             open={notifOpen}
@@ -313,16 +360,18 @@ export function TopBar() {
                         Mark all read
                       </button>
                     )}
-                    <button
-                      onClick={() => setActivityOpen(true)}
-                      className="text-[9px] font-mono uppercase tracking-wider text-white/50 hover:text-white transition-colors"
-                    >
-                      Activity log →
-                    </button>
+                    {!orgBell && (
+                      <button
+                        onClick={() => setActivityOpen(true)}
+                        className="text-[9px] font-mono uppercase tracking-wider text-white/50 hover:text-white transition-colors"
+                      >
+                        Activity log →
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="max-h-80 overflow-y-auto">
-                  {attention > 0 && (
+                  {!orgBell && attention > 0 && (
                     <Link
                       href="/store-editor"
                       onClick={() => setNotifOpen(false)}
@@ -341,7 +390,7 @@ export function TopBar() {
                       </div>
                     </Link>
                   )}
-                  {notifs.length === 0 && attention === 0 ? (
+                  {notifs.length === 0 && (orgBell || attention === 0) ? (
                     <div className="px-4 py-8 text-center text-[11px] text-white/50">
                       No notifications yet
                     </div>
@@ -350,16 +399,24 @@ export function TopBar() {
                       // An unread row is the button that reads it; a read one
                       // has nothing left to do, so it stays inert rather than
                       // offering a click that changes nothing.
-                      const Row = n.read ? 'div' : 'button';
+                      // A direct ask under an org also opens the page it is about.
+                      const href = shell ? notificationHref(shell.org.slug, n) : null;
+                      const Row = n.read && !href ? 'div' : 'button';
                       return (
                         <Row
                           key={n.id}
-                          {...(n.read
+                          {...(n.read && !href
                             ? {}
                             : {
                                 type: 'button' as const,
-                                onClick: () => markRead([n.id]),
-                                'aria-label': `Mark "${n.title}" read`,
+                                onClick: () => {
+                                  if (!n.read) markRead([n.id]);
+                                  if (href) {
+                                    setNotifOpen(false);
+                                    router.push(href);
+                                  }
+                                },
+                                'aria-label': href ? `Open "${n.title}"` : `Mark "${n.title}" read`,
                               })}
                           className={`flex w-full items-start gap-3 px-4 py-3 text-left border-b border-white/20 last:border-0 transition-colors ${
                             n.read ? 'opacity-60' : 'bg-white/[0.04] hover:bg-white/[0.07]'
@@ -379,7 +436,12 @@ export function TopBar() {
                     })
                   )}
                 </div>
-                {hasMore && (
+                {hasMore && orgBell && (
+                  <p className="border-t border-white/10 px-4 py-2.5 text-center text-[9px] font-mono uppercase tracking-wider text-white/40">
+                    Showing the latest 20
+                  </p>
+                )}
+                {hasMore && !orgBell && (
                   <button
                     onClick={() => { setNotifOpen(false); setActivityOpen(true); }}
                     className="block w-full border-t border-white/10 px-4 py-2.5 text-center text-[9px] font-mono uppercase tracking-wider text-white/50 transition-colors hover:bg-white/[0.04] hover:text-white"
@@ -388,10 +450,10 @@ export function TopBar() {
                   </button>
                 )}
               </div>
-          </Popover>
+          </Popover>)}
 
           {/* View public storefront */}
-          <Link
+          {producerChrome && (<Link
             href="/store"
             target="_blank"
             rel="noopener noreferrer"
@@ -400,10 +462,10 @@ export function TopBar() {
             className="tap hidden md:flex w-9 h-9 rounded-full items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors shrink-0"
           >
             <Store size={17} />
-          </Link>
+          </Link>)}
 
           {/* Settings */}
-          <Link
+          {producerChrome && (<Link
             href="/settings"
             aria-label="Open settings"
             title="Settings"
@@ -416,7 +478,7 @@ export function TopBar() {
             )}
           >
             <Settings size={17} />
-          </Link>
+          </Link>)}
 
           {/* Mobile menu — on the right, because that is the edge the drawer
               slides in from. A left-hand control opening a right-hand panel
@@ -430,7 +492,8 @@ export function TopBar() {
           </button>
 
           {/* Profile — account menu: profile + settings + sign out, so every
-              dashboard page (owner, admin, collaborator) reaches sign-out. */}
+              dashboard page (owner, admin, collaborator) reaches sign-out. A Label OS
+              member gets sign-out only: profile and settings are producer chrome. */}
           <Popover
             align="right"
             width={212}
@@ -456,6 +519,7 @@ export function TopBar() {
           >
             {(close) => (
               <nav className="p-1" aria-label="Account">
+                {producerChrome && (<>
                 <Link
                   href="/profile"
                   onClick={close}
@@ -480,7 +544,8 @@ export function TopBar() {
                   <Settings size={17} strokeWidth={1.75} className="shrink-0" />
                   <span className="truncate">Settings</span>
                 </Link>
-                <div className="my-1 border-t border-white/10" />
+                </>)}
+                {producerChrome && <div className="my-1 border-t border-white/10" />}
                 <SignOutButton onDone={close} />
               </nav>
             )}
@@ -522,7 +587,7 @@ export function TopBar() {
               </button>
             </div>
             <nav className="flex-1 px-3 py-4 overflow-y-auto">
-              {ALL_GROUPS.map((g) => (
+              {drawerGroups.map((g) => (
                 <div key={g.key} className="mb-4 last:mb-0">
                   <p className="px-3 mb-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/50 flex items-center gap-1.5">
                     <g.icon size={14} />

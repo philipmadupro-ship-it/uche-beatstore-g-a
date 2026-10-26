@@ -4,6 +4,8 @@ import { MediaSessionBridge } from '@/components/player/MediaSessionBridge';
 import { UploadsTray } from '@/components/upload/UploadsTray';
 import { StemWarmup } from '@/components/system/StemWarmup';
 import { WidgetErrorBoundary } from '@/components/system/WidgetErrorBoundary';
+import { LabelOsFlagProvider } from '@/components/labelos/LabelOsFlag';
+import { isLabelOsEnabled } from '@/lib/labelos/flag';
 
 /**
  * Each always-on widget is isolated. React tears down the whole tree when a
@@ -13,7 +15,10 @@ import { WidgetErrorBoundary } from '@/components/system/WidgetErrorBoundary';
  * fails, the user should see Next's error UI rather than an empty shell.
  */
 export default function DashboardGroupLayout({ children }: { children: React.ReactNode }) {
+  // Label OS (LABEL-09): off, the provider only says so, and nothing below
+  // renders or requests anything it did not before.
   return (
+    <LabelOsFlagProvider enabled={isLabelOsEnabled()}>
     <div className="min-h-screen">
       <WidgetErrorBoundary name="TopBar"><TopBar /></WidgetErrorBoundary>
       {/* Single-row nav: the hub surfaces live in dropdowns, not a second row. */}
@@ -25,5 +30,6 @@ export default function DashboardGroupLayout({ children }: { children: React.Rea
       <WidgetErrorBoundary name="UploadsTray"><UploadsTray /></WidgetErrorBoundary>
       <WidgetErrorBoundary name="StemWarmup"><StemWarmup /></WidgetErrorBoundary>
     </div>
+    </LabelOsFlagProvider>
   );
 }

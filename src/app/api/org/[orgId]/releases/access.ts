@@ -1,0 +1,208 @@
+/**
+ * Who may touch which release (LABEL-16), shared by the
+ * `/api/org/[orgId]/releases*` routes. Not a route itself.
+ *
+ *  - The RELEASE: requireObjectAccess on `releases` reads its org from the
+ *    row and its scope through its PROJECT (migration 144's read policy,
+ *    `can_see_org_project`): another org's release, one outside the
+ *    member's artists, or a missing id is 404; lacking the capability is 403.
+ *    Reads need `catalog.read`, every write `release.write`.
+ *  - A TRACK named in a body (a song, a master): requireObjectAccess on
+ *    `tracks` with `catalog.read` — a producer track, another org's, or one
+ *    outside the member's artists is 404, the same answer as a missing one.
+ *    The release rules themselves (song type, master relation) are the pure
+ *    lib/labelos/releases, and 144's trigger holds them again.
+ *
+ * Everything is read with the service role, by id and org — never by user.
+ */
+import { NextResponse } from 'next/server';
+import { requireObjectAccess, type ObjectAccessResult } from '@/lib/auth/org-access';
+import { createServiceClient, type OwnershipFail } from '@/lib/auth/ownership';
+import { isMissingSchema } from '@/lib/artists/workspace-load';
+import {
+  ARTWORK_PROBLEM_MESSAGES,
+  MASTER_PROBLEM_MESSAGES,
+  RELEASE_COLUMNS,
+  RELEASE_ITEM_COLUMNS,
+  releaseArtworkProblem,
+  releaseMasterProblem,
+  type ReleaseItemRow,
+  type ReleaseRow,
+} from '@/lib/labelos/releases';
+
+export type ObjectAccessOk = Extract<ObjectAccessResult, { ok: true }>;
+
+export const fail = (status: number, error: string, extra: Record<string, unknown> = {}): OwnershipFail => ({
+  ok: false,
+  res: NextResponse.json({ error, ...extra }, { status, headers: { 'Cache-Control': 'no-store' } }),
+});
+
+export const notReady = () =>
+  fail(503, 'Releases need migration 144 applied on Supabase.', { migration: '144', schemaReady: false });
+
+const OFF_THE_STORE_FIRST = 'Take this release off the store to change its tracklist';
+const keepsItsTracklist = (state: string) => `A ${state} release keeps its tracklist`;
+
+export const conflict = () => fail(409, 'The tracklist changed at the same time; reload and try again');
+
+/**
+ * requireObjectAccess answers 500 when its read of `releases` fails, and
+ * before migration 144 the table does not exist: say so (503 naming the
+ * migration), as every Label OS route does for an unapplied migration.
+ */
+export async function schemaAware(denied: OwnershipFail): Promise<OwnershipFail> {
+  if (denied.res.status !== 500) return denied;
+  const { error } = await createServiceClient().from('releases').select('id').limit(1);
+  return error && isMissingSchema(error) ? notReady() : denied;
+}
+
+/**
+ * Only a draft's tracklist changes: a delivered one went out, a cancelled one
+ * is not going. LABEL-42: a release IMPORTED as already out is entered
+ * delivered, but its tracklist is the very thing being entered, so it stays
+ * editable — until it is on the store, where each item's public preview was
+ * promoted for that exact list (take it off the store to change it).
+ */
+export function tracklistLocked(release: ReleaseRow): OwnershipFail | null {
+  if (release.state === 'draft') return null;
+  if (release.imported_released && release.state === 'delivered') {
+    return release.store_listed ? fail(409, OFF_THE_STORE_FIRST, { field: 'store_listed' }) : null;
+  }
+  return fail(409, keepsItsTracklist(release.state), { field: 'state' });
+}
+
+/**
+ * An IMPORTED release (LABEL-42) is music entered as already out on the
+ * owner's word, and its tracklist is what the public store will play. Anyone
+ * with `release.write` could otherwise slip an unreleased demo in as a song,
+ * so its tracklist, its listing and its playback are the owner's or an
+ * admin's (a role, as for the import itself), not A&R's.
+ */
+export function importedNeedsOwnerOrAdmin(release: Pick<ReleaseRow, 'imported_released'>, role: string): OwnershipFail | null {
+  if (!release.imported_released || role === 'owner' || role === 'admin') return null;
+  return fail(403, 'Only an owner or an admin can change a release that was entered as already out', { field: 'imported_released' });
+}
+
+/** A Postgres error from a write, as the member should see it. */
+export function writeError(error: { code?: string; message?: string }, fallback: string): OwnershipFail {
+  if (isMissingSchema(error)) return notReady();
+  // Two tracklist writes that met on their locks (167 orders them, so this is
+  // a safety net): retry, never a 500.
+  if (error.code === '40P01' || error.code === '40001') return conflict();
+  // The deferred position check: another edit of the tracklist got there
+  // first (a race, not bad input), so it is a conflict to retry.
+  if (error.code === '23514' && /no gap/.test(error.message ?? '')) return conflict();
+  // 158 / 167's release_items_store_lock: the release left draft (or went on
+  // the store) after this route read it — the answers tracklistLocked gives,
+  // as a 409, never the trigger's own wording.
+  if (error.code === '23514' && /^release_items: take the release off the store/.test(error.message ?? '')) {
+    return fail(409, OFF_THE_STORE_FIRST, { field: 'store_listed' });
+  }
+  const locked = error.code === '23514' ? /^release_items: a (delivered|cancelled) release keeps its tracklist/.exec(error.message ?? '') : null;
+  if (locked) return fail(409, keepsItsTracklist(locked[1]), { field: 'state' });
+  // 144's other triggers and CHECKs: our own wording, naming no row.
+  if (error.code === '23514') return fail(400, error.message ?? fallback);
+  // The deferred (release, position) key: two edits of one tracklist at once.
+  if (error.code === '23505') return conflict();
+  if (error.code === '23503') return fail(409, 'Something this release points at no longer exists');
+  return fail(500, fallback);
+}
+
+/** 167's labelos_release_item_update is not there yet (the migration is unapplied). */
+export function isMissingItemUpdate(error: { code?: string; message?: string }): boolean {
+  return /labelos_release_item_update/.test(error.message ?? '') && (error.code === 'PGRST202' || error.code === '42883');
+}
+
+export type ReleaseAccess = { ok: true; release: ReleaseRow };
+
+/**
+ * After the route's `requireObjectAccess({ table: 'releases', … })`: the
+ * release row, read by id and org.
+ */
+export async function releaseRow(access: ObjectAccessOk): Promise<ReleaseAccess | OwnershipFail> {
+  const { data, error } = await access.admin
+    .from('releases')
+    .select(RELEASE_COLUMNS)
+    .eq('id', access.object.id)
+    .eq('org_id', access.object.orgId)
+    .maybeSingle();
+  if (error) return isMissingSchema(error) ? notReady() : fail(500, 'Could not read the release');
+  if (!data) return fail(404, 'Not found');
+  return { ok: true, release: data as unknown as ReleaseRow };
+}
+
+/** The release's items in tracklist order. Throws when the read fails. */
+export async function itemsOf(access: ObjectAccessOk, releaseId: string): Promise<ReleaseItemRow[]> {
+  const { data, error } = await access.admin
+    .from('release_items')
+    .select(RELEASE_ITEM_COLUMNS)
+    .eq('release_id', releaseId)
+    .eq('org_id', access.orgId)
+    .order('position', { ascending: true });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as ReleaseItemRow[]).sort((a, b) => a.position - b.position);
+}
+
+type TrackRef = { id: string; type: string | null };
+
+/** An org track the member can see (catalog.read + scope), else the 404 / 403 of requireObjectAccess. */
+async function visibleTrack(orgId: string, trackId: string): Promise<{ ok: true; track: TrackRef } | OwnershipFail> {
+  const access = await requireObjectAccess({ table: 'tracks', id: trackId, cap: 'catalog.read', orgId });
+  if (!access.ok) return access;
+  const { data, error } = await access.admin
+    .from('tracks')
+    .select('id, type')
+    .eq('id', access.object.id)
+    .eq('org_id', access.object.orgId)
+    .maybeSingle();
+  if (error) return fail(500, 'Could not read the track');
+  if (!data) return fail(404, 'Not found');
+  return { ok: true, track: data as TrackRef };
+}
+
+/**
+ * The song and master of an item, both visible to the member, and the
+ * master one the song may be released as. 400 names the field at fault.
+ */
+export async function checkItemTracks(
+  access: ObjectAccessOk,
+  songId: string,
+  masterId: string,
+): Promise<{ ok: true } | OwnershipFail> {
+  const song = await visibleTrack(access.orgId, songId);
+  if (!song.ok) return song;
+  if (masterId.toLowerCase() !== songId.toLowerCase()) {
+    const master = await visibleTrack(access.orgId, masterId);
+    if (!master.ok) return master;
+  }
+  const { data, error } = await access.admin
+    .from('track_links')
+    .select('from_track_id, to_track_id, relation')
+    .eq('from_track_id', song.track.id)
+    .eq('to_track_id', masterId);
+  if (error) return fail(500, 'Could not read the song’s links');
+  const links = (data ?? []) as { from_track_id: string; to_track_id: string; relation: string }[];
+  const problem = releaseMasterProblem(song.track, masterId, links);
+  if (problem) {
+    const { field, error: message } = MASTER_PROBLEM_MESSAGES[problem];
+    return fail(400, message, { field });
+  }
+  return { ok: true };
+}
+
+/** The artwork file, which must be an artwork / photo of the release's own project. */
+export async function checkArtwork(
+  access: { admin: ObjectAccessOk['admin']; orgId: string },
+  release: { org_id: string; project_id: string },
+  assetId: string,
+): Promise<{ ok: true } | OwnershipFail> {
+  const { data, error } = await access.admin
+    .from('project_assets')
+    .select('id, org_id, project_id, kind')
+    .eq('id', assetId)
+    .eq('org_id', access.orgId)
+    .maybeSingle();
+  if (error) return isMissingSchema(error) ? notReady() : fail(500, 'Could not read the artwork');
+  const problem = releaseArtworkProblem(release, data as { org_id: string | null; project_id: string; kind: string } | null);
+  return problem ? fail(400, ARTWORK_PROBLEM_MESSAGES[problem], { field: 'artwork_asset_id' }) : { ok: true };
+}

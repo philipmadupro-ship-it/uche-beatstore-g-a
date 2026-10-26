@@ -45,6 +45,53 @@ function readTab(): WorkspaceTab {
   return (WORKSPACE_TABS as readonly string[]).includes(t ?? '') ? (t as WorkspaceTab) : 'overview';
 }
 
+/**
+ * The workspace's URL-addressable tab state (`?tab=`), shared by the
+ * producer workspace and the org workspace (LABEL-17, 17 R12). Overview is
+ * the bare URL.
+ */
+export function useUrlTab<T extends string>(read: () => T, home: T): [T, (next: T) => void] {
+  const [tab, setTab] = useState<T>(read);
+  const go = useCallback((next: T) => {
+    setTab(next);
+    const url = new URL(window.location.href);
+    if (next === home) url.searchParams.delete('tab');
+    else url.searchParams.set('tab', next);
+    window.history.replaceState(null, '', url.toString());
+  }, [home]);
+  return [tab, go];
+}
+
+/** The workspace tab strip. One anatomy for the producer and the org workspace. */
+export function WorkspaceTabBar<T extends string>({ tabs, labelOf, current, onSelect, ariaLabel, badge }: {
+  tabs: readonly T[];
+  labelOf: (t: T) => string;
+  current: T;
+  onSelect: (t: T) => void;
+  ariaLabel: string;
+  badge?: (t: T) => React.ReactNode;
+}) {
+  return (
+    <div role="tablist" aria-label={ariaLabel} className="mb-6 flex gap-1 overflow-x-auto border-b border-white/10">
+      {tabs.map((t) => (
+        <button
+          key={t}
+          type="button"
+          role="tab"
+          id={`ws-tab-${t}`}
+          aria-selected={current === t}
+          aria-controls={`ws-panel-${t}`}
+          onClick={() => onSelect(t)}
+          className={`-mb-px shrink-0 border-b px-3 py-2 text-[11px] transition-colors ${current === t ? 'border-white text-white' : 'border-transparent text-white/50 hover:text-white/80'}`}
+        >
+          {labelOf(t)}
+          {badge?.(t)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ArtistWorkspaceTabs({
   contactId,
   contactName,
@@ -70,31 +117,18 @@ export function ArtistWorkspaceTabs({
 }) {
   // Only ever rendered after the client-side workspace fetch, so reading the
   // URL in the initializer cannot mismatch a server render.
-  const [tab, setTab] = useState<WorkspaceTab>(readTab);
-
-  const go = (next: WorkspaceTab) => {
-    setTab(next);
-    const url = new URL(window.location.href);
-    if (next === 'overview') url.searchParams.delete('tab');
-    else url.searchParams.set('tab', next);
-    window.history.replaceState(null, '', url.toString());
-  };
+  const [tab, go] = useUrlTab<WorkspaceTab>(readTab, 'overview');
 
   return (
     <div className="min-w-0" data-testid="artist-workspace">
-      <div role="tablist" aria-label={`${contactName} workspace`} className="mb-6 flex gap-1 overflow-x-auto border-b border-white/10">
-        {WORKSPACE_TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="tab"
-            id={`ws-tab-${t}`}
-            aria-selected={tab === t}
-            aria-controls={`ws-panel-${t}`}
-            onClick={() => go(t)}
-            className={`-mb-px shrink-0 border-b px-3 py-2 text-[11px] transition-colors ${tab === t ? 'border-white text-white' : 'border-transparent text-white/50 hover:text-white/80'}`}
-          >
-            {TAB_LABEL[t]}
+      <WorkspaceTabBar
+        tabs={WORKSPACE_TABS}
+        labelOf={(t) => TAB_LABEL[t]}
+        current={tab}
+        onSelect={go}
+        ariaLabel={`${contactName} workspace`}
+        badge={(t) => (
+          <>
             {t === 'beats' && workspace.beats.length > 0 && <span className="ml-1.5 text-white/30">{workspace.beats.length}</span>}
             {t === 'songs' && workspace.songs.length > 0 && <span className="ml-1.5 text-white/30">{workspace.songs.length}</span>}
             {t === 'files' && workspace.files.length > 0 && <span className="ml-1.5 text-white/30">{workspace.files.length}</span>}
@@ -103,9 +137,9 @@ export function ArtistWorkspaceTabs({
                 {workspace.messages.unread + workspace.messages.openRequests}
               </span>
             )}
-          </button>
-        ))}
-      </div>
+          </>
+        )}
+      />
 
       <div role="tabpanel" id={`ws-panel-${tab}`} aria-labelledby={`ws-tab-${tab}`}>
         {tab === 'overview' && <OverviewTab workspace={workspace} contactName={contactName} tasks={tasks} onOpen={go} />}
@@ -417,6 +451,7 @@ function ProjectsTab({ contactId, contactName, audience, workspace, onChanged }:
               <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-white/[0.06] pt-3">
                 <Toggle label="In portal" checked={p.link.in_portal} disabled={busy === p.id} onChange={(v) => patch(p.id, { in_portal: v })} />
                 <Toggle label="Downloads" checked={p.link.allow_downloads} disabled={busy === p.id || !p.link.in_portal} onChange={(v) => patch(p.id, { allow_downloads: v })} />
+                <Toggle label="Uploads" checked={!!p.link.can_upload} disabled={busy === p.id || !p.link.in_portal} onChange={(v) => patch(p.id, { can_upload: v })} />
                 <span className="ml-auto text-[11px] text-white/30">
                   {p.link.last_notified_at ? `Last notified ${relativeDays(p.link.last_notified_at)}` : p.link.in_portal ? 'Not notified yet' : ''}
                 </span>
@@ -712,9 +747,10 @@ function FilesTab({ contactName, workspace, onChanged }: { contactName: string; 
                         <p className="flex items-center gap-2 truncate text-[13px] text-white/80">
                           <span className="truncate">{f.label}</span>
                           {f.isNewForArtist && <span className="shrink-0 text-[10px] font-mono uppercase tracking-[0.2em] text-[#6DC6A4]">Not seen</span>}
+                          {f.fromArtist && <span className="shrink-0 text-[10px] font-mono uppercase tracking-[0.2em] text-[#6DC6A4]" data-testid={`ws-file-from-artist-${f.id}`}>From {contactName}</span>}
                         </p>
                         <p className="truncate text-[11px] text-white/40">
-                          {[ASSET_KIND_LABEL[f.kind as ProjectAssetKind] ?? 'File', formatBytes(f.size_bytes), f.downloadedAt ? `downloaded ${relativeDays(f.downloadedAt)}` : null].filter(Boolean).join(' · ')}
+                          {[f.uploadedByName ? `from ${f.uploadedByName}` : null, ASSET_KIND_LABEL[f.kind as ProjectAssetKind] ?? 'File', formatBytes(f.size_bytes), f.downloadedAt ? `downloaded ${relativeDays(f.downloadedAt)}` : null].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                       <Toggle label="In portal" checked={f.in_portal} disabled={busy === f.id} onChange={() => void togglePortal(f)} />

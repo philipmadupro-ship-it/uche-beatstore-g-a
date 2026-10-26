@@ -1,0 +1,921 @@
+/**
+ * LABEL-21's route matrix: an EXTERNAL project member (a `project_members`
+ * row, no `org_members` row) against EVERY handler under src/app/api/org.
+ * Each runs through the REAL lib/auth/org-access and the real route code
+ * against an in-memory database; only storage, mail and the rate limiter are
+ * faked, and none of them is reached before authorisation.
+ *
+ * The property: an external member reaches artist, org and other-project
+ * objects NOWHERE. Every handler that is not in the allowlist
+ * (lib/labelos/external-routes) must answer them 403 or 404 — for each of the
+ * four project roles, with the member's own project's ids in every path
+ * param (the worst case: they hold a real id in the real org). A route
+ * added later is walked automatically: it either refuses them or must be
+ * named in the allowlist, with a reason.
+ *
+ * Then the allowlisted routes: what a role may do, and that revoking or
+ * expiring a membership ends it on the very next request.
+ */
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+import { memoryAdmin, type MemoryDb } from '@/lib/labelos/mocks/memory-db';
+import { auditRpcMemory } from '@/lib/labelos/mocks/audit-rpc-memory';
+import { EXTERNAL_ROUTES, externalRouteKeys } from '@/lib/labelos/external-routes';
+
+const L = '10000000-0000-4000-8000-000000000001';
+const L2 = '10000000-0000-4000-8000-000000000002';
+const u = (n: number) => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const OWNER = u(1);
+const VIEWER = u(11);
+const COMMENTER = u(12);
+const CONTRIBUTOR = u(13);
+const EDITOR = u(14);
+const STRANGER = u(15);
+const OTHER = u(16);
+const C1 = '30000000-0000-4000-8000-0000000000c1';
+const P1 = '40000000-0000-4000-8000-0000000000a1';
+const P2 = '40000000-0000-4000-8000-0000000000a2';
+const XP = '40000000-0000-4000-8000-0000000000b1';
+const k = (n: number) => `50000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const S1 = k(1); // a song in P1
+const S2 = k(2); // a song in P2 (same org, not shared with them)
+const XS = k(3); // a song in another org
+const ASSET = '60000000-0000-4000-8000-000000000001';
+const RELEASE = '70000000-0000-4000-8000-000000000001';
+const ITEM = '70000000-0000-4000-8000-000000000002';
+const INV = '80000000-0000-4000-8000-000000000001';
+const TASK = '90000000-0000-4000-8000-000000000001';
+const NOTE = '90000000-0000-4000-8000-000000000002';
+const NOVA_PARTY = 'a0000000-0000-4000-8000-000000000001';
+const NOVA_CREDIT = 'a0000000-0000-4000-8000-000000000002';
+const SHEET = 'b0000000-0000-4000-8000-000000000001';
+const SPLIT_NOVA = 'b0000000-0000-4000-8000-000000000002';
+const SPLIT_EDITOR = 'b0000000-0000-4000-8000-000000000003';
+const EDITOR_PARTY = 'a0000000-0000-4000-8000-000000000003';
+const REFERENCE = '90000000-0000-4000-8000-0000000000d1';
+const VIEW = '90000000-0000-4000-8000-0000000000e1';
+const COMMENT = '90000000-0000-4000-8000-0000000000c1'; // artist-visible
+const INTERNAL = '90000000-0000-4000-8000-0000000000c2'; // team-only
+// LABEL-41: L is also connected to an ARTIST org; an external member of L's project holds no part of that.
+const ART = '10000000-0000-4000-8000-000000000003';
+const ART_PROJECT = '40000000-0000-4000-8000-0000000000c1';
+const ART_SONG = k(9);
+const CONN = '60000000-0000-4000-8000-0000000000c1';
+
+const ROLES = { viewer: VIEWER, commenter: COMMENTER, contributor: CONTRIBUTOR, editor: EDITOR } as const;
+
+let current: string | null = null;
+let db: MemoryDb;
+let mem: ReturnType<typeof memoryAdmin>;
+
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: async () => ({ auth: { getUser: async () => ({ data: { user: current ? { id: current, email: `${current}@local.test` } : null } }) } }),
+}));
+vi.mock('@supabase/supabase-js', () => ({ createClient: () => mem.client }));
+vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
+vi.mock('@/lib/security/rate-limit', () => ({ rateLimitDurable: async () => true, clientIp: () => '127.0.0.1', rateLimit: () => true }));
+
+function seed(): MemoryDb {
+  const member = (user: string, role: string, project = P1, org = L, extra: Record<string, unknown> = {}) => ({
+    org_id: org, project_id: project, user_id: user, role, allow_downloads: false, expires_at: null, invitation_id: null, created_at: '2026-10-01', ...extra,
+  });
+  return {
+    tables: {
+      organizations: [
+        { id: L, name: 'Night Shift', slug: 'night-shift', kind: 'label', deleted_at: null },
+        { id: L2, name: 'Other Label', slug: 'other', kind: 'label', deleted_at: null },
+        { id: ART, name: 'Nova', slug: 'nova', kind: 'artist', deleted_at: null },
+      ],
+      org_connections: [
+        { id: CONN, label_org_id: L, artist_org_id: ART, status: 'active', initiated_by: 'label', label_contact_id: C1, share_mode: 'selected', allow_copies: true, accepted_at: '2026-10-01', ended_at: null, created_at: '2026-10-01' },
+      ],
+      connection_projects: [{ connection_id: CONN, project_id: ART_PROJECT, org_id: ART }],
+      org_members: [{ org_id: L, user_id: OWNER, role: 'owner', functions: [], scope: 'org', cap_grants: [], cap_revokes: [] }],
+      project_members: [
+        member(VIEWER, 'viewer'),
+        member(COMMENTER, 'commenter'),
+        member(CONTRIBUTOR, 'contributor'),
+        member(EDITOR, 'editor'),
+        member(OTHER, 'editor', XP, L2),
+      ],
+      contacts: [{ id: C1, org_id: L, user_id: null, name: 'Nova', category: 'artist' }],
+      projects: [
+        { id: P1, org_id: L, user_id: null, name: 'Uche × Producer X', inbox_for_contact_id: C1 },
+        { id: P2, org_id: L, user_id: null, name: 'Secret LP', inbox_for_contact_id: null },
+        { id: XP, org_id: L2, user_id: null, name: 'Elsewhere', inbox_for_contact_id: null },
+        { id: ART_PROJECT, org_id: ART, user_id: null, name: 'Nova shared', inbox_for_contact_id: null },
+      ],
+      project_contacts: [],
+      project_tracks: [
+        { project_id: P1, track_id: S1, position: 0 },
+        { project_id: P2, track_id: S2, position: 0 },
+        { project_id: XP, track_id: XS, position: 0 },
+        { project_id: ART_PROJECT, track_id: ART_SONG, position: 0 },
+      ],
+      tracks: [
+        { id: S1, org_id: L, user_id: null, created_by: OWNER, title: 'Midnight', type: 'song', song_stage: 'in_review', audio_url: 'r2://priv/s1.mp3', wav_url: null, preview_url: null, peaks_url: null },
+        { id: S2, org_id: L, user_id: null, created_by: OWNER, title: 'Secret', type: 'song', song_stage: 'in_review', audio_url: 'r2://priv/s2.mp3', wav_url: null, preview_url: null, peaks_url: null },
+        { id: XS, org_id: L2, user_id: null, created_by: OTHER, title: 'Elsewhere', type: 'song', song_stage: 'in_review', audio_url: 'r2://priv/xs.mp3', wav_url: null, preview_url: null, peaks_url: null },
+        { id: ART_SONG, org_id: ART, user_id: null, created_by: OWNER, title: 'Nova demo', type: 'song', song_stage: 'in_review', audio_url: 'r2://priv/art.mp3', wav_url: null, preview_url: null, peaks_url: null },
+      ],
+      project_assets: [{ id: ASSET, org_id: L, project_id: P1, user_id: null, kind: 'artwork', sensitivity: 'normal', label: 'Cover', url: 'r2://priv/cover.png', file_name: 'cover.png' }],
+      project_comments: [
+        { id: COMMENT, org_id: L, project_id: P1, track_id: S1, user_id: OWNER, author_name: 'Owen', body: 'Open note', parent_id: null, region_start: null, region_end: null, visibility: 'artist', resolved_at: null, deleted_at: null, share_token: null, contact_id: null, created_at: '2026-10-01T10:00:00Z' },
+        { id: INTERNAL, org_id: L, project_id: P1, track_id: S1, user_id: OWNER, author_name: 'Owen', body: 'Team-only note', parent_id: null, region_start: null, region_end: null, visibility: 'internal', resolved_at: null, deleted_at: null, share_token: null, contact_id: null, created_at: '2026-10-01T11:00:00Z' },
+      ],
+      org_invitations: [
+        { id: INV, org_id: L, email: 'x@local.test', role: 'member', functions: [], artist_ids: [], project_id: P1, project_role: 'viewer', token_hash: 'h', expires_at: '2099-01-01', accepted_at: null, revoked_at: null, created_at: '2026-10-01' },
+      ],
+      releases: [{ id: RELEASE, org_id: L, project_id: P1, contact_id: C1, state: 'planned', title: 'EP' }],
+      release_items: [{ id: ITEM, org_id: L, release_id: RELEASE, position: 1, song_track_id: S1 }],
+      activity_events: [],
+      // LABEL-23: rows that even NAME an external member (a stale assignment, a notification addressed to them)
+      // must not be readable by them — they are not org members.
+      artist_direction: [{ contact_id: C1, org_id: L, direction: { sound: 'Dusty drums' }, updated_by: OWNER, updated_at: '2026-10-01' }],
+      artist_references: [{ id: REFERENCE, org_id: L, contact_id: C1, kind: 'note', title: 'Candid', note: 'Team only', url: null, track_id: null, asset_id: null, visibility: 'internal', position: 0, created_by: OWNER, created_at: '2026-10-01', updated_at: '2026-10-01' }],
+      // LABEL-37: a view SHARED with the org, naming an artist: an external member must not read, run, change or delete it
+      org_saved_views: [{ id: VIEW, org_id: L, created_by: OWNER, subject: 'songs', name: 'Nova demos', definition: { v: 1, subject: 'songs', filter: { artistIds: [C1] } }, shared: true, created_at: '2026-10-01', updated_at: '2026-10-01' }],
+      tasks: [{ id: TASK, org_id: L, title: 'Clear the sample', assignee_id: EDITOR, created_by: OWNER, song_id: S1, artist_id: null, project_id: null, release_id: null, created_at: '2026-10-01', done_at: null }],
+      notifications: [{ id: NOTE, user_id: EDITOR, org_id: L, kind: 'task_assigned', title: 'Owner assigned you a task', body: 'Clear the sample', data: null, read: false, created_at: '2026-10-01' }],
+      user_profiles: [],
+      creator_profiles: [],
+      track_links: [],
+      song_beats: [],
+      stems: [],
+      // LABEL-27: Nova's credit on the shared song (not theirs), and the parties behind it
+      parties: [{ id: NOVA_PARTY, org_id: L, kind: 'person', display_name: 'Nova', legal_name: 'Nova Okafor', ipi: '00987654321', user_id: null, contact_id: C1, created_at: '2026-10-01' }],
+      track_collaborators: [{ id: NOVA_CREDIT, track_id: S1, org_id: L, name: 'Nova', role: 'songwriter', scope: 'composition', status: 'confirmed', party_id: NOVA_PARTY, source: 'manual', created_by: OWNER, created_at: '2026-10-01' }],
+    },
+    rpc: auditRpcMemory(),
+  };
+}
+
+beforeEach(() => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'eyJtest';
+  process.env.R2_PRIVATE_BUCKET_NAME = 'priv';
+  current = null;
+  db = seed();
+  mem = memoryAdmin(db);
+});
+
+// ── Every route file, and every handler it exports ──────────────────────
+
+const ROOT = __dirname;
+function routeFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) return routeFiles(full);
+    return name === 'route.ts' ? [full] : [];
+  });
+}
+const HTTP = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+const files = routeFiles(ROOT).map((full) => relative(ROOT, full).split(sep).join('/')).sort();
+const loaders = import.meta.glob('./**/route.ts') as Record<string, () => Promise<Record<string, unknown>>>;
+
+function handlersOf(path: string): string[] {
+  const src = readFileSync(join(ROOT, path), 'utf8');
+  return HTTP.filter((m) => new RegExp(`^export\\s+(?:async\\s+function\\s+${m}\\b|const\\s+${m}\\s*=)`, 'm').test(src));
+}
+
+/** Path params for a route, with the external member's OWN project in every project slot. */
+function paramsFor(path: string): Record<string, string> {
+  const names = [...path.matchAll(/\[(\w+)\]/g)].map((m) => m[1]);
+  const values: Record<string, string> = {
+    orgId: L,
+    id: P1,
+    trackId: S1,
+    contactId: C1,
+    assetId: ASSET,
+    releaseId: RELEASE,
+    itemId: ITEM,
+    invitationId: INV,
+    commentId: COMMENT,
+    creditId: NOVA_CREDIT,
+    sheetId: SHEET,
+    partyId: NOVA_PARTY,
+    userId: EDITOR,
+    taskId: TASK,
+    connectionId: CONN,
+    referenceId: REFERENCE,
+    viewId: VIEW,
+  };
+  // `tracks/[id]/…` routes take a TRACK in `id` (the worst case: a song of the member's own project).
+  if (path.includes('tracks/[id]')) values.id = S1;
+  return Object.fromEntries(names.map((n) => [n, values[n] ?? P1]));
+}
+
+function urlFor(path: string, params: Record<string, string>): string {
+  const route = path.replace(/\/?route\.ts$/, '').replace(/\[(\w+)\]/g, (_, n: string) => params[n]);
+  return `https://app.test/api/org${route ? `/${route}` : ''}`;
+}
+
+async function call(path: string, method: string, user: string | null, init: { body?: unknown; query?: string } = {}) {
+  current = user;
+  const mod = await loaders[`./${path}`]();
+  const handler = mod[method] as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+  const params = paramsFor(path);
+  const hasBody = method !== 'GET' && method !== 'HEAD' && method !== 'DELETE';
+  const req = new NextRequest(`${urlFor(path, params)}${init.query ?? ''}`, {
+    method,
+    ...(hasBody ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(init.body ?? {}) } : {}),
+  });
+  return handler(req, { params: Promise.resolve(params) });
+}
+
+describe('the matrix walks every org route', () => {
+  it('finds the real routes, and every one of them loads', () => {
+    expect(files.length).toBeGreaterThan(25);
+    expect(Object.keys(loaders).map((p) => p.replace(/^\.\//, '')).sort()).toEqual(files);
+  });
+
+  it('the allowlist names only handlers that exist', () => {
+    const real = new Set(files.flatMap((f) => handlersOf(f).map((m) => `${f}:${m}`)));
+    expect(externalRouteKeys().filter((key) => !real.has(key))).toEqual([]);
+    for (const [path, r] of Object.entries(EXTERNAL_ROUTES)) expect(r.why.length, path).toBeGreaterThan(20);
+  });
+});
+
+describe('an external member × every org route', () => {
+  const allowed = new Set(externalRouteKeys());
+  const refused = files.flatMap((f) => handlersOf(f).filter((m) => !allowed.has(`${f}:${m}`)).map((m) => [f, m] as const));
+
+  it('covers a realistic number of refused handlers', () => {
+    expect(refused.length).toBeGreaterThan(30);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    for (const [path, method] of refused) {
+      it(`${role}: ${method} ${path} → 403/404`, async () => {
+        const res = await call(path, method, user);
+        expect([403, 404], `${method} ${path} answered ${res.status}`).toContain(res.status);
+        // And nothing happened: no row of the org's was written.
+        expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+      });
+    }
+  }
+
+  it('a stranger (no membership at all) is refused everywhere the same way', async () => {
+    for (const [path, method] of refused) {
+      const res = await call(path, method, STRANGER);
+      expect([403, 404], `${method} ${path}`).toContain(res.status);
+    }
+  });
+
+  it('signed out is 401 or the route’s own refusal, never a 200', async () => {
+    for (const [path, method] of refused) {
+      const res = await call(path, method, null);
+      expect([401, 403, 404], `${method} ${path}`).toContain(res.status);
+    }
+  });
+});
+
+describe('LABEL-23: tasks and notifications are not an external member\'s (route by route)', () => {
+  const routes = [
+    ['[orgId]/tasks/route.ts', 'GET', '?view=mine'],
+    ['[orgId]/tasks/route.ts', 'GET', `?kind=song&id=${S1}`],
+    ['[orgId]/tasks/route.ts', 'POST', ''],
+    ['[orgId]/tasks/[taskId]/route.ts', 'PATCH', ''],
+    ['[orgId]/tasks/[taskId]/route.ts', 'DELETE', ''],
+    ['[orgId]/tasks/assignees/route.ts', 'GET', ''],
+    ['[orgId]/notifications/route.ts', 'GET', ''],
+    ['[orgId]/notifications/route.ts', 'PATCH', '?action=read_all'],
+  ] as const;
+
+  it('the routes exist and none of them is on the external allowlist', () => {
+    for (const [path, method] of routes) {
+      expect(files, path).toContain(path);
+      expect(externalRouteKeys(), `${path}:${method}`).not.toContain(`${path}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: a task assigned to them and a notification addressed to them are still unreadable and unchangeable`, async () => {
+      for (const [path, method, query] of routes) {
+        const res = await call(path, method, user, {
+          query,
+          body: method === 'POST' ? { title: 'x', assignee_id: user, target: { kind: 'song', id: S1 } } : method === 'PATCH' ? { done: true } : undefined,
+        });
+        expect([403, 404], `${method} ${path}${query} answered ${res.status}`).toContain(res.status);
+      }
+      expect(db.tables.tasks).toHaveLength(1);
+      expect(db.tables.tasks[0].done_at ?? null).toBeNull();
+      expect(db.tables.notifications[0].read).toBe(false);
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-29: legal readiness and sample declarations are not an external member\'s', () => {
+  const route = '[orgId]/tracks/[id]/legal-readiness/route.ts';
+  const samples = '[orgId]/tracks/[id]/samples/route.ts';
+
+  it('the routes exist and are not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(files).toContain(samples);
+    expect(externalRouteKeys()).not.toContain(`${route}:GET`);
+    expect(externalRouteKeys()).not.toContain(`${samples}:GET`);
+    expect(externalRouteKeys()).not.toContain(`${samples}:PUT`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: the readiness of a song of their own project is still 403/404 (no counts, no percentage)`, async () => {
+      const res = await call(route, 'GET', user);
+      expect([403, 404], `answered ${res.status}`).toContain(res.status);
+      expect(JSON.stringify(await res.json())).not.toMatch(/percent|blockerCount|readiness/);
+    });
+    it(`${role}: the sample declaration can be neither read nor written`, async () => {
+      for (const method of ['GET', 'PUT'] as const) {
+        const res = await call(samples, method, user, { body: { samples: 'none' } });
+        expect([403, 404], `${method} answered ${res.status}`).toContain(res.status);
+      }
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-30: approvals are not an external member\'s', () => {
+  const routes = [
+    ['[orgId]/approvals/route.ts', 'GET', `?song=${S1}`, undefined],
+    ['[orgId]/approvals/route.ts', 'POST', '', { subject: { kind: 'song', id: S1 }, gate: 'legal', approver_id: OWNER }],
+    ['[orgId]/approvals/decide/route.ts', 'POST', '', { subject: { kind: 'song', id: S1 }, gate: 'legal', decision: 'approved' }],
+  ] as const;
+
+  it('the routes exist and none is on the external allowlist', () => {
+    for (const [route, method] of routes) {
+      expect(files).toContain(route);
+      expect(externalRouteKeys()).not.toContain(`${route}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: neither reading, asking nor deciding on a song of their own project reaches anything (403/404), and nothing is written`, async () => {
+      for (const [path, method, query, body] of routes) {
+        const res = await call(path, method, user, { query, body });
+        expect([403, 404], `${method} ${path} answered ${res.status}`).toContain(res.status);
+        expect(JSON.stringify(await res.json())).not.toMatch(/gates|approval/i);
+      }
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+      expect(mem.writes.filter((w) => w.op === 'rpc')).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-31: the legal queue and the legal pack are not an external member\'s', () => {
+  const routes = [
+    ['[orgId]/legal/queue/route.ts', 'GET', '', undefined],
+    ['[orgId]/releases/[releaseId]/legal-pack/route.ts', 'GET', '', undefined],
+    ['[orgId]/releases/[releaseId]/legal-pack/route.ts', 'GET', '?format=csv', undefined],
+  ] as const;
+
+  it('the routes exist and none is on the external allowlist', () => {
+    for (const [route, method] of routes) {
+      expect(files).toContain(route);
+      expect(externalRouteKeys()).not.toContain(`${route}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: neither the queue nor a pack of a release in their own project reaches anything (403/404), and nothing is written or audited`, async () => {
+      for (const [path, method, query, body] of routes) {
+        const res = await call(path, method, user, { query, body });
+        expect([403, 404], `${method} ${path}${query} answered ${res.status}`).toContain(res.status);
+        expect(res.headers.get('content-type') ?? '').toMatch(/json/);
+        expect(JSON.stringify(await res.json())).not.toMatch(/items|legal-pack|Legal name/);
+      }
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+      expect(db.tables.activity_events.filter((e) => e.verb === 'release.legal_pack_exported')).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-35: Needs attention is not an external member\'s', () => {
+  const route = '[orgId]/attention/route.ts';
+
+  it('the route exists and is not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(externalRouteKeys()).not.toContain(`${route}:GET`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: is 403/404 with no item in the body, and nothing is written`, async () => {
+      const res = await call(route, 'GET', user);
+      expect([403, 404], `answered ${res.status}`).toContain(res.status);
+      expect(JSON.stringify(await res.json())).not.toMatch(/items|attention|restricted/);
+      expect(mem.writes).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-32: release readiness is not an external member\'s', () => {
+  const route = '[orgId]/releases/[releaseId]/readiness/route.ts';
+
+  it('the route exists and is not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(externalRouteKeys()).not.toContain(`${route}:GET`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: the readiness of a release of their own project is 403/404, with no gate in the body, and nothing is written`, async () => {
+      const res = await call(route, 'GET', user);
+      expect([403, 404], `answered ${res.status}`).toContain(res.status);
+      expect(JSON.stringify(await res.json())).not.toMatch(/gates|readyToDeliver|schemaReady/);
+      expect(mem.writes).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-33: delivering a release is not an external member\'s', () => {
+  const route = '[orgId]/releases/[releaseId]/deliver/route.ts';
+
+  it('the route exists and is not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(externalRouteKeys()).not.toContain(`${route}:POST`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: delivering — even with an override — is 403/404, the release stays a draft and nothing is written`, async () => {
+      const res = await call(route, 'POST', user, { body: { distributor: 'DistroKid', override: true, override_note: 'let me' } });
+      expect([403, 404], `answered ${res.status}`).toContain(res.status);
+      expect(JSON.stringify(await res.json())).not.toMatch(/gates|readyToDeliver|delivered/i);
+      expect(db.tables.releases[0].state).not.toBe('delivered');
+      expect(db.tables.activity_events ?? []).toEqual([]);
+      expect(mem.writes).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-42: putting a release on the store is not an external member\'s', () => {
+  const route = '[orgId]/releases/[releaseId]/store/route.ts';
+
+  it('the route exists and is not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(externalRouteKeys()).not.toContain(`${route}:GET`);
+    expect(externalRouteKeys()).not.toContain(`${route}:PUT`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: reading the listing or listing / unlisting is 403/404, nothing is written and nothing is recorded`, async () => {
+      for (const [method, body] of [['GET', undefined], ['PUT', { listed: true }], ['PUT', { listed: false }]] as const) {
+        const res = await call(route, method, user, { body });
+        expect([403, 404], `${method} answered ${res.status}`).toContain(res.status);
+        expect(JSON.stringify(await res.json())).not.toMatch(/canList|playback|listed/);
+      }
+      expect(db.tables.releases[0].store_listed).not.toBe(true);
+      expect(db.tables.activity_events ?? []).toEqual([]);
+      expect(mem.writes).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-27: credits and parties (route by route)', () => {
+  const credits = '[orgId]/tracks/[id]/credits/route.ts';
+  const decide = '[orgId]/tracks/[id]/credits/[creditId]/route.ts';
+  const parties = ['[orgId]/parties/route.ts', '[orgId]/parties/[partyId]/route.ts'];
+
+  const propose = (user: string, body: unknown) => {
+    current = user;
+    return loaders[`./${credits}`]().then((mod) => {
+      const post = mod.POST as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+      return post(
+        new NextRequest(`https://app.test/api/org/${L}/tracks/${S1}/credits`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+        { params: Promise.resolve({ orgId: L, id: S1 }) },
+      );
+    });
+  };
+
+  it('the party routes are not on the allowlist: an external member never reaches the directory', () => {
+    for (const path of parties) {
+      expect(files, path).toContain(path);
+      for (const method of handlersOf(path)) expect(externalRouteKeys(), `${path}:${method}`).not.toContain(`${path}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: reads their own credit lines only — none of Nova’s credit, party, legal name or IPI`, async () => {
+      const res = await call(credits, 'GET', user);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.me.reach).toBe('own');
+      expect(body.credits).toEqual([]);
+      for (const leak of ['Nova', 'Okafor', '00987654321', NOVA_PARTY, NOVA_CREDIT]) expect(JSON.stringify(body), leak).not.toContain(leak);
+      expect(db.tables.parties).toHaveLength(1);
+    });
+
+    it(`${role}: cannot confirm or dispute Nova’s credit (404) and the credit does not change`, async () => {
+      for (const action of ['confirm', 'dispute']) {
+        const res = await call(decide, 'PATCH', user, { body: { action } });
+        expect(res.status, action).toBe(404);
+      }
+      expect(db.tables.track_collaborators[0].status).toBe('confirmed');
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+
+  it('a viewer and a commenter cannot propose a credit at all', async () => {
+    for (const user of [VIEWER, COMMENTER]) expect((await propose(user, { role: 'mixer' })).status).toBe(403);
+    expect(db.tables.track_collaborators).toHaveLength(1);
+  });
+
+  it('a contributor and an editor can propose a credit naming themselves — and nobody else', async () => {
+    for (const user of [CONTRIBUTOR, EDITOR]) {
+      for (const body of [{ role: 'mixer', party_id: NOVA_PARTY }, { role: 'songwriter', name: 'Nova' }, { role: 'mixer', contact_id: C1 }]) {
+        const res = await propose(user, body);
+        expect(res.status, `${user} ${JSON.stringify(body)}`).toBe(403);
+      }
+    }
+    expect(db.tables.track_collaborators).toHaveLength(1);
+    expect(db.tables.parties).toHaveLength(1);
+    const ok = await propose(CONTRIBUTOR, { role: 'mixer' });
+    expect(ok.status).toBe(201);
+    expect(db.tables.track_collaborators).toHaveLength(2);
+    expect(db.tables.track_collaborators[1]).toMatchObject({ created_by: CONTRIBUTOR, status: 'proposed', org_id: L, track_id: S1 });
+    expect(db.tables.parties).toHaveLength(2);
+    // And it is theirs to read back, with Nova still absent.
+    const read = await (await call(credits, 'GET', CONTRIBUTOR)).json();
+    expect(read.credits.map((c: { role: string }) => c.role)).toEqual(['mixer']);
+    expect(JSON.stringify(read)).not.toContain('Okafor');
+  });
+
+  it('a song in a project they are NOT a member of (same org): 404 for read and propose', async () => {
+    current = CONTRIBUTOR;
+    const mod = await loaders[`./${credits}`]();
+    const post = mod.POST as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+    const get = mod.GET as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+    const ctx = { params: Promise.resolve({ orgId: L, id: S2 }) };
+    expect((await get(new NextRequest(`https://app.test/api/org/${L}/tracks/${S2}/credits`), ctx)).status).toBe(404);
+    expect((await post(new NextRequest(`https://app.test/api/org/${L}/tracks/${S2}/credits`, { method: 'POST', body: JSON.stringify({ role: 'mixer' }) }), ctx)).status).toBe(404);
+    expect(db.tables.track_collaborators).toHaveLength(1);
+  });
+});
+
+describe('LABEL-28: split sheets (route by route)', () => {
+  const splits = '[orgId]/tracks/[id]/splits/route.ts';
+  const signatures = '[orgId]/tracks/[id]/splits/[sheetId]/signatures/route.ts';
+  const writes = [
+    '[orgId]/tracks/[id]/splits/[sheetId]/route.ts',
+    '[orgId]/tracks/[id]/splits/[sheetId]/circulate/route.ts',
+    '[orgId]/tracks/[id]/splits/[sheetId]/supersede/route.ts',
+  ];
+
+  // A circulated sheet on the shared song: Nova 50 (not theirs), the editor 50 (their own line).
+  beforeEach(() => {
+    db.tables.parties.push({ id: EDITOR_PARTY, org_id: L, kind: 'person', display_name: 'Eddie', legal_name: 'Eddie Editor', ipi: null, user_id: EDITOR, contact_id: null, created_at: '2026-10-01' });
+    db.tables.split_sheets = [{ id: SHEET, org_id: L, track_id: S1, kind: 'composition', version: 1, status: 'circulated', note: 'internal', document_asset_id: null, created_by: OWNER, created_at: '2026-10-01', circulated_at: '2026-10-02', signed_at: null, superseded_at: null, superseded_by: null }];
+    db.tables.split_lines = [
+      { id: SPLIT_NOVA, split_sheet_id: SHEET, org_id: L, track_id: S1, party_id: NOVA_PARTY, role: 'writer', share: 50, signed_at: null, signature_method: null, signature_asset_id: null, created_at: '2026-10-01T10:00:00Z' },
+      { id: SPLIT_EDITOR, split_sheet_id: SHEET, org_id: L, track_id: S1, party_id: EDITOR_PARTY, role: 'publisher', share: 50, signed_at: null, signature_method: null, signature_asset_id: null, created_at: '2026-10-01T10:00:01Z' },
+    ];
+    db.tables.project_assets = [];
+  });
+
+  const ack = (user: string, lineId: string, method = 'POST') => {
+    current = user;
+    return loaders[`./${signatures}`]().then((mod) => {
+      const post = mod[method] as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+      return post(
+        new NextRequest(`https://app.test/api/org/${L}/tracks/${S1}/splits/${SHEET}/signatures`, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method: 'acknowledged', line_id: lineId }) }),
+        { params: Promise.resolve({ orgId: L, id: S1, sheetId: SHEET }) },
+      );
+    });
+  };
+
+  it('only the listing (GET) and the acknowledgement (POST signatures) are open to an external member; editing, circulating and superseding never are', () => {
+    expect(externalRouteKeys().filter((k) => k.includes('/splits')).sort()).toEqual([`${signatures}:POST`, `${splits}:GET`]);
+    for (const path of writes) {
+      expect(files, path).toContain(path);
+      for (const method of handlersOf(path)) expect(externalRouteKeys(), `${path}:${method}`).not.toContain(`${path}:${method}`);
+    }
+    expect(handlersOf(splits)).toContain('POST'); // starting a sheet exists, and is not on the list
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: reads their own split line only — never Nova’s share, the total, the note or anyone’s legal data`, async () => {
+      const res = await call(splits, 'GET', user);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.me).toMatchObject({ reach: 'own', canWrite: false });
+      const text = JSON.stringify(body);
+      for (const leak of ['Nova', 'Okafor', '00987654321', NOVA_PARTY, SPLIT_NOVA, 'internal']) expect(text, leak).not.toContain(leak);
+      if (user === EDITOR) {
+        expect(body.sheets).toHaveLength(1);
+        expect(body.sheets[0].lines).toHaveLength(1);
+        expect(body.sheets[0]).toMatchObject({ lines: [{ name: 'Eddie', share: '50', mine: true }] });
+        expect(body.sheets[0].total).toBeUndefined();
+      } else {
+        expect(body.sheets).toEqual([]);
+      }
+    });
+
+    it(`${role}: cannot acknowledge Nova’s line (404), upload a signed PDF, or change anything`, async () => {
+      expect((await ack(user, SPLIT_NOVA)).status).toBe(404);
+      expect(db.tables.split_lines.every((l) => !l.signed_at)).toBe(true);
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+
+  it('the editor acknowledges their own line — and only that', async () => {
+    const res = await ack(EDITOR, SPLIT_EDITOR);
+    expect(res.status).toBe(200);
+    expect(db.tables.split_lines.find((l) => l.id === SPLIT_EDITOR)).toMatchObject({ signature_method: 'acknowledged', signed_by: EDITOR });
+    expect(db.tables.split_lines.find((l) => l.id === SPLIT_NOVA)!.signed_at).toBeNull();
+    expect(db.tables.split_sheets[0].status).toBe('circulated');
+  });
+
+  it('a song in a project they are NOT a member of: 404', async () => {
+    current = EDITOR;
+    const mod = await loaders[`./${splits}`]();
+    const get = mod.GET as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+    expect((await get(new NextRequest(`https://app.test/api/org/${L}/tracks/${S2}/splits`), { params: Promise.resolve({ orgId: L, id: S2 }) })).status).toBe(404);
+  });
+});
+
+describe('LABEL-26: creative direction and references are never an external member\'s (route by route)', () => {
+  const routes = [
+    ['[orgId]/artists/[contactId]/direction/route.ts', 'GET', ''],
+    ['[orgId]/artists/[contactId]/direction/route.ts', 'PUT', ''],
+    ['[orgId]/artists/[contactId]/references/route.ts', 'POST', ''],
+    ['[orgId]/artists/[contactId]/references/[referenceId]/route.ts', 'PATCH', ''],
+    ['[orgId]/artists/[contactId]/references/[referenceId]/route.ts', 'DELETE', ''],
+    ['[orgId]/artists/[contactId]/references/choices/route.ts', 'GET', '?kind=track&q='],
+    ['[orgId]/artists/[contactId]/references/choices/route.ts', 'GET', '?kind=file'],
+  ] as const;
+
+  it('the routes exist and none of them is on the external allowlist', () => {
+    for (const [path, method] of routes) {
+      expect(files, path).toContain(path);
+      expect(externalRouteKeys(), `${path}:${method}`).not.toContain(`${path}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: reads no direction, no internal reference, and changes nothing`, async () => {
+      for (const [path, method, query] of routes) {
+        const res = await call(path, method, user, {
+          query,
+          body: method === 'PUT' ? { direction: { sound: 'x' } } : method === 'POST' ? { kind: 'note', title: 'x', note: 'y' } : method === 'PATCH' ? { title: 'x' } : undefined,
+        });
+        expect([403, 404], `${method} ${path}${query} answered ${res.status}`).toContain(res.status);
+        expect(JSON.stringify(await res.clone().json().catch(() => ({})))).not.toContain('Team only');
+      }
+      expect(db.tables.artist_references).toHaveLength(1);
+      expect(db.tables.artist_references[0]).toMatchObject({ title: 'Candid', visibility: 'internal' });
+      expect(db.tables.artist_direction[0].direction).toEqual({ sound: 'Dusty drums' });
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-37: saved views are not an external member\'s (route by route)', () => {
+  const routes = [
+    ['[orgId]/views/route.ts', 'GET', '?subject=songs'],
+    ['[orgId]/views/route.ts', 'POST', ''],
+    ['[orgId]/views/[viewId]/route.ts', 'PATCH', ''],
+    ['[orgId]/views/[viewId]/route.ts', 'DELETE', ''],
+    ['[orgId]/views/run/route.ts', 'GET', `?view=${VIEW}`],
+    ['[orgId]/views/run/route.ts', 'GET', '?f=e30'],
+  ] as const;
+
+  it('the routes exist and none of them is on the external allowlist', () => {
+    for (const [path, method] of routes) {
+      expect(files, path).toContain(path);
+      expect(externalRouteKeys(), `${path}:${method}`).not.toContain(`${path}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: lists, runs, changes and deletes nothing, and reads no definition`, async () => {
+      for (const [path, method, query] of routes) {
+        const res = await call(path, method, user, {
+          query,
+          body: method === 'POST' ? { subject: 'songs', name: 'x', definition: { v: 1, subject: 'songs', filter: {} } } : method === 'PATCH' ? { name: 'x' } : undefined,
+        });
+        expect([403, 404], `${method} ${path}${query} answered ${res.status}`).toContain(res.status);
+        expect(JSON.stringify(await res.clone().json().catch(() => ({})))).not.toMatch(/Nova demos|artistIds/);
+      }
+      expect(db.tables.org_saved_views).toHaveLength(1);
+      expect(db.tables.org_saved_views[0]).toMatchObject({ name: 'Nova demos', shared: true });
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+});
+
+describe('LABEL-41: the artist ↔ label connection is not an external member’s (route by route)', () => {
+  const routes = [
+    ['[orgId]/connections/route.ts', 'GET', ''],
+    ['[orgId]/connections/route.ts', 'POST', ''],
+    ['[orgId]/connections/[connectionId]/route.ts', 'PATCH', ''],
+    ['[orgId]/connections/[connectionId]/route.ts', 'DELETE', ''],
+    ['[orgId]/connections/[connectionId]/accept/route.ts', 'POST', ''],
+    ['[orgId]/connections/[connectionId]/projects/route.ts', 'GET', ''],
+    ['[orgId]/tracks/copy/route.ts', 'POST', ''],
+  ] as const;
+
+  it('the routes exist and none of them is on the external allowlist', () => {
+    for (const [path, method] of routes) {
+      expect(files, path).toContain(path);
+      expect(externalRouteKeys(), `${path}:${method}`).not.toContain(`${path}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: the connection and what it shares are unreachable and unchangeable`, async () => {
+      for (const [path, method] of routes) {
+        const res = await call(path, method, user, {
+          body: method === 'POST' ? { slug: 'nova', source: { kind: 'connection', track_id: ART_SONG } } : method === 'PATCH' ? { share_mode: 'all' } : undefined,
+        });
+        expect([403, 404], `${method} ${path} answered ${res.status}`).toContain(res.status);
+      }
+      // The connected artist-org recording, by either org’s path, is a 404 for them.
+      const audio = (await loaders['./[orgId]/audio/[trackId]/route.ts']()).GET as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+      for (const org of [L, ART]) {
+        current = user;
+        const res = await audio(new NextRequest(`https://app.test/api/org/${org}/audio/${ART_SONG}`), { params: Promise.resolve({ orgId: org, trackId: ART_SONG }) });
+        expect(res.status, `audio via ${org}`).toBe(404);
+      }
+      expect(db.tables.org_connections[0]).toMatchObject({ status: 'active', share_mode: 'selected' });
+      expect(db.tables.connection_projects).toHaveLength(1);
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+});
+
+describe('the allowlisted routes', () => {
+  it('GET /api/org/shared lists only the caller’s own live memberships', async () => {
+    const res = await call('shared/route.ts', 'GET', VIEWER);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.projects).toEqual([
+      { id: P1, name: 'Uche × Producer X', orgName: 'Night Shift', role: 'viewer', href: `/shared/${P1}` },
+    ]);
+    // Nothing about the org beyond its name; no ids of it, no slug, no members.
+    expect(JSON.stringify(body)).not.toContain(L);
+    expect(JSON.stringify(body)).not.toContain('night-shift');
+    expect((await (await call('shared/route.ts', 'GET', STRANGER)).json()).projects).toEqual([]);
+  });
+
+  it('GET project: the shared view for a member; 404 for any other project, org or id', async () => {
+    const res = await call('[orgId]/projects/[id]/route.ts', 'GET', VIEWER);
+    expect(res.status).toBe(200);
+    const { shared } = await res.json();
+    expect(shared.project).toMatchObject({ id: P1, name: 'Uche × Producer X', orgName: 'Night Shift', artistNames: ['Nova'] });
+    expect(shared.me).toMatchObject({ role: 'viewer', allowDownloads: false, can: { listen: true, comment: false, uploadVersions: false, editMetadata: false, download: false } });
+    expect(shared.recordings.map((r: { id: string }) => r.id)).toEqual([S1]);
+    expect(shared.recordings[0].downloadUrl).toBeNull();
+    // Built field by field: no stored reference, no ids of artists, no stage, no member ids.
+    const text = JSON.stringify(shared);
+    for (const leak of ['r2://', C1, 'in_review', OWNER, 'audio_url', 'song_stage']) expect(text, leak).not.toContain(leak);
+
+    current = VIEWER;
+    const mod = await loaders['./[orgId]/projects/[id]/route.ts']();
+    const get = mod.GET as (req: NextRequest, ctx: { params: Promise<{ orgId: string; id: string }> }) => Promise<Response>;
+    const ask = (orgId: string, id: string) => get(new NextRequest(`https://app.test/api/org/${orgId}/projects/${id}`), { params: Promise.resolve({ orgId, id }) });
+    expect((await ask(L, P2)).status).toBe(404); // same org, not theirs
+    expect((await ask(L, XP)).status).toBe(404); // another org's
+    expect((await ask(L2, P1)).status).toBe(404); // right project, wrong org in the path
+    expect((await ask(L, 'not-a-uuid')).status).toBe(404);
+  });
+
+  it('each role’s controls are exactly the §2.6 table', async () => {
+    const can = async (user: string) => (await (await call('[orgId]/projects/[id]/route.ts', 'GET', user)).json()).shared.me.can;
+    expect(await can(VIEWER)).toEqual({ listen: true, comment: false, uploadVersions: false, editMetadata: false, download: false });
+    expect(await can(COMMENTER)).toEqual({ listen: true, comment: true, uploadVersions: false, editMetadata: false, download: false });
+    expect(await can(CONTRIBUTOR)).toEqual({ listen: true, comment: true, uploadVersions: true, editMetadata: false, download: true });
+    expect(await can(EDITOR)).toEqual({ listen: true, comment: true, uploadVersions: true, editMetadata: true, download: true });
+    // A viewer with downloads allowed gets the link.
+    db.tables.project_members.find((m) => m.user_id === VIEWER)!.allow_downloads = true;
+    const v = (await (await call('[orgId]/projects/[id]/route.ts', 'GET', VIEWER)).json()).shared;
+    expect(v.me.can.download).toBe(true);
+    expect(v.recordings[0].downloadUrl).toBe(`/api/org/${L}/audio/${S1}?variant=full&download=1`);
+  });
+
+  it('upload: a viewer and a commenter are refused at the gate; a contributor and an editor reach the handlers', async () => {
+    for (const user of [VIEWER, COMMENTER]) {
+      for (const [path, method] of [['[orgId]/upload/part/route.ts', 'POST'], ['[orgId]/upload/abort/route.ts', 'POST'], ['[orgId]/upload/status/route.ts', 'GET']] as const) {
+        expect((await call(path, method, user)).status, `${user} ${path}`).toBe(403);
+      }
+      const init = await call('[orgId]/upload/init/route.ts', 'POST', user, {
+        body: { fileName: 'v2.wav', fileSize: 1000, as: { kind: 'link', songId: S1, relation: 'version' } },
+      });
+      expect(init.status).toBe(403);
+    }
+    for (const user of [CONTRIBUTOR, EDITOR]) {
+      // Past the gate: the handlers answer for the missing session / sessionId, not for access.
+      expect((await call('[orgId]/upload/part/route.ts', 'POST', user)).status).toBe(400);
+      expect((await call('[orgId]/upload/status/route.ts', 'GET', user)).status).toBe(400);
+      expect((await call('[orgId]/upload/abort/route.ts', 'POST', user)).status).toBe(400);
+    }
+  });
+
+  it('upload init: new songs for an artist, master / demo material and another project’s song are refused', async () => {
+    const init = (user: string, as: unknown) => call('[orgId]/upload/init/route.ts', 'POST', user, { body: { fileName: 'v2.wav', fileSize: 1000, as } });
+    // An artist's new song needs an artist scope they cannot have.
+    expect((await init(EDITOR, { kind: 'song', contactId: C1 })).status).toBe(404);
+    // Material that vouches for finished music, or any kind but a new version.
+    for (const relation of ['master', 'instrumental', 'demo', 'loop', 'topline']) {
+      expect((await init(EDITOR, { kind: 'link', songId: S1, relation })).status, relation).toBe(403);
+    }
+    // A song in the same org but another project; a song in another org.
+    expect((await init(EDITOR, { kind: 'link', songId: S2, relation: 'version' })).status).toBe(404);
+    expect((await init(EDITOR, { kind: 'link', songId: XS, relation: 'version' })).status).toBe(404);
+  });
+});
+
+describe('comments (LABEL-22): an external member of the project, per role', () => {
+  const route = '[orgId]/projects/[id]/comments/route.ts';
+
+  it('every role reads the artist-visible comments of THEIR project and never the internal one', async () => {
+    for (const user of Object.values(ROLES)) {
+      const res = await call(route, 'GET', user);
+      expect(res.status, user).toBe(200);
+      const text = JSON.stringify(await res.json());
+      expect(text).toContain('Open note');
+      expect(text).not.toContain('Team-only note');
+      expect(text).not.toContain('"internal"');
+    }
+  });
+
+  it('who may comment is the §2.6 column: a viewer cannot, a commenter / contributor / editor can — never internal', async () => {
+    expect((await call(route, 'POST', VIEWER, { body: { body: 'hi' } })).status).toBe(403);
+    for (const user of [COMMENTER, CONTRIBUTOR, EDITOR]) {
+      expect((await call(route, 'POST', user, { body: { body: 'hi', track_id: S1 } })).status, user).toBe(201);
+      expect((await call(route, 'POST', user, { body: { body: 'hi', visibility: 'internal' } })).status, user).toBe(403);
+    }
+  });
+
+  it('they cannot reach an internal comment by id (404), nor change another’s, nor reach a comment of another project', async () => {
+    // The internal one, and the artist-visible one of another project:
+    const mod = await loaders['./[orgId]/projects/[id]/comments/[commentId]/route.ts']();
+    const ask = (method: 'PATCH' | 'DELETE', user: string, commentId: string, project = P1, body: unknown = { resolved: true }) => {
+      current = user;
+      const handler = mod[method] as (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+      return handler(
+        new NextRequest(`https://app.test/api/org/${L}/projects/${project}/comments/${commentId}`, {
+          method,
+          ...(method === 'PATCH' ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
+        }),
+        { params: Promise.resolve({ orgId: L, id: project, commentId }) },
+      );
+    };
+    for (const user of Object.values(ROLES)) {
+      expect((await ask('PATCH', user, INTERNAL)).status, user).toBe(404);
+      expect((await ask('DELETE', user, INTERNAL)).status, user).toBe(404);
+    }
+    // A member of another project of the same org: 404 on the project itself.
+    expect((await ask('PATCH', OTHER, COMMENT)).status).toBe(404);
+    expect((await call(route, 'GET', OTHER)).status).toBe(404); // OTHER is a member of XP in another org, P1 is not theirs
+    expect(db.tables.project_comments.find((r) => r.id === INTERNAL)).toMatchObject({ body: 'Team-only note', deleted_at: null, resolved_at: null });
+  });
+
+  it('a stranger, and a removed or expired member, get nothing', async () => {
+    expect((await call(route, 'GET', STRANGER)).status).toBe(404);
+    db.tables.project_members = db.tables.project_members.filter((m) => m.user_id !== COMMENTER);
+    expect((await call(route, 'GET', COMMENTER)).status).toBe(404);
+    expect((await call(route, 'POST', COMMENTER, { body: { body: 'hi' } })).status).toBe(404);
+    db.tables.project_members.find((m) => m.user_id === EDITOR)!.expires_at = new Date(Date.now() - 1000).toISOString();
+    expect((await call(route, 'GET', EDITOR)).status).toBe(404);
+  });
+});
+
+describe('revocation and expiry take effect on the very next request', () => {
+  const reads = async (user: string) => ({
+    project: (await call('[orgId]/projects/[id]/route.ts', 'GET', user)).status,
+    shared: (await (await call('shared/route.ts', 'GET', user)).json()).projects.length as number,
+    init: (
+      await call('[orgId]/upload/init/route.ts', 'POST', user, {
+        body: { fileName: 'v2.wav', fileSize: 1000, as: { kind: 'link', songId: S1, relation: 'version' } },
+      })
+    ).status,
+    part: (await call('[orgId]/upload/part/route.ts', 'POST', user)).status,
+  });
+
+  it('a live editor reaches the project and the upload gate', async () => {
+    expect(await reads(EDITOR)).toMatchObject({ project: 200, shared: 1, part: 400 });
+  });
+
+  it('removing the membership: 404 / 403 immediately, and nothing listed', async () => {
+    db.tables.project_members = db.tables.project_members.filter((m) => m.user_id !== EDITOR);
+    expect(await reads(EDITOR)).toEqual({ project: 404, shared: 0, init: 404, part: 403 });
+  });
+
+  it('an expiry in the past ends it the same way', async () => {
+    db.tables.project_members.find((m) => m.user_id === EDITOR)!.expires_at = new Date(Date.now() - 1000).toISOString();
+    expect(await reads(EDITOR)).toEqual({ project: 404, shared: 0, init: 404, part: 403 });
+  });
+
+  it('a future expiry is still live', async () => {
+    db.tables.project_members.find((m) => m.user_id === EDITOR)!.expires_at = new Date(Date.now() + 3600_000).toISOString();
+    expect((await reads(EDITOR)).project).toBe(200);
+  });
+
+  it('a soft-deleted org takes its external members with it', async () => {
+    db.tables.organizations.find((o) => o.id === L)!.deleted_at = new Date().toISOString();
+    expect(await reads(EDITOR)).toEqual({ project: 404, shared: 0, init: 404, part: 403 });
+  });
+
+  it('a membership of another project does not open this one', async () => {
+    expect((await call('[orgId]/projects/[id]/route.ts', 'GET', OTHER)).status).toBe(404);
+  });
+});

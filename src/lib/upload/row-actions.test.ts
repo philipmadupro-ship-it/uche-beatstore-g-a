@@ -57,6 +57,9 @@ describe('uploadRowActions', () => {
 });
 
 describe('canEditUploadedTrack', () => {
+  it('never for an org upload: its editors write through producer routes (LABEL-14)', () => {
+    expect(canEditUploadedTrack({ status: 'success', track: { id: 'abc' }, org: { orgId: 'o' } })).toBe(false);
+  });
   it('needs a success AND a real track id', () => {
     expect(canEditUploadedTrack({ status: 'success', track: { id: 'abc' } })).toBe(true);
   });

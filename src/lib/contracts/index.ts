@@ -17,6 +17,31 @@
 import { z } from 'zod';
 import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
 import { DECISIONS } from '@/lib/contacts/decisions';
+import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
+import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
+import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers';
+import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
+import { CONTRACT_TYPE_IDS, type ContractTypeId } from '@/lib/labelos/contract-types';
+import { STORE_PLAYBACKS } from '@/lib/labelos/store-listing';
+import { CURSOR_RE } from '@/lib/labelos/activity-feed';
+import { DECISIONS as APPROVAL_DECISIONS, GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
+import { SONG_STAGES } from '@/lib/labelos/song-stage';
+import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
+import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
+import { SPLIT_KINDS, SPLIT_ROLES } from '@/lib/labelos/splits';
+import { ACCOUNT_FACES } from '@/lib/labelos/account';
+import { MODULES } from '@/lib/labelos/entitlements';
+import {
+  DIRECTION_KEYWORDS_MAX,
+  DIRECTION_KEYWORD_MAX,
+  DIRECTION_TEXT_MAX,
+  REFERENCE_KINDS,
+  REFERENCE_NOTE_MAX,
+  REFERENCE_TITLE_MAX,
+  REFERENCE_URL_MAX,
+  REFERENCE_VISIBILITIES,
+  safeReferenceUrl,
+} from '@/lib/labelos/direction';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -501,17 +526,6 @@ export const StemStartBodySchema = z.object({
 });
 export type StemStartBody = z.infer<typeof StemStartBodySchema>;
 
-// ── Invites ──────────────────────────────────────────────────────────────
-// POST /api/invite — team invite. Role mirrors the settings UI's options.
-export const INVITE_ROLES = ['admin', 'collaborator'] as const;
-export type InviteRole = (typeof INVITE_ROLES)[number];
-
-export const InviteCreateBodySchema = z.object({
-  email: z.string().email().max(200),
-  role: z.enum(INVITE_ROLES),
-}).strict();
-export type InviteCreateBody = z.infer<typeof InviteCreateBodySchema>;
-
 // ── Share links ──────────────────────────────────────────────────────────
 // POST /api/share — legacy track/project share-link creation.
 export const ShareCreateBodySchema = z.object({
@@ -699,6 +713,8 @@ export const ProjectContactPatchBodySchema = z.object({
   in_portal: z.boolean().optional(),
   allow_downloads: z.boolean().optional(),
   can_comment: z.boolean().optional(),
+  /** Mig 191: the contact may upload their own files into this project from their portal. */
+  can_upload: z.boolean().optional(),
   /** Mig 135: the pitch a label sees on this project in their portal. Empty clears it. */
   pitch_note: z.string().max(2000).nullable().optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
@@ -720,7 +736,7 @@ export const ArtistPortalActionBodySchema = z.object({
   auto_digest: z.boolean().optional(),
   /** settings: the artist must confirm their email before the portal opens (mig 131). */
   require_sign_in: z.boolean().optional(),
-}).strict().refine((b) => b.action !== 'settings' || b.auto_digest !== undefined || b.require_sign_in !== undefined, { message: 'Nothing to update' });
+}).strict().refine((b) => b.action !== 'settings' || b.auto_digest !== undefined || b.require_sign_in !== undefined || b.password !== undefined, { message: 'Nothing to update' });
 export type ArtistPortalActionBody = z.infer<typeof ArtistPortalActionBodySchema>;
 
 /** POST /api/contacts/[id]/notify — one digest email of what is new in the portal. */
@@ -778,6 +794,37 @@ export const ProjectAssetPatchBodySchema = z.object({
   position: z.number().int().min(0).max(100000).optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type ProjectAssetPatchBody = z.infer<typeof ProjectAssetPatchBodySchema>;
+
+// ── Contact uploads through the portal (PORTAL-UP, mig 191) ──────────────
+// The kind is guessed from the name and the file always lands in the portal
+// (the artist sees what they sent); the producer recategorises it later.
+
+/** POST /api/portal/[token]/files/presign */
+export const PortalUploadPresignBodySchema = z.object({
+  project_id: z.string().uuid(),
+  file_name: z.string().min(1).max(300),
+  size_bytes: z.number().int().positive(),
+}).strict();
+export type PortalUploadPresignBody = z.infer<typeof PortalUploadPresignBodySchema>;
+
+/**
+ * POST /api/portal/[token]/files (JSON) — register a file uploaded with a
+ * presigned PUT. `upload_id` is the opaque `<id>.<ext>` the presign returned:
+ * a public visitor never sees or sends a storage reference.
+ */
+export const PortalUploadRegisterBodySchema = z.object({
+  project_id: z.string().uuid(),
+  upload_id: z.string().regex(/^[A-Za-z0-9_-]{6,64}\.[a-z0-9]{1,8}$/, 'Invalid upload id'),
+  file_name: z.string().min(1).max(300),
+  label: z.string().max(200).optional(),
+}).strict();
+export type PortalUploadRegisterBody = z.infer<typeof PortalUploadRegisterBodySchema>;
+
+/** Fields of a multipart POST /api/portal/[token]/files besides the file. */
+export const PortalUploadFormFieldsSchema = z.object({
+  project_id: z.string().uuid(),
+  label: z.string().max(200).optional(),
+});
 
 const commentRegion = <T extends { region_start?: number | null; region_end?: number | null }>(b: T) =>
   (b.region_start == null) === (b.region_end == null)
@@ -854,3 +901,899 @@ export const TrackLinkBodySchema = z.object({
   direction: z.enum(['out', 'in']).optional().default('out'),
 }).strict();
 export type TrackLinkBody = z.infer<typeof TrackLinkBodySchema>;
+/**
+ * DELETE /api/tracks/[id]/links. Also takes the Label OS relations (mig 140),
+ * so a master or demo link the drawer shows can always be removed; creating
+ * one (POST, TrackLinkBodySchema) stays refused on the producer route.
+ */
+export const TrackUnlinkBodySchema = z.object({
+  track_id: z.string().uuid(),
+  relation: z.enum(['beat', 'instrumental', 'loop', 'topline', 'version', 'master', 'demo']),
+  direction: z.enum(['out', 'in']).optional().default('out'),
+}).strict();
+
+// ── Label OS invitations (LABEL-08) ──────────────────────────────────────
+
+/**
+ * POST /api/org/[orgId]/invitations. Which roles and functions are allowed is
+ * decided per org kind by `validateInvitationGrant` (lib/labelos/invitations),
+ * so here they are only bounded strings. `contact_ids` are the roster artists
+ * (contacts, 17 R3) the member is limited to; the route checks they are on
+ * that org's roster.
+ */
+export const OrgInvitationCreateBodySchema = z.object({
+  email: z.string().trim().email('Enter a valid email address').max(200),
+  role: z.string().min(1).max(40),
+  functions: z.array(z.string().min(1).max(40)).max(9).optional().default([]),
+  contact_ids: z.array(z.string().uuid()).max(100).optional().default([]),
+}).strict();
+export type OrgInvitationCreateBody = z.infer<typeof OrgInvitationCreateBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/team-accounts (doc 25): create a login for a person
+ * directly — what an invitation carries, plus their name and the password
+ * the creator chose (checked by lib/labelos/team-accounts#passwordProblem).
+ */
+export const TeamAccountCreateBodySchema = z.object({
+  email: z.string().trim().email('Enter a valid email address').max(200),
+  name: z.string().trim().min(1, 'Enter their name').max(80),
+  password: z.string().max(200),
+  role: z.string().min(1).max(40),
+  functions: z.array(z.string().min(1).max(40)).max(9).optional().default([]),
+  contact_ids: z.array(z.string().uuid()).max(100).optional().default([]),
+}).strict();
+export type TeamAccountCreateBody = z.infer<typeof TeamAccountCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/team-accounts/[userId]: reset the password, or switch the account off / on. */
+export const TeamAccountPatchBodySchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('reset_password'), password: z.string().max(200) }).strict(),
+  z.object({ action: z.literal('disable') }).strict(),
+  z.object({ action: z.literal('enable') }).strict(),
+]);
+export type TeamAccountPatchBody = z.infer<typeof TeamAccountPatchBodySchema>;
+
+/** POST /api/org/account/password: a team account sets its own password. */
+export const AccountPasswordBodySchema = z.object({ password: z.string().max(200) }).strict();
+
+/**
+ * POST /api/org/join. The token travels in the body, never an API query
+ * string (the join PAGE's own URL does carry it, as share links do). `preview` reads what the invitation is
+ * for (no session needed); `accept` joins (session required).
+ */
+export const OrgJoinBodySchema = z.object({
+  token: z.string().min(1).max(200),
+  action: z.enum(['preview', 'accept']).optional().default('accept'),
+}).strict();
+export type OrgJoinBody = z.infer<typeof OrgJoinBodySchema>;
+
+/** The owner-editable settings keys, shared by PATCH …/settings and the setup wizard's `settings`. */
+const OrgSettingsPatchFields = {
+  legal_gate: z.enum(['on', 'off']),
+  marketing_gate: z.enum(['on', 'off']),
+  require_signed_master_split: z.boolean(),
+  attention_release_days: z.number().int().min(1).max(365),
+  attention_stalled_days: z.number().int().min(1).max(365),
+  departments_off: z.array(z.enum(['contracts', 'finance', 'marketing', 'pr', 'executive', 'artistic', 'store', 'search', 'digest'])).max(9),
+  /** LABEL-48: the contract types the org works with (lib/labelos/contract-types). */
+  contract_types: z.array(z.enum(CONTRACT_TYPE_IDS as [ContractTypeId, ...ContractTypeId[]])).max(8),
+};
+
+/**
+ * POST /api/org/setup (LABEL-48, first slice). What the new account is and
+ * what its organization is called (src/lib/labelos/setup.ts).
+ */
+export const OrgSetupBodySchema = z.object({
+  face: z.enum(['independent', 'label']),
+  name: z.string().min(1).max(200),
+  /**
+   * The wizard's choices (LABEL-48), written with the org in one transaction.
+   * Same keys and values as PATCH …/settings; `planSettingsChange` judges them
+   * in the route and migration 192's validator again in the database.
+   */
+  settings: z.object(OrgSettingsPatchFields).partial().strict().optional(),
+}).strict();
+export type OrgSetupBody = z.infer<typeof OrgSetupBodySchema>;
+
+// ── Label OS org settings + members (LABEL-09) ───────────────────────────
+
+/** PATCH /api/org/[orgId]. The name only: the slug never changes. */
+export const OrgPatchBodySchema = z.object({
+  name: z.string().trim().min(1, 'Name the organization').max(80),
+}).strict();
+export type OrgPatchBody = z.infer<typeof OrgPatchBodySchema>;
+
+/** PUT /api/org/[orgId]/digest (LABEL-38): the caller's own weekly-digest switch. */
+export const DigestPreferenceBodySchema = z.object({ enabled: z.boolean() }).strict();
+
+/**
+ * PUT /api/org/[orgId]/digest/slack (LABEL-38). The URL is only checked for
+ * shape here; whether it is a Slack webhook is `validateSlackWebhookUrl`.
+ */
+export const DigestSlackBodySchema = z.object({ url: z.string().max(400) }).strict();
+
+/**
+ * DELETE /api/org/[orgId] (LABEL-39). The owner types the organization's
+ * name; whether it matches is `confirmationMatches` (lib/labelos/org-lifecycle),
+ * checked by the route against the stored name, not here.
+ */
+export const OrgDeleteBodySchema = z.object({
+  confirmName: z.string().max(200),
+}).strict();
+export type OrgDeleteBody = z.infer<typeof OrgDeleteBodySchema>;
+
+/**
+ * `organizations.settings` as release readiness reads it (LABEL-32, 09 §4).
+ * Unknown keys are dropped; every key is total — a missing or malformed
+ * value reads as its default, so a bad row can never switch a gate off
+ * (`legal_gate` / `marketing_gate` leave "on" only for the exact string
+ * "off"). Read-only: nothing here is a request body.
+ */
+export const OrgReadinessSettingsSchema = z.object({
+  legal_gate: z.enum(['on', 'off']).catch('on'),
+  marketing_gate: z.enum(['on', 'off']).catch('on'),
+  require_signed_master_split: z.boolean().catch(false),
+  /** The shorter side of cover art, in pixels (09 §4: 3000 is the common DSP minimum). Whole numbers 600-10000; anything else reads as 3000. */
+  artwork_min_px: z.number().int().min(600).max(10000).catch(3000),
+});
+export type OrgReadinessSettings = z.infer<typeof OrgReadinessSettingsSchema>;
+
+/** Total over any stored value: null, a string or an array reads as the defaults. */
+export function parseReadinessSettings(raw: unknown): OrgReadinessSettings {
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  return OrgReadinessSettingsSchema.parse(obj);
+}
+
+/**
+ * `organizations.settings` as Needs attention reads it (LABEL-35, 07 §2.1).
+ * Two thresholds, whole days, total: a missing, non-numeric, fractional or
+ * out-of-range value reads as its default, so a bad row can neither switch
+ * the list off nor flood it. Unknown keys are dropped. Read-only.
+ */
+export const ATTENTION_DEFAULTS = { attention_release_days: 30, attention_stalled_days: 30 } as const;
+const attentionDays = (fallback: number) => z.number().int().min(1).max(365).catch(fallback);
+export const OrgAttentionSettingsSchema = z.object({
+  /** A draft release whose target date is this many days away (or past) is listed when a gate is blocked. */
+  attention_release_days: attentionDays(ATTENTION_DEFAULTS.attention_release_days),
+  /** A song in a working stage for MORE than this many days is listed. */
+  attention_stalled_days: attentionDays(ATTENTION_DEFAULTS.attention_stalled_days),
+});
+export type OrgAttentionSettings = z.infer<typeof OrgAttentionSettingsSchema>;
+
+/** Total over any stored value: null, a string or an array reads as the defaults. */
+export function parseAttentionSettings(raw: unknown): OrgAttentionSettings {
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  return OrgAttentionSettingsSchema.parse(obj);
+}
+
+/**
+ * PATCH /api/org/[orgId]/settings (LABEL-51): the owner-editable organization
+ * settings. Every key is optional; at least one is required. Whether a
+ * department named in `departments_off` is part of the org's licence is
+ * `planSettingsChange` (lib/labelos/org-settings), checked by the route;
+ * here the names are only bounded to the switchable departments.
+ */
+export const OrgSettingsPatchBodySchema = z.object(OrgSettingsPatchFields).partial().strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
+export type OrgSettingsPatchBody = z.infer<typeof OrgSettingsPatchBodySchema>;
+
+/**
+ * PATCH /api/org/[orgId]/members. Which roles, functions, scopes and
+ * switches are allowed is decided per org kind and per actor by
+ * `planMemberChange` (lib/labelos/members), so here they are only bounded
+ * strings. At least one field besides `user_id`.
+ */
+export const OrgMemberPatchBodySchema = z.object({
+  user_id: z.string().uuid(),
+  role: z.string().min(1).max(40).optional(),
+  functions: z.array(z.string().min(1).max(40)).max(9).optional(),
+  scope: z.string().min(1).max(20).optional(),
+  cap_grants: z.array(z.string().min(1).max(60)).max(40).optional(),
+  cap_revokes: z.array(z.string().min(1).max(60)).max(40).optional(),
+}).strict().refine(
+  (b) => b.role !== undefined || b.functions !== undefined || b.scope !== undefined || b.cap_grants !== undefined || b.cap_revokes !== undefined,
+  { message: 'Nothing to change' },
+);
+export type OrgMemberPatchBody = z.infer<typeof OrgMemberPatchBodySchema>;
+
+// ── Label OS external project members (LABEL-21) ─────────────────────────
+
+/**
+ * POST /api/org/[orgId]/projects/[id]/members — invite a person with their
+ * own account to ONE project. The role is one of the four external project
+ * roles (06 §2.6), checked by `validateProjectInvite` (lib/labelos/project-
+ * members); here only bounded. `allow_downloads` is what a viewer or
+ * commenter may do with masters; a contributor or editor always may.
+ */
+export const OrgProjectInviteBodySchema = z.object({
+  email: z.string().trim().email('Enter a valid email address').max(200),
+  role: z.string().min(1).max(40),
+  allow_downloads: z.boolean().optional().default(false),
+}).strict();
+export type OrgProjectInviteBody = z.infer<typeof OrgProjectInviteBodySchema>;
+
+/** PATCH /api/org/[orgId]/projects/[id]/members/[userId]. At least one field; `expires_at: null` clears the expiry. */
+export const OrgProjectMemberPatchBodySchema = z.object({
+  role: z.string().min(1).max(40).optional(),
+  allow_downloads: z.boolean().optional(),
+  expires_at: z.string().max(40).nullable().optional(),
+}).strict().refine(
+  (b) => b.role !== undefined || b.allow_downloads !== undefined || b.expires_at !== undefined,
+  { message: 'Nothing to change' },
+);
+export type OrgProjectMemberPatchBody = z.infer<typeof OrgProjectMemberPatchBodySchema>;
+
+// ── Label OS org contacts + artist scope (LABEL-10) ──────────────────────
+
+/**
+ * POST / PATCH /api/org/[orgId]/contacts[/id]: an org's own people directory
+ * (17 R3, Q2). The producer's field list, so the two cannot drift — minus
+ * `notes` and `crm_status`, the CRM's private fields: an org contact is read
+ * by every member in scope, including the roster artist it describes (role
+ * `artist`, D5), so it must not hold business-internal notes. `org_id` and
+ * `user_id` are never accepted from the body.
+ */
+const ORG_CONTACT_PRIVATE = { notes: true, crm_status: true } as const;
+export const OrgContactCreateBodySchema = ContactCreateBodySchema.omit(ORG_CONTACT_PRIVATE);
+export type OrgContactCreateBody = z.infer<typeof OrgContactCreateBodySchema>;
+export const OrgContactPatchBodySchema = ContactPatchBodySchema.omit(ORG_CONTACT_PRIVATE).refine(
+  (b) => Object.keys(b).length > 0,
+  { message: 'Nothing to change' },
+);
+export type OrgContactPatchBody = z.infer<typeof OrgContactPatchBodySchema>;
+
+/**
+ * PUT /api/org/[orgId]/members/artists: the roster contacts an
+ * artists-scoped member sees (member_artist_scopes), replaced as a whole.
+ * An empty list is allowed and means "sees nothing". At most 150: past that
+ * a member should see the whole org, and the list must fit in the audit
+ * event (16 KB) and in a PostgREST `in.(…)` filter.
+ */
+export const ORG_MEMBER_ARTISTS_MAX = 150;
+export const OrgMemberArtistsBodySchema = z.object({
+  user_id: z.string().uuid(),
+  contact_ids: z.array(z.string().uuid()).max(ORG_MEMBER_ARTISTS_MAX),
+}).strict();
+export type OrgMemberArtistsBody = z.infer<typeof OrgMemberArtistsBodySchema>;
+
+// ── Label OS org audio (LABEL-13) ────────────────────────────────────────
+
+/**
+ * GET /api/org/[orgId]/audio/[trackId] query. The track is the path; the
+ * query only names WHICH of its stored files (`variant`, parsed by
+ * `parseOrgAudioVariant` in lib/labelos/org-audio) and whether to download.
+ * `src` / `key` (what `/api/audio` takes) are refused outright: the route
+ * never takes a URL or an `r2://` reference from the client. Any other
+ * parameter (a player's cache-buster) is ignored.
+ */
+export const OrgAudioQuerySchema = z.object({
+  variant: z.string().max(40).optional(),
+  download: z.enum(['0', '1']).optional(),
+  src: z.undefined({ message: 'Name a track, not a file' }).optional(),
+  key: z.undefined({ message: 'Name a track, not a file' }).optional(),
+});
+export type OrgAudioQuery = z.infer<typeof OrgAudioQuerySchema>;
+
+// ── Label OS activity feeds (LABEL-20) ───────────────────────────────────
+
+/** Newest events per page of a feed, and the most one page may ask for. */
+export const ORG_ACTIVITY_DEFAULT_LIMIT = 100;
+export const ORG_ACTIVITY_MAX_LIMIT = 200;
+
+/**
+ * GET /api/org/[orgId]/activity query. At most one of `artist` / `project` /
+ * `song` picks the feed (none = the org overview feed). `since` keeps events
+ * after an instant (the overview's "since your last visit"), `before` is the
+ * previous page's `nextBefore` — a `<created_at>_<id>` position, so events
+ * written in one transaction are never split by a page boundary. Instants are
+ * ISO with an offset; anything else is a 400, never a silent default. Empty
+ * values (`?before=`) are read as absent.
+ */
+export const OrgActivityQuerySchema = z
+  .object({
+    artist: z.string().uuid().optional(),
+    project: z.string().uuid().optional(),
+    song: z.string().uuid().optional(),
+    since: z.string().datetime({ offset: true }).optional(),
+    before: z.string().regex(CURSOR_RE, { message: 'before must be a cursor from a previous page' }).optional(),
+    limit: z.coerce.number().int().min(1).max(ORG_ACTIVITY_MAX_LIMIT).default(ORG_ACTIVITY_DEFAULT_LIMIT),
+  })
+  .refine((q) => [q.artist, q.project, q.song].filter(Boolean).length <= 1, { message: 'Ask for one of artist, project or song' });
+export type OrgActivityQuery = z.infer<typeof OrgActivityQuerySchema>;
+
+/**
+ * POST /api/org/[orgId]/overview/seen: the member has looked at the digest up
+ * to `through` (the `asOf` the digest was served with — not "now", or an
+ * event written while the page was open would be marked seen unseen). The
+ * user is always the session's; the body names no one.
+ */
+export const OrgOverviewSeenBodySchema = z.object({ through: z.string().datetime({ offset: true }) }).strict();
+export type OrgOverviewSeenBody = z.infer<typeof OrgOverviewSeenBodySchema>;
+
+// ── Label OS org upload (LABEL-14) ───────────────────────────────────────
+
+/**
+ * What an org upload becomes (lib/labelos/org-upload): a new song for a
+ * roster artist, or material linked to an existing org song. Sent at init
+ * (checked before a byte moves) and again at complete (checked again — the
+ * session row stores no intent, and access may have changed meanwhile).
+ */
+export const OrgUploadIntentSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('song'), contactId: z.string().uuid() }),
+  z.object({ kind: z.literal('link'), songId: z.string().uuid(), relation: z.enum(ORG_UPLOAD_RELATIONS) }),
+]);
+export type OrgUploadIntentBody = z.infer<typeof OrgUploadIntentSchema>;
+
+/**
+ * POST /api/org/[orgId]/upload/init. Unlike the producer route it takes no
+ * `projectId`, `replaceTrackId` or `trackType`: the destination and the type
+ * follow from the intent, and are decided by the server. Unknown keys drop.
+ */
+export const OrgUploadInitSchema = z.object({
+  fileName: z.string().trim().min(1).max(300),
+  fileSize: z.number().int().positive(),
+  fileType: z.string().max(120).optional(),
+  as: OrgUploadIntentSchema,
+});
+
+/** POST /api/org/[orgId]/upload/complete. `analysis` is validated per field by `parseClientAnalysis`. */
+export const OrgUploadCompleteSchema = z.object({
+  sessionId: z.string().min(1).max(64),
+  analysis: z.unknown().optional(),
+  as: OrgUploadIntentSchema,
+});
+
+/** POST /api/org/[orgId]/upload/abort. */
+export const OrgUploadSessionSchema = z.object({ sessionId: z.string().min(1).max(64) });
+
+// ── Label OS org files (LABEL-15) ────────────────────────────────────────
+// The presign body is the producer's (ProjectAssetPresignBodySchema). None of
+// these takes `in_portal`: org files are not in any portal (the portal is
+// producer-owned until a later task), and a restricted file never may be.
+
+/** POST /api/org/[orgId]/projects/[id]/assets (JSON) — register a presigned upload. */
+export const OrgAssetRegisterBodySchema = z.object({
+  url: z.string().min(1).max(500),
+  file_name: z.string().min(1).max(300),
+  kind: z.enum(ORG_ASSET_KINDS).optional(),
+  label: z.string().max(200).optional(),
+  sensitivity: z.enum(ASSET_SENSITIVITIES).optional(),
+}).strict();
+export type OrgAssetRegisterBody = z.infer<typeof OrgAssetRegisterBodySchema>;
+
+/** Fields of a multipart POST /api/org/[orgId]/projects/[id]/assets besides the file. */
+export const OrgAssetFormFieldsSchema = z.object({
+  kind: z.enum(ORG_ASSET_KINDS).optional(),
+  label: z.string().max(200).optional(),
+  sensitivity: z.enum(ASSET_SENSITIVITIES).optional(),
+});
+
+/** PATCH /api/org/[orgId]/projects/[id]/assets/[assetId] */
+export const OrgAssetPatchBodySchema = z.object({
+  label: z.string().trim().min(1).max(200).optional(),
+  kind: z.enum(ORG_ASSET_KINDS).optional(),
+  sensitivity: z.enum(ASSET_SENSITIVITIES).optional(),
+  position: z.number().int().min(0).max(100000).optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgAssetPatchBody = z.infer<typeof OrgAssetPatchBodySchema>;
+
+// ── Label OS org comments (LABEL-22) ─────────────────────────────────────
+// None of these takes an org, project, user, author or resolver: the org and
+// project are the path, the author is the session, `resolved_by` is the
+// caller. `visibility` is `artist` (default) or `internal`; the route refuses
+// `internal` for anyone who is not on the team.
+
+const COMMENT_UUID = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'Not a valid id');
+
+/** POST /api/org/[orgId]/projects/[id]/comments */
+export const OrgCommentCreateBodySchema = z.object({
+  body: z.string().trim().min(1, 'Comment cannot be empty').max(5000, 'Comment too long'),
+  track_id: COMMENT_UUID.nullish(),
+  parent_id: COMMENT_UUID.nullish(),
+  visibility: z.enum(['artist', 'internal']).optional(),
+  // A moment in the recording. Both or neither; the route drops a half-set pin.
+  region_start: z.number().finite().nonnegative().nullish(),
+  region_end: z.number().finite().positive().nullish(),
+}).strict();
+export type OrgCommentCreateBody = z.infer<typeof OrgCommentCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/projects/[id]/comments/[commentId] — words, who reads it, or resolve / reopen the thread. */
+export const OrgCommentPatchBodySchema = z.object({
+  body: z.string().trim().min(1, 'Comment cannot be empty').max(5000, 'Comment too long').optional(),
+  visibility: z.enum(['artist', 'internal']).optional(),
+  resolved: z.boolean().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgCommentPatchBody = z.infer<typeof OrgCommentPatchBodySchema>;
+
+// ── Label OS releases (LABEL-16) ─────────────────────────────────────────
+// None of these takes `org_id`, a `user_id` or a gate / delivery / store
+// field: the org is the path, gates are LABEL-32, delivery LABEL-33 and the
+// store LABEL-42. `state` moves only between draft and cancelled here.
+
+/**
+ * An industry code field (lib/labelos/identifiers): normalised on the way
+ * in, blank → null, and an invalid code is a 400 whose message names the
+ * field ("upc: not a valid UPC/EAN …") at that path.
+ */
+export function identifierField(kind: IdentifierKind) {
+  return z
+    .string()
+    .max(40)
+    .nullable()
+    .transform((raw, ctx) => {
+      if (raw === null || raw.trim() === '') return null;
+      const parsed = parseIdentifier(kind, raw);
+      if (!parsed.ok) {
+        ctx.addIssue({ code: 'custom', message: parsed.error });
+        return z.NEVER;
+      }
+      return parsed.value;
+    });
+}
+
+/** Free text, trimmed; blank → null. */
+const releaseText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .transform((v) => (v === null || v === '' ? null : v));
+
+/** A calendar date (YYYY-MM-DD) that exists; null clears it. */
+const releaseDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, 'Not a calendar date')
+  .nullable();
+
+const releaseFields = {
+  title: z.string().trim().min(1, 'Name the release').max(300),
+  type: z.enum(RELEASE_TYPES),
+  upc: identifierField('upc'),
+  label_name: releaseText(200),
+  c_line: releaseText(200),
+  p_line: releaseText(200),
+  primary_genre: releaseText(80),
+  target_date: releaseDate,
+  release_date: releaseDate,
+  artwork_asset_id: z.string().uuid().nullable(),
+};
+
+/** POST /api/org/[orgId]/releases. No `project_id` → the route creates the release's project. */
+export const OrgReleaseCreateBodySchema = z.object({
+  title: releaseFields.title,
+  contact_id: z.string().uuid(),
+  project_id: z.string().uuid().optional(),
+  type: releaseFields.type.optional(),
+  upc: releaseFields.upc.optional(),
+  label_name: releaseFields.label_name.optional(),
+  c_line: releaseFields.c_line.optional(),
+  p_line: releaseFields.p_line.optional(),
+  primary_genre: releaseFields.primary_genre.optional(),
+  target_date: releaseFields.target_date.optional(),
+  release_date: releaseFields.release_date.optional(),
+  artwork_asset_id: releaseFields.artwork_asset_id.optional(),
+  /** LABEL-42: the music is already out (an album on Spotify). Owner / admin only; needs a past `release_date`; skips every gate. */
+  imported_released: z.literal(true).optional(),
+}).strict();
+export type OrgReleaseCreateBody = z.infer<typeof OrgReleaseCreateBodySchema>;
+
+/**
+ * PUT /api/org/[orgId]/releases/[releaseId]/store (LABEL-42): put a released
+ * release on the public store (and choose how it plays), or take it off (and
+ * say whether its promoted previews go, which the server honours only for
+ * music that was never publicly out).
+ */
+export const OrgReleaseStoreBodySchema = z.discriminatedUnion('listed', [
+  z.object({ listed: z.literal(true), playback: z.enum(STORE_PLAYBACKS).optional() }).strict(),
+  z.object({ listed: z.literal(false), delete_previews: z.boolean().optional() }).strict(),
+]);
+export type OrgReleaseStoreBody = z.infer<typeof OrgReleaseStoreBodySchema>;
+
+/** PATCH /api/org/[orgId]/releases/[releaseId]. The project and the artist are fixed. */
+export const OrgReleasePatchBodySchema = z.object({
+  title: releaseFields.title.optional(),
+  type: releaseFields.type.optional(),
+  upc: releaseFields.upc.optional(),
+  label_name: releaseFields.label_name.optional(),
+  c_line: releaseFields.c_line.optional(),
+  p_line: releaseFields.p_line.optional(),
+  primary_genre: releaseFields.primary_genre.optional(),
+  target_date: releaseFields.target_date.optional(),
+  release_date: releaseFields.release_date.optional(),
+  artwork_asset_id: releaseFields.artwork_asset_id.optional(),
+  state: z.enum(['draft', 'cancelled']).optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgReleasePatchBody = z.infer<typeof OrgReleasePatchBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/tracks/[id]/stage (LABEL-24). `to` is a stored stage
+ * (`released` is derived and is not accepted). `from` is the stage the caller
+ * was looking at: when it is no longer the song's stage the move is a 409,
+ * so a stale screen never overwrites someone else's decision.
+ */
+export const OrgSongStageBodySchema = z.object({
+  to: z.enum(SONG_STAGES),
+  from: z.enum(SONG_STAGES).optional(),
+}).strict();
+export type OrgSongStageBody = z.infer<typeof OrgSongStageBodySchema>;
+
+/**
+ * PUT /api/org/[orgId]/tracks/[id]/samples (LABEL-29): the song's sample
+ * declaration. `note` and `asset_id` are optional: omitted keeps what is
+ * there, `null` clears. Declaring `none` or `unknown` drops both (a clearance
+ * of nothing is meaningless; `planSamples` does it, not the client).
+ */
+export const OrgSamplesBodySchema = z.object({
+  samples: z.enum(['none', 'yes', 'unknown']),
+  note: z.string().trim().max(2000).nullable().optional(),
+  asset_id: z.string().uuid().nullable().optional(),
+}).strict();
+export type OrgSamplesBody = z.infer<typeof OrgSamplesBodySchema>;
+
+/**
+ * PUT /api/org/[orgId]/tracks/[id]/reviews (LABEL-25): MY review of a song.
+ * Each field is optional: omitted keeps what is there, `null` clears it. The
+ * merged review must still hold a rating, a verdict or a note.
+ */
+export const OrgSongReviewBodySchema = z.object({
+  rating: z.number().int().min(1).max(5).nullable().optional(),
+  verdict: z.enum(REVIEW_VERDICTS).nullable().optional(),
+  note: z.string().max(NOTE_MAX).nullable().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Send a rating, a verdict or a note' });
+export type OrgSongReviewBody = z.infer<typeof OrgSongReviewBodySchema>;
+
+/**
+ * /api/org/[orgId]/parties (LABEL-27): a rights identity. Free text is
+ * trimmed and length-bounded here; the legal identifiers are normalised and
+ * checked by `partyColumns` (lib/labelos/parties), which is what the database
+ * CHECKs accept. `user_id` links an account (an org member, or an external
+ * member of one of the org's projects — the route checks which).
+ */
+const PARTY_TEXT = (max: number) => z.string().trim().max(max).nullable().optional();
+const PartyFields = {
+  kind: z.enum(['person', 'company']).optional(),
+  display_name: z.string().trim().min(1).max(200).optional(),
+  legal_name: PARTY_TEXT(200),
+  email: PARTY_TEXT(320),
+  ipi: PARTY_TEXT(32),
+  isni: PARTY_TEXT(32),
+  pro: PARTY_TEXT(80),
+  pro_affiliation: z.enum(['affiliated', 'not_affiliated', 'unknown']).optional(),
+  publisher_name: PARTY_TEXT(200),
+  publisher_ipi: PARTY_TEXT(32),
+  contact_id: z.string().uuid().nullable().optional(),
+  user_id: z.string().uuid().nullable().optional(),
+};
+export const OrgPartyCreateBodySchema = z.object({ ...PartyFields, display_name: z.string().trim().min(1).max(200) }).strict();
+export type OrgPartyCreateBody = z.infer<typeof OrgPartyCreateBodySchema>;
+export const OrgPartyPatchBodySchema = z.object(PartyFields).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgPartyPatchBody = z.infer<typeof OrgPartyPatchBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/tracks/[id]/credits (LABEL-27): propose a credit.
+ * `party_id` / `name` / `contact_id` name WHO — a member without
+ * `rights.write` (and every external member) may only omit them or name
+ * themselves; the route refuses anything else (lib/labelos/credits#planPropose).
+ */
+export const OrgCreditProposeBodySchema = z.object({
+  role: z.string().trim().min(1).max(60),
+  scope: z.enum(['composition', 'recording']).nullable().optional(),
+  role_detail: z.string().trim().max(200).nullable().optional(),
+  party_id: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(200).optional(),
+  contact_id: z.string().uuid().nullable().optional(),
+}).strict();
+export type OrgCreditProposeBody = z.infer<typeof OrgCreditProposeBodySchema>;
+
+/** PATCH /api/org/[orgId]/tracks/[id]/credits/[creditId]: confirm or dispute (a dispute may say why). */
+export const OrgCreditDecisionBodySchema = z.object({
+  action: z.enum(['confirm', 'dispute']),
+  note: z.string().trim().min(1).max(1000).nullable().optional(),
+}).strict();
+export type OrgCreditDecisionBody = z.infer<typeof OrgCreditDecisionBodySchema>;
+
+/**
+ * Split sheets (LABEL-28). A share is a decimal STRING ("33.3333") or a number
+ * with at most four decimals; it is parsed to integer units by
+ * lib/labelos/splits#parseShare (no float arithmetic ever touches it), so the
+ * schema only bounds the shape.
+ */
+const SplitShareSchema = z.union([z.string().trim().regex(/^\d{1,3}(\.\d{1,4})?$/, 'A share has at most four decimals'), z.number().finite()]);
+const SplitLineSchema = z.object({
+  party_id: z.string().uuid(),
+  role: z.enum(SPLIT_ROLES),
+  share: SplitShareSchema,
+}).strict();
+const SplitNoteSchema = z.string().trim().max(2000).nullable().optional();
+
+/** POST /api/org/[orgId]/tracks/[id]/splits: a new draft (optionally with lines). */
+export const OrgSplitCreateBodySchema = z.object({
+  kind: z.enum(SPLIT_KINDS),
+  note: SplitNoteSchema,
+  lines: z.array(SplitLineSchema).max(50).optional(),
+}).strict();
+export type OrgSplitCreateBody = z.infer<typeof OrgSplitCreateBodySchema>;
+
+/** PATCH …/splits/[sheetId]: replace a draft's note and / or its whole set of lines. */
+export const OrgSplitPatchBodySchema = z.object({
+  note: SplitNoteSchema,
+  lines: z.array(SplitLineSchema).max(50).optional(),
+}).strict().refine((b) => b.note !== undefined || b.lines !== undefined, { message: 'Nothing to change' });
+export type OrgSplitPatchBody = z.infer<typeof OrgSplitPatchBodySchema>;
+
+/** POST …/splits/[sheetId]/signatures as JSON: an acknowledgement of one line. (An upload is multipart: `file` + optional `line_id`.) */
+export const OrgSplitAcknowledgeBodySchema = z.object({
+  method: z.literal('acknowledged'),
+  line_id: z.string().uuid(),
+}).strict();
+export type OrgSplitAcknowledgeBody = z.infer<typeof OrgSplitAcknowledgeBodySchema>;
+export const OrgSplitUploadFieldsSchema = z.object({ line_id: z.string().uuid().optional() }).strict();
+
+/**
+ * POST /api/org/[orgId]/tasks (LABEL-23): a task on at most ONE artist,
+ * project, song or release (`target`), or on none (an org-level task), with an
+ * optional assignee and due date. The target is fixed at creation: a task is
+ * not moved between objects (make a new one).
+ */
+const TASK_TITLE = z.string().trim().min(1).max(TASK_TITLE_MAX);
+const TASK_NOTES = z.string().max(TASK_NOTES_MAX);
+export const OrgTaskCreateBodySchema = z.object({
+  title: TASK_TITLE,
+  notes: TASK_NOTES.nullable().optional(),
+  due_at: z.string().datetime({ offset: true }).nullable().optional(),
+  assignee_id: z.string().uuid().nullable().optional(),
+  target: z.object({ kind: z.enum(TASK_OBJECT_KINDS), id: z.string().uuid() }).strict().nullable().optional(),
+}).strict();
+export type OrgTaskCreateBody = z.infer<typeof OrgTaskCreateBodySchema>;
+
+/** PUT /api/org/[orgId]/artists/[contactId]/direction (LABEL-26): the whole document; an empty string clears a field. */
+const DIRECTION_TEXT = z.string().max(DIRECTION_TEXT_MAX);
+export const OrgDirectionPutBodySchema = z.object({
+  direction: z.object({
+    sound: DIRECTION_TEXT.optional(),
+    lyrics: DIRECTION_TEXT.optional(),
+    visual: DIRECTION_TEXT.optional(),
+    influences: DIRECTION_TEXT.optional(),
+    avoid: DIRECTION_TEXT.optional(),
+    next: DIRECTION_TEXT.optional(),
+    keywords: z.array(z.string().max(DIRECTION_KEYWORD_MAX)).max(DIRECTION_KEYWORDS_MAX).optional(),
+  }).strict(),
+}).strict();
+export type OrgDirectionPutBody = z.infer<typeof OrgDirectionPutBodySchema>;
+
+/** POST /api/org/[orgId]/artists/[contactId]/references: exactly the pointer the kind needs. */
+const REFERENCE_TITLE = z.string().trim().min(1).max(REFERENCE_TITLE_MAX);
+const REFERENCE_NOTE = z.string().trim().min(1).max(REFERENCE_NOTE_MAX);
+export const OrgReferenceCreateBodySchema = z.object({
+  kind: z.enum(REFERENCE_KINDS),
+  title: REFERENCE_TITLE.optional(),
+  note: REFERENCE_NOTE.nullable().optional(),
+  url: z.string().max(REFERENCE_URL_MAX).optional(),
+  track_id: z.string().uuid().optional(),
+  asset_id: z.string().uuid().optional(),
+  visibility: z.enum(REFERENCE_VISIBILITIES).optional(),
+}).strict().superRefine((b, ctx) => {
+  const need = (ok: boolean, path: string, message: string) => { if (!ok) ctx.addIssue({ code: 'custom', path: [path], message }); };
+  const only = (...names: Array<'url' | 'track_id' | 'asset_id'>) => {
+    for (const n of ['url', 'track_id', 'asset_id'] as const) if (!names.includes(n)) need(b[n] === undefined, n, `Not used by a ${b.kind} reference`);
+  };
+  if (b.kind === 'track') { need(!!b.track_id, 'track_id', 'Pick a track'); only('track_id'); }
+  if (b.kind === 'file') { need(!!b.asset_id, 'asset_id', 'Pick a file'); only('asset_id'); }
+  if (b.kind === 'link') { need(safeReferenceUrl(b.url) !== null, 'url', 'A link must be an https address'); need(!!b.title, 'title', 'Name the link'); only('url'); }
+  if (b.kind === 'note') { need(!!b.note, 'note', 'Write the note'); need(!!b.title, 'title', 'Give the note a title'); only(); }
+});
+export type OrgReferenceCreateBody = z.infer<typeof OrgReferenceCreateBodySchema>;
+
+/** PATCH …/references/[referenceId]: omitted keeps; the pointer of a reference never changes. */
+export const OrgReferencePatchBodySchema = z.object({
+  title: REFERENCE_TITLE.optional(),
+  note: REFERENCE_NOTE.nullable().optional(),
+  url: z.string().max(REFERENCE_URL_MAX).optional(),
+  visibility: z.enum(REFERENCE_VISIBILITIES).optional(),
+  position: z.number().int().min(0).max(100000).optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgReferencePatchBody = z.infer<typeof OrgReferencePatchBodySchema>;
+
+/** PATCH /api/org/[orgId]/tasks/[taskId]: omitted keeps, `null` clears; `done` ticks it off or reopens it. */
+export const OrgTaskPatchBodySchema = z.object({
+  title: TASK_TITLE.optional(),
+  notes: TASK_NOTES.nullable().optional(),
+  due_at: z.string().datetime({ offset: true }).nullable().optional(),
+  assignee_id: z.string().uuid().nullable().optional(),
+  done: z.boolean().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgTaskPatchBody = z.infer<typeof OrgTaskPatchBodySchema>;
+
+/** The song or release an approval is about. */
+const ApprovalSubjectSchema = z.object({ kind: z.enum(APPROVAL_SUBJECT_KINDS), id: z.string().uuid() }).strict();
+
+/** POST /api/org/[orgId]/approvals: ask ONE member to decide a gate (LABEL-30). */
+export const OrgApprovalRequestBodySchema = z.object({
+  subject: ApprovalSubjectSchema,
+  gate: z.enum(APPROVAL_GATES),
+  approver_id: z.string().uuid(),
+  note: z.string().max(APPROVAL_NOTE_MAX).nullable().optional(),
+  /** "Send to legal" (LABEL-31): also hand the person asked a task on the subject, in the same action. */
+  with_task: z.boolean().optional(),
+}).strict();
+export type OrgApprovalRequestBody = z.infer<typeof OrgApprovalRequestBodySchema>;
+
+/** POST /api/org/[orgId]/approvals/decide: Approved, or Changes requested with a note. */
+export const OrgApprovalDecideBodySchema = z.object({
+  subject: ApprovalSubjectSchema,
+  gate: z.enum(APPROVAL_GATES),
+  decision: z.enum(APPROVAL_DECISIONS),
+  note: z.string().max(APPROVAL_NOTE_MAX).nullable().optional(),
+  /**
+   * `snapshotKey` of the gate as the screen drew it. REQUIRED with "approved" (doc 21 #14; absent = 400 `seen_required`
+   * from `planDecide`, which says it in words); when the facts moved since, 409 `changed_since_seen`. Optional here so
+   * the refusal is that plain-spoken one, not a schema error.
+   */
+  seen: z.string().max(64).nullable().optional(),
+}).strict();
+export type OrgApprovalDecideBody = z.infer<typeof OrgApprovalDecideBodySchema>;
+
+/** POST /api/org/[orgId]/releases/[releaseId]/deliver (LABEL-33). `override` + a note is the owner's way past unsatisfied gates. */
+export const OrgReleaseDeliverBodySchema = z.object({
+  distributor: z.string().trim().min(1).max(120),
+  delivered_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional(),
+  override: z.boolean().optional(),
+  override_note: z.string().max(1000).optional(),
+}).strict();
+export type OrgReleaseDeliverBody = z.infer<typeof OrgReleaseDeliverBodySchema>;
+
+/** POST /api/org/[orgId]/releases/[releaseId]/items — appended at the end. No master = the song itself. */
+export const OrgReleaseItemCreateBodySchema = z.object({
+  song_track_id: z.string().uuid(),
+  master_track_id: z.string().uuid().optional(),
+  version_title: releaseText(200).optional(),
+  explicit: z.boolean().optional(),
+}).strict();
+export type OrgReleaseItemCreateBody = z.infer<typeof OrgReleaseItemCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/releases/[releaseId]/items — the whole tracklist, in its new order. */
+export const OrgReleaseItemsReorderBodySchema = z.object({
+  order: z.array(z.string().uuid()).min(1).max(RELEASE_MAX_ITEMS),
+}).strict();
+export type OrgReleaseItemsReorderBody = z.infer<typeof OrgReleaseItemsReorderBodySchema>;
+
+/** PATCH /api/org/[orgId]/releases/[releaseId]/items/[itemId]. The song is fixed; remove and add to change it. */
+export const OrgReleaseItemPatchBodySchema = z.object({
+  master_track_id: z.string().uuid().optional(),
+  version_title: releaseText(200).optional(),
+  explicit: z.boolean().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgReleaseItemPatchBody = z.infer<typeof OrgReleaseItemPatchBodySchema>;
+
+// ── Artist ↔ label connection (LABEL-41) ──────────────────────────────
+
+/**
+ * POST /api/org/[orgId]/connections — ask the other side to connect: a label
+ * names an ARTIST org by `slug` or by the `email` of one of its owners /
+ * admins; an artist org names a LABEL the same way. Exactly one of the two.
+ * A label may name one of its own roster contacts (`contact_id`) to stand for
+ * the artist; without it one is created when the request is accepted.
+ */
+export const OrgConnectionCreateBodySchema = z.object({
+  slug: z.string().trim().toLowerCase().min(1).max(80).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Not a valid organization slug').optional(),
+  email: z.string().trim().toLowerCase().email().max(254).optional(),
+  contact_id: z.string().uuid().optional(),
+}).strict().refine((b) => (b.slug !== undefined) !== (b.email !== undefined), { message: 'Give either a slug or an email' });
+export type OrgConnectionCreateBody = z.infer<typeof OrgConnectionCreateBodySchema>;
+
+/**
+ * PATCH /api/org/[orgId]/connections/[connectionId] — ARTIST SIDE ONLY: what
+ * is shared. `project_ids` replaces the selected list (they must be projects
+ * of the artist org); `share_mode` `all` shares the whole catalogue;
+ * `allow_copies` lets the label copy a recording into its own org (D6).
+ */
+export const OrgConnectionShareBodySchema = z.object({
+  share_mode: z.enum(['selected', 'all']).optional(),
+  project_ids: z.array(z.string().uuid()).max(500).optional(),
+  allow_copies: z.boolean().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type OrgConnectionShareBody = z.infer<typeof OrgConnectionShareBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/tracks/copy — "Use in a label song" (D6): copy a
+ * recording into THIS (label) org. `source` is a recording in a project a
+ * connected artist org shared (`connection`), or the caller's own producer
+ * recording (`producer`). The copy keeps its provenance and has no live link
+ * to the source.
+ */
+export const OrgTrackCopyBodySchema = z.object({
+  source: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('connection'), track_id: z.string().uuid() }).strict(),
+    z.object({ kind: z.literal('producer'), track_id: z.string().uuid() }).strict(),
+  ]),
+  /** Put the copy in one of the label's own projects (optional). */
+  project_id: z.string().uuid().optional(),
+}).strict();
+export type OrgTrackCopyBody = z.infer<typeof OrgTrackCopyBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/views (LABEL-37) — save a filter view. `definition` is
+ * validated by `parseDefinition` (lib/labelos/filters.ts) in the route, which
+ * answers with the field that is wrong; here it only has to be present.
+ */
+export const OrgViewCreateBodySchema = z.object({
+  subject: z.enum(['songs', 'releases']),
+  name: z.string().trim().min(1).max(80),
+  definition: z.unknown().refine((v) => v !== undefined && v !== null, { message: 'A view needs a definition' }),
+  shared: z.boolean().optional(),
+}).strict();
+export type OrgViewCreateBody = z.infer<typeof OrgViewCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/views/[viewId]. The subject of a view never changes. */
+export const OrgViewPatchBodySchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  definition: z.unknown().optional(),
+  shared: z.boolean().optional(),
+}).strict().refine((b) => b.name !== undefined || b.definition !== undefined || b.shared !== undefined, { message: 'Nothing to update' });
+export type OrgViewPatchBody = z.infer<typeof OrgViewPatchBodySchema>;
+
+// ── Label OS platform console (LABEL-47) ─────────────────────────────────
+
+const PLATFORM_MODULES = z.array(z.enum(MODULES)).max(MODULES.length * 2);
+const SEAT_CAP = z.number().int().min(1, 'At least one seat').max(100_000).nullable();
+const ARTIST_CAP = z.number().int().min(0).max(100_000).nullable();
+
+/**
+ * POST /api/platform/licensees — a new licensee org with its face, licence
+ * and (optionally) the owner to invite. `modules` omitted = everything the
+ * face allows. Caps omitted or null = unlimited.
+ */
+export const PlatformLicenseeCreateBodySchema = z.object({
+  name: z.string().trim().min(1, 'Name the organization').max(80),
+  slug: z.string().trim().toLowerCase().min(2).max(60).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Lowercase letters, numbers and single hyphens'),
+  face: z.enum(ACCOUNT_FACES),
+  modules: PLATFORM_MODULES.optional(),
+  max_seats: SEAT_CAP.optional(),
+  max_artists: ARTIST_CAP.optional(),
+  owner_email: z.string().trim().email('Not a valid email').max(254).optional(),
+}).strict();
+
+/** PATCH /api/platform/licensees/[orgId] — replace the licence (all three fields). */
+export const PlatformEntitlementsBodySchema = z.object({
+  modules: PLATFORM_MODULES,
+  max_seats: SEAT_CAP,
+  max_artists: ARTIST_CAP,
+}).strict();
+
+/** POST /api/platform/licensees/[orgId]/invitations — invite the licensee's owner. */
+export const PlatformOwnerInviteBodySchema = z.object({
+  email: z.string().trim().email('Not a valid email').max(254),
+}).strict();
+
+/**
+ * PATCH /api/org/[orgId]/songs/[trackId] (LABEL-53): the recording / song
+ * metadata editor. Every field is optional: omitted keeps what is there,
+ * `null` (or a blank string) clears it — except the title. `expected` is the
+ * compare-and-set token the editor was loaded with (`metadata_updated_at`,
+ * `null` for a row nobody edited yet); a row that changed meanwhile is 409
+ * with the current values. The values themselves are judged by
+ * `planMetadataPatch` (lib/labelos/track-metadata.ts), which needs the
+ * caller's capabilities; this contract only fixes the shape.
+ */
+const metadataText = z.string().max(4000).nullable().optional();
+export const OrgTrackMetadataBodySchema = z.object({
+  expected: z.string().max(64).nullable(),
+  title: metadataText,
+  version_label: metadataText,
+  isrc: metadataText,
+  iswc: metadataText,
+  // A string is allowed so that "14o" reaches the planner, which names the field in its refusal.
+  bpm: z.union([z.number().finite(), z.string().max(20)]).nullable().optional(),
+  key: metadataText,
+  language: metadataText,
+  explicit: z.boolean().nullable().optional(),
+  genre: metadataText,
+  recorded_on: metadataText,
+  p_line: metadataText,
+  master_owner: metadataText,
+  notes: metadataText,
+}).strict();
+export type OrgTrackMetadataBody = z.infer<typeof OrgTrackMetadataBodySchema>;

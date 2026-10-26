@@ -13,6 +13,7 @@ never used by CI.
 | `gateway.mjs` | `:54321` | the Supabase URL: `/rest/v1` → PostgREST, `/auth/v1/user` + `/token` from JWTs signed by `jwt.mjs` |
 | `gateway.mjs` | `:54400` | Resend: records every email (`GET /emails`) |
 | `env.sh` | your shell | points `next dev` at all of the above |
+| `check.sh` | a throwaway server | `npm run db:local:check`: starts its own Postgres in a temp dir, runs `reset.sh` on it, then `supabase/local/checks/*.sql`, the `has_org_cap` parity check (`capability-parity.ts`) and every `supabase/rollback/*.down.sql`, and deletes it. Needs no server and no URL — run it before pushing any change under `supabase/` |
 
 ```bash
 npm run db:local:reset                       # needs a Postgres superuser URL (LOCAL_DB_ADMIN_URL)
