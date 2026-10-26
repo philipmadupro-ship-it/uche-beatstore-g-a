@@ -9,18 +9,63 @@ Your producer login (the account with the `creator_profiles` row) is not
 edited by any of this. The only things added around it are its own `producer`
 organization (migration 137) and its row in the operator list (step 1).
 
-## 0. Before you start
+## 0. Before you start — read-only checks
 
-- Take a Supabase backup / point-in-time-restore marker (Dashboard → Database →
-  Backups).
-- Check the one assumption the bundle makes. In the SQL editor run:
-  `SELECT count(*) FROM public.creator_profiles;` — it must say **1** (you).
-  Before 26 Sep any signed-in buyer could create a profile row, so an old stray
-  row is possible. The bundle refuses to run on anything but exactly one row
-  and says so; nothing changes if it refuses. If it says 2 or more, run
-  `SELECT user_id, display_name, created_at FROM public.creator_profiles;`,
-  then **stop and tell the orchestrator**. Do not delete anything yourself and
-  do not run the bundle until it is back to exactly one row.
+Take a Supabase backup / note the point-in-time-restore time first (Dashboard →
+Database → Backups). Then paste each query below into the SQL editor and compare
+with what it must show. **If any one differs, stop and tell the orchestrator.**
+None of them changes anything.
+
+```sql
+-- 1 row, value 1 (the producer; the bundle itself refuses anything else)
+SELECT count(*) FROM public.creator_profiles;
+
+-- 1 row: true
+SELECT user_id IS NOT NULL FROM public.creator_profiles;
+
+-- 1 row: 0
+SELECT count(*) FROM public.projects WHERE user_id IS NULL;
+
+-- only these types (and NULL): beat, instrumental, song, remix, loop, topline
+SELECT type, count(*) FROM public.tracks GROUP BY 1;
+
+-- 0 rows: none of the columns the bundle adds exists yet
+SELECT c.table_name, c.column_name
+FROM information_schema.columns c
+JOIN (VALUES
+    ('artist_portals', ARRAY['require_sign_in', 'sign_in_sent_at']),
+    ('buyer_offers', ARRAY['buyer_email_verified']),
+    ('contacts', ARRAY['artist_org_id', 'org_id', 'org_self_artist', 'search_tsv', 'secondary_category']),
+    ('notifications', ARRAY['org_id']),
+    ('project_assets', ARRAY['created_by', 'org_id', 'search_tsv', 'sensitivity', 'uploaded_by_contact_id']),
+    ('project_comments', ARRAY['org_id', 'resolved_at', 'resolved_by', 'visibility']),
+    ('project_contacts', ARRAY['can_upload', 'pitch_note']),
+    ('projects', ARRAY['inbox_for_contact_id', 'org_id', 'search_tsv']),
+    ('track_collaborators', ARRAY['confirmed_at', 'confirmed_by', 'created_by', 'dispute_note', 'org_id', 'party_id', 'role_detail', 'scope', 'status']),
+    ('tracks', ARRAY['created_by', 'explicit', 'genre', 'isrc', 'iswc', 'language', 'master_owner', 'metadata_updated_at', 'org_id', 'p_line', 'provenance', 'recorded_on', 'samples_clearance_asset_id', 'samples_clearance_note', 'samples_declared', 'search_tsv', 'song_stage', 'version_label'])
+) AS w(tbl, cols) ON w.tbl = c.table_name AND c.column_name = ANY (w.cols)
+WHERE c.table_schema = 'public';
+
+-- 0 rows: none of the tables the bundle adds exists yet
+SELECT tablename FROM pg_tables
+WHERE schemaname = 'public' AND tablename IN ('activity_events', 'approvals', 'artist_direction', 'artist_messages', 'artist_references', 'connection_projects', 'member_artist_scopes', 'org_connections', 'org_digest_channels', 'org_digest_members', 'org_entitlements', 'org_invitations', 'org_managed_accounts', 'org_members', 'org_overview_seen', 'org_saved_views', 'organizations', 'parties', 'platform_admins', 'project_members', 'release_items', 'releases', 'song_beats', 'song_reviews', 'split_lines', 'split_sheets', 'tasks', 'track_links', 'user_profiles');
+
+-- 0 rows: everything in public belongs to postgres
+SELECT tablename, tableowner FROM pg_tables
+WHERE schemaname = 'public' AND tableowner <> 'postgres';
+
+-- 15 or higher
+SELECT version();
+```
+
+(The two "0 rows" lists were generated from what the bundle really creates, by
+comparing a production-state database before and after the rehearsal.)
+
+If `creator_profiles` shows more than 1 row, also run
+`SELECT user_id, display_name, created_at FROM public.creator_profiles;` and send
+the result to the orchestrator; do not delete anything yourself and do not run
+the bundle until the count is exactly 1. (Before 26 Sep any signed-in buyer could
+create such a row, so an old stray one is possible.)
 
 ## 1. Paste the migration bundle
 
@@ -30,12 +75,19 @@ organization (migration 137) and its row in the operator list (step 1).
    is highlighted, then press **Run**. (The editor runs only the highlighted
    text, which is how a half-pasted script fails.)
 3. It runs in one transaction: either all of it applies or none of it does.
-   If it errors, copy the message to Claude; nothing was changed, and you can
+   If it errors, copy the message to the orchestrator; nothing was changed, and you can
    run the whole file again after the cause is fixed.
 4. The last result is a table with 63 rows. **Every row must say `applied`.**
-   Any `MISSING` row means that migration did not take: send the table to Claude.
-   You can re-read the same table any time by running
-   `supabase/apply/labelos-verify.sql` on its own.
+   Any `MISSING` row means that migration did not take: send the table to the
+   orchestrator. One exception: the row `112_backfill_buyer_contacts` depends on
+   your data (it is `MISSING` if a paid buyer still has no contact), so if it is
+   the **only** `MISSING` row, that is not a failed paste.
+5. If the paste errors, the editor may leave its session inside the failed
+   transaction. Run `ROLLBACK;` on its own, or open a new SQL-editor tab, before
+   you run anything else. Then send the error to the orchestrator.
+
+You can re-read the verify table any time by running
+`supabase/apply/labelos-verify.sql` on its own.
 
 What the bundle contains, in order: the guard above; then every migration from
 130 up, in number order: 130–135 and `139_buyer_offer_email_verified` (still
@@ -62,6 +114,10 @@ Label OS itself only appears once the flag is on.
 2. **Redeploy** (Deployments → the latest → ⋯ → Redeploy). Changing a variable
    does not change a running deployment, and `/login` and the dashboard are
    prerendered, so they only learn the flag on a new deployment.
+
+With the flag on, anyone who signs in or signs up at `/login` and is neither the
+producer nor a member of an org is sent to `/setup` to create one (by design,
+LABEL-48); buyers who sign in at `/store/account` are not affected.
 
 With the flag on, `/o/*`, `/api/org/*`, `/setup`, `/join/<token>`, `/shared`
 and `/platform` exist; with it off every one of those answers 404.
@@ -137,7 +193,7 @@ From `/o/<slug>/settings` (the admin centre) → **Members**:
   `true` is what you want. If it says `false` nothing breaks: the reset still
   changes the password and records the event, and the function logs that
   sessions were not revoked (an old session would then live until it expires).
-  Tell Claude, so the privilege or the approach can be fixed.
+  Tell the orchestrator, so the privilege or the approach can be fixed.
 - **Buckets.** Label OS audio, previews and files live in the **private** R2
   bucket (`R2_PRIVATE_BUCKET_NAME`) under `orgs/<org-id>/…`; the bucket and its
   CORS are the same ones the studio already needs. Only a released release
