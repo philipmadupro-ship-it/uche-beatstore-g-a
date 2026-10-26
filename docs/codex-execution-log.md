@@ -9438,3 +9438,21 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - `ui/Dropdown` (z-[200]) renders behind `ui/Modal` (`--z-modal` 240).
   - Saved-view credit/split filter clauses still key on `rights.read`, so role `artist` can filter by credited names.
   - eslint-plugin-react-hooks 7.1 needs a code pass.
+- 2026-10-26 — **Upload speed fix live** (#152 → main, `801a3b2`). The r2 S3Client now uses `requestChecksumCalculation`/`responseChecksumValidation: 'WHEN_REQUIRED'`. A presign test guards against the checksum params coming back. The tray's retry text shows the real HTTP status / S3 code and whether the upload is direct or proxied. Waiting on the owner's WAV test.
+- 2026-10-26 — **Label OS go-live merged into main**: #149, merge commit `584b212`.
+  - Gate:
+    - CI green on `a18ec79`; preview checked.
+    - Independent HARD review: safe to merge; bundle byte-identical to its generator; no write to existing producer rows.
+    - Cold rehearsal reported: 63/63 applied twice, fingerprints identical, guard refusals.
+  - Production already has `LABEL_OS_ENABLED=true` (`/o` and `/setup` redirect to login and `/api/org` answers 401 after the deploy). The owner still has to run the go-live.md pre-checks and paste `supabase/apply/labelos-go-live.sql` (130–173, 189–192). 174+ ship in a later rebuilt paste.
+- 2026-10-26 — **LABEL-55 Done**: #150 squash `99f7c49`, migration 175 (not applied).
+  - Adds a New release form, a master chooser (D4-filtered), a per-row master / explicit editor, and release distributor / territories / language.
+  - Single-release routes degrade without 175; writes naming the new fields answer 503 naming 175.
+  - The metadata approval snapshot includes the new fields.
+  - Gate: CI green on `958aca6`; preview checked; independent review fixes M1/M2/L1/L3 applied before merge.
+- 2026-10-26 — LABEL-56 started (session_01EsNbV2xZ8ChWsGtjbL7474, no migration) and LABEL-57 started (session_01DCscGqX56BBP54VFWPemjL, migration 176), both on Sonnet. Next reserved: 177 (LABEL-59).
+- Follow-ups noted:
+  - LABEL-34 export lacks distributor / territories / language.
+  - Deliver does not pre-fill the planned distributor.
+  - The New-release artist list uses main-role artists only.
+  - CI e2e `timeout-minutes: 15` is at the margin (runs take ~12–13 min); raise to 25.
