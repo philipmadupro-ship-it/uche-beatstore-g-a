@@ -20,7 +20,7 @@ import { loadOrgArtistWorkspace } from './org-workspace-store';
 import { parseOrgSettings, skippedGates } from './org-settings';
 import { evaluateReleaseReadiness, releaseReadinessView, type ReleaseReadinessView } from './release-readiness';
 import { loadReleaseReadinessFacts, ReleaseReadinessNotReadyError } from './release-readiness-store';
-import { RELEASE_COLUMNS, RELEASE_ITEM_COLUMNS, toReleaseView, type ReleaseItemRow, type ReleaseRow, type ReleaseView } from './releases';
+import { RELEASE_COLUMNS, RELEASE_DETAIL_COLUMNS, RELEASE_ITEM_COLUMNS, toReleaseView, type ReleaseItemRow, type ReleaseRow, type ReleaseView } from './releases';
 
 type Access = Extract<ObjectAccessResult, { ok: true }>;
 
@@ -61,7 +61,11 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
   const org = access.object.orgId;
   const id = access.object.id;
 
-  const relRes = await admin.from('releases').select(RELEASE_COLUMNS).eq('id', id).eq('org_id', org).maybeSingle();
+  let relRes = await admin.from('releases').select(RELEASE_DETAIL_COLUMNS).eq('id', id).eq('org_id', org).maybeSingle();
+  // Migration 175 not applied yet: the page still opens, without the three newer details.
+  if (relRes.error && /distributor|territories|language/.test(relRes.error.message ?? '')) {
+    relRes = await admin.from('releases').select(RELEASE_COLUMNS).eq('id', id).eq('org_id', org).maybeSingle();
+  }
   if (relRes.error) {
     if (isMissingSchema(relRes.error)) return null;
     throw new Error(`release read: ${relRes.error.message}`);

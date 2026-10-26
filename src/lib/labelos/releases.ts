@@ -58,6 +58,10 @@ export type ReleaseRow = {
   c_line: string | null;
   p_line: string | null;
   primary_genre: string | null;
+  /** Migration 175; absent from a read that did not select RELEASE_DETAIL_COLUMNS. */
+  distributor?: string | null;
+  territories?: string[] | null;
+  language?: string | null;
   target_date: string | null;
   release_date: string | null;
   artwork_asset_id: string | null;
@@ -74,6 +78,15 @@ export type ReleaseRow = {
 
 export const RELEASE_COLUMNS =
   'id, org_id, project_id, contact_id, title, type, upc, label_name, c_line, p_line, primary_genre, target_date, release_date, artwork_asset_id, state, delivered_at, delivered_to, imported_released, store_listed, store_listed_at, created_by, created_at, updated_at';
+
+/**
+ * RELEASE_COLUMNS plus migration 175's three details. Only the routes and the
+ * page that show or write those fields select them (release detail, GET / POST
+ * / PATCH of one release), so every other reader of `releases` — board, gates,
+ * delivery, store, exports — keeps working on a database where 175 is not
+ * applied yet.
+ */
+export const RELEASE_DETAIL_COLUMNS = `${RELEASE_COLUMNS}, distributor, territories, language`;
 
 export type ReleaseItemRow = {
   id: string;
@@ -98,6 +111,9 @@ export type ReleaseView = {
   cLine: string | null;
   pLine: string | null;
   primaryGenre: string | null;
+  distributor: string | null;
+  territories: string[] | null;
+  language: string | null;
   targetDate: string | null;
   releaseDate: string | null;
   artworkAssetId: string | null;
@@ -134,6 +150,9 @@ export function toReleaseView(r: ReleaseRow): ReleaseView {
     cLine: r.c_line,
     pLine: r.p_line,
     primaryGenre: r.primary_genre,
+    distributor: r.distributor ?? null,
+    territories: r.territories ?? null,
+    language: r.language ?? null,
     targetDate: r.target_date,
     releaseDate: r.release_date,
     artworkAssetId: r.artwork_asset_id,

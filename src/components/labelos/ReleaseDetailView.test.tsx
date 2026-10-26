@@ -6,7 +6,7 @@
  * detail the member may not read is never drawn. The rules are the server's.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ReleaseDetailView } from './ReleaseDetailView';
 import type { ReleaseDetail } from '@/lib/labelos/release-detail-store';
 import { RELEASE_GATES, type ReleaseGate } from '@/lib/labelos/release-readiness';
@@ -22,16 +22,20 @@ let calls: { url: string; method: string; body: unknown }[];
 /** Every request, including the approvals panel's own read; `calls` leaves that one out so the page's actions are calls[0]. */
 let everything: { url: string; method: string; body: unknown }[];
 let reply: { status: number; body: unknown };
+/** What GET …/master-options answers (the chooser's read); every other call answers `reply`. */
+let optionsReply: { status: number; body: unknown };
 
 beforeEach(() => {
   calls = [];
   everything = [];
   reply = { status: 200, body: {} };
+  optionsReply = { status: 200, body: { songId: 's9', options: [{ id: 's9', relation: 'self', title: 'Extra' }], defaultId: null, ask: true } };
   global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as never;
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const call = { url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined };
     everything.push(call);
     if (!(call.method === 'GET' && url.includes('/approvals?'))) calls.push(call);
+    if (url.includes('/master-options')) return { ok: optionsReply.status < 400, status: optionsReply.status, json: async () => optionsReply.body } as Response;
     return { ok: reply.status < 400, status: reply.status, json: async () => reply.body } as Response;
   });
   toast.success.mockReset();
@@ -54,7 +58,7 @@ const readiness = (over: Partial<Record<ReleaseGate, ReturnType<typeof gate>>> =
 });
 const detail = (over: Partial<ReleaseDetail> = {}): ReleaseDetail => ({
   release: {
-    id: REL, projectId: 'p1', contactId: 'c1', title: 'Midnight EP', type: 'ep', upc: null, labelName: null, cLine: null, pLine: null, primaryGenre: null,
+    id: REL, projectId: 'p1', contactId: 'c1', title: 'Midnight EP', type: 'ep', upc: null, labelName: null, cLine: null, pLine: null, primaryGenre: null, distributor: null, territories: null, language: null,
     targetDate: null, releaseDate: null, artworkAssetId: null, state: 'draft', deliveredAt: null, deliveredTo: null, importedReleased: false,
     storeListed: false, storeListedAt: null, createdBy: null, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
   },
@@ -310,5 +314,132 @@ describe('the export and calendar controls (LABEL-34)', () => {
     d.release.state = 'delivered';
     mount(d);
     expect(screen.getByRole('button', { name: 'Download CSV' })).toBeTruthy();
+  });
+});
+
+const pickSong = async (title: string) => {
+  fireEvent.click(screen.getByRole('button', { name: 'Song to add' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('option', { name: title }));
+  });
+};
+
+describe('the master chooser (LABEL-55)', () => {
+  it('the single linked master is selected for you and goes with the add', async () => {
+    optionsReply = {
+      status: 200,
+      body: { songId: 's9', defaultId: 'm9', ask: false, options: [{ id: 'm9', relation: 'master', title: 'Extra (master)' }, { id: 's9', relation: 'self', title: 'Extra' }] },
+    };
+    mount(detail());
+    await pickSong('Extra');
+    await waitFor(() => expect(screen.getByTestId('release-master-choice').getAttribute('data-ask')).toBe('false'));
+    expect(calls[0]).toMatchObject({ method: 'GET', url: `/api/org/${ORG}/releases/${REL}/master-options?song_track_id=s9` });
+    expect(screen.getByTestId('release-master-hint').textContent).toBe('Its linked master is selected.');
+    expect((screen.getByTestId('release-add-submit') as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByTestId('release-add-submit'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+    expect(calls.find((c) => c.method === 'POST')).toMatchObject({ url: `/api/org/${ORG}/releases/${REL}/items`, body: { song_track_id: 's9', master_track_id: 'm9' } });
+  });
+
+  it('with several masters, or none, Add waits until one is chosen — nothing is guessed', async () => {
+    optionsReply = {
+      status: 200,
+      body: { songId: 's9', defaultId: null, ask: true, options: [{ id: 'm1', relation: 'master', title: 'Mix A' }, { id: 'm2', relation: 'master', title: 'Mix B' }, { id: 's9', relation: 'self', title: 'Extra' }] },
+    };
+    mount(detail());
+    await pickSong('Extra');
+    await waitFor(() => expect(screen.getByTestId('release-master-choice').getAttribute('data-ask')).toBe('true'));
+    expect(screen.getByTestId('release-master-hint').textContent).toMatch(/more than one recording/);
+    expect((screen.getByTestId('release-add-submit') as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Master recording' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('option', { name: /Mix B/ }));
+    });
+    expect((screen.getByTestId('release-add-submit') as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByTestId('release-add-submit'));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ song_track_id: 's9', master_track_id: 'm2' }));
+  });
+
+  it('a song with no linked master says the masters gate stays open on its own mix', async () => {
+    mount(detail());
+    await pickSong('Extra');
+    await waitFor(() => expect(screen.getByTestId('release-master-hint').textContent).toMatch(/No master is linked/));
+    expect((screen.getByTestId('release-add-submit') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('a refused read of the options is shown, and nothing can be added', async () => {
+    optionsReply = { status: 404, body: { error: 'Not found' } };
+    mount(detail());
+    await pickSong('Extra');
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Not found'));
+    expect((screen.getByTestId('release-add-submit') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('changes the master from the row: the options are read when it opens, the current one is marked, and the edit is a PATCH of the item', async () => {
+    optionsReply = {
+      status: 200,
+      body: { songId: 's1', defaultId: 'm1', ask: false, options: [{ id: 'm1', relation: 'master', title: 'Midnight (master)' }, { id: 's1', relation: 'self', title: 'Midnight' }] },
+    };
+    mount(detail());
+    expect(calls).toEqual([]);
+    fireEvent.click(screen.getByTestId('release-item-master-i1'));
+    const current = await screen.findByTestId('release-item-master-option-m1');
+    expect(current.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByTestId('release-item-master-option-s1'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({ url: `/api/org/${ORG}/releases/${REL}/items/i1`, body: { master_track_id: 's1' } });
+  });
+
+  it('marks a track explicit from its row', async () => {
+    mount(detail());
+    fireEvent.click(screen.getByTestId('release-item-explicit-i1'));
+    await waitFor(() => expect(calls[0]).toMatchObject({ url: `/api/org/${ORG}/releases/${REL}/items/i1`, method: 'PATCH', body: { explicit: true } }));
+  });
+
+  it('offers neither the chooser nor the row controls to a member who cannot write', () => {
+    mount(detail({ me: { canWrite: false, isOwner: false, canManagePublic: false, mayReadRights: true } }));
+    expect(screen.queryByTestId('release-add-track')).toBeNull();
+    expect(screen.queryByTestId('release-item-master-i1')).toBeNull();
+    expect(screen.queryByTestId('release-item-explicit-i1')).toBeNull();
+  });
+});
+
+describe('the details (LABEL-55)', () => {
+  const edit = async (testId: string, value: string) => {
+    const field = screen.getByTestId(testId);
+    fireEvent.click(within(field).getByRole('button'));
+    const input = within(field).getByRole('textbox');
+    fireEvent.change(input, { target: { value } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+  };
+
+  it('territories are typed as codes and sent as a list; language and distributor as text', async () => {
+    mount(detail());
+    await edit('release-field-territories', 'us gb');
+    await waitFor(() => expect(calls[0]).toMatchObject({ method: 'PATCH', url: `/api/org/${ORG}/releases/${REL}`, body: { territories: ['US', 'GB'] } }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    await edit('release-field-language', 'PT-br');
+    await waitFor(() => expect(calls.at(-1)?.body).toEqual({ language: 'pt-BR' }));
+    await edit('release-field-distributor', 'DistroKid');
+    await waitFor(() => expect(calls.at(-1)?.body).toEqual({ distributor: 'DistroKid' }));
+  });
+
+  it('a territory that is not a country code is refused on the page, before anything is sent', async () => {
+    mount(detail());
+    await edit('release-field-territories', 'US, USA');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('“USA” is not a two-letter country code (use WW for worldwide).'));
+    expect(calls).toEqual([]);
+  });
+
+  it('a UPC the server refuses is its words in a toast', async () => {
+    reply = { status: 400, body: { error: 'upc: not a valid UPC/EAN (12 or 13 digits with a valid check digit)' } };
+    mount(detail());
+    await edit('release-field-upc', '123456789012');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('upc: not a valid UPC/EAN (12 or 13 digits with a valid check digit)'));
+  });
+
+  it('are read-only for a member who cannot write', () => {
+    mount(detail({ me: { canWrite: false, isOwner: false, canManagePublic: false, mayReadRights: true } }));
+    expect(within(screen.getByTestId('release-field-territories')).queryByRole('button')).toBeNull();
   });
 });
