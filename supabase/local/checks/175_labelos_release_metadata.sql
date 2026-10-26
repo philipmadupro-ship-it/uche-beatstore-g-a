@@ -50,9 +50,9 @@ SELECT public.check_eq('the three columns exist',
 SELECT public.check_eq('an existing release reads NULL',
   (SELECT (distributor IS NULL AND territories IS NULL AND language IS NULL) FROM public.releases WHERE id = :R), true);
 
-UPDATE public.releases SET distributor = 'DistroKid', territories = ARRAY['US', 'GB', 'WW'], language = 'pt-BR' WHERE id = :R;
+UPDATE public.releases SET distributor = 'DistroKid', territories = ARRAY['US', 'GB'], language = 'pt-BR' WHERE id = :R;
 SELECT public.check_eq('a release keeps the details',
-  (SELECT distributor || '|' || array_to_string(territories, ',') || '|' || language FROM public.releases WHERE id = :R), 'DistroKid|US,GB,WW|pt-BR');
+  (SELECT distributor || '|' || array_to_string(territories, ',') || '|' || language FROM public.releases WHERE id = :R), 'DistroKid|US,GB|pt-BR');
 
 SELECT public.check_raises('an empty distributor is refused', format($q$UPDATE public.releases SET distributor = '  ' WHERE id = %L$q$, :R), 'releases_metadata_format');
 SELECT public.check_raises('an over-long distributor is refused', format($q$UPDATE public.releases SET distributor = repeat('x', 121) WHERE id = %L$q$, :R), 'releases_metadata_format');
@@ -60,6 +60,10 @@ SELECT public.check_raises('a malformed language is refused', format($q$UPDATE p
 SELECT public.check_raises('an empty territory list is refused', format($q$UPDATE public.releases SET territories = '{}' WHERE id = %L$q$, :R), 'releases_metadata_format');
 SELECT public.check_raises('a lower-case territory is refused', format($q$UPDATE public.releases SET territories = ARRAY['us'] WHERE id = %L$q$, :R), 'releases_metadata_format');
 SELECT public.check_raises('a three-letter territory is refused', format($q$UPDATE public.releases SET territories = ARRAY['USA'] WHERE id = %L$q$, :R), 'releases_metadata_format');
+SELECT public.check_raises('WW beside a country is refused', format($q$UPDATE public.releases SET territories = ARRAY['WW', 'US'] WHERE id = %L$q$, :R), 'releases_metadata_format');
+SELECT public.check_raises('a duplicate territory is refused', format($q$UPDATE public.releases SET territories = ARRAY['US', 'US'] WHERE id = %L$q$, :R), 'releases_metadata_format');
+UPDATE public.releases SET territories = ARRAY['WW'] WHERE id = :R;
+SELECT public.check_eq('WW on its own is worldwide', (SELECT territories[1] FROM public.releases WHERE id = :R), 'WW');
 SELECT public.check_raises('a null element is refused', format($q$UPDATE public.releases SET territories = ARRAY['US', NULL] WHERE id = %L$q$, :R), 'releases_metadata_format');
 
 -- NULL clears each field.

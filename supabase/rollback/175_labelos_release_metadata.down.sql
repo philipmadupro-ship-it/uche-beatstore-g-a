@@ -12,5 +12,6 @@ ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_metadata_format;
 ALTER TABLE public.releases DROP COLUMN IF EXISTS language;
 ALTER TABLE public.releases DROP COLUMN IF EXISTS territories;
 ALTER TABLE public.releases DROP COLUMN IF EXISTS distributor;
+DROP FUNCTION IF EXISTS public.labelos_territories_ok(text[]);
 
 NOTIFY pgrst, 'reload schema';

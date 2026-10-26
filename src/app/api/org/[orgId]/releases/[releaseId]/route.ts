@@ -18,8 +18,8 @@ import { OrgReleasePatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
-import { RELEASE_DETAIL_COLUMNS, releaseEventSubject, toReleaseItemView, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
-import { checkArtwork, fail, itemsOf, releaseRow, schemaAware, writeError } from '../access';
+import { RELEASE_COLUMNS, RELEASE_DETAIL_COLUMNS, releaseEventSubject, toReleaseItemView, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
+import { checkArtwork, fail, isMissingDetailColumn, itemsOf, releaseRow, schemaAware, writeError } from '../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -91,14 +91,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     // Guarded in the statement: state and release date are repeated as READ, so a delivery (or a cancel)
     // that landed between the read and this write cannot be overwritten — it matches no row and is a 409.
-    let guarded = access.admin
-      .from('releases')
-      .update(parsed.data)
-      .eq('id', release.id)
-      .eq('org_id', access.object.orgId)
-      .eq('state', release.state);
-    guarded = release.release_date === null ? guarded.is('release_date', null) : guarded.eq('release_date', release.release_date);
-    const { data, error } = await guarded.select(RELEASE_DETAIL_COLUMNS).maybeSingle();
+    const update = (columns: string) => {
+      let guarded = access.admin
+        .from('releases')
+        .update(parsed.data)
+        .eq('id', release.id)
+        .eq('org_id', access.object.orgId)
+        .eq('state', release.state);
+      guarded = release.release_date === null ? guarded.is('release_date', null) : guarded.eq('release_date', release.release_date);
+      return guarded.select(columns).maybeSingle();
+    };
+    let { data, error } = await update(RELEASE_DETAIL_COLUMNS);
+    // Before 175 a change that does not name the three details still saves (the statement is refused whole, so it is safe to repeat).
+    if (error && isMissingDetailColumn(error) && !('distributor' in parsed.data || 'territories' in parsed.data || 'language' in parsed.data)) {
+      ({ data, error } = await update(RELEASE_COLUMNS));
+    }
     if (error) return writeError(error, 'Could not save the release').res;
     if (!data) return fail(409, 'The release changed while it was being saved; reload and try again', { field: 'state' }).res;
     await recordEvent(

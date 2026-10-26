@@ -23,7 +23,7 @@ import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { RELEASE_COLUMNS, RELEASE_DETAIL_COLUMNS, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
 import { importedDeliveredAt, planImport } from '@/lib/labelos/release-import';
 import { inChunks, pageAll, ReadError } from '@/lib/labelos/overview-store';
-import { checkArtwork, fail, notReady, writeError } from './access';
+import { checkArtwork, fail, isMissingDetailColumn, notReady, writeError } from './access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -127,9 +127,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (link.error) throw new Error(link.error.message);
     }
 
-    const { data, error } = await admin
-      .from('releases')
-      .insert({
+    const row = {
         org_id: org,
         project_id: projectId,
         contact_id: artist.object.id,
@@ -140,9 +138,6 @@ export async function POST(req: NextRequest, { params }: Params) {
         c_line: body.c_line ?? null,
         p_line: body.p_line ?? null,
         primary_genre: body.primary_genre ?? null,
-        distributor: body.distributor ?? null,
-        territories: body.territories ?? null,
-        language: body.language ?? null,
         target_date: body.target_date ?? null,
         release_date: body.release_date ?? null,
         artwork_asset_id: body.artwork_asset_id ?? null,
@@ -156,9 +151,18 @@ export async function POST(req: NextRequest, { params }: Params) {
             }
           : { state: 'draft' }),
         created_by: access.userId,
-      })
-      .select(RELEASE_DETAIL_COLUMNS)
-      .single();
+        // Migration 175's details: sent only when the body names them, so a create that does not
+        // touch them works on a database that has 144 but not 175.
+        ...(body.distributor !== undefined ? { distributor: body.distributor } : {}),
+        ...(body.territories !== undefined ? { territories: body.territories } : {}),
+        ...(body.language !== undefined ? { language: body.language } : {}),
+    };
+    const insert = (columns: string) => admin.from('releases').insert(row).select(columns).single();
+    let { data, error } = await insert(RELEASE_DETAIL_COLUMNS);
+    // Before 175 the detail columns are not there to select back: the same insert, without them.
+    if (error && isMissingDetailColumn(error) && body.distributor === undefined && body.territories === undefined && body.language === undefined) {
+      ({ data, error } = await insert(RELEASE_COLUMNS));
+    }
     if (error || !data) {
       await removeProject(admin, org, createdProject ? projectId : null);
       return writeError(error ?? {}, 'Could not create the release').res;

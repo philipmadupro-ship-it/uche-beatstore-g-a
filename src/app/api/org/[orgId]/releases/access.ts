@@ -41,6 +41,18 @@ export const fail = (status: number, error: string, extra: Record<string, unknow
 export const notReady = () =>
   fail(503, 'Releases need migration 144 applied on Supabase.', { migration: '144', schemaReady: false });
 
+/**
+ * Migration 175's three columns. A database that has 144 but not 175 answers a
+ * statement that names one of them with 42703 (select) or PGRST204 (write):
+ * that is "apply 175", not "apply 144", and only a request that touches them.
+ */
+export const DETAIL_COLUMN_RE = /\b(distributor|territories|language)\b/;
+export function isMissingDetailColumn(error: { code?: string; message?: string }): boolean {
+  return (error.code === '42703' || error.code === 'PGRST204') && DETAIL_COLUMN_RE.test(error.message ?? '');
+}
+export const detailsNotReady = () =>
+  fail(503, 'The release details (distributor, territories, language) need migration 175 applied on Supabase.', { migration: '175', schemaReady: false });
+
 const OFF_THE_STORE_FIRST = 'Take this release off the store to change its tracklist';
 const keepsItsTracklist = (state: string) => `A ${state} release keeps its tracklist`;
 
@@ -86,6 +98,7 @@ export function importedNeedsOwnerOrAdmin(release: Pick<ReleaseRow, 'imported_re
 
 /** A Postgres error from a write, as the member should see it. */
 export function writeError(error: { code?: string; message?: string }, fallback: string): OwnershipFail {
+  if (isMissingDetailColumn(error)) return detailsNotReady();
   if (isMissingSchema(error)) return notReady();
   // Two tracklist writes that met on their locks (167 orders them, so this is
   // a safety net): retry, never a 500.
@@ -121,12 +134,11 @@ export type ReleaseAccess = { ok: true; release: ReleaseRow };
  * release row, read by id and org.
  */
 export async function releaseRow(access: ObjectAccessOk, opts: { details?: boolean } = {}): Promise<ReleaseAccess | OwnershipFail> {
-  const { data, error } = await access.admin
-    .from('releases')
-    .select(opts.details ? RELEASE_DETAIL_COLUMNS : RELEASE_COLUMNS)
-    .eq('id', access.object.id)
-    .eq('org_id', access.object.orgId)
-    .maybeSingle();
+  const read = (columns: string) =>
+    access.admin.from('releases').select(columns).eq('id', access.object.id).eq('org_id', access.object.orgId).maybeSingle();
+  let { data, error } = await read(opts.details ? RELEASE_DETAIL_COLUMNS : RELEASE_COLUMNS);
+  // Before 175 the page and the routes still work, without the three newer details.
+  if (error && opts.details && isMissingDetailColumn(error)) ({ data, error } = await read(RELEASE_COLUMNS));
   if (error) return isMissingSchema(error) ? notReady() : fail(500, 'Could not read the release');
   if (!data) return fail(404, 'Not found');
   return { ok: true, release: data as unknown as ReleaseRow };
