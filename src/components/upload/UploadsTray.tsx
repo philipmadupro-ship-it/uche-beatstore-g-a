@@ -236,6 +236,13 @@ function UploadRow({ u }: { u: UploadItem }) {
         <div className="flex-1" />
         {isActive && (
           <>
+            {u.transport && (
+              <>
+                <span className="text-white/30" title="How the file reaches storage">{u.transport}</span>
+                {u.retries > 0 && <span className="text-white/30">{u.retries} retr{u.retries === 1 ? 'y' : 'ies'}</span>}
+                <span className="text-white/30">·</span>
+              </>
+            )}
             <span className="text-white/60">{formatSpeed(u.speedBps)}</span>
             <span className="text-white/30">·</span>
             <span className="text-white/60">ETA {formatEta(u.etaSec)}</span>
