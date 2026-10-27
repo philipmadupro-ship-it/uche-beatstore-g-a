@@ -143,7 +143,7 @@ export function ReleaseStoreCard({
           <p className="text-[11px] text-white/60">{consentSentence(store.consent.status)}</p>
           <ul className="mt-2 space-y-1">
             {store.consent.artists.map((a) => (
-              <li key={a.contactId} className="flex items-center justify-between gap-3 text-[12px] text-white/80" data-testid="release-store-consent-artist" data-state={a.state}>
+              <li key={a.contactId} className="flex items-center justify-between gap-3 text-[11px] text-white/80" data-testid="release-store-consent-artist" data-state={a.state}>
                 <span className="truncate">{a.name}</span>
                 <span className="flex shrink-0 items-center gap-2">
                   <span className={cn('text-[11px]', a.state === 'no' ? 'text-white' : 'text-white/60')}>{consentStateLabel(a.state)}</span>

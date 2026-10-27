@@ -36,7 +36,7 @@
  * behaves as it did before LABEL-71).
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { orgHasModule, requireObjectAccess } from '@/lib/auth/org-access';
+import { orgHasModule, requireObjectAccess, type OrgAccessOk } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { OrgReleaseStoreBodySchema } from '@/lib/contracts';
@@ -46,7 +46,7 @@ import { recordEvent } from '@/lib/labelos/activity';
 import { releaseEventSubject } from '@/lib/labelos/releases';
 import { planList, planUnlist, releasedPublicly, type ListingFacts } from '@/lib/labelos/store-listing';
 import { proposalRecipients, summarizeConsents, planProposal, answerableContacts } from '@/lib/labelos/store-consent';
-import { insertProposals, loadAccountLinks, loadCreditedArtists, readConsents, readVeto } from '@/lib/labelos/store-consent-store';
+import { blockedByConsent, insertProposals, loadAccountLinks, loadCreditedArtists, readConsents, readVeto } from '@/lib/labelos/store-consent-store';
 import { askArtistsAboutListing } from '@/lib/labelos/store-consent-notify';
 import { askerName } from '@/lib/labelos/tasks-store';
 import {
@@ -82,7 +82,7 @@ function stateOf(r: ListingFacts & { store_listed_at: string | null }, playback:
  * contacts they themselves answer for (an artist sees their own question here too).
  */
 async function consentView(
-  access: { admin: any; orgId: string; userId: string; artistScope: ReadonlySet<string> | readonly string[] | null },
+  access: OrgAccessOk,
   release: { id: string },
   consents: Awaited<ReturnType<typeof readConsents>>,
 ) {
@@ -105,12 +105,12 @@ async function consentView(
   };
 }
 
-async function answerableForViewer(access: { admin: any; orgId: string; userId: string }, consents: Awaited<ReturnType<typeof readConsents>>): Promise<string[]> {
+async function answerableForViewer(access: OrgAccessOk, consents: Awaited<ReturnType<typeof readConsents>>): Promise<string[]> {
   const links = await loadAccountLinks(access.admin, access.orgId, consents.rows.map((r) => r.artist_contact_id));
   return answerableContacts(links, access.userId);
 }
 
-async function consentStatus(admin: any, releaseId: string) {
+async function consentStatus(admin: OrgAccessOk['admin'], releaseId: string) {
   try {
     return summarizeConsents((await readConsents(admin, releaseId)).rows).status;
   } catch {
@@ -331,6 +331,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
       }
     }
     return json(409, { error: 'The release changed while it was being listed; check it and try again', field: 'state' });
+  }
+  // An artist may have said no (or the store owner vetoed) between the plan's read and the claim above. The public
+  // routes would refuse the release anyway; this keeps the flag honest and tells the lister, instead of a listing
+  // that looks live and serves nothing.
+  if (consents.schemaReady && (await blockedByConsent(admin, [release.id])).has(release.id.toLowerCase())) {
+    await admin
+      .from('releases')
+      .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
+      .eq('id', release.id)
+      .eq('org_id', org);
+    if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
+    return json(409, { error: 'An artist on this release said no while it was being listed; nothing was put on the store', field: 'consent' });
   }
   // recordEvent + put-back, as LABEL-33's delivery: there is no audit RPC for these verbs (that would be a
   // second migration), so the change is written first and undone if its record cannot be written.

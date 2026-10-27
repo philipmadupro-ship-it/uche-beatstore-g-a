@@ -92,7 +92,7 @@ export function StoreListingsView({ orgId, showConnected }: { orgId: string; sho
               <li key={c.releaseId} className={ROW} data-testid="store-asked-row" data-state={c.state}>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-medium text-white/80">{c.title}</p>
-                  <p className={`${LABEL} mt-1 truncate`}>
+                  <p className={`${LABEL} mt-1 break-words`}>
                     {c.type}
                     {c.releaseDate ? ` · ${c.releaseDate}` : ''} · {myConsentStatus(c.state, c.listed)}
                   </p>
@@ -133,7 +133,7 @@ export function StoreListingsView({ orgId, showConnected }: { orgId: string; sho
                 <li key={r.releaseId} className={ROW} data-testid="store-connected-row" data-serving={r.serving ? 'true' : 'false'}>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-medium text-white/80">{r.title}</p>
-                    <p className={`${LABEL} mt-1 truncate`}>
+                    <p className={`${LABEL} mt-1 break-words`}>
                       {r.artist ?? r.artistOrg}
                       {r.artist && r.artistOrg !== r.artist ? ` · ${r.artistOrg}` : ''} · {r.playback === 'full' ? 'full songs' : 'preview clips'} · {connectedStatus(r)}
                     </p>

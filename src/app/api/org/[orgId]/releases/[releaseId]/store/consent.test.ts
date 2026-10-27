@@ -43,6 +43,7 @@ let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
 let failVerb: string | null = null;
 let missing = new Set<string>();
+let broken = new Set<string>();
 const promote = vi.fn();
 const del = vi.fn();
 
@@ -57,6 +58,17 @@ vi.mock('@supabase/supabase-js', () => ({
       if (missing.has(table)) {
         // PostgREST: a table the schema cache does not know.
         const res = { data: null, error: { message: `Could not find the table 'public.${table}' in the schema cache`, code: 'PGRST205' } };
+        const q: Record<string, unknown> = {};
+        const chain = () => q;
+        for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'in', 'is', 'not', 'order', 'limit', 'range', 'neq']) q[m] = chain;
+        q.maybeSingle = async () => res;
+        q.single = async () => res;
+        q.then = (ok: (v: unknown) => unknown) => Promise.resolve(res).then(ok);
+        return q;
+      }
+      if (broken.has(table)) {
+        // A real failure that is NOT "table missing": the store must fail closed on it.
+        const res = { data: null, error: { message: 'connection reset', code: '08006' } };
         const q: Record<string, unknown> = {};
         const chain = () => q;
         for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'in', 'is', 'not', 'order', 'limit', 'range', 'neq']) q[m] = chain;
@@ -120,6 +132,7 @@ beforeEach(() => {
   current = null;
   failVerb = null;
   missing = new Set();
+  broken = new Set();
   promote.mockReset().mockImplementation(async (_o: string, _r: string, items: { masterTrackId: string; privatePreviewRef: string | null }[]) =>
     items.filter((i) => i.privatePreviewRef).map((i) => i.masterTrackId));
   del.mockReset().mockResolvedValue(1);
@@ -280,6 +293,21 @@ describe('listing asks the credited artists', () => {
     expect(db.tables.notifications).toHaveLength(0);
   });
 
+  it('an artist’s no that lands between the check and the claim is honoured: nothing goes live, the lister is told', async () => {
+    promote.mockImplementation(async (_o: string, _r: string, items: { masterTrackId: string }[]) => {
+      // The artist answers while the previews are being prepared (after the plan's read, before the claim).
+      db.tables.listing_consents.push({ id: 'x', org_id: P, release_id: RP, artist_contact_id: NOVA, state: 'no', proposed_by: AR, proposed_at: '2026-10-01', decided_by: AU1, decided_at: '2026-10-02' });
+      return items.map((i) => i.masterTrackId);
+    });
+    const res = await list(AR, P, RP, { listed: true });
+    expect(res.status).toBe(409);
+    expect((await res.json()).field).toBe('consent');
+    expect(row(RP).store_listed).toBe(false);
+    expect(events('release.store_listed')).toHaveLength(0);
+    expect(del).toHaveBeenCalled();
+    expect((await publicDetail(RP)).status).toBe(404);
+  });
+
   it('a second listing request asks nobody twice', async () => {
     await list(AR, P, RP, { listed: true });
     await list(AR, P, RP, { listed: true, playback: 'preview' });
@@ -404,6 +432,21 @@ describe('the artist’s answer', () => {
     const res = await decide(AU1, P, RP, 'no');
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({ migration: '186' });
+  });
+
+  it('the public store fails CLOSED on a consent table it cannot read (never "no rows")', async () => {
+    broken = new Set(['listing_consents']);
+    expect((await publicDetail(RP)).status).toBe(500);
+    expect((await publicAudio(RP, I1)).status).toBe(500);
+    const list500 = await call('publicList', 'GET', null, {});
+    expect(list500.status).toBe(500);
+  });
+
+  it('GET consents without migration 186 says so and lists nothing', async () => {
+    missing = new Set(['listing_consents']);
+    const res = await call('consents', 'GET', AU1, { orgId: P });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ schemaReady: false, consents: [] });
   });
 
   it('GET consents lists only the caller’s own questions; a member who is nobody’s artist gets an empty list', async () => {
