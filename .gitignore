@@ -82,3 +82,5 @@ public/uploads/labelos-e2e-*
 
 # Org assets the local-database e2e run uploads (LABEL-54 review).
 data/orgs/
+# Local-upload residue (no R2 locally): never committed.
+public/uploads/*.wav

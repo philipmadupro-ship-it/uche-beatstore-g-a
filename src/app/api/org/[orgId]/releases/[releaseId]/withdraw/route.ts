@@ -146,7 +146,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       .eq('state', 'withdrawn');
     if (revertError) {
       log.error('withdraw put-back FAILED: release is withdrawn without its event', { releaseId, error: revertError.message });
-      return json(500, { error: 'The release was withdrawn but the record of it could not be written, and it could not be undone. Withdraw it again, or ask an owner.', withdrawn: true });
+      return json(500, { error: 'The release is withdrawn, but the record of it could not be written. Tell an owner: nothing else needs doing and a second withdraw would be refused.', withdrawn: true });
     }
     return json(500, { error: 'Could not withdraw the release' });
   }

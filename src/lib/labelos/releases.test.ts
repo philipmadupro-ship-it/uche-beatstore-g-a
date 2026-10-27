@@ -145,3 +145,23 @@ describe('countsAsOnRelease (LABEL-56: only a release that went out finishes a s
     expect(countsAsOnRelease([...on('draft'), ...on('cancelled')])).toBe(false);
   });
 });
+
+describe('views are built field by field', () => {
+  it('a release row', () => {
+    const view = toReleaseView({
+      id: 'R', org_id: 'L', project_id: 'P', contact_id: 'C', title: 'EP', type: 'ep', upc: '036000291452',
+      label_name: 'L Records', c_line: '© 2026 L', p_line: '℗ 2026 L', primary_genre: 'R&B', target_date: '2026-11-01',
+      release_date: null, artwork_asset_id: null, state: 'draft', delivered_at: null, delivered_to: null,
+      imported_released: false, store_listed: false, store_listed_at: null, created_by: 'U', created_at: 't', updated_at: 't',
+      secret_column: 'never',
+    } as never);
+    expect(view).not.toHaveProperty('secret_column');
+    expect(view).toMatchObject({ id: 'R', projectId: 'P', contactId: 'C', title: 'EP', type: 'ep', upc: '036000291452', state: 'draft' });
+  });
+
+  it('an item row', () => {
+    expect(toReleaseItemView({ id: 'I', release_id: 'R', position: 2, song_track_id: 'S', master_track_id: 'M', version_title: 'Radio Edit', explicit: true, extra: 1 } as never)).toEqual({
+      id: 'I', position: 2, songTrackId: 'S', masterTrackId: 'M', versionTitle: 'Radio Edit', explicit: true,
+    });
+  });
+});
