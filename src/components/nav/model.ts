@@ -121,9 +121,12 @@ function licensed(org: OrgNavContext, module: string): boolean {
  * The pages every org has, under its slug. Every member can see who is in
  * their org (136's RLS lets them read co-members), so Members is not gated.
  */
-function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | string> | null, isOwner = false): NavGroup {
+function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | string> | null, isOwner = false, storeLicensed = true): NavGroup {
   const base = `/o/${slug}`;
   const items: NavGroup['items'] = [{ label: 'Members', href: `${base}/settings/members`, icon: UsersRound }];
+  // LABEL-71: the page where a credited artist answers "may this go on the store?" (the bell links to it) and where the
+  // store owner sees the music of connected artists. Every member can open it; it shows each of them only what is theirs.
+  if (storeLicensed) items.push({ label: 'Store listings', href: `${base}/releases/store`, icon: Store });
   // Doc 25 phase 3: the admin centre, first, for whoever runs the team of a label or artist org (lib/labelos/admin-centre's rule).
   if ((orgKind === 'label' || orgKind === 'artist') && caps?.has(ADMIN_CENTRE_CAPABILITY)) {
     items.unshift({ label: 'Admin', href: `${base}/settings`, icon: ShieldCheck });
@@ -212,5 +215,5 @@ export function navGroupsFor(
       ? rightsGroup(org.slug, { parties: canSeeParties(caps), legal: canSeeLegalQueue(caps) && licensed(org, 'contracts') })
       : null;
   const rights = rightsHub ? [rightsHub] : [];
-  return [...producerHubs, ...roster, ...releases, ...rights, orgGroup(org.slug, orgKind, caps, org.isOwner === true)];
+  return [...producerHubs, ...roster, ...releases, ...rights, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];
 }
