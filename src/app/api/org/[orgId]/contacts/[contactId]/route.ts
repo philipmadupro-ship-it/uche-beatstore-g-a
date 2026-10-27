@@ -152,6 +152,10 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
         if (/listing_consents/.test(deleteErr.message ?? '')) {
           return NextResponse.json({ error: 'This artist has a say on a store listing of one of the organization’s releases. Delete that release first.' }, { status: 409 });
         }
+        // LABEL-57: a contract names this contact as its artist (a contract is a record; it is voided, never deleted).
+        if (/"contracts"|contracts_artist_contact/.test(deleteErr.message ?? '')) {
+          return NextResponse.json({ error: 'This contact is the artist on a contract. Contracts are kept as a record, so the contact cannot be removed.' }, { status: 409 });
+        }
         return NextResponse.json({ error: 'This contact is the artist of a release. Delete the release first.' }, { status: 409 });
       }
       throw new Error(deleteErr.message);

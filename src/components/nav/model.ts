@@ -1,12 +1,13 @@
 import {
   Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
   CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
-  Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2,
+  Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2, FileText,
   SlidersHorizontal, ShieldCheck,
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
 import { canSeeParties } from '@/lib/labelos/parties-view';
+import { canSeeContracts } from '@/lib/labelos/contracts-nav';
 import { ADMIN_CENTRE_CAPABILITY } from '@/lib/labelos/admin-centre';
 
 /**
@@ -175,9 +176,10 @@ function releasesGroup(slug: string): NavGroup {
  * artist orgs only. The IA's wider Rights hub (splits overview) grows here; a
  * link to a page not built would be a dead link.
  */
-function rightsGroup(slug: string, items: { parties: boolean; legal: boolean }): NavGroup | null {
+function rightsGroup(slug: string, items: { parties: boolean; legal: boolean; contracts: boolean }): NavGroup | null {
   const links = [
     ...(items.parties ? [{ label: 'Parties', href: `/o/${slug}/rights/parties`, icon: UsersRound }] : []),
+    ...(items.contracts ? [{ label: 'Contracts', href: `/o/${slug}/rights/contracts`, icon: FileText }] : []),
     ...(items.legal ? [{ label: 'Legal queue', href: `/o/${slug}/rights/legal`, icon: Scale }] : []),
   ];
   return links.length === 0 ? null : { key: 'rights', label: 'Rights', icon: Scale, items: links };
@@ -212,7 +214,7 @@ export function navGroupsFor(
   // The legal queue belongs to the contracts module (LABEL-47); Parties is for anyone who reads a party.
   const rightsHub =
     orgKind !== 'producer' && caps
-      ? rightsGroup(org.slug, { parties: canSeeParties(caps), legal: canSeeLegalQueue(caps) && licensed(org, 'contracts') })
+      ? rightsGroup(org.slug, { parties: canSeeParties(caps), legal: canSeeLegalQueue(caps) && licensed(org, 'contracts'), contracts: canSeeContracts(caps) && licensed(org, 'contracts') })
       : null;
   const rights = rightsHub ? [rightsHub] : [];
   return [...producerHubs, ...roster, ...releases, ...rights, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];

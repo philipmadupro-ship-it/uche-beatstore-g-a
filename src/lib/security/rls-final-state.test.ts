@@ -123,6 +123,10 @@ function labelOsTables(): string[] {
     // 170_labelos_entitlements_platform.sql (LABEL-47)
     'org_entitlements',
     'platform_admins',
+    // 176_labelos_contracts.sql (LABEL-57)
+    'contract_templates',
+    'contracts',
+    'contract_parties',
     // 190_labelos_team_accounts.sql (doc 25): service-role only, no policy.
     'org_managed_accounts',
     // 186_labelos_listing_consent.sql (LABEL-71): service-role only behind a deny-all policy.
@@ -594,7 +598,7 @@ describe('final RLS policy state', () => {
 
     it('changes exactly one policy: the parties read, which now excludes role artist from the capability branch', () => {
       const before = replay(realMigrations().filter((m) => m.name < '174')).policies;
-      // A policy that did not exist at 173 is a new table's (186's deny-all pair, for one), not a change to an old one.
+      // A policy that did not exist at 173 is a new table's (176's contracts, 186's deny-all pair), not a change to an old one.
       const changed = [...policies.keys()].filter((k) => before.has(k) && policies.get(k) !== before.get(k)).sort();
       expect(changed).toEqual(['parties.parties_member_read']);
       const body = policies.get('parties.parties_member_read') ?? '';
