@@ -9456,3 +9456,5 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Deliver does not pre-fill the planned distributor.
   - The New-release artist list uses main-role artists only.
   - CI e2e `timeout-minutes` raised 15 → 25 in this status PR: runs take ~12–15 min and were cancelled at the limit (twice on #151, once on #149).
+- 2026-10-27 — **CI e2e timeout raised 15 → 25 min**, on this branch (#151, `98e33d1`) and on main (#153, `1064cef`). Runs take about 12–15 min and were cancelled at the limit without a failing test.
+- 2026-10-27 — **LABEL-56 decisions (orchestrator):** migration **193** approved, the next free number outside the backlog; next free is now 194. A song whose only releases are drafts stays `working` until a release is DELIVERED, not when its gates turn green, because the gates are derived in TS and cannot be mirrored in SQL. Cancelled releases are ignored. The TS rule and its SQL twin (`labelos_track_is_finished`) carry parity tests. Without 193 the old rule applies; 193 ships in the second paste.
