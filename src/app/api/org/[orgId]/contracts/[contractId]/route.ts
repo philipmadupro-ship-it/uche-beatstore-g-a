@@ -144,8 +144,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const patch: Record<string, unknown> = {};
     const changed: string[] = [];
+    // The editor sends the whole form; only what really differs is a change (and a version, and an event field).
+    const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
     for (const key of ['title', 'artist_contact_id', 'track_id', 'release_id', 'effective_date', 'term_months', 'territories', 'internal_note'] as const) {
-      if (body[key] !== undefined) {
+      if (body[key] !== undefined && !same(body[key], row[key])) {
         patch[key] = body[key];
         changed.push(key);
       }
@@ -156,8 +158,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (body.fields !== undefined) {
       const fields = cleanFields(body.fields);
       if (!fields.ok) return json(400, { error: fields.error });
-      patch.fields = fields.fields;
-      changed.push('fields');
+      const sorted = (f: Record<string, string>) => Object.entries(f).sort(([a], [b]) => a.localeCompare(b));
+      if (!same(sorted(fields.fields), sorted(row.fields))) {
+        patch.fields = fields.fields;
+        changed.push('fields');
+      }
     }
     if (body.base_version !== undefined && body.base_version !== row.version) {
       return json(409, { error: 'Someone saved this contract after you opened it. Reload to see their changes.' });
@@ -178,8 +183,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       const many = slots.find((s) => !s.many && body.parties!.filter((p) => p.role === s.role).length > 1);
       if (many) return json(400, { error: `This contract has one ${many.label.toLowerCase()}` });
       if (!(await partiesInOrg(admin, org, body.parties.map((p) => p.party_id)))) return json(404, { error: 'A party was not found in this organization' });
-      parties = body.parties.map((p, i) => ({ party_id: p.party_id, role: p.role, position: i }));
-      changed.push('parties');
+      const next = body.parties.map((p, i) => ({ party_id: p.party_id, role: p.role, position: i }));
+      const current = [...loaded.links].sort((a, b) => a.position - b.position).map((l, i) => ({ party_id: l.party_id, role: l.role, position: i }));
+      if (!same(next, current)) {
+        parties = next;
+        changed.push('parties');
+      }
     }
     const bad = await linkedInOrg(admin, org, { artist: body.artist_contact_id, track: body.track_id, release: body.release_id });
     if (bad) return json(404, { error: bad });

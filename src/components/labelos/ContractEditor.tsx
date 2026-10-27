@@ -30,6 +30,14 @@ import {
 } from '@/lib/labelos/contracts-client';
 import { BTN, FIELD, FormFields, LABEL, NOTICE, StatusBadge, loadLookups, type Lookups } from './ContractsView';
 
+/** "contract.effective_date" → "Effective date"; typed fields keep their own label. */
+const missingLabel = (key: string): string => {
+  const own = mergeField(key)?.label;
+  if (own) return own;
+  const words = key.replace(/^(contract|party)\./, '').replace(/[._]/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 const MARK_LABEL = { edited: 'Edited from the template', added: 'Added to this contract' } as const;
 
 /** A merge value still empty is shown in brackets by the renderer; give it a colour so a reader sees what is left. */
@@ -253,7 +261,7 @@ export function ContractEditor({ orgId, contractId }: { orgId: string; contractI
             ))}
             {suggestions.fields.map((s) => (
               <li key={`${s.key}-${s.partyId}`}>
-                <button type="button" className={BTN} onClick={() => setForm({ ...form, fields: { ...form.fields, [s.key]: s.value } })} data-testid={`suggest-${s.key}`} title={s.source}>
+                <button type="button" className={BTN} onClick={() => setForm({ ...form, fields: { ...form.fields, [s.key]: s.value } })} data-testid={`suggest-${s.key}-${s.partyId}`} title={s.source}>
                   {mergeField(s.key)?.label ?? s.key}: {s.value} <span className="text-white/40">· {s.source}</span>
                 </button>
               </li>
@@ -328,7 +336,7 @@ export function ContractEditor({ orgId, contractId }: { orgId: string; contractI
         {error && (
           <div role="alert" className="text-[11px] text-[#ff8b73]" data-testid="contract-editor-error">
             {error}
-            {missing.length > 0 && <span className="block text-white/60">Empty: {missing.map((k) => mergeField(k)?.label ?? k).join(', ')}</span>}
+            {missing.length > 0 && <span className="block text-white/60">Empty: {missing.map(missingLabel).join(', ')}</span>}
           </div>
         )}
       </header>

@@ -171,6 +171,17 @@ describe('PATCH — clause edits are versions', () => {
     expect(db.tables.contracts[0].version).toBe(2);
   });
 
+  it('the editor resends the whole form: only what differs is a change, a version and an event field', async () => {
+    const c = add();
+    const same = { title: 'Nova deal', artist_contact_id: C1, track_id: S1, release_id: null, effective_date: '2027-03-01', term_months: 24, territories: ['WW'], fields: { currency: 'USD', advance: '25000' }, parties: [{ party_id: PL, role: 'label' }, { party_id: PN, role: 'artist' }], clauses: CLAUSES, base_version: 1 };
+    await call('detail', 'PATCH', LEG, c.id, same);
+    expect(db.tables.contracts[0].version).toBe(1);
+    expect(events('contract.updated')).toHaveLength(0);
+    await call('detail', 'PATCH', LEG, c.id, { ...same, fields: { currency: 'USD', advance: '26000' } });
+    expect(db.tables.contracts[0].version).toBe(2);
+    expect(events('contract.updated')[0].payload).toEqual({ changed: ['fields'], version: 2 });
+  });
+
   it('identical wording saves nothing and bumps nothing', async () => {
     const c = add();
     const res = await call('detail', 'PATCH', LEG, c.id, { clauses: CLAUSES });
