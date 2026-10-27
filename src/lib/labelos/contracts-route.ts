@@ -8,7 +8,7 @@ import type { AdminClient } from '@/lib/auth/ownership';
 import { mayReadContract, readsAllContracts, type ContractActor } from './contracts/access';
 import { contractView, renderContext, type ContractPartyLink, type ContractRow, type ContractView, type PartyIdentity } from './contracts/context';
 import { renderClauses, type Rendered } from './contracts/render';
-import { identitiesOf, linkedNames, linksOf, ownPartyIds } from './contracts-store';
+import { identitiesOf, linkedNames, linksOf, ownPartyIds, type ContractReadScope } from './contracts-store';
 
 export async function contractActor(access: Pick<OrgAccessOk, 'admin' | 'orgId' | 'userId' | 'role' | 'capabilities' | 'artistScope'>): Promise<ContractActor> {
   return {
@@ -43,4 +43,12 @@ export function viewsOf(loaded: LoadedContracts, actor: ContractActor): Contract
 export async function documentOf(admin: AdminClient, org: string, row: ContractRow, links: readonly ContractPartyLink[], identities: ReadonlyMap<string, PartyIdentity>): Promise<Rendered> {
   const names = await linkedNames(admin, org, row);
   return renderClauses(row.clauses, renderContext({ row, links, identities, ...names }));
+}
+
+/** The narrowest read that still contains everything `mayReadContract` would let this actor see. */
+export function readScopeFor(actor: ContractActor): ContractReadScope {
+  if (readsAllContracts(actor)) {
+    return actor.artistScope === null ? { kind: 'all' } : { kind: 'artists', contactIds: [...actor.artistScope], sentOnly: false, partyIds: [] };
+  }
+  return { kind: 'own', contactIds: actor.role === 'artist' && actor.artistScope ? [...actor.artistScope] : [], partyIds: [...actor.ownPartyIds] };
 }

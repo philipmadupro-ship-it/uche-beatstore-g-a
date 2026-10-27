@@ -187,6 +187,7 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'credit.confirmed',
   'credit.disputed',
   'credit.withdrawn',
+  'contract.voided',
   'split_sheet.circulated',
   'split_sheet.superseded',
   'split_sheet.signed',

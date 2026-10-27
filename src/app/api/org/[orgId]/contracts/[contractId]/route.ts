@@ -17,6 +17,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { isUUID, readBody } from '@/lib/validate';
 import { recordEvent } from '@/lib/labelos/activity';
+import { auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { scopeAllowsContact } from '@/lib/labelos/artist-scope';
 import { mayReadContract, readsAllContracts } from '@/lib/labelos/contracts/access';
 import { contractView } from '@/lib/labelos/contracts/context';
@@ -29,12 +30,12 @@ import {
   ContractSaveError,
   ContractsNotReadyError,
   identitiesOf,
+  isMissingContractsSchema,
   linkedInOrg,
   linksOf,
   partiesInOrg,
   readContractRow,
   saveContract,
-  voidContract,
 } from '@/lib/labelos/contracts-store';
 
 export const runtime = 'nodejs';
@@ -99,9 +100,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     if (body.status === 'void') {
       if (row.status === 'void') return json(409, { error: 'This contract is already void' });
-      const done = await voidContract(admin, org, row.id, access.userId, body.void_reason ?? null);
-      if (!done) return json(409, { error: 'This contract is already void' });
-      await recordEvent(admin, { orgId: org, userId: access.userId }, 'contract.voided', subject, { from: row.status, with_reason: !!body.void_reason });
+      // Voiding is final, so the status change and its audit event are ONE transaction (migration 176).
+      const { data, error } = await auditRpc(admin, 'contractVoid', {
+        p_org: org,
+        p_actor: access.userId,
+        p_contract: row.id,
+        p_reason: body.void_reason ?? null,
+        p_payload: { with_reason: !!body.void_reason },
+      });
+      if (error) {
+        if (isMissingAuditRpc(error) || isMissingContractsSchema(error)) return json(503, { error: CONTRACTS_NOT_READY });
+        throw new Error(`contract void: ${error.message}`);
+      }
+      if (data?.error === 'already_void') return json(409, { error: 'This contract is already void' });
+      if (data?.error === 'not_found') return NOT_FOUND();
       return json(200, { ok: true });
     }
 

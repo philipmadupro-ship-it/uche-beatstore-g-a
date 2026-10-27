@@ -15,7 +15,8 @@ import { isUUID } from '@/lib/validate';
 import type { TemplateClause } from './contracts/templates';
 import type { ContractPartyLink, ContractRow, PartyIdentity } from './contracts/context';
 import type { PartyRole, TemplateTypeId } from './contracts/types';
-import { inChunks, pageAll } from './paged-read';
+import { inChunks, pageAll, ReadError } from './paged-read';
+import { hasArtistRole } from './roster';
 
 export const CONTRACTS_NOT_READY = 'Contracts are not set up on this database yet (migration 176).';
 
@@ -29,13 +30,20 @@ type DbError = { message: string; code?: string } | null | undefined;
 
 export function isMissingContractsSchema(error: DbError): boolean {
   if (!error) return false;
-  return ['PGRST205', '42P01', '42703', 'PGRST204', 'PGRST202', '42883'].includes(error.code ?? '');
+  // A missing relation or function only: a missing COLUMN is a bug (or another migration), never "not set up".
+  return ['PGRST205', '42P01', 'PGRST202', '42883'].includes(error.code ?? '');
 }
 
 function check(what: string, error: DbError): void {
   if (!error) return;
   if (isMissingContractsSchema(error)) throw new ContractsNotReadyError();
   throw new Error(`${what}: ${error.message}`);
+}
+
+/** A paged read that failed: a missing relation is `ContractsNotReadyError`, anything else stays what it was. */
+function rethrowRead(err: unknown): never {
+  if (err instanceof ReadError) check(err.message, err.raw as DbError);
+  throw err;
 }
 
 /** A read before any write: an INSERT into a missing table is an empty 404 PostgREST gives no code for. */
@@ -64,15 +72,10 @@ const TEMPLATE_COLUMNS = 'id, type, version, name, clauses, based_on, created_by
 
 /** Every version of the org's own templates, newest first within a type. */
 export async function listOrgTemplates(admin: AdminClient, org: string): Promise<TemplateRow[]> {
-  try {
-    return await pageAll<TemplateRow>(
-      (from, to) => admin.from('contract_templates').select(TEMPLATE_COLUMNS).eq('org_id', org).order('type').order('version', { ascending: false }).range(from, to),
-      'template list',
-    );
-  } catch (err) {
-    if (err && typeof err === 'object' && 'raw' in err) check('template list', { message: String((err as { raw: { message: string } }).raw.message), code: (err as { raw: { code?: string } }).raw.code });
-    throw err;
-  }
+  return pageAll<TemplateRow>(
+    (from, to) => admin.from('contract_templates').select(TEMPLATE_COLUMNS).eq('org_id', org).order('type').order('version', { ascending: false }).range(from, to),
+    'template list',
+  ).catch(rethrowRead);
 }
 
 export async function latestOrgTemplate(admin: AdminClient, org: string, type: TemplateTypeId): Promise<TemplateRow | null> {
@@ -114,16 +117,42 @@ function asRow(raw: unknown): ContractRow {
   return raw as ContractRow;
 }
 
-export async function listContractRows(admin: AdminClient, org: string): Promise<ContractRow[]> {
-  const rows = await pageAll<unknown>(
-    (from, to) => admin.from('contracts').select(CONTRACT_LIST_COLUMNS).eq('org_id', org).order('created_at', { ascending: false }).order('id').range(from, to),
-    'contract list',
-  ).catch((err) => {
-    const raw = (err as { raw?: { message: string; code?: string } }).raw;
-    if (raw) check('contract list', raw);
-    throw err;
-  });
-  return rows.map(asRow);
+/**
+ * Which rows to read. The caller's rights are decided by `mayReadContract`
+ * either way; this only keeps the read from paging the whole org for someone
+ * who can read a few: `all` (whole-org staff), `artists` (staff or an artist
+ * limited to these contacts), `own` (sent contracts naming these parties
+ * and / or these artists).
+ */
+export type ContractReadScope =
+  | { kind: 'all' }
+  | { kind: 'artists'; contactIds: readonly string[]; sentOnly: boolean; partyIds: readonly string[] }
+  | { kind: 'own'; contactIds: readonly string[]; partyIds: readonly string[] };
+
+const listPage = (admin: AdminClient, org: string, narrow: (q: ReturnType<typeof base>) => ReturnType<typeof base>) =>
+  pageAll<unknown>((from, to) => narrow(base(admin, org)).order('created_at', { ascending: false }).order('id').range(from, to), 'contract list').catch(rethrowRead);
+const base = (admin: AdminClient, org: string) => admin.from('contracts').select(CONTRACT_LIST_COLUMNS).eq('org_id', org);
+
+export async function listContractRows(admin: AdminClient, org: string, scope: ContractReadScope = { kind: 'all' }): Promise<ContractRow[]> {
+  if (scope.kind === 'all') return (await listPage(admin, org, (q) => q)).map(asRow);
+  const found = new Map<string, ContractRow>();
+  const add = (rows: unknown[]) => rows.forEach((r) => found.set((r as ContractRow).id, asRow(r)));
+  const sentOnly = scope.kind === 'own' || scope.sentOnly;
+  if (scope.contactIds.length > 0) {
+    for (const part of [...new Set(scope.contactIds)].reduce<string[][]>((acc, id, i) => ((i % 200 === 0 ? acc.push([id]) : acc[acc.length - 1].push(id)), acc), [])) {
+      add(await listPage(admin, org, (q) => (sentOnly ? q.neq('status', 'draft') : q).in('artist_contact_id', part)));
+    }
+  }
+  if (scope.partyIds.length > 0) {
+    const linked = await inChunks<{ contract_id: string }>(
+      scope.partyIds,
+      (part, from, to) => admin.from('contract_parties').select('contract_id').eq('org_id', org).in('party_id', part).order('contract_id').range(from, to),
+      'own contract parties',
+    ).catch(rethrowRead);
+    const ids = [...new Set(linked.map((l) => l.contract_id))].filter((id) => !found.has(id));
+    for (let i = 0; i < ids.length; i += 200) add(await listPage(admin, org, (q) => q.neq('status', 'draft').in('id', ids.slice(i, i + 200))));
+  }
+  return [...found.values()].sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
 }
 
 export async function readContractRow(admin: AdminClient, org: string, id: string): Promise<ContractRow | null> {
@@ -172,6 +201,13 @@ export async function linkedNames(admin: AdminClient, org: string, row: Pick<Con
   return { artistName: artist, songTitle: song, releaseTitle: release };
 }
 
+/** The contact must be a ROSTER artist of the org (an artist role, or in workspace mode): the read rules treat the contract's contact as the artist. */
+async function isRosterArtist(admin: AdminClient, org: string, id: string): Promise<boolean> {
+  const res = await admin.from('contacts').select('category, secondary_category').eq('org_id', org).eq('id', id).maybeSingle();
+  if (res.error || !res.data) return false;
+  return hasArtistRole(res.data as { category: string | null; secondary_category: string | null });
+}
+
 export async function linkedInOrg(admin: AdminClient, org: string, ids: { artist?: string | null; track?: string | null; release?: string | null }): Promise<string | null> {
   const probe = async (table: string, id: string | null | undefined): Promise<boolean> => {
     if (!id) return true;
@@ -179,6 +215,7 @@ export async function linkedInOrg(admin: AdminClient, org: string, ids: { artist
     return !res.error && !!res.data;
   };
   if (!(await probe('contacts', ids.artist))) return 'That artist is not in this organization';
+  if (ids.artist && !(await isRosterArtist(admin, org, ids.artist))) return 'That contact is not an artist on your roster';
   if (!(await probe('tracks', ids.track))) return 'That song is not in this organization';
   if (!(await probe('releases', ids.release))) return 'That release is not in this organization';
   return null;
@@ -218,18 +255,4 @@ export async function saveContract(
     throw new Error(`contract save: ${res.error.message}`);
   }
   return res.data as unknown as string;
-}
-
-/** Void a contract that has not been voided; the trigger refuses a void one. Returns false when nothing matched. */
-export async function voidContract(admin: AdminClient, org: string, id: string, actor: string, reason: string | null): Promise<boolean> {
-  await assertContractsSchema(admin);
-  const res = await admin
-    .from('contracts')
-    .update({ status: 'void', voided_by: actor, voided_at: new Date().toISOString(), void_reason: reason })
-    .eq('org_id', org)
-    .eq('id', id)
-    .neq('status', 'void')
-    .select('id');
-  check('contract void', res.error);
-  return (res.data ?? []).length > 0;
 }

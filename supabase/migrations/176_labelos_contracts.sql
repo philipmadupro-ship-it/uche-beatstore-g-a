@@ -45,11 +45,20 @@
 --   · contract_templates: `contracts.read`, role other than artist.
 --   · contract_parties: exactly the contracts the caller can read.
 --
+-- Voiding: labelos_audit_contract_void changes the status and records the audit
+-- event `contract.voided` in one transaction.
+--
 -- Atomic write: labelos_contract_save(org, actor, id, row, parties) creates
 -- or edits a DRAFT and replaces its parties in one transaction. service_role
 -- only. Everything else (void, templates) is one statement.
 --
 -- Idempotent: IF NOT EXISTS, CREATE OR REPLACE, DROP … IF EXISTS first.
+
+-- The links to a contact, song, release and party are plain (NO ACTION, like
+-- split_sheets): deleting one that a contract names is refused at the end of the
+-- statement, but the org's own hard delete (one DELETE on organizations,
+-- cascading to all of these) still goes through. RESTRICT would be checked per
+-- row and could fail the purge depending on cascade order.
 
 -- ── 1. contract_templates ────────────────────────────────────────────────
 
@@ -80,6 +89,7 @@ ALTER TABLE public.contract_templates ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION public.contract_templates_immutable()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
@@ -106,9 +116,9 @@ CREATE TABLE IF NOT EXISTS public.contracts (
   template_source   text NOT NULL,
   template_version  int  NOT NULL DEFAULT 1,
   clauses           jsonb NOT NULL,
-  artist_contact_id uuid REFERENCES public.contacts(id) ON DELETE RESTRICT,
-  track_id          uuid REFERENCES public.tracks(id) ON DELETE RESTRICT,
-  release_id        uuid REFERENCES public.releases(id) ON DELETE RESTRICT,
+  artist_contact_id uuid REFERENCES public.contacts(id),
+  track_id          uuid REFERENCES public.tracks(id),
+  release_id        uuid REFERENCES public.releases(id),
   effective_date    date,
   term_months       int,
   territories       text[],
@@ -147,7 +157,7 @@ ALTER TABLE public.contracts ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.contract_parties (
   contract_id uuid NOT NULL REFERENCES public.contracts(id) ON DELETE CASCADE,
-  party_id    uuid NOT NULL REFERENCES public.parties(id) ON DELETE RESTRICT,
+  party_id    uuid NOT NULL REFERENCES public.parties(id),
   org_id      uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
   role        text NOT NULL,
   position    int  NOT NULL DEFAULT 0,
@@ -252,6 +262,29 @@ END;
 $$;
 ALTER FUNCTION public.contract_parties_guard() OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.contract_parties_guard() FROM PUBLIC;
+
+-- Once the contract has left draft its parties are as frozen as the rest of it:
+-- no update, no delete. A cascade (the contract's or the org's deletion) runs
+-- nested in the foreign key's own trigger (pg_trigger_depth() > 1) and passes.
+CREATE OR REPLACE FUNCTION public.contract_parties_freeze()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF pg_trigger_depth() = 1 AND EXISTS (SELECT 1 FROM public.contracts c WHERE c.id = OLD.contract_id AND c.status <> 'draft') THEN
+    RAISE EXCEPTION 'contract_parties: the parties of a contract that has left draft are not changed' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+ALTER FUNCTION public.contract_parties_freeze() OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.contract_parties_freeze() FROM PUBLIC;
+
+DROP TRIGGER IF EXISTS contract_parties_freeze ON public.contract_parties;
+CREATE TRIGGER contract_parties_freeze BEFORE UPDATE OR DELETE ON public.contract_parties
+  FOR EACH ROW EXECUTE FUNCTION public.contract_parties_freeze();
 
 DROP TRIGGER IF EXISTS contract_parties_guard ON public.contract_parties;
 CREATE TRIGGER contract_parties_guard BEFORE INSERT OR UPDATE ON public.contract_parties
@@ -420,5 +453,59 @@ $$;
 ALTER FUNCTION public.labelos_contract_save(uuid, uuid, uuid, jsonb, jsonb) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.labelos_contract_save(uuid, uuid, uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.labelos_contract_save(uuid, uuid, uuid, jsonb, jsonb) TO service_role;
+
+-- ── 7. Voiding is an audit act ───────────────────────────────────────────
+-- A void contract is final and a signed one may be voided: the status change
+-- and its `contract.voided` event commit together (the 146 pattern).
+-- Answers { error: 'not_found' | 'already_void' } or { voided: true, from }.
+
+CREATE OR REPLACE FUNCTION public.labelos_audit_contract_void(
+  p_org uuid,
+  p_actor uuid,
+  p_contract uuid,
+  p_reason text,
+  p_payload jsonb
+) RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public
+AS $fn$
+DECLARE
+  v_row public.contracts%ROWTYPE;
+BEGIN
+  IF p_payload IS NULL OR jsonb_typeof(p_payload) <> 'object' THEN
+    RAISE EXCEPTION 'audit payload must be an object' USING ERRCODE = '22023';
+  END IF;
+  IF p_payload::text ~* '"[^"]*(token|password|secret)[^"]*"\s*:' THEN
+    RAISE EXCEPTION 'audit payload carries a secret-looking key' USING ERRCODE = '22023';
+  END IF;
+  IF pg_column_size(p_payload) > 16384 THEN
+    RAISE EXCEPTION 'audit payload is too large' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT * INTO v_row FROM public.contracts WHERE id = p_contract AND org_id = p_org FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('error', 'not_found');
+  END IF;
+  IF v_row.status = 'void' THEN
+    RETURN jsonb_build_object('error', 'already_void');
+  END IF;
+
+  UPDATE public.contracts
+  SET status = 'void', voided_by = p_actor, voided_at = now(), void_reason = NULLIF(p_reason, '')
+  WHERE id = p_contract;
+
+  INSERT INTO public.activity_events (org_id, actor_id, verb, subject_type, subject_id, artist_id, song_id, release_id, payload, audit, visibility)
+  VALUES (p_org, p_actor, 'contract.voided', 'contract', v_row.id, v_row.artist_contact_id, v_row.track_id, v_row.release_id,
+          p_payload || jsonb_build_object('from', v_row.status), true, 'internal');
+
+  RETURN jsonb_build_object('voided', true, 'from', v_row.status);
+END;
+$fn$;
+
+ALTER FUNCTION public.labelos_audit_contract_void(uuid, uuid, uuid, text, jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_audit_contract_void(uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_audit_contract_void(uuid, uuid, uuid, text, jsonb) TO service_role;
 
 NOTIFY pgrst, 'reload schema';

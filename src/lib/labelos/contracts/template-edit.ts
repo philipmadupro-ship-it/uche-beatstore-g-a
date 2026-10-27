@@ -46,9 +46,9 @@ export function cleanTemplateEdit(input: EditInput): EditResult {
   return { ok: true, name, clauses: out };
 }
 
-/** Same words? An edit that changes nothing saves no version. */
+/** Same clauses, in the same order, with the same words? An edit that changes nothing saves no version. */
 export function sameClauses(a: readonly TemplateClause[], b: readonly TemplateClause[]): boolean {
-  return a.length === b.length && a.every((c, i) => c.heading === b[i].heading && c.body === b[i].body);
+  return a.length === b.length && a.every((c, i) => c.id === b[i].id && c.heading === b[i].heading && c.body === b[i].body);
 }
 
 /** Which clause ids changed, were added or removed: the event payload names ids, never words. */

@@ -27,6 +27,7 @@ const STRANGER = u(8);
 const C1 = '30000000-0000-4000-8000-0000000000c1';
 const C2 = '30000000-0000-4000-8000-0000000000c2';
 const CX = '30000000-0000-4000-8000-0000000000c3';
+const PRODC = '30000000-0000-4000-8000-0000000000c4';
 const PL = '60000000-0000-4000-8000-000000000001';
 const PN = '60000000-0000-4000-8000-000000000002';
 const PX = '60000000-0000-4000-8000-000000000003';
@@ -67,6 +68,7 @@ beforeEach(() => {
       member_artist_scopes: [{ org_id: L, user_id: SC, contact_id: C2 }, { org_id: L, user_id: ART, contact_id: C1 }, { org_id: L, user_id: ART2, contact_id: C2 }],
       contacts: [
         { id: C1, org_id: L, user_id: null, name: 'Nova', category: 'artist' },
+        { id: PRODC, org_id: L, user_id: null, name: 'Pro Ducer', category: 'producer' },
         { id: C2, org_id: L, user_id: null, name: 'Kilo', category: 'artist' },
         { id: CX, org_id: L2, user_id: null, name: 'Xen', category: 'artist' },
       ],
@@ -83,6 +85,15 @@ beforeEach(() => {
       user_profiles: [],
     },
     rpc: {
+      labelos_audit_contract_void: (args, tables) => {
+        const row = tables.contracts.find((c) => c.id === args.p_contract && c.org_id === args.p_org);
+        if (!row) return { data: { error: 'not_found' }, error: null };
+        if (row.status === 'void') return { data: { error: 'already_void' }, error: null };
+        const from = row.status;
+        Object.assign(row, { status: 'void', void_reason: args.p_reason ?? null });
+        tables.activity_events.push({ org_id: args.p_org, actor_id: args.p_actor, verb: 'contract.voided', subject_type: 'contract', subject_id: row.id, payload: { ...(args.p_payload as object), from }, audit: true, visibility: 'internal' });
+        return { data: { voided: true, from }, error: null };
+      },
       labelos_contract_save: (args, tables) => {
         const row = args.p_row as Record<string, unknown>;
         let target: Record<string, unknown> | undefined;
@@ -259,6 +270,7 @@ describe('POST /contracts', () => {
     expect((await call('POST', LEG, L, { body: { ...base, parties: [{ party_id: PL, role: 'label' }, { party_id: PN, role: 'label' }] } })).status).toBe(400);
     expect((await call('POST', LEG, L, { body: { ...base, parties: [{ party_id: PX, role: 'label' }] } })).status).toBe(404);
     expect((await call('POST', LEG, L, { body: { ...base, artist_contact_id: CX } })).status).toBe(404);
+    expect((await call('POST', LEG, L, { body: { ...base, artist_contact_id: PRODC } })).status).toBe(404); // a contact, but not a roster artist
     expect((await call('POST', LEG, L, { body: { ...base, territories: ['England'] } })).status).toBe(400);
     expect((await call('POST', LEG, L, { body: { ...base, type: 'nope' } })).status).toBe(400);
     expect(db.tables.contracts).toHaveLength(0);
@@ -294,7 +306,9 @@ describe('PATCH /contracts/[id]', () => {
     const res = await call('PATCH', LEG, L, { id: sentId(), body: { status: 'void', void_reason: 'replaced' } });
     expect(res.status).toBe(200);
     expect(db.tables.contracts[0]).toMatchObject({ status: 'void', void_reason: 'replaced' });
-    expect(events().find((e) => e.verb === 'contract.voided')!.payload).toEqual({ from: 'sent', with_reason: true });
+    const voided = events().find((e) => e.verb === 'contract.voided')!;
+    expect(voided.payload).toEqual({ from: 'sent', with_reason: true });
+    expect(voided.audit).toBe(true);
     expect((await call('PATCH', LEG, L, { id: sentId(), body: { status: 'void' } })).status).toBe(409);
     expect((await call('PATCH', LEG, L, { id: draftId(), body: { status: 'void', title: 'x' } })).status).toBe(400);
   });

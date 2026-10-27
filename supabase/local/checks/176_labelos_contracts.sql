@@ -131,6 +131,11 @@ SELECT public.check_raises('parties cannot be added once sent', format($q$INSERT
 UPDATE public.contracts SET internal_note = 'chase signature' WHERE id = :K1;
 SELECT public.check_eq('the internal note stays editable', (SELECT internal_note FROM public.contracts WHERE id = :K1), 'chase signature');
 
+-- The parties of a sent contract are frozen too (a cascade is not).
+SELECT public.check_raises('a party cannot be removed from a sent contract', format($q$DELETE FROM public.contract_parties WHERE contract_id = %L$q$, :K1), 'left draft');
+SELECT public.check_raises('… nor re-roled', format($q$UPDATE public.contract_parties SET role = 'publisher' WHERE contract_id = %L$q$, :K1), 'left draft');
+SELECT public.check_eq('both parties still there', (SELECT count(*)::int FROM public.contract_parties WHERE contract_id = :K1), 2);
+
 -- A second contract (Kilo's, a draft) and a third (Kilo's, sent), to read as different people.
 SELECT public.labelos_contract_save(:L, :LG, NULL,
   jsonb_build_object('type', 'nda', 'title', 'K2 draft', 'template_source', 'platform:nda@1', 'clauses', '[{"id":"a","heading":"H","body":"B"}]'::jsonb, 'artist_contact_id', :C2), NULL);
@@ -144,7 +149,9 @@ SELECT public.labelos_contract_save(:L, :LG, NULL,
 UPDATE public.contracts SET status = 'sent' WHERE title = 'K4 session';
 -- Another org's contract.
 SELECT public.labelos_contract_save(:L2, :X, NULL,
-  jsonb_build_object('type', 'nda', 'title', 'L2 nda', 'template_source', 'platform:nda@1', 'clauses', '[{"id":"a","heading":"H","body":"B"}]'::jsonb), NULL);
+  jsonb_build_object('type', 'nda', 'title', 'L2 nda', 'template_source', 'platform:nda@1', 'clauses', '[{"id":"a","heading":"H","body":"B"}]'::jsonb,
+    'artist_contact_id', :XC, 'track_id', :XS),
+  jsonb_build_array(jsonb_build_object('party_id', :XP, 'role', 'disclosing')));
 
 UPDATE public.contracts SET status = 'void' WHERE title = 'K4 session';
 SELECT public.check_raises('void is final', $$UPDATE public.contracts SET status = 'sent' WHERE title = 'K4 session'$$, 'cannot become');
@@ -206,7 +213,22 @@ SELECT public.check_raises('… the save function', format($q$SELECT public.labe
 RESET ROLE;
 SELECT public.check_eq('… an update or delete through RLS touches nothing (no write policy)', (SELECT internal_note FROM public.contracts WHERE title = 'K1'), 'chase signature');
 
+-- ── 4b. Voiding is one transaction with its audit event ─────────────────
+
+SELECT public.check_eq('void: the function answers voided',
+  (public.labelos_audit_contract_void(:L, :LG, (SELECT id FROM public.contracts WHERE title = 'K3 sent'), 'replaced', '{"with_reason":true}'::jsonb)) ->> 'voided', 'true');
+SELECT public.check_eq('… the contract is void with the reason and the actor', (SELECT status || '/' || void_reason FROM public.contracts WHERE title = 'K3 sent'), 'void/replaced');
+SELECT public.check_eq('… and ONE audit event, internal, naming the artist and the previous status',
+  (SELECT count(*)::int FROM public.activity_events WHERE verb = 'contract.voided' AND audit AND visibility = 'internal' AND artist_id = :C2 AND payload ->> 'from' = 'sent'), 1);
+SELECT public.check_eq('a second void is refused', (public.labelos_audit_contract_void(:L, :LG, (SELECT id FROM public.contracts WHERE title = 'K3 sent'), NULL, '{}'::jsonb)) ->> 'error', 'already_void');
+SELECT public.check_eq('another org cannot void it', (public.labelos_audit_contract_void(:L2, :X, (SELECT id FROM public.contracts WHERE title = 'K1'), NULL, '{}'::jsonb)) ->> 'error', 'not_found');
+SELECT public.check_raises('a secret-looking payload key is refused', format($q$SELECT public.labelos_audit_contract_void(%L, %L, %L, NULL, '{"api_token":"x"}'::jsonb)$q$, :L, :LG, :K1), 'secret-looking');
+SET ROLE authenticated;
+SELECT public.check_raises('API roles cannot call it', format($q$SELECT public.labelos_audit_contract_void(%L, %L, %L, NULL, '{}'::jsonb)$q$, :L, :LG, :K1), 'permission denied');
+RESET ROLE;
+
 -- ── 5. Cascade ───────────────────────────────────────────────────────────
+-- L2's contract names L2's contact, song and party (NO ACTION links): the org's one DELETE cascades through all of them.
 
 DELETE FROM public.organizations WHERE id = :L2;
 SELECT public.check_eq('an org’s contracts and templates go with it', (SELECT count(*)::int FROM public.contracts WHERE org_id = :L2) + (SELECT count(*)::int FROM public.contract_templates WHERE org_id = :L2), 0);

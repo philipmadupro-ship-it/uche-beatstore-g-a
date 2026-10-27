@@ -26,7 +26,7 @@ import { scopeAllowsContact } from '@/lib/labelos/artist-scope';
 import { cleanFields } from '@/lib/labelos/contracts/merge-fields';
 import { platformSource, platformTemplate } from '@/lib/labelos/contracts/templates';
 import { type PartyRole } from '@/lib/labelos/contracts/types';
-import { contractActor, viewsOf, visibleContracts } from '@/lib/labelos/contracts-route';
+import { contractActor, readScopeFor, viewsOf, visibleContracts } from '@/lib/labelos/contracts-route';
 import {
   CONTRACTS_NOT_READY,
   ContractSaveError,
@@ -54,7 +54,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!access.ok) return access.res;
   try {
     const actor = await contractActor(access);
-    const rows = await listContractRows(access.admin, access.orgId);
+    const rows = await listContractRows(access.admin, access.orgId, readScopeFor(actor));
     const loaded = await visibleContracts(access.admin, access.orgId, actor, rows);
     return json(200, { schemaReady: true, canWrite: access.capabilities.has('contracts.write'), contracts: viewsOf(loaded, actor) });
   } catch (err) {
