@@ -25,7 +25,7 @@ const BTN =
 const ROW = 'flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4';
 
 type Mine = { state: 'loading' } | { state: 'failed'; message: string } | { state: 'ready'; schemaReady: boolean; consents: MyConsent[] };
-type Connected = { state: 'loading' } | { state: 'hidden' } | { state: 'failed'; message: string } | { state: 'ready'; schemaReady: boolean; releases: ConnectedRelease[] };
+type Connected = { state: 'loading' } | { state: 'hidden' } | { state: 'failed'; message: string } | { state: 'ready'; schemaReady: boolean; releases: ConnectedRelease[]; truncated: boolean };
 
 export function StoreListingsView({ orgId, showConnected }: { orgId: string; showConnected: boolean }) {
   const [mine, setMine] = useState<Mine>({ state: 'loading' });
@@ -41,7 +41,7 @@ export function StoreListingsView({ orgId, showConnected }: { orgId: string; sho
     const res = await getConnectedReleases(orgId);
     // Not the store owner (or not a label): the page has nothing to show here, and says nothing about why.
     if (!res.ok) setConnected(res.status === 404 ? { state: 'hidden' } : { state: 'failed', message: res.error });
-    else setConnected({ state: 'ready', schemaReady: res.schemaReady, releases: res.releases });
+    else setConnected({ state: 'ready', schemaReady: res.schemaReady, releases: res.releases, truncated: res.truncated === true });
   }, [orgId, showConnected]);
 
   useEffect(() => {
@@ -152,6 +152,9 @@ export function StoreListingsView({ orgId, showConnected }: { orgId: string; sho
                 </li>
               ))}
             </ul>
+          )}
+          {connected.state === 'ready' && connected.truncated && (
+            <p className="mt-2 text-[11px] text-white/40" data-testid="store-connected-truncated">Showing the first {connected.releases.length}: the ones you took off first, then the most recent.</p>
           )}
         </section>
       )}

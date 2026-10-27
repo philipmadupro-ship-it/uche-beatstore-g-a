@@ -305,6 +305,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 
   const before = { store_listed: release.store_listed, store_listed_at: release.store_listed_at };
+  /** Put the release row, and a first listing's promoted previews, back as they were before the claim. */
+  const putBackClaim = async () => {
+    await admin
+      .from('releases')
+      .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
+      .eq('id', release.id)
+      .eq('org_id', org);
+    if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
+  };
   const listedAt = release.store_listed_at ?? now.toISOString();
   // Guarded: the statement itself repeats what the plan judged (state, import flag and release date as
   // read), so a change between the plan and this write cannot store a listing for a release that is
@@ -334,15 +343,21 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
   // An artist may have said no (or the store owner vetoed) between the plan's read and the claim above. The public
   // routes would refuse the release anyway; this keeps the flag honest and tells the lister, instead of a listing
-  // that looks live and serves nothing.
-  if (consents.schemaReady && (await blockedByConsent(admin, [release.id])).has(release.id.toLowerCase())) {
-    await admin
-      .from('releases')
-      .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
-      .eq('id', release.id)
-      .eq('org_id', org);
-    if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
-    return json(409, { error: 'An artist on this release said no while it was being listed; nothing was put on the store', field: 'consent' });
+  // that looks live and serves nothing. A read that fails is treated like an answer we cannot rule out: the claim is
+  // put back (the listing must not stand on a check that did not happen).
+  if (consents.schemaReady) {
+    let refusedNow: boolean;
+    try {
+      refusedNow = (await blockedByConsent(admin, [release.id])).has(release.id.toLowerCase());
+    } catch (err) {
+      log.error('consent re-check failed: putting the claim back', { releaseId, error: errorMessage(err) });
+      await putBackClaim();
+      return json(500, { error: 'Could not check the artists’ answers; nothing was put on the store' });
+    }
+    if (refusedNow) {
+      await putBackClaim();
+      return json(409, { error: 'An artist on this release said no while it was being listed; nothing was put on the store', field: 'consent' });
+    }
   }
   // recordEvent + put-back, as LABEL-33's delivery: there is no audit RPC for these verbs (that would be a
   // second migration), so the change is written first and undone if its record cannot be written.

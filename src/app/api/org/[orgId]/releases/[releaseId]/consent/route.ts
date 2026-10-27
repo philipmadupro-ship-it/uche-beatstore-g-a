@@ -14,7 +14,7 @@
  * WHAT. `planDecision` (pure): asked → yes | no, yes → no, no → yes; a repeat
  * is a 200 that writes nothing. A `no` is final for the label: in the SAME
  * request the release comes off the store (`store_listed` false, playback back
- * to `preview`) and the public routes stop serving on their next read because
+ * to `preview`, promoted public previews deleted) and the public routes stop serving on their next read because
  * they check the row themselves. It cannot be listed again until this artist
  * says yes.
  *
@@ -36,10 +36,9 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { releaseEventSubject } from '@/lib/labelos/releases';
-import { planUnlist } from '@/lib/labelos/store-listing';
 import { loadListingRelease, readPlayback } from '@/lib/labelos/store-listing-store';
 import { planDecision } from '@/lib/labelos/store-consent';
-import { NEEDS_186, answerableFor, readConsents, restoreConsent, setConsent, takeOffStore } from '@/lib/labelos/store-consent-store';
+import { NEEDS_186, answerableFor, insertProposals, loadCreditedArtists, readConsents, restoreConsent, setConsent, takeOffStore } from '@/lib/labelos/store-consent-store';
 import { deletePromotedPreviews } from '@/lib/storage/store-release-media';
 
 export const runtime = 'nodejs';
@@ -71,7 +70,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const consents = await readConsents(admin, release.id);
     if (!consents.schemaReady) return json(503, { error: NEEDS_186, migration: '186', schemaReady: false });
     const mine = new Set(await answerableFor(admin, org, userId));
-    const rows = consents.rows.filter((r) => mine.has(r.artist_contact_id));
+    let rows = consents.rows.filter((r) => mine.has(r.artist_contact_id));
+    // An artist credited on this release who was never asked — it was listed before migration 186, or the credit
+    // was confirmed after the listing — still has the last word: their question is created now, as asked, and
+    // answered below. Only a contact that really is credited on it (never one the caller merely names).
+    const unasked = (await loadCreditedArtists(admin, release)).filter((c) => mine.has(c) && !rows.some((r) => r.artist_contact_id === c));
+    if (unasked.length > 0) {
+      const made = await insertProposals(admin, release, unasked, null);
+      if (made.error) {
+        log.error('consent row for an unasked artist failed', { releaseId, error: made.error.message });
+        return json(500, { error: 'Could not record your answer' });
+      }
+      rows = (await readConsents(admin, release.id)).rows.filter((r) => mine.has(r.artist_contact_id));
+    }
     if (rows.length === 0) return NOT_FOUND();
 
     const subject = releaseEventSubject(release);
@@ -93,7 +104,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         if (!set.changed) continue;
         changed += 1;
         try {
-          await recordEvent(admin, actor, 'listing.consent_decided', { ...subject, artistId: row.artist_contact_id }, { decision: plan.to, from: plan.from, withdrew: plan.withdraw && release.store_listed });
+          await recordEvent(admin, actor, 'listing.consent_decided', { ...subject, artistId: row.artist_contact_id }, { decision: plan.to, from: plan.from, withdrew: plan.withdraw });
         } catch (err) {
           log.error('consent audit failed', { releaseId, decision, error: errorMessage(err) });
           if (plan.to === 'yes') {
@@ -107,9 +118,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
       }
     }
 
-    // A no (also one given a moment ago whose unlisting did not finish) takes the release off the store now.
+    // A no (also one given a moment ago whose unlisting did not finish) takes the release off the store now. The
+    // update itself is conditional on the release being listed, so it needs no read of that flag first: a listing
+    // that landed after this request began is taken off too.
     const refusing = decision === 'no';
-    if (refusing && release.store_listed) {
+    if (refusing) {
       const playback = await readPlayback(admin, release.id);
       const off = await takeOffStore(admin, org, release.id, playback.schemaReady);
       if (off.error) {
@@ -117,15 +130,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
         log.error('unlist after a no failed (the public routes still refuse it)', { releaseId, error: off.error.message });
       } else if (off.changed) {
         unlisted = true;
-        const unlist = planUnlist(release, false, now);
         try {
-          await recordEvent(admin, actor, 'release.store_unlisted', subject, { reason: 'artist_declined', askedToDeletePreviews: unlist.ok && unlist.askToDeletePreviews, deletePreviews: false });
+          await recordEvent(admin, actor, 'release.store_unlisted', subject, { reason: 'artist_declined', askedToDeletePreviews: false, deletePreviews: true });
         } catch (err) {
           log.error('unlist audit after a no failed', { releaseId, error: errorMessage(err) });
           unrecorded = true;
         }
-        // Music that was never publicly out keeps no public copy once the artist has refused.
-        if (unlist.ok && unlist.askToDeletePreviews) await deletePromotedPreviews(release.id).catch((e) => log.error('preview delete failed', { releaseId, error: errorMessage(e) }));
+        // The artist's no outranks the owner's choice about previews (`planUnlist` leaves that to the owner for
+        // music that was publicly out): the promoted public copies go. Listing it again promotes them anew.
+        await deletePromotedPreviews(release.id).catch((e) => log.error('preview delete failed', { releaseId, error: errorMessage(e) }));
       }
     }
 

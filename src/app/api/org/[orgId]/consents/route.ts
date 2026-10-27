@@ -4,6 +4,10 @@
  * account that stands for them (`answerableFor`) is credited, with where it
  * stands — asked, yes, no — and whether it is on the store right now.
  *
+ * Releases that are on the store and credit the caller but have no consent row yet (listed before migration 186, or
+ * credited after the listing) are listed as asked: the artist still has the last word on them, and answering
+ * creates the row (`PUT …/consent`).
+ *
  * Any member may ask; they are shown only rows that are theirs, so a member
  * who is nobody's artist gets an empty list, never a 403 that would tell them
  * which colleagues are. Built field by field: the release's title, type and
@@ -17,7 +21,7 @@ import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { inChunks } from '@/lib/labelos/paged-read';
-import { answerableFor } from '@/lib/labelos/store-consent-store';
+import { answerableFor, loadListedReleasesOfArtist } from '@/lib/labelos/store-consent-store';
 import { isConsentState } from '@/lib/labelos/store-consent';
 
 export const runtime = 'nodejs';
@@ -51,6 +55,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ orgId: 
       throw new Error(error.message);
     }
     const rows = ((data ?? []) as { release_id: string; state: string; proposed_at: string; decided_at: string | null }[]).filter((r) => isConsentState(r.state));
+    // Listed and credited, never asked: shown as asked (the row is made when they answer).
+    const have = new Set(rows.map((r) => r.release_id.toLowerCase()));
+    for (const id of await loadListedReleasesOfArtist(admin, org, mine.slice(0, 200))) {
+      if (!have.has(id)) rows.push({ release_id: id, state: 'proposed', proposed_at: '', decided_at: null });
+    }
     const releases = await inChunks<{ id: string; title: string; type: string; release_date: string | null; store_listed: boolean; state: string }>(
       rows.map((r) => r.release_id),
       (part, from, to) => admin.from('releases').select('id, title, type, release_date, store_listed, state').eq('org_id', org).in('id', part).order('id', { ascending: true }).range(from, to),

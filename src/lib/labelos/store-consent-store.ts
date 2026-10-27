@@ -68,35 +68,49 @@ export async function readVeto(admin: any, releaseId: string): Promise<{ vetoed:
 }
 
 /**
- * Which of these releases must the public store NOT serve for consent's sake:
- * a `no` from any credited artist, or the store owner's veto. Read on every
- * public request (release detail, each audio Range, the list). Chunked and
- * paged; a failed read throws.
+ * Per release: has a credited artist said no (`refused`), has the store owner
+ * vetoed it (`vetoed`). The two reads are independent and run together; both
+ * are chunked and paged, and a failed read throws. Before migration 186 there
+ * is nothing to consult: both sets come back empty.
  */
-export async function blockedByConsent(admin: any, releaseIds: readonly string[]): Promise<Set<string>> {
+export async function refusalsAndVetoes(admin: any, releaseIds: readonly string[]): Promise<{ refused: Set<string>; vetoed: Set<string> }> {
   const ids = cleanIds(releaseIds);
-  const out = new Set<string>();
-  if (ids.length === 0) return out;
+  const refused = new Set<string>();
+  const vetoed = new Set<string>();
+  if (ids.length === 0) return { refused, vetoed };
   try {
-    const refused = await inChunks<{ release_id: string }>(
-      ids,
-      (part, from, to) => admin.from('listing_consents').select('release_id').in('release_id', part).eq('state', 'no').order('release_id', { ascending: true }).order('artist_contact_id', { ascending: true }).range(from, to),
-      'consent read',
-    );
-    for (const r of refused) out.add(r.release_id.toLowerCase());
-    const vetoed = await inChunks<{ release_id: string }>(
-      ids,
-      (part, from, to) => admin.from('store_listing_vetoes').select('release_id').in('release_id', part).order('release_id', { ascending: true }).range(from, to),
-      'veto read',
-    );
-    for (const r of vetoed) out.add(r.release_id.toLowerCase());
+    const [no, veto] = await Promise.all([
+      inChunks<{ release_id: string }>(
+        ids,
+        (part, from, to) => admin.from('listing_consents').select('release_id').in('release_id', part).eq('state', 'no').order('release_id', { ascending: true }).order('artist_contact_id', { ascending: true }).range(from, to),
+        'consent read',
+      ),
+      inChunks<{ release_id: string }>(
+        ids,
+        (part, from, to) => admin.from('store_listing_vetoes').select('release_id').in('release_id', part).order('release_id', { ascending: true }).range(from, to),
+        'veto read',
+      ),
+    ]);
+    for (const r of no) refused.add(r.release_id.toLowerCase());
+    for (const r of veto) vetoed.add(r.release_id.toLowerCase());
   } catch (err) {
     const raw = (err as { raw?: unknown } | null)?.raw;
     // Before 186 there is nothing to consult: the store behaves as it did.
-    if (raw && isMissingSchema(raw)) return out;
+    if (raw && isMissingSchema(raw)) return { refused: new Set(), vetoed: new Set() };
     throw err;
   }
-  return out;
+  return { refused, vetoed };
+}
+
+/**
+ * Which of these releases must the public store NOT serve for consent's sake:
+ * a `no` from any credited artist, or the store owner's veto. Read on every
+ * public request (release detail, each audio Range, the list), never cached;
+ * a failed read throws, so the store fails closed.
+ */
+export async function blockedByConsent(admin: any, releaseIds: readonly string[]): Promise<Set<string>> {
+  const { refused, vetoed } = await refusalsAndVetoes(admin, releaseIds);
+  return new Set([...refused, ...vetoed]);
 }
 
 /* ── Who is credited, who they are ───────────────────────────────────── */
@@ -238,7 +252,7 @@ export async function answerableFor(admin: any, orgId: string, userId: string): 
 /* ── Writes ──────────────────────────────────────────────────────────── */
 
 /** Insert `proposed` rows for the artists not yet asked. Idempotent: an existing (release, artist) row is left alone. */
-export async function insertProposals(admin: any, release: ReleaseRef, contactIds: readonly string[], proposedBy: string): Promise<{ error: { message: string } | null }> {
+export async function insertProposals(admin: any, release: ReleaseRef, contactIds: readonly string[], proposedBy: string | null): Promise<{ error: { message: string } | null }> {
   const ids = cleanIds(contactIds);
   if (ids.length === 0) return { error: null };
   const { error } = await admin
@@ -319,4 +333,48 @@ export async function takeOffStore(admin: any, orgId: string, releaseId: string,
     .select('id')
     .maybeSingle();
   return { changed: !!data, error: error ?? null };
+}
+
+/**
+ * The LISTED releases an artist account is credited on, whether or not they were ever asked (a release listed
+ * before migration 186, or a credit confirmed after the listing, has no consent row — the artist still has the
+ * last word on it). The release's own artist, plus confirmed credits on the songs of its tracklist, directly or
+ * through a party linked to the contact. Chunked and paged; releases only of this org.
+ */
+export async function loadListedReleasesOfArtist(admin: any, orgId: string, contactIds: readonly string[]): Promise<string[]> {
+  const ids = cleanIds(contactIds);
+  if (ids.length === 0) return [];
+  const own = await inChunks<{ id: string }>(
+    ids,
+    (part, from, to) => admin.from('releases').select('id').eq('org_id', orgId).eq('store_listed', true).in('contact_id', part).order('id', { ascending: true }).range(from, to),
+    'releases of the artist',
+  );
+  const parties = await inChunks<{ id: string }>(
+    ids,
+    (part, from, to) => admin.from('parties').select('id').eq('org_id', orgId).in('contact_id', part).order('id', { ascending: true }).range(from, to),
+    'parties of the artist',
+  );
+  const direct = await inChunks<{ id: string; track_id: string }>(
+    ids,
+    (part, from, to) => admin.from('track_collaborators').select('id, track_id').eq('org_id', orgId).eq('status', 'confirmed').in('contact_id', part).order('id', { ascending: true }).range(from, to),
+    'credits of the artist',
+  );
+  const viaParty = await inChunks<{ id: string; track_id: string }>(
+    parties.map((p) => p.id),
+    (part, from, to) => admin.from('track_collaborators').select('id, track_id').eq('org_id', orgId).eq('status', 'confirmed').in('party_id', part).order('id', { ascending: true }).range(from, to),
+    'credits through parties',
+  );
+  const songs = [...new Set([...direct, ...viaParty].map((c) => c.track_id))];
+  const items = await inChunks<{ id: string; release_id: string }>(
+    songs,
+    (part, from, to) => admin.from('release_items').select('id, release_id').eq('org_id', orgId).in('song_track_id', part).order('id', { ascending: true }).range(from, to),
+    'release items of the credits',
+  );
+  const credited = [...new Set(items.map((i) => i.release_id))];
+  const viaCredits = await inChunks<{ id: string }>(
+    credited,
+    (part, from, to) => admin.from('releases').select('id').eq('org_id', orgId).eq('store_listed', true).in('id', part).order('id', { ascending: true }).range(from, to),
+    'listed releases of the credits',
+  );
+  return [...new Set([...own, ...viaCredits].map((r) => r.id.toLowerCase()))];
 }

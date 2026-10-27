@@ -13,7 +13,7 @@
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { resolveStoreOwner } from '@/lib/store/owner';
 import { pageAll, inChunks } from './paged-read';
-import { blockedByConsent } from './store-consent-store';
+import { refusalsAndVetoes } from './store-consent-store';
 import { isStorePlayback, isReleasedForStore, type StorePlayback } from './store-listing';
 
 /** Is `userId` the owner of the store (and so entitled to this list)? */
@@ -57,50 +57,58 @@ async function connectedArtistOrgs(admin: any, labelOrgId: string): Promise<{ id
   return orgs;
 }
 
-export async function loadConnectedReleases(admin: any, labelOrgId: string, now: Date): Promise<{ releases: ConnectedRelease[]; schemaReady: boolean }> {
+const COLUMNS = 'id, org_id, title, type, contact_id, release_date, state, imported_released, store_listed, store_listed_at, store_playback';
+const COLUMNS_NO_PLAYBACK = COLUMNS.replace(', store_playback', '');
+
+/** `releases` read with its playback column; before migration 158 the column is absent, so retry without it. */
+async function selectReleases(admin: any, apply: (q: any) => any) {
+  const first = await apply(admin.from('releases').select(COLUMNS));
+  if (!first.error || !isMissingSchema(first.error)) return first;
+  return apply(admin.from('releases').select(COLUMNS_NO_PLAYBACK));
+}
+
+export async function loadConnectedReleases(
+  admin: any,
+  labelOrgId: string,
+  now: Date,
+): Promise<{ releases: ConnectedRelease[]; schemaReady: boolean; truncated: boolean }> {
   const orgs = await connectedArtistOrgs(admin, labelOrgId);
   const orgName = new Map(orgs.map((o) => [o.id, o.name]));
   const orgIds = orgs.map((o) => o.id);
 
+  // The owner's own vetoes, every one (paged): each is a row they must be able to lift, connected or not any more.
   let schemaReady = true;
   let vetoIds: string[] = [];
-  {
-    const { data, error } = await admin.from('store_listing_vetoes').select('release_id').eq('org_id', labelOrgId).limit(1000);
-    if (error) {
-      if (!isMissingSchema(error)) throw new Error(error.message);
-      schemaReady = false;
-    } else {
-      vetoIds = ((data ?? []) as { release_id: string }[]).map((r) => r.release_id);
-    }
+  try {
+    vetoIds = (
+      await pageAll<{ release_id: string }>(
+        (from, to) => admin.from('store_listing_vetoes').select('release_id').eq('org_id', labelOrgId).order('release_id', { ascending: true }).range(from, to),
+        'vetoes',
+      )
+    ).map((r) => r.release_id);
+  } catch (err) {
+    const raw = (err as { raw?: unknown } | null)?.raw;
+    if (!(raw && isMissingSchema(raw))) throw err;
+    schemaReady = false;
   }
-  if (orgIds.length === 0) return { releases: [], schemaReady };
 
-  const COLUMNS = 'id, org_id, title, type, contact_id, release_date, state, imported_released, store_listed, store_listed_at, store_playback';
-  const COLUMNS_NO_PLAYBACK = COLUMNS.replace(', store_playback', '');
-  const listed = await inChunks<any>(
-    orgIds,
-    async (part, from, to) => {
-      const first = await admin.from('releases').select(COLUMNS).in('org_id', part).eq('store_listed', true).order('store_listed_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
-      if (!first.error || !isMissingSchema(first.error)) return first;
-      return admin.from('releases').select(COLUMNS_NO_PLAYBACK).in('org_id', part).eq('store_listed', true).order('store_listed_at', { ascending: false }).order('id', { ascending: true }).range(from, to);
-    },
-    'listed releases',
-  );
-  const have = new Set(listed.map((r: any) => r.id));
-  const vetoedOnly = await inChunks<any>(
-    vetoIds.filter((id) => !have.has(id)),
-    async (part, from, to) => {
-      const first = await admin.from('releases').select(COLUMNS).in('id', part).in('org_id', orgIds).order('id', { ascending: true }).range(from, to);
-      if (!first.error || !isMissingSchema(first.error)) return first;
-      return admin.from('releases').select(COLUMNS_NO_PLAYBACK).in('id', part).in('org_id', orgIds).order('id', { ascending: true }).range(from, to);
-    },
-    'vetoed releases',
-  );
-  const all = [...listed, ...vetoedOnly].slice(0, LIMIT);
-  if (all.length === 0) return { releases: [], schemaReady };
+  const vetoedRows = await inChunks<any>(vetoIds, (part, from, to) => selectReleases(admin, (q) => q.in('id', part).order('id', { ascending: true }).range(from, to)), 'vetoed releases');
+  const vetoedSet = new Set(vetoedRows.map((r: any) => r.id));
+  const listedRows =
+    orgIds.length === 0
+      ? []
+      : await inChunks<any>(
+          orgIds,
+          (part, from, to) =>
+            selectReleases(admin, (q) => q.in('org_id', part).eq('store_listed', true).order('store_listed_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
+          'listed releases',
+        );
+  // Vetoed first: those are the rows that need an act from the owner, and they must never fall off the end.
+  const merged = [...vetoedRows, ...listedRows.filter((r: any) => !vetoedSet.has(r.id))];
+  const all = merged.slice(0, LIMIT);
+  if (all.length === 0) return { releases: [], schemaReady, truncated: false };
 
-  const blocked = await blockedByConsent(admin, all.map((r: any) => r.id));
-  const vetoed = new Set(vetoIds.map((v) => v.toLowerCase()));
+  const { refused, vetoed } = await refusalsAndVetoes(admin, all.map((r: any) => r.id));
   const contactIds = [...new Set(all.map((r: any) => r.contact_id as string))];
   const contacts = await inChunks<{ id: string; name: string | null }>(
     contactIds,
@@ -109,54 +117,50 @@ export async function loadConnectedReleases(admin: any, labelOrgId: string, now:
   );
   const artistName = new Map(contacts.map((c) => [c.id, c.name]));
 
-  // Refusal is read separately from the veto so the page can say which of the two took it off.
-  const refusedIds = await refused(admin, all.map((r: any) => r.id));
-
   return {
     schemaReady,
+    truncated: merged.length > all.length,
     releases: all.map((r: any): ConnectedRelease => {
-      const isVetoed = vetoed.has(r.id.toLowerCase());
-      const isRefused = refusedIds.has(r.id.toLowerCase());
-      const out = isReleasedForStore(r, now);
+      const id = r.id.toLowerCase();
+      const isVetoed = vetoedSet.has(r.id) || vetoed.has(id);
+      const isRefused = refused.has(id);
       return {
         releaseId: r.id,
         title: r.title,
         type: r.type,
         artist: artistName.get(r.contact_id) ?? null,
-        artistOrg: orgName.get(r.org_id) ?? 'Artist',
+        artistOrg: orgName.get(r.org_id) ?? 'Former connection',
         releaseDate: r.release_date,
         listed: r.store_listed === true,
         listedAt: r.store_listed_at ?? null,
         playback: isStorePlayback(r.store_playback) ? r.store_playback : 'preview',
         vetoed: isVetoed,
         refused: isRefused,
-        serving: r.store_listed === true && out && !blocked.has(r.id.toLowerCase()),
+        serving: r.store_listed === true && isReleasedForStore(r, now) && !isVetoed && !isRefused,
       };
     }),
   };
 }
 
-async function refused(admin: any, releaseIds: readonly string[]): Promise<Set<string>> {
-  const out = new Set<string>();
-  try {
-    const rows = await inChunks<{ release_id: string }>(
-      [...releaseIds],
-      (part, from, to) => admin.from('listing_consents').select('release_id').in('release_id', part).eq('state', 'no').order('release_id', { ascending: true }).order('artist_contact_id', { ascending: true }).range(from, to),
-      'consent read',
-    );
-    for (const r of rows) out.add(r.release_id.toLowerCase());
-  } catch (err) {
-    const raw = (err as { raw?: unknown } | null)?.raw;
-    if (!(raw && isMissingSchema(raw))) throw err;
-  }
-  return out;
-}
-
-/** The release row a veto concerns, only if it belongs to an artist org actively connected to this label org. */
-export async function connectedReleaseFor(admin: any, labelOrgId: string, releaseId: string): Promise<{ id: string; org_id: string; contact_id: string; project_id: string; store_listed: boolean } | null> {
+/**
+ * The release row a veto concerns: one that belongs to an artist org actively connected to this label org — or,
+ * for LIFTING a veto (`hasVeto`), one the label already vetoed even if the connection has ended since (otherwise
+ * the veto could never be taken back, and would silently bite again on a reconnection).
+ */
+export async function connectedReleaseFor(
+  admin: any,
+  labelOrgId: string,
+  releaseId: string,
+  opts: { hasVeto?: boolean } = {},
+): Promise<{ id: string; org_id: string; contact_id: string; project_id: string; store_listed: boolean } | null> {
   const { data, error } = await admin.from('releases').select('id, org_id, contact_id, project_id, store_listed').eq('id', releaseId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
+  if (opts.hasVeto) {
+    const { data: veto, error: vetoErr } = await admin.from('store_listing_vetoes').select('release_id').eq('release_id', releaseId).eq('org_id', labelOrgId).maybeSingle();
+    if (vetoErr) throw new Error(vetoErr.message);
+    if (veto) return data as any;
+  }
   const { data: link, error: linkErr } = await admin
     .from('org_connections')
     .select('id')

@@ -36,8 +36,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ orgId: 
   if (access.orgKind !== 'label' || access.role !== 'owner') return json(404, { error: 'Not found' });
   try {
     if (!(await isStoreOwner(admin, userId))) return json(404, { error: 'Not found' });
-    const { releases, schemaReady } = await loadConnectedReleases(admin, org, new Date());
-    return json(200, { schemaReady, releases });
+    const { releases, schemaReady, truncated } = await loadConnectedReleases(admin, org, new Date());
+    return json(200, { schemaReady, releases, truncated });
   } catch (err) {
     log.error('connected releases failed', { orgId: org, error: errorMessage(err) });
     return json(500, { error: 'Could not read the releases from connected artists' });

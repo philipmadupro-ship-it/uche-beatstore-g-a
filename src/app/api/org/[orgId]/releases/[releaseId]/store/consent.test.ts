@@ -567,3 +567,46 @@ describe('the store owner’s Unlist for music of connected artists', () => {
     expect(await publicList()).not.toContain(RA);
   });
 });
+
+describe('review fixes', () => {
+  it('an artist credited on a release listed before 186 (no row) can still say no; the question is shown as asked', async () => {
+    Object.assign(row(RP), { store_listed: true, store_listed_at: '2026-10-10T00:00:00Z' });
+    const mine = await (await call('consents', 'GET', AU1, { orgId: P })).json();
+    expect(mine.consents).toEqual([expect.objectContaining({ releaseId: RP, state: 'proposed', listed: true })]);
+    const res = await decide(AU1, P, RP, 'no');
+    expect(res.status).toBe(200);
+    expect(consentOf(RP, NOVA)).toMatchObject({ state: 'no', decided_by: AU1 });
+    expect(row(RP).store_listed).toBe(false);
+    expect(del).toHaveBeenCalled();
+    expect((await publicDetail(RP)).status).toBe(404);
+  });
+
+  it('an artist who is not credited on the release cannot create a row by answering', async () => {
+    db.tables.parties[0].contact_id = FEAT; // AU1 now stands for Feat, who is credited on song 1 — then remove that credit
+    db.tables.track_collaborators = db.tables.track_collaborators.filter((c) => c.contact_id !== FEAT);
+    expect((await decide(AU1, P, RP, 'no')).status).toBe(404);
+    expect(db.tables.listing_consents).toEqual([]);
+  });
+
+  it('a veto can be lifted after the connection ended, and the list still shows it first', async () => {
+    Object.assign(row(RA), { store_listed: true, store_listed_at: '2026-10-10T00:00:00Z' });
+    await call('veto', 'PUT', PU, { orgId: L, releaseId: RA }, { listed: false });
+    db.tables.org_connections[0].status = 'ended';
+    const list = await (await call('connected', 'GET', PU, { orgId: L })).json();
+    expect(list.releases[0]).toMatchObject({ releaseId: RA, vetoed: true, artistOrg: 'Former connection' });
+    expect((await call('veto', 'PUT', PU, { orgId: L, releaseId: RA }, { listed: true })).status).toBe(200);
+    expect(db.tables.store_listing_vetoes).toHaveLength(0);
+  });
+
+  it('a failed consent re-check after the claim puts the claim back', async () => {
+    promote.mockImplementation(async (_o: string, _r: string, items: { masterTrackId: string }[]) => {
+      broken = new Set(['listing_consents']); // readable for the plan, unreadable for the re-check
+      return items.map((i) => i.masterTrackId);
+    });
+    const res = await list(AR, P, RP, { listed: true });
+    broken = new Set();
+    expect(res.status).toBe(500);
+    expect(row(RP).store_listed).toBe(false);
+  });
+});
+

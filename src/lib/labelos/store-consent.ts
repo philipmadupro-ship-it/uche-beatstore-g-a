@@ -75,9 +75,8 @@ export function planConsentGate(rows: readonly ConsentRow[], vetoed = false): { 
     return {
       ok: false,
       status: 409,
-      error: refused.length === 1
-        ? 'An artist on this release has said no to the store. It can be listed again once they say yes.'
-        : `${refused.length} artists on this release have said no to the store. It can be listed again once each of them says yes.`,
+      // No count and no name: a member limited to some artists must not learn how many, or which, of the others refused.
+      error: 'An artist on this release has said no to the store. It can be listed again once every artist who said no says yes.',
       field: 'consent',
     };
   }

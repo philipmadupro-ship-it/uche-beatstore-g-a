@@ -172,7 +172,7 @@ export type ConnectedRelease = {
   serving: boolean;
 };
 
-export const getConnectedReleases = (orgId: string) => send<{ schemaReady: boolean; releases: ConnectedRelease[] }>(`/api/org/${orgId}/connected-releases`, 'GET');
+export const getConnectedReleases = (orgId: string) => send<{ schemaReady: boolean; releases: ConnectedRelease[]; truncated?: boolean }>(`/api/org/${orgId}/connected-releases`, 'GET');
 
 /** The store owner's Unlist (`listed: false`) and Allow again (`listed: true`). */
 export const setConnectedRelease = (orgId: string, releaseId: string, listed: boolean) =>

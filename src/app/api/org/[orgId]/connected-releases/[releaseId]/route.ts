@@ -55,10 +55,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   try {
     if (!(await isStoreOwner(admin, userId))) return NOT_FOUND();
-    const release = await connectedReleaseFor(admin, org, releaseId);
+    const veto = await readVeto(admin, releaseId);
+    if (!veto.schemaReady) {
+      // Nothing to read or write before 186; say so for anyone who could have asked (the release must still be theirs).
+      return (await connectedReleaseFor(admin, org, releaseId)) ? json(503, { error: NEEDS_186, migration: '186', schemaReady: false }) : NOT_FOUND();
+    }
+    const release = await connectedReleaseFor(admin, org, releaseId, { hasVeto: veto.vetoed });
     if (!release) return NOT_FOUND();
-    const veto = await readVeto(admin, release.id);
-    if (!veto.schemaReady) return json(503, { error: NEEDS_186, migration: '186', schemaReady: false });
     const plan = planVeto({ want, vetoed: veto.vetoed, listed: release.store_listed });
     if (!plan.ok) return json(plan.status, { error: plan.error, ...(plan.field ? { field: plan.field } : {}) });
     if (plan.change === 'none') return json(200, { listed: want === 'allow', changed: false });

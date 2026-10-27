@@ -350,9 +350,10 @@ export async function loadPublicRelease(admin: any, releaseId: string, now: Date
   const owner = await cachedStoreOwnerOrgs(admin);
   if (!owner || !orgMayListOnStore(release.org_id, owner)) return null;
   // LABEL-71: a credited artist's no, or the store owner's veto, takes the release off the store on this very
-  // request. Read fresh every time (never cached), like `store_listed`; an unreadable consent table fails closed.
-  if ((await blockedByConsent(admin, [release.id])).has(release.id.toLowerCase())) return null;
-  const [loaded, names] = await Promise.all([cachedItems(admin, release, opts.itemId), artistNames(admin, [release])]);
+  // request. Read fresh every time (never cached), like `store_listed`, in parallel with the other reads; an
+  // unreadable consent table fails closed.
+  const [blocked, loaded, names] = await Promise.all([blockedByConsent(admin, [release.id]), cachedItems(admin, release, opts.itemId), artistNames(admin, [release])]);
+  if (blocked.has(release.id.toLowerCase())) return null;
   // Per item: a recording that is not finished music is never served, even from a listed release.
   const items = listableItems(loaded);
   if (items.length === 0) return null;

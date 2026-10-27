@@ -49,9 +49,13 @@ describe('the gate: a listing serves while no credited artist has said no', () =
   it('planConsentGate refuses a re-listing until the artist says yes, naming nothing of them', () => {
     const one = planConsentGate([row(A, 'no')]);
     expect(one).toMatchObject({ ok: false, status: 409, field: 'consent' });
+    // The words never carry a count or a name (a scoped member must not learn how many others refused).
     const many = planConsentGate([row(A, 'no'), row(B, 'no')]);
     expect(many.ok).toBe(false);
-    if (!many.ok) expect(many.error).toMatch(/2 artists/);
+    if (!many.ok) {
+      expect(many.error).toBe((one as { error: string }).error);
+      expect(many.error).not.toMatch(/\d|\bnamed\b/);
+    }
     expect(planConsentGate([row(A, 'yes'), row(B, 'proposed')])).toEqual({ ok: true });
     expect(planConsentGate([row(A, 'yes')], true)).toMatchObject({ ok: false, field: 'veto' });
   });
