@@ -159,15 +159,27 @@ describe('navGroupsFor', () => {
     expect(hub?.items.map((i) => i.href)).toEqual(['/o/ns/rights/legal']);
   });
 
+  it('the Contracts page (LABEL-57) is for contracts staff, rights readers and own-line members, in orgs licensed for contracts', () => {
+    const hrefs = (caps: string[], modules?: string[]) =>
+      navGroupsFor('label', new Set(caps), { slug: 'ns', viewerIsProducer: false, modules }).find((g) => g.key === 'rights')?.items.map((i) => i.href) ?? [];
+    expect(hrefs(['catalog.read', 'contracts.read'])).toEqual(['/o/ns/rights/contracts']);
+    expect(hrefs(['catalog.read', 'rights.read.own_line'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/contracts']);
+    expect(hrefs(['catalog.read', 'rights.read'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/contracts']);
+    expect(hrefs(['catalog.read', 'contracts.read'], ['export'])).toEqual([]);
+    expect(hrefs(['catalog.read'])).toEqual([]);
+    expect(navGroupsFor('producer', new Set(['contracts.read']), { slug: 'ns', viewerIsProducer: false }).some((g) => g.key === 'rights')).toBe(false);
+  });
+
   it('Parties (LABEL-54) is in the Rights hub for anyone who reads a party; the legal queue stays for those who work it', () => {
     const hub = (kind: string, caps: string[], modules?: string[]) =>
       navGroupsFor(kind, new Set(caps), { slug: 'ns', viewerIsProducer: false, ...(modules ? { modules: new Set(modules) } : {}) }).find((g) => g.key === 'rights')?.items.map((i) => i.href);
     // An own-line producer, a rights reader (a roster artist holds it) and finance each get Parties.
-    expect(hub('label', ['catalog.read', 'rights.read.own_line'])).toEqual(['/o/ns/rights/parties']);
-    expect(hub('label', ['catalog.read', 'rights.read'])).toEqual(['/o/ns/rights/parties']);
+    // (LABEL-57: a rights reader or own-line member also gets Contracts, their own, once sent.)
+    expect(hub('label', ['catalog.read', 'rights.read.own_line'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/contracts']);
+    expect(hub('label', ['catalog.read', 'rights.read'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/contracts']);
     expect(hub('label', ['finance.read'])).toEqual(['/o/ns/rights/parties']);
     // Legal gets both, queue second; without the contracts module the queue goes and Parties stays.
-    expect(hub('label', ['catalog.read', 'rights.read', 'rights.read.own_line', 'release.approve.legal'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/legal']);
+    expect(hub('label', ['catalog.read', 'rights.read', 'rights.read.own_line', 'release.approve.legal'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/contracts', '/o/ns/rights/legal']);
     expect(hub('label', ['catalog.read', 'rights.read', 'release.approve.legal'], ['store'])).toEqual(['/o/ns/rights/parties']);
     // Neither a reviewer nor marketing, and never a producer org.
     expect(hub('label', ['catalog.read', 'review.write'])).toBeUndefined();

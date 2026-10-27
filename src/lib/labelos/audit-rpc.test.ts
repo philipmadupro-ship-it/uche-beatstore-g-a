@@ -22,7 +22,9 @@ const SQL_172 = readFileSync(join(process.cwd(), 'supabase/migrations/172_labelo
 const SQL_190 = readFileSync(join(process.cwd(), 'supabase/migrations/190_labelos_team_accounts.sql'), 'utf8');
 // LABEL-54 adds the credit withdrawal.
 const SQL_174 = readFileSync(join(process.cwd(), 'supabase/migrations/174_labelos_parties_payee.sql'), 'utf8');
-const SQL = SQL_146 + SQL_148 + SQL_153 + SQL_154 + SQL_155 + SQL_157 + SQL_170 + SQL_172 + SQL_174 + SQL_190;
+// LABEL-57 adds the contract void.
+const SQL_176 = readFileSync(join(process.cwd(), 'supabase/migrations/176_labelos_contracts.sql'), 'utf8');
+const SQL = SQL_146 + SQL_148 + SQL_153 + SQL_154 + SQL_155 + SQL_157 + SQL_170 + SQL_172 + SQL_174 + SQL_176 + SQL_190;
 
 describe('auditRpc', () => {
   it('calls the named function with the arguments untouched', async () => {
@@ -59,7 +61,7 @@ describe('auditRpc', () => {
   });
 });
 
-describe('migrations 146 + 148 + 153 + 154 + 155 + 157 + 170 + 172 + 174 + 190 hold exactly these functions, service_role only', () => {
+describe('migrations 146 + 148 + 153 + 154 + 155 + 157 + 170 + 172 + 174 + 176 + 190 hold exactly these functions, service_role only', () => {
   for (const [key, name] of Object.entries(AUDIT_RPCS)) {
     it(`${key} → ${name}`, () => {
       expect(SQL).toMatch(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\(`));

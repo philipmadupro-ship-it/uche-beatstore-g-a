@@ -128,7 +128,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
     if (!(await readParty(admin, org, partyId))) return json(404, { error: 'Not found' });
     const credits = await creditsOfParty(admin, org, partyId);
-    if (credits > 0) return json(409, { error: `This party is named on ${credits} credit${credits === 1 ? '' : 's'} or split-sheet line${credits === 1 ? '' : 's'}`, credits });
+    if (credits > 0) return json(409, { error: `This party is named on ${credits} credit${credits === 1 ? '' : 's'}, split-sheet line${credits === 1 ? '' : 's'} or contract${credits === 1 ? '' : 's'}`, credits });
     if (!(await deleteParty(admin, org, partyId))) return json(404, { error: 'Not found' });
 
     await recordEvent(admin, { orgId: org, userId: access.userId }, 'party.deleted', { type: 'party', id: partyId }, {});

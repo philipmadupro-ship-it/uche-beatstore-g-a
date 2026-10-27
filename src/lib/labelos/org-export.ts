@@ -58,6 +58,10 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'split_sheets', source: { by: 'org' }, order: ['id'] },
   { name: 'split_lines', source: { by: 'org' }, order: ['id'] },
   { name: 'approvals', source: { by: 'org' }, order: ['id'] },
+  // Contracts (LABEL-57): the org's template versions, the contracts (with the clauses they were made from) and their parties.
+  { name: 'contract_templates', source: { by: 'org' }, order: ['id'] },
+  { name: 'contracts', source: { by: 'org' }, order: ['id'] },
+  { name: 'contract_parties', source: { by: 'org' }, order: ['contract_id', 'party_id', 'role'] },
   // Creative direction (LABEL-26) and what an artist org shares with a label (LABEL-41, the artist side's rows)
   { name: 'artist_direction', source: { by: 'org' }, order: ['contact_id'] },
   { name: 'artist_references', source: { by: 'org' }, order: ['id'] },

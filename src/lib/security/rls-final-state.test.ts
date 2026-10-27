@@ -123,6 +123,10 @@ function labelOsTables(): string[] {
     // 170_labelos_entitlements_platform.sql (LABEL-47)
     'org_entitlements',
     'platform_admins',
+    // 176_labelos_contracts.sql (LABEL-57)
+    'contract_templates',
+    'contracts',
+    'contract_parties',
     // 190_labelos_team_accounts.sql (doc 25): service-role only, no policy.
     'org_managed_accounts',
   ];
@@ -591,7 +595,8 @@ describe('final RLS policy state', () => {
 
     it('changes exactly one policy: the parties read, which now excludes role artist from the capability branch', () => {
       const before = replay(realMigrations().filter((m) => m.name < '174')).policies;
-      const changed = [...policies.keys()].filter((k) => policies.get(k) !== before.get(k)).sort();
+      // 176 (LABEL-57) adds three tables of its own; what 174 changed on EXISTING tables is the one parties policy.
+      const changed = [...policies.keys()].filter((k) => policies.get(k) !== before.get(k) && !/^contract(s|_parties|_templates)\./.test(k)).sort();
       expect(changed).toEqual(['parties.parties_member_read']);
       const body = policies.get('parties.parties_member_read') ?? '';
       expect(body).toMatch(/cm\.role <> 'artist'/);
