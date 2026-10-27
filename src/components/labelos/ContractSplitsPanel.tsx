@@ -18,7 +18,7 @@ import { toast } from '@/hooks/useToast';
 import { DriftNotice } from '@/components/labelos/DriftNotice';
 import { useOrgShell } from '@/components/labelos/OrgShellContext';
 import { fetchContractSplits, prefillSplitsFromContract, type ContractSplitsPayload, type KindPlanView, type PrefillResult } from '@/lib/labelos/contract-splits-client';
-import { SPLIT_KIND_LABEL, type SplitKind } from '@/lib/labelos/splits';
+import { SPLIT_KIND_LABEL } from '@/lib/labelos/splits';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
@@ -92,17 +92,17 @@ export function ContractSplitsPanel({ orgId, contractId, trackId, version }: { o
         <DriftNotice key={d.sheetId} entry={d} against="this contract" href={songHref} />
       ))}
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {data.plans.map((p) => (
-          <div key={p.kind} className="rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid={`contract-split-plan-${p.kind}`}>
+          <div key={p.kind} className="min-w-0 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid={`contract-split-plan-${p.kind}`}>
             <p className="text-[11px] text-white/80">{SPLIT_KIND_LABEL[p.kind]}</p>
             {p.ok ? (
               <>
                 <ul className="mt-2 space-y-1 text-[11px] text-white/60">
                   {p.lines.map((l) => (
                     <li key={`${l.partyId}-${l.role}`} className="flex justify-between gap-3">
-                      <span className="truncate">{l.name} · {l.roleLabel}</span>
-                      <span className="font-mono text-white/80">{l.share}%</span>
+                      <span className="min-w-0 truncate">{l.name} · {l.roleLabel}</span>
+                      <span className="shrink-0 font-mono text-white/80">{l.share}%</span>
                     </li>
                   ))}
                 </ul>
