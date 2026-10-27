@@ -14,6 +14,7 @@ import type { AdminClient } from '@/lib/auth/ownership';
 import { isUUID } from '@/lib/validate';
 import type { TemplateClause } from './contracts/templates';
 import type { ContractPartyLink, ContractRow, PartyIdentity } from './contracts/context';
+import type { HistoryEvent } from './contracts/history';
 import type { PartyRole, TemplateTypeId } from './contracts/types';
 import { inChunks, pageAll, ReadError } from './paged-read';
 import { hasArtistRole } from './roster';
@@ -212,7 +213,16 @@ async function isRosterArtist(admin: AdminClient, org: string, id: string): Prom
   return hasArtistRole(res.data as { category: string | null; secondary_category: string | null });
 }
 
-export async function linkedInOrg(admin: AdminClient, org: string, ids: { artist?: string | null; track?: string | null; release?: string | null }): Promise<string | null> {
+/**
+ * `ids` are probed as before. `effective` (LABEL-58) is the artist / song / release the contract WILL have: a song or
+ * release must belong to the contract's artist (a song in none of the org's projects is fine; a release always has a project).
+ */
+export async function linkedInOrg(
+  admin: AdminClient,
+  org: string,
+  ids: { artist?: string | null; track?: string | null; release?: string | null },
+  effective?: { artist: string | null; track: string | null; release: string | null },
+): Promise<string | null> {
   const probe = async (table: string, id: string | null | undefined): Promise<boolean> => {
     if (!id) return true;
     const res = await admin.from(table).select('id').eq('org_id', org).eq('id', id).maybeSingle();
@@ -222,6 +232,17 @@ export async function linkedInOrg(admin: AdminClient, org: string, ids: { artist
   if (ids.artist && !(await isRosterArtist(admin, org, ids.artist))) return 'That contact is not an artist on your roster';
   if (!(await probe('tracks', ids.track))) return 'That song is not in this organization';
   if (!(await probe('releases', ids.release))) return 'That release is not in this organization';
+  if (effective?.artist) {
+    if (effective.track) {
+      const projects = await songProjectIds(admin, org, effective.track);
+      if (projects.length > 0 && (await artistProjects(admin, org, effective.artist, projects)).length === 0) return 'That song is not in this artist’s projects';
+    }
+    if (effective.release) {
+      const res = await admin.from('releases').select('project_id').eq('org_id', org).eq('id', effective.release).maybeSingle();
+      const pid = (res.data as { project_id?: string } | null)?.project_id;
+      if (pid && (await artistProjects(admin, org, effective.artist, [pid])).length === 0) return 'That release is not in this artist’s projects';
+    }
+  }
   return null;
 }
 
@@ -259,4 +280,157 @@ export async function saveContract(
     throw new Error(`contract save: ${res.error.message}`);
   }
   return res.data as unknown as string;
+}
+
+// ── LABEL-58: clause edits, sending, the document ──────────────────────────
+
+/**
+ * Bump a draft's version, and write its clauses with the same statement when
+ * they changed. Compare-and-set on (status = draft, version = expected): two
+ * editors cannot both write version N+1. Returns the new version, or null when
+ * the row moved on (someone else saved, or it is no longer a draft).
+ */
+export async function writeDraftVersion(admin: AdminClient, org: string, id: string, expected: number, clauses: TemplateClause[] | null): Promise<number | null> {
+  await assertContractsSchema(admin);
+  const res = await admin
+    .from('contracts')
+    .update({ version: expected + 1, ...(clauses ? { clauses } : {}) })
+    .eq('org_id', org)
+    .eq('id', id)
+    .eq('status', 'draft')
+    .eq('version', expected)
+    .select('version');
+  check('contract version', res.error);
+  return ((res.data ?? [])[0] as { version: number } | undefined)?.version ?? null;
+}
+
+/** draft → sent in one conditional UPDATE: of two requests only one claims it. The content-freeze trigger (176) takes over from here. */
+export async function claimSend(admin: AdminClient, org: string, id: string, version: number): Promise<boolean> {
+  await assertContractsSchema(admin);
+  const res = await admin.from('contracts').update({ status: 'sent' }).eq('org_id', org).eq('id', id).eq('status', 'draft').eq('version', version).select('id');
+  check('contract send', res.error);
+  return (res.data ?? []).length === 1;
+}
+
+/** The wording the contract started from: the org's template version it names, else the platform default. */
+export async function templateBase(admin: AdminClient, org: string, row: Pick<ContractRow, 'type' | 'template_id'>, platform: (type: TemplateTypeId) => readonly TemplateClause[]): Promise<readonly TemplateClause[]> {
+  if (row.template_id) {
+    const t = await readOrgTemplate(admin, org, row.template_id).catch(() => null);
+    if (t) return t.clauses;
+  }
+  return platform(row.type);
+}
+
+/**
+ * The projects (of this org) among `projectIds` that belong to the artist: an Inbox for them, or linked to them.
+ * Inbox first, then the oldest, so the answer is stable.
+ */
+async function artistProjects(admin: AdminClient, org: string, artist: string, projectIds: readonly string[]): Promise<string[]> {
+  const ids = [...new Set(projectIds)];
+  if (ids.length === 0) return [];
+  const res = await admin.from('projects').select('id, inbox_for_contact_id, created_at').eq('org_id', org).in('id', ids);
+  check('project read', res.error);
+  const projects = ((res.data ?? []) as { id: string; inbox_for_contact_id: string | null; created_at?: string }[]).sort(
+    (x, y) => Number(!!y.inbox_for_contact_id) - Number(!!x.inbox_for_contact_id) || String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id),
+  );
+  const { projectArtists } = await import('./org-workspace-store');
+  const owners = await projectArtists(admin, projects);
+  return projects.filter((p) => (owners.get(p.id) ?? []).includes(artist)).map((p) => p.id);
+}
+
+async function songProjectIds(admin: AdminClient, org: string, trackId: string): Promise<string[]> {
+  const res = await admin.from('project_tracks').select('project_id').eq('track_id', trackId);
+  check('song projects', res.error);
+  const ids = ((res.data ?? []) as { project_id: string }[]).map((r) => r.project_id);
+  if (ids.length === 0) return [];
+  const inOrg = await admin.from('projects').select('id').eq('org_id', org).in('id', ids);
+  check('project read', inOrg.error);
+  return ((inOrg.data ?? []) as { id: string }[]).map((r) => r.id);
+}
+
+/**
+ * The project a contract's PDF is filed in: its release's, else its song's, and ONLY a project of the contract's
+ * own artist. The PDF then sits where the contract's own scope reaches: a member limited to artist Y must not be
+ * able to open (or find by search) a contract of artist X because the song happens to live in Y's project.
+ * No artist, no release / song, or none of them in that artist's project → null: the PDF is made on request and
+ * not stored.
+ */
+export async function contractProjectId(admin: AdminClient, org: string, row: Pick<ContractRow, 'release_id' | 'track_id' | 'artist_contact_id'>): Promise<string | null> {
+  if (!row.artist_contact_id) return null;
+  if (row.release_id) {
+    const res = await admin.from('releases').select('project_id').eq('org_id', org).eq('id', row.release_id).maybeSingle();
+    const pid = (res.data as { project_id?: string } | null)?.project_id;
+    if (!res.error && pid) return (await artistProjects(admin, org, row.artist_contact_id, [pid]))[0] ?? null;
+  }
+  if (row.track_id) return (await artistProjects(admin, org, row.artist_contact_id, await songProjectIds(admin, org, row.track_id)))[0] ?? null;
+  return null;
+}
+
+export type ContractCopy = { asset_id: string; project_id: string; url: string };
+
+/** The stored PDF of this contract version, if one was made (the file name is the key: one per version and status). */
+export async function findContractCopy(admin: AdminClient, org: string, projectId: string, fileName: string): Promise<ContractCopy | null> {
+  const all = await listContractCopies(admin, org, projectId, fileName);
+  return all[0] ?? null;
+}
+
+/** Every contract file of the project whose name starts with `prefix`, oldest first (the dedupe key of a contract is its name). */
+export async function listContractCopies(admin: AdminClient, org: string, projectId: string, prefix: string): Promise<(ContractCopy & { file_name: string })[]> {
+  const res = await admin
+    .from('project_assets')
+    .select('id, project_id, url, file_name, created_at')
+    .eq('org_id', org)
+    .eq('project_id', projectId)
+    .eq('kind', 'contract')
+    .ilike('file_name', `${prefix.replace(/[%_]/g, '\\$&')}%`);
+  check('contract copy lookup', res.error);
+  return ((res.data ?? []) as { id: string; project_id: string; url: string; file_name: string; created_at?: string }[])
+    .sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')) || a.id.localeCompare(b.id))
+    .map((r) => ({ asset_id: r.id, project_id: r.project_id, url: r.url, file_name: r.file_name }));
+}
+
+/** Insert the restricted `contract` project file a generated PDF is kept as (143: a contract file is always restricted). */
+export async function insertContractPdfRow(
+  admin: AdminClient,
+  a: { org: string; projectId: string; createdBy: string; url: string; fileName: string; size: number; label: string },
+): Promise<string> {
+  const { data: last } = await admin.from('project_assets').select('position').eq('org_id', a.org).eq('project_id', a.projectId).order('position', { ascending: false }).limit(1);
+  const position = ((last as Array<{ position: number }> | null)?.[0]?.position ?? -1) + 1;
+  const res = await admin
+    .from('project_assets')
+    .insert({
+      user_id: null,
+      org_id: a.org,
+      created_by: a.createdBy,
+      project_id: a.projectId,
+      kind: 'contract',
+      sensitivity: 'restricted',
+      label: a.label.slice(0, 200),
+      file_name: a.fileName,
+      url: a.url,
+      mime: 'application/pdf',
+      size_bytes: a.size,
+      position,
+      in_portal: false,
+      portal_at: null,
+    })
+    .select('id')
+    .single();
+  check('contract document insert', res.error);
+  return (res.data as { id: string }).id;
+}
+
+/** A contract's own events (created / edited / sent / voided / PDF made), newest first, bounded. */
+export async function contractEvents(admin: AdminClient, org: string, id: string, verbs: readonly string[]): Promise<HistoryEvent[]> {
+  const res = await admin
+    .from('activity_events')
+    .select('id, verb, actor_id, payload, created_at')
+    .eq('org_id', org)
+    .eq('subject_type', 'contract')
+    .eq('subject_id', id)
+    .in('verb', [...verbs])
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (res.error) return [];
+  return (res.data ?? []) as unknown as HistoryEvent[];
 }

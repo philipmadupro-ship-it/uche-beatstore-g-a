@@ -6,9 +6,11 @@
 import type { OrgAccessOk } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { mayReadContract, readsAllContracts, type ContractActor } from './contracts/access';
-import { contractView, renderContext, type ContractPartyLink, type ContractRow, type ContractView, type PartyIdentity } from './contracts/context';
+import { contractView, partyName, renderContext, type ContractPartyLink, type ContractRow, type ContractView, type PartyIdentity } from './contracts/context';
 import { renderClauses, type Rendered } from './contracts/render';
-import { identitiesOf, linkedNames, linksOf, ownPartyIds, type ContractReadScope } from './contracts-store';
+import type { ContractDocumentInput } from './contracts/document';
+import { CONTRACT_STATUS_LABELS, PARTY_ROLE_LABELS, TEMPLATE_TYPE_LABELS } from './contracts/types';
+import { identitiesOf, linkedNames, linksOf, ownPartyIds, readContractRow, type ContractReadScope } from './contracts-store';
 
 export async function contractActor(access: Pick<OrgAccessOk, 'admin' | 'orgId' | 'userId' | 'role' | 'capabilities' | 'artistScope'>): Promise<ContractActor> {
   return {
@@ -51,4 +53,41 @@ export function readScopeFor(actor: ContractActor): ContractReadScope {
     return actor.artistScope === null ? { kind: 'all' } : { kind: 'artists', contactIds: [...actor.artistScope], sentOnly: false, partyIds: [] };
   }
   return { kind: 'own', contactIds: actor.role === 'artist' && actor.artistScope ? [...actor.artistScope] : [], partyIds: [...actor.ownPartyIds] };
+}
+
+// ── LABEL-58 ────────────────────────────────────────────────────────────
+
+/** The PDF's input from what the live preview shows, so file and screen cannot differ. */
+export function documentInputOf(
+  row: Pick<ContractRow, 'title' | 'type' | 'status' | 'version'>,
+  links: readonly ContractPartyLink[],
+  identities: ReadonlyMap<string, PartyIdentity>,
+  rendered: Rendered,
+  generatedOn: string = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }),
+): ContractDocumentInput {
+  return {
+    title: row.title,
+    typeLabel: TEMPLATE_TYPE_LABELS[row.type],
+    statusLabel: CONTRACT_STATUS_LABELS[row.status],
+    version: row.version,
+    parties: [...links]
+      .sort((a, b) => a.position - b.position)
+      .map((l) => ({ roleLabel: PARTY_ROLE_LABELS[l.role], name: identities.get(l.party_id) ? partyName(identities.get(l.party_id)!) : 'Unknown party' })),
+    clauses: rendered.clauses,
+    missing: rendered.missing,
+    generatedOn,
+  };
+}
+
+type OrgAccess = Extract<Awaited<ReturnType<typeof import('@/lib/auth/org-access').requireOrgModule>>, { ok: true }>;
+
+/** One contract the caller may read, with its parties and their names; null = 404 (not there, or not theirs). */
+export async function loadContractFor(access: OrgAccess, contractId: string) {
+  const actor = await contractActor(access);
+  const row = await readContractRow(access.admin, access.orgId, contractId);
+  if (!row) return null;
+  const links = (await linksOf(access.admin, access.orgId, [row.id])).get(row.id) ?? [];
+  if (!mayReadContract(actor, { status: row.status, artist_contact_id: row.artist_contact_id, partyIds: links.map((l) => l.party_id) })) return null;
+  const identities = await identitiesOf(access.admin, access.orgId, links.map((l) => l.party_id));
+  return { actor, row, links, identities };
 }
