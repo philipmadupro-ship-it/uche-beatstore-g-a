@@ -31,6 +31,7 @@ const date = (iso: string | null) => (iso ? new Date(iso.length === 10 ? `${iso}
 
 function dateLine(r: BoardRelease): string {
   if (r.state === 'delivered') return `Delivered${r.deliveredTo ? ` to ${r.deliveredTo}` : ''}${r.deliveredAt ? ` · ${date(r.deliveredAt)}` : ''}`;
+  if (r.state === 'withdrawn') return `Withdrawn${r.deliveredTo ? ` from ${r.deliveredTo}` : ''}`;
   if (r.state === 'cancelled') return 'Cancelled';
   const d = r.releaseDate ?? r.targetDate;
   return d ? `${r.releaseDate ? 'Release' : 'Target'} ${date(d)}` : 'No date set';

@@ -41,6 +41,7 @@ import {
   setItemExplicit,
   setItemMaster,
   setReleaseArtwork,
+  withdrawRelease,
   type MasterOptions,
 } from '@/lib/labelos/release-client';
 import { MASTER_RELATION_LABEL } from '@/lib/labelos/master-choice';
@@ -137,7 +138,7 @@ export function ReleaseDetailView({ orgId, orgSlug, detail, extraActions }: { or
               <h1 className="font-heading text-[28px] font-bold leading-[1.05] tracking-tight text-white sm:text-[32px] md:text-[40px]">{release.title}</h1>
             )}
             <p className="mt-2 text-[11px] text-white/60" data-testid="release-state">
-              <span className="capitalize">{release.type}</span> · {release.state === 'delivered' ? 'Delivered' : release.state === 'cancelled' ? 'Cancelled' : 'Draft'}
+              <span className="capitalize">{release.type}</span> · {release.state === 'delivered' ? 'Delivered' : release.state === 'withdrawn' ? 'Withdrawn' : release.state === 'cancelled' ? 'Cancelled' : 'Draft'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2" data-testid="release-actions">
@@ -599,6 +600,47 @@ function GateRow({ gate, view, mayReadRights, orgSlug, canFix }: { gate: Release
   );
 }
 
+// ── Withdraw ────────────────────────────────────────────────────────────
+
+/** Cancel is for drafts; a release that went out is withdrawn. Asks first, with an optional reason for the record. */
+function Withdraw({ orgId, detail, busy, act }: { orgId: string; detail: Detail; busy: boolean; act: Act }) {
+  const { release } = detail;
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  if (!open) {
+    return (
+      <button type="button" className={`${BTN} mt-3`} disabled={busy} data-testid="release-withdraw-open" onClick={() => setOpen(true)}>
+        Withdraw release…
+      </button>
+    );
+  }
+  return (
+    <div className="mt-3 space-y-2 rounded-lg border border-white/10 p-3" data-testid="release-withdraw-panel">
+      <p className="text-[11px] leading-relaxed text-white/80">
+        Withdrawing keeps this release and its history, but it is no longer delivered{release.storeListed ? ' and comes off the store' : ''}. A release that went out is not cancelled or deleted.
+      </p>
+      <label className="block">
+        <span className={LABEL}>Why (optional)</span>
+        <textarea className={`${FIELD} mt-1`} rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Kept in the activity record, for the business side." data-testid="release-withdraw-note" />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={BTN}
+          disabled={busy}
+          data-testid="release-withdraw"
+          onClick={() => void act(() => withdrawRelease(orgId, release.id, { note }), 'Release withdrawn').then((ok) => ok && setOpen(false))}
+        >
+          Withdraw release
+        </button>
+        <button type="button" className={BTN} disabled={busy} data-testid="release-withdraw-cancel" onClick={() => setOpen(false)}>
+          Keep it delivered
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Delivery ────────────────────────────────────────────────────────────
 
 function Delivery({ orgId, detail, busy, act }: { orgId: string; detail: Detail; busy: boolean; act: Act }) {
@@ -615,6 +657,18 @@ function Delivery({ orgId, detail, busy, act }: { orgId: string; detail: Detail;
         <p className="text-[13px] text-white" data-testid="release-delivered">
           Delivered{release.deliveredTo ? ` to ${release.deliveredTo}` : ''}{release.deliveredAt ? ` · ${day(release.deliveredAt)}` : ''}
         </p>
+        {me.canWrite && <Withdraw orgId={orgId} detail={detail} busy={busy} act={act} />}
+      </section>
+    );
+  }
+  if (release.state === 'withdrawn') {
+    return (
+      <section aria-labelledby="release-delivery" className={CARD} data-testid="release-delivery">
+        <h2 id="release-delivery" className={`${LABEL} mb-3`}>Delivery</h2>
+        <p className="text-[13px] text-white" data-testid="release-withdrawn">
+          Delivered{release.deliveredTo ? ` to ${release.deliveredTo}` : ''}{release.deliveredAt ? ` · ${day(release.deliveredAt)}` : ''}, then withdrawn.
+        </p>
+        <p className="mt-2 text-[11px] text-white/60">The record, the tracklist and the gates stay as they were. A withdrawn release is not on the store and is not delivered again.</p>
       </section>
     );
   }

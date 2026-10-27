@@ -13,20 +13,22 @@ describe('board stage', () => {
     expect(boardStage(r('a', { readyToDeliver: true }))).toBe('ready');
     expect(boardStage(r('a', { state: 'delivered', readyToDeliver: true }))).toBe('delivered');
     expect(boardStage(r('a', { state: 'cancelled' }))).toBe('cancelled');
+    expect(boardStage(r('a', { state: 'withdrawn' }))).toBe('withdrawn');
   });
 
   it('filters and counts by it', () => {
-    const rows = [r('1'), r('2', { readyToDeliver: true }), r('3', { state: 'delivered' }), r('4', { state: 'cancelled' }), r('5')];
-    expect(countByFilter(rows)).toEqual({ all: 5, ready: 1, in_progress: 2, delivered: 1, cancelled: 1 });
+    const rows = [r('1'), r('2', { readyToDeliver: true }), r('3', { state: 'delivered' }), r('4', { state: 'cancelled' }), r('5'), r('6', { state: 'withdrawn' })];
+    expect(countByFilter(rows)).toEqual({ all: 6, ready: 1, in_progress: 2, delivered: 1, withdrawn: 1, cancelled: 1 });
     expect(filterBoard(rows, 'in_progress').map((x) => x.id)).toEqual(['1', '5']);
-    expect(filterBoard(rows, 'all')).toHaveLength(5);
+    expect(filterBoard(rows, 'all')).toHaveLength(6);
   });
 });
 
 describe('sortBoard', () => {
-  it('puts ready first, then in progress by nearest date (undated last), then delivered latest first, then cancelled', () => {
+  it('puts ready first, then in progress by nearest date (undated last), then delivered latest first, then withdrawn, then cancelled', () => {
     const rows = [
       r('cancelled', { state: 'cancelled' }),
+      r('withdrawn', { state: 'withdrawn' }),
       r('delivered-old', { state: 'delivered', deliveredAt: '2026-09-01T00:00:00Z' }),
       r('later', { targetDate: '2026-12-01' }),
       r('undated'),
@@ -34,7 +36,7 @@ describe('sortBoard', () => {
       r('delivered-new', { state: 'delivered', deliveredAt: '2026-10-01T00:00:00Z' }),
       r('ready', { readyToDeliver: true, targetDate: '2026-12-31' }),
     ];
-    expect(sortBoard(rows).map((x) => x.id)).toEqual(['ready', 'soon', 'later', 'undated', 'delivered-new', 'delivered-old', 'cancelled']);
+    expect(sortBoard(rows).map((x) => x.id)).toEqual(['ready', 'soon', 'later', 'undated', 'delivered-new', 'delivered-old', 'withdrawn', 'cancelled']);
   });
 
   it('does not mutate its input', () => {

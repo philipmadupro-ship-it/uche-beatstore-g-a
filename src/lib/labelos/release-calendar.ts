@@ -88,7 +88,7 @@ export function foldLine(line: string): string {
 
 /** The event date of a release: its release date, else its target (tentative); null = not on the calendar. */
 export function calendarDay(r: Pick<CalendarRelease, 'releaseDate' | 'targetDate' | 'state'>): { day: { y: number; m: number; d: number }; tentative: boolean } | null {
-  if (r.state === 'cancelled') return null;
+  if (r.state === 'cancelled' || r.state === 'withdrawn') return null;
   const release = parseDay(r.releaseDate);
   if (release) return { day: release, tentative: false };
   const target = parseDay(r.targetDate);

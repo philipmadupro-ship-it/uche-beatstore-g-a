@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   // LABEL-42: once a release is delivered or entered as already out, its date is the record of when
   // it came out — the store judges "released" by it, so it is not editable (a street date next month
   // cannot be moved to yesterday to put the release on the store).
-  const wentOut = release.state === 'delivered' || release.imported_released;
+  const wentOut = release.state === 'delivered' || release.state === 'withdrawn' || release.imported_released;
   const manages = access.role === 'owner' || access.role === 'admin';
   if (parsed.data.release_date !== undefined && parsed.data.release_date !== release.release_date && wentOut) {
     if (release.release_date !== null) {
