@@ -14,6 +14,7 @@ import type { AdminClient } from '@/lib/auth/ownership';
 import { isUUID } from '@/lib/validate';
 import type { TemplateClause } from './contracts/templates';
 import type { ContractPartyLink, ContractRow, PartyIdentity } from './contracts/context';
+import type { HistoryEvent } from './contracts/history';
 import type { PartyRole, TemplateTypeId } from './contracts/types';
 import { inChunks, pageAll, ReadError } from './paged-read';
 import { hasArtistRole } from './roster';
@@ -259,4 +260,118 @@ export async function saveContract(
     throw new Error(`contract save: ${res.error.message}`);
   }
   return res.data as unknown as string;
+}
+
+// ── LABEL-58: clause edits, sending, the document ──────────────────────────
+
+/**
+ * Bump a draft's version, and write its clauses with the same statement when
+ * they changed. Compare-and-set on (status = draft, version = expected): two
+ * editors cannot both write version N+1. Returns the new version, or null when
+ * the row moved on (someone else saved, or it is no longer a draft).
+ */
+export async function writeDraftVersion(admin: AdminClient, org: string, id: string, expected: number, clauses: TemplateClause[] | null): Promise<number | null> {
+  await assertContractsSchema(admin);
+  const res = await admin
+    .from('contracts')
+    .update({ version: expected + 1, ...(clauses ? { clauses } : {}) })
+    .eq('org_id', org)
+    .eq('id', id)
+    .eq('status', 'draft')
+    .eq('version', expected)
+    .select('version');
+  check('contract version', res.error);
+  return ((res.data ?? [])[0] as { version: number } | undefined)?.version ?? null;
+}
+
+/** draft → sent in one conditional UPDATE: of two requests only one claims it. The content-freeze trigger (176) takes over from here. */
+export async function claimSend(admin: AdminClient, org: string, id: string, version: number): Promise<boolean> {
+  await assertContractsSchema(admin);
+  const res = await admin.from('contracts').update({ status: 'sent' }).eq('org_id', org).eq('id', id).eq('status', 'draft').eq('version', version).select('id');
+  check('contract send', res.error);
+  return (res.data ?? []).length === 1;
+}
+
+/** The wording the contract started from: the org's template version it names, else the platform default. */
+export async function templateBase(admin: AdminClient, org: string, row: Pick<ContractRow, 'type' | 'template_id'>, platform: (type: TemplateTypeId) => readonly TemplateClause[]): Promise<readonly TemplateClause[]> {
+  if (row.template_id) {
+    const t = await readOrgTemplate(admin, org, row.template_id).catch(() => null);
+    if (t) return t.clauses;
+  }
+  return platform(row.type);
+}
+
+/**
+ * The project a contract's PDF is filed in: its release's project, else the
+ * song's (the Inbox project of the artist first, as every other song event is
+ * filed). No release and no song in a project → null: the PDF is made on
+ * request and not stored, rather than invented a place outside a project.
+ */
+export async function contractProjectId(admin: AdminClient, org: string, row: Pick<ContractRow, 'release_id' | 'track_id'>): Promise<string | null> {
+  if (row.release_id) {
+    const res = await admin.from('releases').select('project_id').eq('org_id', org).eq('id', row.release_id).maybeSingle();
+    if (!res.error && (res.data as { project_id?: string } | null)?.project_id) return (res.data as { project_id: string }).project_id;
+  }
+  if (row.track_id) {
+    const { songEventSubject } = await import('./song-stage-store');
+    const song = await songEventSubject(admin, org, row.track_id);
+    if (song.projectId) return song.projectId;
+  }
+  return null;
+}
+
+export type ContractCopy = { asset_id: string; project_id: string };
+
+/** The stored PDF of this contract version, if one was made (the file name is the key: one per version). */
+export async function findContractCopy(admin: AdminClient, org: string, projectId: string, fileName: string): Promise<ContractCopy | null> {
+  const res = await admin.from('project_assets').select('id, project_id').eq('org_id', org).eq('project_id', projectId).eq('kind', 'contract').eq('file_name', fileName).limit(1);
+  if (res.error) return null;
+  const row = ((res.data ?? [])[0] as { id: string; project_id: string } | undefined) ?? null;
+  return row ? { asset_id: row.id, project_id: row.project_id } : null;
+}
+
+/** Insert the restricted `contract` project file a generated PDF is kept as (143: a contract file is always restricted). */
+export async function insertContractPdfRow(
+  admin: AdminClient,
+  a: { org: string; projectId: string; createdBy: string; url: string; fileName: string; size: number; label: string },
+): Promise<string> {
+  const { data: last } = await admin.from('project_assets').select('position').eq('org_id', a.org).eq('project_id', a.projectId).order('position', { ascending: false }).limit(1);
+  const position = ((last as Array<{ position: number }> | null)?.[0]?.position ?? -1) + 1;
+  const res = await admin
+    .from('project_assets')
+    .insert({
+      user_id: null,
+      org_id: a.org,
+      created_by: a.createdBy,
+      project_id: a.projectId,
+      kind: 'contract',
+      sensitivity: 'restricted',
+      label: a.label.slice(0, 200),
+      file_name: a.fileName,
+      url: a.url,
+      mime: 'application/pdf',
+      size_bytes: a.size,
+      position,
+      in_portal: false,
+      portal_at: null,
+    })
+    .select('id')
+    .single();
+  check('contract document insert', res.error);
+  return (res.data as { id: string }).id;
+}
+
+/** A contract's own events (created / edited / sent / voided / PDF made), newest first, bounded. */
+export async function contractEvents(admin: AdminClient, org: string, id: string, verbs: readonly string[]): Promise<HistoryEvent[]> {
+  const res = await admin
+    .from('activity_events')
+    .select('id, verb, actor_id, payload, created_at')
+    .eq('org_id', org)
+    .eq('subject_type', 'contract')
+    .eq('subject_id', id)
+    .in('verb', [...verbs])
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (res.error) return [];
+  return (res.data ?? []) as unknown as HistoryEvent[];
 }

@@ -1925,9 +1925,40 @@ export const OrgContractCreateBodySchema = z
   .strict();
 export type OrgContractCreateBody = z.infer<typeof OrgContractCreateBodySchema>;
 
+/** One clause of a contract's own wording (LABEL-58). Ids, lengths and merge keys are checked again by `cleanContractClauses`. */
+const contractClause = z.object({
+  id: z.string().trim().max(40).optional(),
+  heading: z.string().max(400),
+  body: z.string().max(20000),
+});
+const contractClauses = z.array(contractClause).min(1).max(60);
+
+/** POST …/contracts/[contractId]/preview: the unsaved form, rendered by the server exactly as the PDF will say it. */
+export const OrgContractPreviewBodySchema = z
+  .object({
+    title: ContractFields.title.optional(),
+    artist_contact_id: ContractFields.artist_contact_id.optional(),
+    track_id: ContractFields.track_id.optional(),
+    release_id: ContractFields.release_id.optional(),
+    effective_date: ContractFields.effective_date.optional(),
+    term_months: ContractFields.term_months.optional(),
+    territories: ContractFields.territories.optional(),
+    fields: ContractFields.fields.optional(),
+    parties: ContractFields.parties.optional(),
+    clauses: contractClauses.optional(),
+  })
+  .strict();
+export type OrgContractPreviewBody = z.infer<typeof OrgContractPreviewBodySchema>;
+
+/** POST …/contracts/[contractId]/send: the version the sender reviewed; a newer one is refused. */
+export const OrgContractSendBodySchema = z.object({ version: z.number().int().min(1) }).strict();
+
 /** PATCH /api/org/[orgId]/contracts/[contractId]: edit a draft, or void the contract. */
 export const OrgContractPatchBodySchema = z
   .object({
+    clauses: contractClauses.optional(),
+    /** The version the editor loaded; a different one on the server means someone else saved first (409). */
+    base_version: z.number().int().min(1).optional(),
     title: ContractFields.title.optional(),
     artist_contact_id: ContractFields.artist_contact_id.optional(),
     track_id: ContractFields.track_id.optional(),
@@ -1944,5 +1975,6 @@ export const OrgContractPatchBodySchema = z
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' })
   .refine((b) => !b.void_reason || b.status === 'void', { message: 'A reason goes with voiding' })
-  .refine((b) => b.status !== 'void' || Object.keys(b).every((k) => k === 'status' || k === 'void_reason'), { message: 'Void a contract on its own' });
+  .refine((b) => b.status !== 'void' || Object.keys(b).every((k) => k === 'status' || k === 'void_reason'), { message: 'Void a contract on its own' })
+  .refine((b) => Object.keys(b).some((k) => k !== 'base_version'), { message: 'Nothing to update' });
 export type OrgContractPatchBody = z.infer<typeof OrgContractPatchBodySchema>;

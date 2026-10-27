@@ -293,7 +293,7 @@ describe('PATCH /contracts/[id]', () => {
     expect(res.status).toBe(200);
     expect(db.tables.contracts[1]).toMatchObject({ title: 'Renamed', fields: { royalty_rate: '18.5' } });
     const ev = events().find((e) => e.verb === 'contract.updated')!;
-    expect(ev.payload).toEqual({ changed: ['title', 'internal_note', 'fields'] });
+    expect(ev.payload).toEqual({ changed: ['title', 'internal_note', 'fields'], version: 2 });
   });
 
   it('refuses to edit a contract past draft (409), and bad values (400)', async () => {
