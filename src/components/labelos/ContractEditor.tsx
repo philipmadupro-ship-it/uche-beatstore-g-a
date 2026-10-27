@@ -199,33 +199,37 @@ export function ContractEditor({ orgId, contractId }: { orgId: string; contractI
       return next;
     });
 
-  const save = async (): Promise<boolean> => {
+  const save = async (): Promise<number | null> => {
     const problem = contractFormError(form, []);
     if (problem) {
       setError(problem);
-      return false;
+      return null;
     }
     setBusy('save');
     const res = await updateContract(orgId, contractId, { ...bodyFromContractForm(form), clauses, base_version: contract.version });
     setBusy(null);
     if (!res.ok) {
       setError(res.error);
-      return false;
+      return null;
     }
     setError(null);
     toast.success('Saved');
     await reload();
-    return true;
+    return res.version ?? contract.version;
   };
 
   const send = async () => {
-    if (dirty && !(await save())) return;
-    const fresh = await loadContract(orgId, contractId);
-    if (!fresh.ok) return setError(fresh.error);
+    // The version THIS editor shows: if a colleague saved another since, the server refuses (409) rather than freeze words nobody here read.
+    let reviewed = contract.version;
+    if (dirty) {
+      const saved = await save();
+      if (saved === null) return;
+      reviewed = saved;
+    }
     const ok = await confirmToast('Send for signature?', 'This is the last edit: the wording and the values are frozen once it is sent.', { confirmLabel: 'Send' });
     if (!ok) return;
     setBusy('send');
-    const res = await sendContract(orgId, contractId, fresh.contract.version);
+    const res = await sendContract(orgId, contractId, reviewed);
     setBusy(null);
     if (!res.ok) {
       setError(res.error);

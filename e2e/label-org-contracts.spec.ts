@@ -237,7 +237,7 @@ test('4 · the owner edits the draft in the page', async ({ browser, baseURL }) 
   await expect(page.getByTestId('contract-document')).toContainText('USD 15000', { timeout: 20_000 });
   const [row] = await contracts(ctx.request);
   expect(row.term_months).toBe(36);
-  expect((await events(ctx.request, 'contract.updated'))[0].payload).toEqual({ changed: expect.arrayContaining(['fields', 'term_months']) });
+  expect((await events(ctx.request, 'contract.updated'))[0].payload).toEqual({ changed: expect.arrayContaining(['fields', 'term_months']), version: 2 });
 
   // A second contract for Kilo, to prove the artist cannot read it.
   await page.getByTestId('contract-new').click();

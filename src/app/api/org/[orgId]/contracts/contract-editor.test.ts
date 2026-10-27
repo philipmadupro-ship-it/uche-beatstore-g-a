@@ -257,6 +257,10 @@ describe('POST preview', () => {
     expect(document.clauses[0].body).toContain('[Advance]');
     expect(document.missing).toEqual(expect.arrayContaining(['advance', 'currency']));
   });
+  it('a member limited to Kilo cannot preview with another artist’s name', async () => {
+    const c = add({ artist_contact_id: C2 });
+    expect((await call('preview', 'POST', SC, c.id, { artist_contact_id: C1 })).status).toBe(403);
+  });
   it('a bad value is 400, a party of another org 404, a sent contract 409, a non-writer 403', async () => {
     const c = add();
     expect((await call('preview', 'POST', LEG, c.id, { fields: { advance: 'lots' } })).status).toBe(400);
@@ -322,6 +326,14 @@ describe('POST send — the last edit', () => {
     expect((await call('detail', 'PATCH', LEG, c.id, { title: 'New' })).status).toBe(409);
     expect((await call('send', 'POST', LEG, c.id, { version: 1 })).status).toBe(409);
     expect(events('contract.sent')).toHaveLength(1);
+  });
+
+  it('a send that cannot be recorded does not happen', async () => {
+    const c = add();
+    db.tables.activity_events = { push: () => { throw new Error('events down'); } } as never;
+    const res = await call('send', 'POST', LEG, c.id, { version: 1 });
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(db.tables.contracts[0].status).toBe('draft');
   });
 
   it('is refused with what is missing: an empty value, a required party', async () => {

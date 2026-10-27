@@ -7,10 +7,8 @@
  * requests cannot both send it), after which the database refuses any change
  * to the content (migration 176). A contract with a value still empty, or a
  * required party not chosen, is 422 with what is missing. `contract.sent` is
- * an audit event written right after the claim: there is no atomic function
- * for it (that needs a migration) and a sent contract cannot go back to draft,
- * so if the event cannot be written the answer is 500 and the failure is
- * logged loudly (accepted deviation, see the PR).
+ * an audit event written BEFORE the claim: a sent contract cannot go back to
+ * draft, so a send that cannot be recorded does not happen (500, nothing sent).
  *
  * A frozen PDF copy is filed in the contract's project when it has one
  * (best effort; `…/document` makes it later if this could not).
@@ -65,8 +63,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     });
     if (!plan.ok) return json(plan.status, { error: plan.error, ...(plan.missing ? { missing: plan.missing } : {}) });
 
-    if (!(await claimSend(admin, org, row.id, row.version))) return json(409, { error: 'This contract was changed or sent by someone else just now. Reload it.' });
-
+    // The audit record FIRST: a sent contract cannot go back to draft, so an unauditable send must not happen.
+    // (A request that then loses the claim to a concurrent send leaves one extra event; the contract is sent once.)
     const base = await templateBase(admin, org, row, (t) => platformTemplate(t).clauses);
     try {
       await recordEvent(
@@ -78,15 +76,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
       );
     } catch (err) {
       if (err instanceof AuditEventError) {
-        log.error('contract sent WITHOUT its audit event', { orgId: org, contractId: row.id, error: err.message });
-        return json(500, { error: 'The contract was sent but the record of it could not be written. Tell an administrator.' });
+        log.error('contract send not recorded, nothing sent', { orgId: org, contractId: row.id, error: err.message });
+        return json(500, { error: 'The send could not be recorded, so the contract was not sent. Try again.' });
       }
       throw err;
     }
+    if (!(await claimSend(admin, org, row.id, row.version))) return json(409, { error: 'This contract was changed or sent by someone else just now. Reload it.' });
 
     let copy: Awaited<ReturnType<typeof storeContractPdf>> = { stored: false, reason: 'no_project' };
     try {
       copy = await storeContractPdf(admin, org, access.userId, { ...row, status: 'sent' }, links, identities, rendered);
+      if (copy.stored && !copy.reused) {
+        await recordEvent(admin, { orgId: org, userId: access.userId }, 'contract.document_generated', { type: 'contract', id: row.id, artistId: row.artist_contact_id, projectId: copy.project_id, songId: row.track_id, releaseId: row.release_id }, { version: row.version, status: 'sent' });
+      }
     } catch (err) {
       // Sent is done and recorded; the copy can be made from the contract page.
       log.error('contract PDF not filed after sending', { orgId: org, contractId: row.id, error: errorMessage(err) });

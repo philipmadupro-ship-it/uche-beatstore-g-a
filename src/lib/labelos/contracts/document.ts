@@ -86,6 +86,8 @@ export function renderContractDocumentPdf(input: ContractDocumentInput): Promise
     for (let i = 0; i < range.count; i += 1) {
       doc.switchToPage(range.start + i);
       doc.font('Helvetica').fontSize(8).fillColor('#777777');
+      // The footer sits in the bottom margin: without this pdfkit adds a page for text below maxY().
+      doc.page.margins.bottom = 0;
       const y = doc.page.height - 40;
       doc.text(toWinAnsi(`${input.title} · version ${input.version} · ${input.generatedOn} · page ${i + 1} of ${range.count}`), doc.page.margins.left, y, {
         width: doc.page.width - doc.page.margins.left - doc.page.margins.right,

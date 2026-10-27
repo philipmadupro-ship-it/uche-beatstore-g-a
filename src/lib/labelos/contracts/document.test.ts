@@ -50,6 +50,8 @@ describe('contract PDF', () => {
     const pages = Number(/page 1 of (\d+)/.exec(text)![1]);
     expect(pages).toBeGreaterThan(1);
     expect(text).toContain(`page ${pages} of ${pages}`);
+    // the footer must not make pdfkit add pages of its own
+    expect(pdf.toString('latin1').match(/\/Type \/Page\b(?!s)/g)).toHaveLength(pages);
   });
 
   it('keeps Latin-1 and smart punctuation, replaces what WinAnsi cannot draw', () => {

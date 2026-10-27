@@ -325,7 +325,7 @@ export type ContractCopy = { asset_id: string; project_id: string };
 /** The stored PDF of this contract version, if one was made (the file name is the key: one per version). */
 export async function findContractCopy(admin: AdminClient, org: string, projectId: string, fileName: string): Promise<ContractCopy | null> {
   const res = await admin.from('project_assets').select('id, project_id').eq('org_id', org).eq('project_id', projectId).eq('kind', 'contract').eq('file_name', fileName).limit(1);
-  if (res.error) return null;
+  check('contract copy lookup', res.error);
   const row = ((res.data ?? [])[0] as { id: string; project_id: string } | undefined) ?? null;
   return row ? { asset_id: row.id, project_id: row.project_id } : null;
 }

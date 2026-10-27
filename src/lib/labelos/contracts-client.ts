@@ -49,7 +49,7 @@ export type ContractDetail = {
 export const loadContract = (orgId: string, id: string) => send<ContractDetail>(`/api/org/${orgId}/contracts/${id}`, 'GET');
 
 export const createContract = (orgId: string, body: Record<string, unknown>) => send<{ id: string }>(`/api/org/${orgId}/contracts`, 'POST', body);
-export const updateContract = (orgId: string, id: string, body: Record<string, unknown>) => send<{ ok: true }>(`/api/org/${orgId}/contracts/${id}`, 'PATCH', body);
+export const updateContract = (orgId: string, id: string, body: Record<string, unknown>) => send<{ ok: true; version?: number }>(`/api/org/${orgId}/contracts/${id}`, 'PATCH', body);
 export const voidContract = (orgId: string, id: string, reason?: string) =>
   send<{ ok: true }>(`/api/org/${orgId}/contracts/${id}`, 'PATCH', { status: 'void', ...(reason ? { void_reason: reason } : {}) });
 

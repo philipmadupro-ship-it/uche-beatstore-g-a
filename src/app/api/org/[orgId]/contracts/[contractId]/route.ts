@@ -194,9 +194,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (bad) return json(404, { error: bad });
 
     if (changed.length === 0) return json(200, { ok: true, version: row.version });
-    await saveContract(admin, org, access.userId, row.id, patch, parties);
 
-    // The next version: anything but the internal note is the contract's content (LABEL-58).
+    // The next version FIRST, by compare-and-set on the version this editor loaded: of two editors only
+    // one gets past here, so the loser overwrites nothing (LABEL-58). The note is not content.
     let version = row.version;
     const contentChanged = changed.some((k) => k !== 'internal_note');
     if (contentChanged) {
@@ -204,12 +204,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (next === null) return json(409, { error: 'Someone saved this contract while you were editing. Reload to see their changes.' });
       version = next;
     }
+    await saveContract(admin, org, access.userId, row.id, patch, parties);
+    const changedIds = clauses?.ok ? changedClauseIds(row.clauses, clauses.clauses) : [];
     await recordEvent(
       admin,
       { orgId: org, userId: access.userId },
       'contract.updated',
       { ...subject, artistId: body.artist_contact_id !== undefined ? body.artist_contact_id : row.artist_contact_id },
-      { changed, ...(clauses?.ok ? { changed_clauses: changedClauseIds(row.clauses, clauses.clauses) } : {}), version },
+      { changed, ...(clauses?.ok ? { changed_clauses: changedIds, ...(changedIds.length === 0 ? { reordered: true } : {}) } : {}), ...(contentChanged ? { version } : {}) },
     );
     return json(200, { ok: true, version });
   } catch (err) {

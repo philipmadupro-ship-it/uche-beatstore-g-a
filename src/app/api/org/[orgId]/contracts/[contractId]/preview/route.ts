@@ -45,6 +45,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     const loaded = await loadContractFor(access, contractId);
     if (!loaded || !scopeAllowsContact(access.artistScope, loaded.row.artist_contact_id)) return json(404, { error: 'Contract not found' });
     const { row } = loaded;
+    if (body.artist_contact_id !== undefined && !scopeAllowsContact(access.artistScope, body.artist_contact_id)) {
+      return json(403, { error: 'You can work on contracts for your own artists only' });
+    }
     if (!isEditable(row.status)) return json(409, { error: 'Only a draft is previewed; read a sent contract as it was sent' });
 
     const fields = body.fields === undefined ? { ok: true as const, fields: row.fields } : cleanFields(body.fields);
