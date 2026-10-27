@@ -17,7 +17,7 @@
  * member never reaches POST (requireObjectAccess answers them 403 / 404).
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireObjectAccess, requireTrackActor } from '@/lib/auth/org-access';
+import { orgHasModule, requireObjectAccess, requireTrackActor } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { OrgSplitCreateBodySchema } from '@/lib/contracts';
@@ -27,6 +27,9 @@ import { recordEvent } from '@/lib/labelos/activity';
 import { SPLITS_NOT_READY } from '@/lib/labelos/audit-rpc';
 import { creditActorOf } from '@/lib/labelos/credit-actor';
 import { canWriteRights, creditReach } from '@/lib/labelos/credits';
+import { ContractsNotReadyError } from '@/lib/labelos/contracts-store';
+import { contractsOfSong } from '@/lib/labelos/contract-splits-store';
+import { contractActor } from '@/lib/labelos/contracts-route';
 import { SPLIT_KIND_LABEL, SPLIT_KINDS, SPLIT_ROLE_LABEL, ROLES_BY_KIND } from '@/lib/labelos/splits';
 import { createDraft, loadSheetViews, resolveLines, splitEventSubject, SplitsNotReadyError } from '@/lib/labelos/splits-store';
 
@@ -55,7 +58,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
   };
   try {
     const sheets = await loadSheetViews(admin, org, id, actor);
-    return json(200, { schemaReady: true, sheets, me: { reach, canWrite: canWriteRights(actor) }, ...vocabulary });
+    // The contracts that name this song and whether its sheets still match them (LABEL-59). Only contracts
+    // THIS member may read, and only a yes/no unless they hold rights.read (D2). Never fails the sheets.
+    let contracts: Awaited<ReturnType<typeof contractsOfSong>> = [];
+    if (access.kind === 'org' && orgHasModule(access.access, 'contracts')) {
+      try {
+        const visible = new Set(sheets.map((s) => s.id));
+        contracts = (await contractsOfSong(admin, org, id, await contractActor(access.access), { detail: reach === 'all' && !actor.rosterArtist })).map((c) => ({
+          ...c,
+          drift: c.drift.filter((d) => visible.has(d.sheetId)),
+        }));
+      } catch (err) {
+        if (!(err instanceof ContractsNotReadyError)) log.error('song contracts failed', { orgId: org, trackId: id, error: errorMessage(err) });
+      }
+    }
+    return json(200, { schemaReady: true, sheets, contracts, me: { reach, canWrite: canWriteRights(actor) }, ...vocabulary });
   } catch (err) {
     if (err instanceof SplitsNotReadyError) return json(200, { schemaReady: false, sheets: [], me: { reach, canWrite: false }, ...vocabulary });
     log.error('split list failed', { orgId: org, trackId: id, error: errorMessage(err) });

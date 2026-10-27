@@ -1562,6 +1562,15 @@ export const OrgSplitCreateBodySchema = z.object({
 }).strict();
 export type OrgSplitCreateBody = z.infer<typeof OrgSplitCreateBodySchema>;
 
+/** POST /api/org/[orgId]/contracts/[contractId]/splits: pre-fill split sheet drafts from a contract (LABEL-59). */
+export const OrgContractSplitsBodySchema = z.object({
+  /** One kind, or both of the kinds the contract type has a rule for. */
+  kind: z.enum(SPLIT_KINDS).optional(),
+  /** Replace an existing draft's lines. Without it an existing draft is never touched (409). */
+  replace_draft: z.boolean().optional(),
+}).strict();
+export type OrgContractSplitsBody = z.infer<typeof OrgContractSplitsBodySchema>;
+
 /** PATCH …/splits/[sheetId]: replace a draft's note and / or its whole set of lines. */
 export const OrgSplitPatchBodySchema = z.object({
   note: SplitNoteSchema,
