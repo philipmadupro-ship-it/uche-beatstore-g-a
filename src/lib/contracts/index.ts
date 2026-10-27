@@ -1409,6 +1409,24 @@ export const OrgReleaseStoreBodySchema = z.discriminatedUnion('listed', [
 ]);
 export type OrgReleaseStoreBody = z.infer<typeof OrgReleaseStoreBodySchema>;
 
+/**
+ * PUT /api/org/[orgId]/releases/[releaseId]/consent (LABEL-71): a credited
+ * artist's own answer on putting the release on the store. Only `yes` or
+ * `no` — `proposed` is the system's word. The artist is the caller; the body
+ * never names one, so nobody can answer for somebody else.
+ */
+export const OrgListingConsentBodySchema = z.object({ decision: z.enum(['yes', 'no']) }).strict();
+export type OrgListingConsentBody = z.infer<typeof OrgListingConsentBodySchema>;
+
+/**
+ * PUT /api/org/[orgId]/connected-releases/[releaseId] (LABEL-71): the store
+ * owner's Unlist (`listed: false`, a veto kept in their own org) and Allow
+ * again (`listed: true` lifts it). Allowing does not list anything: the
+ * artist's side still decides whether the release is on the store.
+ */
+export const OrgConnectedReleaseBodySchema = z.object({ listed: z.boolean() }).strict();
+export type OrgConnectedReleaseBody = z.infer<typeof OrgConnectedReleaseBodySchema>;
+
 /** PATCH /api/org/[orgId]/releases/[releaseId]. The project and the artist are fixed. */
 export const OrgReleasePatchBodySchema = z.object({
   title: releaseFields.title.optional(),

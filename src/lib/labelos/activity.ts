@@ -137,6 +137,10 @@ export const VERBS = [
   'release.store_listed',
   'release.store_unlisted',
   'release.imported',
+  // Artist consent on the store (LABEL-71): an artist's answer, and the store owner's own veto
+  'listing.consent_decided',
+  'listing.vetoed',
+  'listing.veto_lifted',
   // Label ↔ artist connections (LABEL-41)
   'connection.requested',
   'connection.accepted',
@@ -198,6 +202,10 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'release.store_listed',
   'release.store_unlisted',
   'release.imported',
+  // Whether music may be public is the artist's word and the store owner's: a record that is never pruned.
+  'listing.consent_decided',
+  'listing.vetoed',
+  'listing.veto_lifted',
   'connection.requested',
   'connection.accepted',
   'connection.ended',
@@ -320,6 +328,10 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'release.store_unlisted': 'artist',
   // "Already out" skips every gate on the owner's word: who said so, and when, is business, not the creative record.
   'release.imported': 'internal',
+  // Consent and veto are the business side of the store: who said no is not the creative record's to broadcast.
+  'listing.consent_decided': 'internal',
+  'listing.vetoed': 'internal',
+  'listing.veto_lifted': 'internal',
   'connection.requested': 'internal',
   'connection.accepted': 'internal',
   'connection.ended': 'internal',

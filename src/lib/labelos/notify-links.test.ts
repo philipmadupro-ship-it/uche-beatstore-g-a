@@ -21,6 +21,10 @@ describe('notificationHref', () => {
     expect(notificationHref('night-shift', { kind: 'party_confirmation', data: { partyId: ID } })).toBe('/o/night-shift/rights/parties');
   });
 
+  it('a store-listing ask opens the Store listings page, where the artist answers', () => {
+    expect(notificationHref('night-shift', { kind: 'listing_proposed', data: { releaseId: ID } })).toBe('/o/night-shift/releases/store');
+  });
+
   it('is not for the producer bell: a producer notification kind has no org link', () => {
     expect(notificationHref('night-shift', { kind: 'purchase', data: { target: { kind: 'song', id: ID } } })).toBeNull();
   });

@@ -252,7 +252,9 @@ SELECT public.check_eq('the service-only write trigger sits on every table the p
    WHERE t.tgname = 'labelos_org_rows_service_only' AND NOT t.tgisinternal),
   -- approvals: 157's org table (LABEL-30)
   -- artist_direction, artist_references: 152's org tables (LABEL-26); parties: 153's (LABEL-27)
-  'approvals,artist_direction,artist_messages,artist_portals,artist_references,contact_track_states,notifications,'
+  'approvals,artist_direction,artist_messages,artist_portals,artist_references,contact_track_states,'
+  -- listing_consents: 186's org table (LABEL-71)
+  'listing_consents,notifications,'
   -- org_saved_views: 161's org table (LABEL-37)
   'org_saved_views,parties,project_assets,project_comments,project_contacts,'
   'project_folder_items,project_shares,project_tags,project_tracks,projects,'
@@ -260,6 +262,8 @@ SELECT public.check_eq('the service-only write trigger sits on every table the p
   'release_items,releases,song_beats,song_reviews,'
   -- split_lines, split_sheets: 155's org tables (LABEL-28)
   'split_lines,split_sheets,'
+  -- store_listing_vetoes: 186's org table (LABEL-71)
+  'store_listing_vetoes,'
   -- tasks: 151's org table (LABEL-23)
   'tasks,track_collaborators,'
   'track_licenses,track_links,track_stem_files,track_versions,tracks');

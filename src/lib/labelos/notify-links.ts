@@ -19,5 +19,7 @@ export function notificationHref(orgSlug: string, n: { kind: string; data?: unkn
   }
   // LABEL-54: a request to confirm one's own rights details opens the Parties page.
   if (n.kind === 'party_confirmation') return `/o/${encodeURIComponent(orgSlug)}/rights/parties`;
+  // LABEL-71: the artist answers on the store listings page (a credited artist may not reach the release itself).
+  if (n.kind === 'listing_proposed') return `/o/${encodeURIComponent(orgSlug)}/releases/store`;
   return `/o/${encodeURIComponent(orgSlug)}`;
 }

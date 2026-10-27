@@ -16,6 +16,7 @@
  */
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { resolveStoreOwner } from '@/lib/store/owner';
+import { blockedByConsent } from './store-consent-store';
 import { orgTrackReadClass, type InboundLink } from './org-read';
 import {
   boundedPut,
@@ -348,6 +349,9 @@ export async function loadPublicRelease(admin: any, releaseId: string, now: Date
   if (!release || !isPubliclyVisible(release, now)) return null;
   const owner = await cachedStoreOwnerOrgs(admin);
   if (!owner || !orgMayListOnStore(release.org_id, owner)) return null;
+  // LABEL-71: a credited artist's no, or the store owner's veto, takes the release off the store on this very
+  // request. Read fresh every time (never cached), like `store_listed`; an unreadable consent table fails closed.
+  if ((await blockedByConsent(admin, [release.id])).has(release.id.toLowerCase())) return null;
   const [loaded, names] = await Promise.all([cachedItems(admin, release, opts.itemId), artistNames(admin, [release])]);
   // Per item: a recording that is not finished music is never served, even from a listed release.
   const items = listableItems(loaded);
@@ -425,7 +429,10 @@ export async function loadPublicReleaseList(admin: any, now: Date, limit = 24): 
     if (visible.length > 0) {
       if (owner === undefined) owner = await cachedStoreOwnerOrgs(admin);
       if (!owner) return out;
-      const rows = visible.filter((r) => orgMayListOnStore(r.org_id, owner as StoreOwnerOrgs));
+      const mine = visible.filter((r) => orgMayListOnStore(r.org_id, owner as StoreOwnerOrgs));
+      // LABEL-71: one batched read per page; a release with an artist's no (or a veto) has no tile.
+      const blocked = mine.length > 0 ? await blockedByConsent(admin, mine.map((r) => r.id)) : new Set<string>();
+      const rows = mine.filter((r) => !blocked.has(r.id.toLowerCase()));
       if (rows.length > 0) {
         const [itemsByRelease, names] = await Promise.all([loadItemsFor(admin, rows), artistNames(admin, rows)]);
         for (const r of rows) {

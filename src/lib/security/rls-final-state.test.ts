@@ -125,6 +125,9 @@ function labelOsTables(): string[] {
     'platform_admins',
     // 190_labelos_team_accounts.sql (doc 25): service-role only, no policy.
     'org_managed_accounts',
+    // 186_labelos_listing_consent.sql (LABEL-71): service-role only behind a deny-all policy.
+    'listing_consents',
+    'store_listing_vetoes',
   ];
 }
 
@@ -591,7 +594,8 @@ describe('final RLS policy state', () => {
 
     it('changes exactly one policy: the parties read, which now excludes role artist from the capability branch', () => {
       const before = replay(realMigrations().filter((m) => m.name < '174')).policies;
-      const changed = [...policies.keys()].filter((k) => policies.get(k) !== before.get(k)).sort();
+      // A policy that did not exist at 173 is a new table's (186's deny-all pair, for one), not a change to an old one.
+      const changed = [...policies.keys()].filter((k) => before.has(k) && policies.get(k) !== before.get(k)).sort();
       expect(changed).toEqual(['parties.parties_member_read']);
       const body = policies.get('parties.parties_member_read') ?? '';
       expect(body).toMatch(/cm\.role <> 'artist'/);
@@ -762,6 +766,34 @@ describe('final RLS policy state', () => {
       // org-only: no user_id (every producer route filters on it), and it cascades from the organization
       expect(sql).not.toMatch(/\buser_id\b/);
       expect(sql).toMatch(/org_id\s+uuid NOT NULL REFERENCES public\.organizations\(id\) ON DELETE CASCADE/);
+    });
+  });
+
+  describe('Label OS artist consent on store listing (mig 186, LABEL-71)', () => {
+    const TABLES = ['listing_consents', 'store_listing_vetoes'];
+
+    it('each table has exactly one policy and it says no: an artist reads their own answers through the route, and a scoped member must not read the others’', () => {
+      for (const table of TABLES) {
+        const own = [...policies].filter(([k]) => k.startsWith(`${table}.`));
+        expect(own.map(([k]) => k), table).toEqual([`${table}.${table}_no_direct_access`]);
+        expect(own[0][1], table).toMatch(/FOR ALL TO anon, authenticated\s+USING \(false\)\s+WITH CHECK \(false\)/i);
+      }
+    });
+
+    it('row level security is on, the API roles hold no privilege, the service-only trigger is attached, and both cascade from the organization', () => {
+      const sql = readFileSync(join(DIR, '186_labelos_listing_consent.sql'), 'utf8').replace(/--[^\n]*/g, '');
+      for (const table of TABLES) {
+        expect(sql, table).toMatch(new RegExp(`ALTER TABLE public\\.${table} ENABLE ROW LEVEL SECURITY`));
+        expect(sql, table).toMatch(new RegExp(`REVOKE ALL ON public\\.${table} FROM anon, authenticated`));
+        expect(sql, table).toMatch(new RegExp(`ON public\\.${table}\\s+FOR EACH ROW EXECUTE FUNCTION public\\.labelos_org_rows_service_only\\('self', 'org_id'\\)`));
+      }
+      expect(sql).not.toMatch(/\buser_id\b/);
+      expect((sql.match(/org_id\s+uuid NOT NULL REFERENCES public\.organizations\(id\) ON DELETE CASCADE/g) ?? []).length).toBe(2);
+    });
+
+    it('an artist’s answer is not erased by erasing the artist: the contact key has no cascade', () => {
+      const sql = readFileSync(join(DIR, '186_labelos_listing_consent.sql'), 'utf8').replace(/--[^\n]*/g, '');
+      expect(sql).toMatch(/artist_contact_id uuid NOT NULL REFERENCES public\.contacts\(id\),/);
     });
   });
 

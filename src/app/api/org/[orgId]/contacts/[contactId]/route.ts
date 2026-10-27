@@ -148,6 +148,10 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
         if (/org_connections/.test(deleteErr.message ?? '')) {
           return NextResponse.json({ error: 'This artist has an open connection with an artist organization (connected or requested). End or withdraw it first.' }, { status: 409 });
         }
+        // LABEL-71: an artist's answer on a store listing outlives tidying the directory (erasing it would re-open the listing).
+        if (/listing_consents/.test(deleteErr.message ?? '')) {
+          return NextResponse.json({ error: 'This artist has a say on a store listing of one of the organization’s releases. Delete that release first.' }, { status: 409 });
+        }
         return NextResponse.json({ error: 'This contact is the artist of a release. Delete the release first.' }, { status: 409 });
       }
       throw new Error(deleteErr.message);
