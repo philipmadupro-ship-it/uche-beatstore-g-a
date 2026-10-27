@@ -9455,4 +9455,4 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - LABEL-34 export lacks distributor / territories / language.
   - Deliver does not pre-fill the planned distributor.
   - The New-release artist list uses main-role artists only.
-  - CI e2e `timeout-minutes: 15` is at the margin (runs take ~12–13 min); raise to 25.
+  - CI e2e `timeout-minutes` raised 15 → 25 in this status PR: runs take ~12–15 min and were cancelled at the limit (twice on #151, once on #149).
