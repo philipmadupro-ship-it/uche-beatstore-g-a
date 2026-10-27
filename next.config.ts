@@ -70,6 +70,9 @@ const nextConfig: NextConfig = {
     // gets the empty `fs` stub from resolveAlias below and throws while the
     // build collects route config. Loaded from node_modules it sees real fs.
     'exceljs',
+    // pdfkit reads its font metric files with fs.readFileSync at runtime. Bundled, it gets the
+    // empty `fs` stub below and every PDF (LABEL-58 contracts) fails with "readFileSync is not a function".
+    'pdfkit',
     'audio-decode',
     '@wasm-audio-decoders/opus-ml',
     '@wasm-audio-decoders/common',

@@ -87,6 +87,8 @@ export const NO_EVENT_HANDLERS: Readonly<Record<string, string>> = {
     'Moves the signed-in member’s own “last looked at the Overview” mark (org_overview_seen, one row per org and member). A personal read marker, not something the org did; recording it would put every visit in the feed it is meant to summarise.',
   '[orgId]/upload/abort/route.ts:POST':
     'Abandons a multipart session before anything was created; there is no object to record history on.',
+  '[orgId]/contracts/[contractId]/preview/route.ts:POST':
+    'Renders the unsaved contract form to text for the live preview (LABEL-58) and writes nothing; every change it previews is recorded when it is saved (contract.updated) or sent (contract.sent).',
   '[orgId]/notifications/route.ts:PATCH':
     'Marks the signed-in member’s OWN direct-ask notifications read (LABEL-23): a personal read marker like the Overview’s, not something the org did. The asks themselves are recorded where they arise (task.created, …).',
 };

@@ -7,7 +7,8 @@
  * staff get every contract in their scope and the internal note; a roster
  * artist or a named party gets their own, once sent. This draws what arrived.
  * Editing the wording clause by clause, the live preview and sending for
- * signature are LABEL-58; signing is LABEL-60.
+ * signature live on the contract's own page (`ContractEditor`, LABEL-58);
+ * signing is LABEL-60.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -24,17 +25,17 @@ import { createContract, loadContract, loadContracts, updateContract, voidContra
 import { fetchParties } from '@/lib/labelos/credits-client';
 import { fetchOrgSearch } from '@/lib/labelos/org-search-client';
 
-const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
-const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/60';
-const BTN =
+export const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
+export const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/60';
+export const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] active:bg-white/[0.14] disabled:opacity-40';
-const FIELD =
+export const FIELD =
   'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none disabled:opacity-60';
 
-type Lookups = { parties: DropdownOption[]; artists: DropdownOption[]; releases: DropdownOption[] };
+export type Lookups = { parties: DropdownOption[]; artists: DropdownOption[]; releases: DropdownOption[] };
 const NONE = '';
 
-async function loadLookups(orgId: string): Promise<Lookups> {
+export async function loadLookups(orgId: string): Promise<Lookups> {
   const [parties, contacts, releases] = await Promise.all([
     fetchParties(orgId),
     fetch(`/api/org/${orgId}/contacts?view=roster`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { contacts: [] })).catch(() => ({ contacts: [] })),
@@ -47,7 +48,7 @@ async function loadLookups(orgId: string): Promise<Lookups> {
   };
 }
 
-function StatusBadge({ status }: { status: ContractView['status'] }) {
+export function StatusBadge({ status }: { status: ContractView['status'] }) {
   return (
     <span className={cn('rounded-md border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.15em]', status === 'signed' ? 'border-[#6DC6A4]/40 text-[#6DC6A4]' : status === 'void' ? 'border-white/10 text-white/30 line-through' : 'border-white/20 text-white/60')}>
       {CONTRACT_STATUS_LABELS[status]}
@@ -89,8 +90,10 @@ function SongPicker({ orgId, title, onPick }: { orgId: string; title: string | n
   );
 }
 
-function FormFields({ orgId, type, form, setForm, lookups, songTitle, setSongTitle }: {
+export function FormFields({ orgId, type, form, setForm, lookups, songTitle, setSongTitle, extraFields }: {
   orgId: string; type: TemplateTypeId; form: ContractForm; setForm: (f: ContractForm) => void; lookups: Lookups; songTitle: string | null; setSongTitle: (t: string | null) => void;
+  /** Field keys the wording uses that the template does not list as usual (LABEL-58: clauses can be edited). */
+  extraFields?: readonly string[];
 }) {
   const def = platformTemplate(type);
   const set = (patch: Partial<ContractForm>) => setForm({ ...form, ...patch });
@@ -154,7 +157,7 @@ function FormFields({ orgId, type, form, setForm, lookups, songTitle, setSongTit
       </div>
       <fieldset className="grid gap-3 sm:grid-cols-2">
         <legend className={`${LABEL} mb-2`}>Terms</legend>
-        {def.suggestedFields.map((key) => {
+        {[...new Set([...def.suggestedFields, ...(extraFields ?? [])])].map((key) => {
           const field = mergeField(key);
           if (!field) return null;
           return (
@@ -396,8 +399,11 @@ export function ContractsView({ orgId }: { orgId: string }) {
                 </section>
               ))}
             </div>
-            {(detail.canWrite || data.canWrite) && contract.status !== 'void' && (
+            {(detail.canWrite || data.canWrite || !!detail.history) && contract.status !== 'void' && (
               <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                {(data.canWrite || !!detail.history) && (
+                  <Link className={BTN} href={`./contracts/${contract.id}`} data-testid="contract-open-editor">{isEditable(contract.status) ? 'Open the editor' : 'Open'}</Link>
+                )}
                 {detail.canWrite && isEditable(contract.status) && (
                   <button type="button" className={BTN} onClick={() => { setForm(formFromContract(contract)); setSongTitle(null); setEditing(true); setError(null); }} data-testid="contract-edit">Edit details</button>
                 )}

@@ -439,6 +439,15 @@ describe('PATCH / DELETE', () => {
     expect(db.tables.activity_events).toEqual([expect.objectContaining({ verb: 'file.updated', subject_id: A_CON, visibility: 'internal' })]);
   });
 
+  it('a contract file cannot be declassified: no kind change, no sensitivity change (409), even by the owner', async () => {
+    expect((await item('PATCH', OWN, L, LP1, A_CON, { kind: 'document' })).status).toBe(409);
+    expect((await item('PATCH', OWN, L, LP1, A_CON, { kind: 'document', sensitivity: 'normal' })).status).toBe(409);
+    // a bare sensitivity request is resolved back to restricted: nothing declassifies
+    expect((await item('PATCH', OWN, L, LP1, A_CON, { sensitivity: 'normal' })).status).toBe(200);
+    expect(row(A_CON)).toMatchObject({ kind: 'contract', sensitivity: 'restricted' });
+    expect((await item('PATCH', OWN, L, LP1, A_CON, { label: 'still fine' })).status).toBe(200);
+  });
+
   it('A&R cannot touch the contract (403), nor restrict a file they could then not open', async () => {
     expect((await item('PATCH', AR, L, LP1, A_CON, { label: 'x' })).status).toBe(403);
     expect((await item('PATCH', AR, L, LP1, A_ART, { sensitivity: 'restricted' })).status).toBe(403);
@@ -447,13 +456,11 @@ describe('PATCH / DELETE', () => {
     expect(row(A_ART)!.sensitivity).toBe('normal');
   });
 
-  it('a contract stays restricted; changing its kind keeps the restriction unless lifted by someone who may', async () => {
+  it('a contract stays restricted and keeps its kind (no declassifying through a kind change)', async () => {
     await item('PATCH', OWN, L, LP1, A_CON, { sensitivity: 'normal' });
     expect(row(A_CON)!.sensitivity).toBe('restricted');
-    expect((await item('PATCH', OWN, L, LP1, A_CON, { kind: 'document' })).status).toBe(200);
-    expect(row(A_CON)).toMatchObject({ kind: 'document', sensitivity: 'restricted' });
-    // Legal may not move it into working material they cannot open.
-    expect((await item('PATCH', LEG, L, LP1, A_CON, { label: 'y' })).status).toBe(403);
+    expect((await item('PATCH', OWN, L, LP1, A_CON, { kind: 'document' })).status).toBe(409);
+    expect(row(A_CON)).toMatchObject({ kind: 'contract', sensitivity: 'restricted' });
   });
 
   it('marketing cannot edit; scope and other orgs are 404; a bad body is 400', async () => {
