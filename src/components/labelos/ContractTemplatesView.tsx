@@ -156,7 +156,7 @@ export function ContractTemplatesView({ orgId }: { orgId: string }) {
           <div className="space-y-4" data-testid="template-sample">
             {sample.clauses.map((c) => (
               <section key={c.id} className="space-y-1">
-                <h3 className="text-[12px] font-semibold text-white/80">{c.heading}</h3>
+                <h3 className="text-[11px] font-semibold text-white/80">{c.heading}</h3>
                 <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-white/70">{c.body}</p>
               </section>
             ))}
@@ -170,7 +170,7 @@ export function ContractTemplatesView({ orgId }: { orgId: string }) {
             {data.canWrite && (
               <div className="space-y-1.5">
                 <span className={LABEL}>Insert a merge field into the clause you are editing</span>
-                <Dropdown value="" onChange={(v) => v && insertField(v)} options={[...MERGE_FIELDS.map((f) => ({ value: f.key, label: f.label })), { value: 'contract.term', label: 'Contract term' }, { value: 'contract.territory', label: 'Territory' }, { value: 'contract.effective_date', label: 'Start date' }, { value: 'artist.name', label: 'Artist name' }, { value: 'song.title', label: 'Song title' }, { value: 'release.title', label: 'Release title' }, ...platform.slots.map((s) => ({ value: `party.${s.role}`, label: `Party: ${s.label}` }))]} placeholder="Choose a field" aria-label="Insert a merge field" />
+                <Dropdown className="w-full" value="" onChange={(v) => v && insertField(v)} options={[...MERGE_FIELDS.map((f) => ({ value: f.key, label: f.label })), { value: 'contract.term', label: 'Contract term' }, { value: 'contract.territory', label: 'Territory' }, { value: 'contract.effective_date', label: 'Start date' }, { value: 'artist.name', label: 'Artist name' }, { value: 'song.title', label: 'Song title' }, { value: 'release.title', label: 'Release title' }, ...platform.slots.map((s) => ({ value: `party.${s.role}`, label: `Party: ${s.label}` }))]} placeholder="Choose a field" aria-label="Insert a merge field" />
               </div>
             )}
             <ol className="space-y-4">

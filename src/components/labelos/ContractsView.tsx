@@ -108,11 +108,11 @@ function FormFields({ orgId, type, form, setForm, lookups, songTitle, setSongTit
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <span className={LABEL}>Artist</span>
-          <Dropdown value={form.artistId} onChange={(v) => set({ artistId: v })} options={[{ value: NONE, label: 'No artist' }, ...lookups.artists]} aria-label="Artist" />
+          <Dropdown className="w-full" value={form.artistId} onChange={(v) => set({ artistId: v })} options={[{ value: NONE, label: 'No artist' }, ...lookups.artists]} aria-label="Artist" />
         </div>
         <div className="space-y-1.5">
           <span className={LABEL}>Release</span>
-          <Dropdown value={form.releaseId} onChange={(v) => set({ releaseId: v })} options={[{ value: NONE, label: 'No release' }, ...lookups.releases]} aria-label="Release" />
+          <Dropdown className="w-full" value={form.releaseId} onChange={(v) => set({ releaseId: v })} options={[{ value: NONE, label: 'No release' }, ...lookups.releases]} aria-label="Release" />
         </div>
       </div>
       <div className="space-y-1.5">
@@ -131,7 +131,7 @@ function FormFields({ orgId, type, form, setForm, lookups, songTitle, setSongTit
             <div key={slot.role} className="space-y-1.5" data-testid={`contract-slot-${slot.role}`}>
               <span className="text-[11px] text-white/60">{slot.label}{slot.required ? '' : ' (optional)'}</span>
               {rows.map((id, i) => (
-                <Dropdown key={`${slot.role}-${i}`} value={id} onChange={(v) => setParty(slot.role, i, v)} options={[{ value: NONE, label: 'Not chosen yet' }, ...lookups.parties]} aria-label={`${slot.label}${slot.many ? ` ${i + 1}` : ''}`} />
+                <Dropdown key={`${slot.role}-${i}`} value={id} onChange={(v) => setParty(slot.role, i, v)} options={[{ value: NONE, label: 'Not chosen yet' }, ...lookups.parties]} aria-label={`Party: ${slot.label}${slot.many ? ` ${i + 1}` : ''}`} />
               ))}
             </div>
           );
@@ -331,7 +331,7 @@ export function ContractsView({ orgId }: { orgId: string }) {
                   className={cn('w-full rounded-xl border bg-[#0D0D0A] px-4 py-3 text-left transition-colors hover:border-white/20', selected === c.id ? 'border-white/30' : 'border-white/10')}
                 >
                   <span className="flex items-start justify-between gap-3">
-                    <span className="min-w-0 truncate text-[12px] text-white/80">{c.title}</span>
+                    <span className="min-w-0 truncate text-[11px] text-white/80">{c.title}</span>
                     <StatusBadge status={c.status} />
                   </span>
                   <span className="mt-1 block text-[10px] text-white/40">{TEMPLATE_TYPE_LABELS[c.type]}</span>
@@ -348,7 +348,7 @@ export function ContractsView({ orgId }: { orgId: string }) {
             <h2 className="font-heading text-[20px] text-white">New contract</h2>
             <div className="space-y-1.5">
               <span className={LABEL}>Type</span>
-              <Dropdown value={type} onChange={(v) => { setType(v as TemplateTypeId); setForm((f) => ({ ...f, parties: {}, fields: {} })); }} options={typeOptions} aria-label="Contract type" />
+              <Dropdown className="w-full" value={type} onChange={(v) => { setType(v as TemplateTypeId); setForm((f) => ({ ...f, parties: {}, fields: {} })); }} options={typeOptions} aria-label="Contract type" />
               <p className="text-[10px] text-white/40">{platformTemplate(type).summary}</p>
             </div>
             <FormFields orgId={orgId} type={type} form={form} setForm={setForm} lookups={lookups} songTitle={songTitle} setSongTitle={setSongTitle} />
@@ -391,7 +391,7 @@ export function ContractsView({ orgId }: { orgId: string }) {
             <div className="space-y-4" data-testid="contract-document">
               {detail.document.clauses.map((c) => (
                 <section key={c.id} className="space-y-1">
-                  <h3 className="text-[12px] font-semibold text-white/80">{c.heading}</h3>
+                  <h3 className="text-[11px] font-semibold text-white/80">{c.heading}</h3>
                   <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-white/70">{c.body}</p>
                 </section>
               ))}
