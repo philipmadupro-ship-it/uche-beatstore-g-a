@@ -96,6 +96,14 @@ SELECT public.check_eq('a withdrawn release went out: its song keeps the class',
 SELECT public.check_raises('a withdrawn release cannot sit on the store',
   format($q$UPDATE public.releases SET store_listed = true, store_listed_at = now() WHERE id = %L$q$, :R_WDR), 'releases_store_listed_released');
 
+-- An entered-as-already-out release (delivered + imported_released) cannot be listed once withdrawn either.
+UPDATE public.releases SET state = 'delivered', delivered_at = now(), imported_released = true, store_listed = true, store_listed_at = now() WHERE id = :R_IMP;
+SELECT public.check_eq('an imported delivered release can be listed', (SELECT store_listed FROM public.releases WHERE id = :R_IMP), true);
+UPDATE public.releases SET store_listed = false, store_listed_at = NULL, state = 'withdrawn' WHERE id = :R_IMP;
+SELECT public.check_raises('a withdrawn imported release cannot be listed',
+  format($q$UPDATE public.releases SET store_listed = true, store_listed_at = now() WHERE id = %L$q$, :R_IMP), 'releases_store_listed_released');
+UPDATE public.releases SET state = 'draft', delivered_at = NULL WHERE id = :R_IMP;
+
 UPDATE public.releases SET state = 'cancelled' WHERE id = :R_CAN;
 SELECT public.check_eq('a cancelled release finishes nothing', public.labelos_track_is_finished(:S_CAN), false);
 

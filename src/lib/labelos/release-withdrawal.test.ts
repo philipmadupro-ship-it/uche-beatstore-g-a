@@ -46,18 +46,14 @@ describe('planWithdrawal (LABEL-56)', () => {
 
 describe('cancelRefusal (what DELETE / PATCH say about a release that went out)', () => {
   it('says plainly that only a draft is cancelled and a delivered release is withdrawn', () => {
-    const msg = cancelRefusal({ state: 'delivered', imported_released: false });
+    const msg = cancelRefusal({ state: 'delivered' });
     expect(msg).toMatch(/only a draft/i);
     expect(msg).toMatch(/withdraw it/i);
-    expect(cancelRefusal({ state: 'delivered', imported_released: false }, 'delete')).toMatch(/cancelled or deleted/);
-    expect(cancelRefusal({ state: 'withdrawn', imported_released: false })).toMatch(/withdrawn/);
-  });
-  it('an imported release is not deleted, but it can be cancelled', () => {
-    expect(cancelRefusal({ state: 'draft', imported_released: true }, 'delete')).toMatch(/already out/);
-    expect(cancelRefusal({ state: 'draft', imported_released: true }, 'cancel')).toBeNull();
+    expect(cancelRefusal({ state: 'delivered' }, 'delete')).toMatch(/cancelled or deleted/);
+    expect(cancelRefusal({ state: 'withdrawn' })).toMatch(/withdrawn/);
   });
   it('a plain draft or cancelled release has nothing to say', () => {
-    expect(cancelRefusal({ state: 'draft', imported_released: false }, 'delete')).toBeNull();
-    expect(cancelRefusal({ state: 'cancelled', imported_released: false }, 'delete')).toBeNull();
+    expect(cancelRefusal({ state: 'draft' }, 'delete')).toBeNull();
+    expect(cancelRefusal({ state: 'cancelled' }, 'delete')).toBeNull();
   });
 });

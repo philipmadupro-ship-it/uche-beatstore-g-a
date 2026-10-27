@@ -56,7 +56,7 @@ const NEEDS_193 = () =>
 
 /** The old `releases_state_check` refusing 'withdrawn' (23514), i.e. 193 is not applied. */
 const isStateCheck = (error: { code?: string; message?: string }) =>
-  error.code === '23514' && /releases_state_check|violates check constraint/i.test(error.message ?? '');
+  error.code === '23514' && /releases_state_check/.test(error.message ?? '');
 
 export async function POST(req: NextRequest, { params }: Params) {
   const { orgId, releaseId } = await params;

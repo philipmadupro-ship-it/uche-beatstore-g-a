@@ -42,6 +42,14 @@ export const RELEASE_ARTWORK_KINDS = ['artwork', 'photo'] as const;
  * counts like a delivery. Readiness (the gates) is derived in TS and is NOT
  * part of this rule: it cannot be mirrored in SQL.
  */
+/**
+ * States in which a release is NOT going out any more: cancelled (never was) and withdrawn (pulled back after
+ * delivery, LABEL-56). Nothing is asked of such a release — a song's legal approval is again given on the song, and
+ * its open legal request leaves the queue. (Whether its songs count as "on a release" is the separate rule below:
+ * a withdrawn release DID go out.)
+ */
+export const RELEASE_STATES_NOT_GOING_OUT: readonly string[] = ['cancelled', 'withdrawn'];
+
 export const RELEASE_STATES_ON_RELEASE = ['delivered', 'withdrawn'] as const;
 
 /** A tracklist's ceiling (a box set is well under it); also the reorder body's. */

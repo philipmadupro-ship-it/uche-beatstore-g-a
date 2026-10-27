@@ -24,6 +24,13 @@ describe('board stage', () => {
   });
 });
 
+describe('sortBoard: withdrawn', () => {
+  it('lists the most recently delivered first, like delivered', () => {
+    const rows = [r('old', { state: 'withdrawn', deliveredAt: '2026-09-01T00:00:00Z' }), r('new', { state: 'withdrawn', deliveredAt: '2026-10-01T00:00:00Z' })];
+    expect(sortBoard(rows).map((x) => x.id)).toEqual(['new', 'old']);
+  });
+});
+
 describe('sortBoard', () => {
   it('puts ready first, then in progress by nearest date (undated last), then delivered latest first, then withdrawn, then cancelled', () => {
     const rows = [

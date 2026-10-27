@@ -4,10 +4,11 @@
 -- 1. releases.state gains 'withdrawn': a DELIVERED release that was pulled
 --    back. The row, its tracklist and its gates history stay (nothing is
 --    deleted); it is off the store; it is never delivered again. Cancel stays
---    draft-only. The other 144 CHECKs are untouched: a withdrawn release is
---    never listed (store_listed needs 'delivered' or imported_released, and
---    the route clears the listing in the same statement that withdraws), and
---    it keeps its delivered_at.
+--    draft-only. A withdrawn release is never listed: 144's store_listed
+--    CHECK is tightened here (a release ENTERED AS ALREADY OUT is stored
+--    delivered + imported_released, so 'imported_released' alone would have
+--    let a withdrawn import be listed), and the route clears the listing in
+--    the same statement that withdraws. It keeps its delivered_at.
 --
 -- 2. labelos_track_is_finished (141, replaced by 144) changes its RELEASE ARM
 --    ONLY. It used to say "a song on any release that is not cancelled is
@@ -20,12 +21,19 @@
 --    function is 144's text, word for word. TS twin:
 --    lib/labelos/releases.ts#countsAsOnRelease / RELEASE_STATES_ON_RELEASE.
 --
--- Idempotent. Until this is applied the app keeps working on the old rule
--- (drafts finish songs) and "withdraw" answers 503 naming 193.
+-- Idempotent. Until this is applied "withdraw" answers 503 naming 193, and the
+-- DATABASE keeps the old release arm (a draft finishes its songs) while the
+-- routes already apply the new one: the routes are the stricter side, so a
+-- marketing member hears less than their own JWT could read through PostgREST
+-- until 193 is applied. Apply it with the rest of Label OS.
 
 ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_state_check;
 ALTER TABLE public.releases ADD CONSTRAINT releases_state_check
   CHECK (state IN ('draft', 'delivered', 'withdrawn', 'cancelled'));
+
+ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_store_listed_released;
+ALTER TABLE public.releases ADD CONSTRAINT releases_store_listed_released
+  CHECK (NOT store_listed OR state = 'delivered' OR (imported_released AND state <> 'withdrawn'));
 
 CREATE OR REPLACE FUNCTION public.labelos_track_is_finished(p_track uuid)
 RETURNS boolean

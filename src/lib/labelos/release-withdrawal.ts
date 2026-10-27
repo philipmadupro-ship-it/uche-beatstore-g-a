@@ -49,14 +49,13 @@ export function planWithdrawal(
 /**
  * Why a release cannot be cancelled (or, with `act: 'delete'`, deleted), in
  * the words the member reads; null when it can. Cancel is draft-only: a
- * delivered release is withdrawn, never cancelled. A release entered as
- * already out is still a draft row: it is not deleted, but it can be
- * cancelled.
+ * delivered release is withdrawn, never cancelled. (A release entered as
+ * already out is stored `delivered`, so it takes the same words and the same
+ * way out.)
  */
-export function cancelRefusal(release: { state: string; imported_released: boolean }, act: 'cancel' | 'delete' = 'cancel'): string | null {
+export function cancelRefusal(release: { state: string }, act: 'cancel' | 'delete' = 'cancel'): string | null {
   const verb = act === 'delete' ? 'cancelled or deleted' : 'cancelled';
   if (release.state === 'delivered') return `Only a draft can be ${verb}. This release was delivered; withdraw it instead`;
   if (release.state === 'withdrawn') return `This release was delivered and then withdrawn; the record is kept, so it cannot be ${verb}`;
-  if (act === 'delete' && release.imported_released) return 'This release was entered as already out, so it is not deleted; cancel it instead';
   return null;
 }

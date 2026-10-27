@@ -15,6 +15,10 @@ ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_state_check;
 ALTER TABLE public.releases ADD CONSTRAINT releases_state_check
   CHECK (state IN ('draft', 'delivered', 'cancelled'));
 
+ALTER TABLE public.releases DROP CONSTRAINT IF EXISTS releases_store_listed_released;
+ALTER TABLE public.releases ADD CONSTRAINT releases_store_listed_released
+  CHECK (NOT store_listed OR state = 'delivered' OR imported_released);
+
 CREATE OR REPLACE FUNCTION public.labelos_track_is_finished(p_track uuid)
 RETURNS boolean
 LANGUAGE sql

@@ -657,7 +657,7 @@ function Delivery({ orgId, detail, busy, act }: { orgId: string; detail: Detail;
         <p className="text-[13px] text-white" data-testid="release-delivered">
           Delivered{release.deliveredTo ? ` to ${release.deliveredTo}` : ''}{release.deliveredAt ? ` · ${day(release.deliveredAt)}` : ''}
         </p>
-        {me.canWrite && <Withdraw orgId={orgId} detail={detail} busy={busy} act={act} />}
+        {me.canWrite && (!release.importedReleased || me.canManagePublic) && <Withdraw orgId={orgId} detail={detail} busy={busy} act={act} />}
       </section>
     );
   }

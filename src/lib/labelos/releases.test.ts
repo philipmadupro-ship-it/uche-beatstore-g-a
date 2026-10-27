@@ -5,6 +5,7 @@ import {
   RELEASE_ARTWORK_KINDS,
   RELEASE_MASTER_RELATIONS,
   RELEASE_STATES,
+  RELEASE_STATES_NOT_GOING_OUT,
   RELEASE_STATES_ON_RELEASE,
   RELEASE_TYPES,
   countsAsOnRelease,
@@ -114,6 +115,13 @@ describe('positions', () => {
     expect(planReorder(items, ['a', 'b'])).toEqual({ ok: false, error: 'order must list every item of the release exactly once' });
     expect(planReorder(items, ['a', 'b', 'b'])).toEqual({ ok: false, error: 'order must list every item of the release exactly once' });
     expect(planReorder(items, ['a', 'b', 'x'])).toEqual({ ok: false, error: 'order must list every item of the release exactly once' });
+  });
+});
+
+describe('RELEASE_STATES_NOT_GOING_OUT (LABEL-56)', () => {
+  it('is cancelled and withdrawn: nothing is asked of them and their legal queue entries leave', () => {
+    expect([...RELEASE_STATES_NOT_GOING_OUT].sort()).toEqual(['cancelled', 'withdrawn']);
+    for (const state of RELEASE_STATES_NOT_GOING_OUT) expect(RELEASE_STATES as readonly string[]).toContain(state);
   });
 });
 

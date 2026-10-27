@@ -73,7 +73,7 @@ export function sortBoard(rows: readonly BoardRelease[]): BoardRelease[] {
     const sa = boardStage(a);
     const sb = boardStage(b);
     if (sa !== sb) return STAGE_ORDER[sa] - STAGE_ORDER[sb];
-    if (sa === 'delivered') return (b.deliveredAt ?? '').localeCompare(a.deliveredAt ?? '');
+    if (sa === 'delivered' || sa === 'withdrawn') return (b.deliveredAt ?? '').localeCompare(a.deliveredAt ?? '');
     const da = date(a);
     const db = date(b);
     if (da && db && da !== db) return da.localeCompare(db);
