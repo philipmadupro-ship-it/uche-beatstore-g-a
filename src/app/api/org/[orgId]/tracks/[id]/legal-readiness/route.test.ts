@@ -99,7 +99,7 @@ beforeEach(() => {
         { project_id: XP1, track_id: XS1, position: 0 },
       ],
       tracks: [
-        track(S1, L, 'song', 'Midnight'),
+        { ...track(S1, L, 'song', 'Midnight'), song_stage: 'selected' }, // selected: a song on a DRAFT release is working until the release is delivered (LABEL-56)
         track(B1, L, 'beat', 'Beat'),
         track(S2, L, 'song', 'Dawn'),
         track(S3, L, 'song', 'Loose'),

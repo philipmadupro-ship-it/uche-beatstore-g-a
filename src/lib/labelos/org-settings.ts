@@ -174,7 +174,7 @@ export function gateSkipNotice(skipped: readonly ('legal' | 'marketing')[], rele
   if (skipped.length === 0 || releaseState === 'cancelled') return null;
   const names = skipped.map((g) => GATE_WORDS[g]).join(' and ');
   const verb = skipped.length === 1 ? 'is' : 'are';
-  return releaseState === 'delivered'
+  return releaseState === 'delivered' || releaseState === 'withdrawn'
     ? `${names} ${verb} switched off for this organization. Credits & splits still gate.`
     : `${names} ${verb} switched off for this organization, so this release does not need it. Credits & splits still gate. The owner can switch it back on in settings.`;
 }

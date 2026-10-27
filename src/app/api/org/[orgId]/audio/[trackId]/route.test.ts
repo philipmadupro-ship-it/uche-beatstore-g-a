@@ -317,14 +317,24 @@ describe('D4 headline cases', () => {
     expect((await get(MK, L, T.song)).status).toBe(200);
   });
 
-  it("a song's current mix becomes finished when the song is on a release (LABEL-16), and not once it is cancelled", async () => {
+  it("a song's current mix becomes finished when its release has gone out (LABEL-16, LABEL-56): a draft or cancelled release finishes nothing", async () => {
     const R = '70000000-0000-4000-8000-000000000001';
     expect((await get(MK, L, T.song)).status).toBe(403);
-    db.tables.releases = [{ id: R, org_id: L, project_id: P1, contact_id: C1, title: 'EP', state: 'draft' }];
+    db.tables.releases = [{ id: R, org_id: L, project_id: P1, contact_id: C1, title: 'EP', state: 'draft', imported_released: false }];
     db.tables.release_items = [{ id: u(90), release_id: R, org_id: L, position: 1, song_track_id: T.song, master_track_id: T.song }];
+    // Still being assembled: the song stays working, so marketing (audio.finished only) does not hear it.
+    expect((await get(MK, L, T.song)).status).toBe(403);
+    // A taker of working audio (A&R) is unaffected.
+    expect((await get(AR, L, T.song)).status).toBe(200);
+    db.tables.releases[0].state = 'delivered';
+    expect((await get(MK, L, T.song)).status).toBe(200);
+    db.tables.releases[0].state = 'withdrawn';
     expect((await get(MK, L, T.song)).status).toBe(200);
     db.tables.releases[0].state = 'cancelled';
     expect((await get(MK, L, T.song)).status).toBe(403);
+    // Entered as already out counts like a delivery.
+    Object.assign(db.tables.releases[0], { state: 'draft', imported_released: true });
+    expect((await get(MK, L, T.song)).status).toBe(200);
   });
 
   it('a release item of ANOTHER org naming the track changes nothing', async () => {

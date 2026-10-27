@@ -244,3 +244,33 @@ test('6 · unlisting takes it off the store at once and leaves its audit row', a
   await stranger.close();
   await ctx.close();
 });
+
+test('7 · withdrawing a listed release takes it off the store in the same step, leaves both audit rows and cannot be undone by listing (LABEL-56)', async ({ browser, baseURL, request }) => {
+  const ctx = await as(browser, baseURL!, producer.id, producer.email);
+  const relist = await ctx.request.put(`${api}/releases/${ids.album}/store`, { data: { listed: true } });
+  expect(relist.status(), await relist.text()).toBe(200);
+  expect(await (await request.get('/api/store/releases')).text()).toContain(ALBUM);
+
+  const page = await ctx.newPage();
+  await page.goto(`/o/${SLUG}/releases/${ids.album}`);
+  await page.getByTestId('release-withdraw-open').click();
+  await expect(page.getByTestId('release-withdraw-panel')).toContainText(/comes off the store/);
+  await page.getByTestId('release-withdraw').click();
+  await expect(page.getByTestId('release-withdrawn')).toBeVisible({ timeout: 60_000 });
+
+  const row = ((await rest(request, 'GET', `releases?select=state,store_listed,store_listed_at,store_playback&id=eq.${ids.album}`)) as Record<string, unknown>[])[0];
+  expect(row).toMatchObject({ state: 'withdrawn', store_listed: false, store_listed_at: null, store_playback: 'preview' });
+  expect(await (await request.get('/api/store/releases')).text()).not.toContain(ALBUM);
+  expect((await request.get(`/api/store/releases/${ids.album}`)).status()).toBe(404);
+  const verbs = (await events(request, ids.album)).map((e) => e.verb);
+  expect(verbs.filter((v) => v === 'release.withdrawn')).toHaveLength(1);
+  expect(verbs.filter((v) => v === 'release.store_unlisted').length).toBeGreaterThanOrEqual(2);
+  const withdrawn = (await events(request, ids.album)).find((e) => e.verb === 'release.withdrawn')!;
+  expect(withdrawn).toMatchObject({ audit: true, visibility: 'internal', actor_id: PRODUCER_ID });
+
+  // A withdrawn release is not listed again (even one entered as already out).
+  const again = await ctx.request.put(`${api}/releases/${ids.album}/store`, { data: { listed: true } });
+  expect(again.status()).toBe(409);
+  expect((await again.json()).field).toBe('state');
+  await ctx.close();
+});

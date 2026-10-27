@@ -27,7 +27,7 @@ export type BoardRelease = {
   createdAt: string;
 };
 
-export const BOARD_FILTERS = ['all', 'ready', 'in_progress', 'delivered', 'cancelled'] as const;
+export const BOARD_FILTERS = ['all', 'ready', 'in_progress', 'delivered', 'withdrawn', 'cancelled'] as const;
 export type BoardFilter = (typeof BOARD_FILTERS)[number];
 
 export const BOARD_FILTER_LABEL: Record<BoardFilter, string> = {
@@ -35,12 +35,14 @@ export const BOARD_FILTER_LABEL: Record<BoardFilter, string> = {
   ready: 'Ready to deliver',
   in_progress: 'In progress',
   delivered: 'Delivered',
+  withdrawn: 'Withdrawn',
   cancelled: 'Cancelled',
 };
 
 /** Where a release stands on the board. Derived, never stored. */
 export function boardStage(r: Pick<BoardRelease, 'state' | 'readyToDeliver'>): Exclude<BoardFilter, 'all'> {
   if (r.state === 'delivered') return 'delivered';
+  if (r.state === 'withdrawn') return 'withdrawn';
   if (r.state === 'cancelled') return 'cancelled';
   return r.readyToDeliver ? 'ready' : 'in_progress';
 }
@@ -54,12 +56,12 @@ export function filterBoard(rows: readonly BoardRelease[], filter: BoardFilter):
 }
 
 export function countByFilter(rows: readonly BoardRelease[]): Record<BoardFilter, number> {
-  const counts = { all: rows.length, ready: 0, in_progress: 0, delivered: 0, cancelled: 0 } as Record<BoardFilter, number>;
+  const counts = { all: rows.length, ready: 0, in_progress: 0, delivered: 0, withdrawn: 0, cancelled: 0 } as Record<BoardFilter, number>;
   for (const r of rows) counts[boardStage(r)] += 1;
   return counts;
 }
 
-const STAGE_ORDER: Record<Exclude<BoardFilter, 'all'>, number> = { ready: 0, in_progress: 1, delivered: 2, cancelled: 3 };
+const STAGE_ORDER: Record<Exclude<BoardFilter, 'all'>, number> = { ready: 0, in_progress: 1, delivered: 2, withdrawn: 3, cancelled: 4 };
 
 /**
  * What needs attention first: ready, then in progress (nearest date first,
@@ -71,7 +73,7 @@ export function sortBoard(rows: readonly BoardRelease[]): BoardRelease[] {
     const sa = boardStage(a);
     const sb = boardStage(b);
     if (sa !== sb) return STAGE_ORDER[sa] - STAGE_ORDER[sb];
-    if (sa === 'delivered') return (b.deliveredAt ?? '').localeCompare(a.deliveredAt ?? '');
+    if (sa === 'delivered' || sa === 'withdrawn') return (b.deliveredAt ?? '').localeCompare(a.deliveredAt ?? '');
     const da = date(a);
     const db = date(b);
     if (da && db && da !== db) return da.localeCompare(db);

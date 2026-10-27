@@ -66,6 +66,13 @@ export const setReleaseArtwork = (orgId: string, releaseId: string, assetId: str
   send<object>(base(orgId, releaseId), 'PATCH', { artwork_asset_id: assetId });
 
 export const cancelRelease = (orgId: string, releaseId: string) => send<object>(base(orgId, releaseId), 'PATCH', { state: 'cancelled' });
+/** Pull a delivered release back (LABEL-56): it keeps its record and leaves the store. Cancel is for drafts. */
+export const withdrawRelease = (orgId: string, releaseId: string, input: { note?: string; deletePreviews?: boolean } = {}) =>
+  send<{ unlisted: boolean; previewsDeleted: boolean }>(`${base(orgId, releaseId)}/withdraw`, 'POST', {
+    ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+    ...(input.deletePreviews ? { delete_previews: true } : {}),
+  });
+
 export const reopenRelease = (orgId: string, releaseId: string) => send<object>(base(orgId, releaseId), 'PATCH', { state: 'draft' });
 
 export type DeliverInput = { distributor: string; deliveredOn?: string; override?: boolean; overrideNote?: string };

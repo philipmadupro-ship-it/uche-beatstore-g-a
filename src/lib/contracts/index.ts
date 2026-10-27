@@ -1689,6 +1689,17 @@ export const OrgReleaseDeliverBodySchema = z.object({
 }).strict();
 export type OrgReleaseDeliverBody = z.infer<typeof OrgReleaseDeliverBodySchema>;
 
+/**
+ * POST /api/org/[orgId]/releases/[releaseId]/withdraw (LABEL-56). The reason is optional and recorded with the
+ * (internal) audit event; `delete_previews` is the LABEL-42 unlist choice, honoured only for music that was never
+ * publicly out.
+ */
+export const OrgReleaseWithdrawBodySchema = z.object({
+  note: z.string().max(1000).optional(),
+  delete_previews: z.boolean().optional(),
+}).strict();
+export type OrgReleaseWithdrawBody = z.infer<typeof OrgReleaseWithdrawBodySchema>;
+
 /** POST /api/org/[orgId]/releases/[releaseId]/items — appended at the end. No master = the song itself. */
 export const OrgReleaseItemCreateBodySchema = z.object({
   song_track_id: z.string().uuid(),
