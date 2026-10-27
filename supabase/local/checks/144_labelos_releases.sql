@@ -366,7 +366,12 @@ RESET ROLE;
 
 -- ── "On a release" makes a mix finished (06 §2.3) ───────────────────────
 
-SELECT public.check_eq('S1 (inbox, on a draft release) is finished',
+-- 193 (LABEL-56) narrows the release arm: a DRAFT release finishes nothing, a release that went out does.
+-- (This file runs against the final schema, so it asserts 193's rule; 144's own was "not cancelled".)
+SELECT public.check_eq('S1 (inbox, on a draft release) is still working (193)',
+  public.labelos_track_is_finished(:S1), false);
+UPDATE public.releases SET state = 'delivered', delivered_at = now() WHERE id = :R1;
+SELECT public.check_eq('S1 (inbox, on a delivered release) is finished',
   public.labelos_track_is_finished(:S1), true);
 SELECT public.check_eq('S3 (inbox, on no release) is not',
   public.labelos_track_is_finished(:S3), false);
@@ -374,12 +379,15 @@ SELECT public.check_eq('M1 is finished as S1''s master, as before',
   public.labelos_track_is_finished(:M1), true);
 SELECT public.check_eq('V1 (a version, chosen as an item''s master) is still working material',
   public.labelos_track_is_finished(:V1), false);
-SELECT public.check_eq('S2 is finished while R2 is a draft',
+SELECT public.check_eq('S2 is working while R2 is a draft',
+  public.labelos_track_is_finished(:S2), false);
+UPDATE public.releases SET state = 'delivered', delivered_at = now() WHERE id = :R2;
+SELECT public.check_eq('… and finished once R2 is delivered',
   public.labelos_track_is_finished(:S2), true);
 UPDATE public.releases SET state = 'cancelled' WHERE id = :R2;
 SELECT public.check_eq('… and not once R2 is cancelled',
   public.labelos_track_is_finished(:S2), false);
-UPDATE public.releases SET state = 'draft' WHERE id = :R2;
+UPDATE public.releases SET state = 'draft', delivered_at = NULL WHERE id IN (:R1, :R2);
 SELECT public.check_eq('a producer song is never finished by this rule',
   public.labelos_track_is_finished(:PS1), false);
 
@@ -395,10 +403,22 @@ SELECT public.check_eq('A&R holds release.write', public.has_org_cap(:L, 'releas
 SELECT public.as_user(:MKT);
 SELECT public.check_eq('marketing (read-only on releases) reads them too', public.visible_releases(), 'Kilo single,Nova EP');
 SELECT public.check_eq('… without release.write', public.has_org_cap(:L, 'release.write'), false);
-SELECT public.check_eq('marketing now reads S1''s row (a mix on a release is finished), not S3''s',
+SELECT public.check_eq('marketing does not read S1''s row while its release is a draft (193), nor S3''s',
+  (SELECT count(*)::int FROM public.tracks WHERE id IN (
+    'e1440000-0000-4000-8000-000000000011', 'e1440000-0000-4000-8000-000000000016')),
+  0);
+RESET ROLE;
+UPDATE public.releases SET state = 'delivered', delivered_at = now() WHERE id = :R1;
+SET ROLE authenticated;
+SELECT public.as_user(:MKT);
+SELECT public.check_eq('marketing reads S1''s row once its release is delivered (a mix on a release that went out is finished), not S3''s',
   (SELECT string_agg(title, ',' ORDER BY title) FROM public.tracks WHERE id IN (
     'e1440000-0000-4000-8000-000000000011', 'e1440000-0000-4000-8000-000000000016')),
   'Nova single');
+RESET ROLE;
+UPDATE public.releases SET state = 'draft', delivered_at = NULL WHERE id = :R1;
+SET ROLE authenticated;
+SELECT public.as_user(:MKT);
 SELECT public.as_user(:SC);
 SELECT public.check_eq('A&R scoped to Kilo: only Kilo''s release', public.visible_releases(), 'Kilo single');
 SELECT public.check_eq('… and only its items', public.visible_items(), 'Kilo single:1');
