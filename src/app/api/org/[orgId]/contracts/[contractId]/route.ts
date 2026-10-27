@@ -19,6 +19,7 @@ import { requireOrgModule } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { OrgContractPatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
+import { memberIdentities, type IdentityAdmin } from '@/lib/labelos/member-identity';
 import { createLogger } from '@/lib/log';
 import { isUUID, readBody } from '@/lib/validate';
 import { recordEvent } from '@/lib/labelos/activity';
@@ -87,7 +88,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
       const projectId = await contractProjectId(access.admin, access.orgId, row);
       body.clauses = row.clauses;
       body.clause_marks = markClauses(base, row.clauses);
-      body.history = buildHistory(await contractEvents(access.admin, access.orgId, row.id, HISTORY_VERBS), (id) => headings.get(id) ?? null);
+      const history = buildHistory(await contractEvents(access.admin, access.orgId, row.id, HISTORY_VERBS), (id) => headings.get(id) ?? null);
+      const identitiesOfActors = await memberIdentities(access.admin as unknown as IdentityAdmin, access.orgId, [...new Set(history.map((h) => h.actorId).filter((x): x is string => !!x))], { withEmail: false });
+      body.history = history;
+      body.history_actors = Object.fromEntries([...identitiesOfActors].filter(([, who]) => !!who.name).map(([id, who]) => [id, who.name]));
+      body.can_manage = access.capabilities.has('contracts.write') && row.status !== 'void' && scopeAllowsContact(access.artistScope, row.artist_contact_id);
       body.copy = projectId ? await findContractCopy(access.admin, access.orgId, projectId, contractDocumentFileName(row.id, row.version, row.status)) : null;
       body.can_store = projectId !== null;
     }
