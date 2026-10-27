@@ -125,6 +125,7 @@ export const VERBS = [
   'contract.voided',
   // LABEL-58: sent for signature (audit: the content is frozen from here), the PDF made, and the PDF taken
   'contract.sent',
+  'contract.send_failed',
   'contract.document_generated',
   'contract.document_downloaded',
   'contract_template.saved',
@@ -320,6 +321,7 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'contract.updated': 'internal',
   'contract.voided': 'internal',
   'contract.sent': 'internal',
+  'contract.send_failed': 'internal',
   'contract.document_generated': 'internal',
   'contract.document_downloaded': 'internal',
   'contract_template.saved': 'internal',

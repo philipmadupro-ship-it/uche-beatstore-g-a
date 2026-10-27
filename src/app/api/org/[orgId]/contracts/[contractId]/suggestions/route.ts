@@ -21,7 +21,7 @@ import { scopeAllowsContact } from '@/lib/labelos/artist-scope';
 import { suggestArtistParties, suggestFromSplits, type SplitFacts } from '@/lib/labelos/contracts/suggest';
 import { partyName } from '@/lib/labelos/contracts/context';
 import { loadContractFor } from '@/lib/labelos/contracts-route';
-import { CONTRACTS_NOT_READY, ContractsNotReadyError } from '@/lib/labelos/contracts-store';
+import { ContractsNotReadyError } from '@/lib/labelos/contracts-store';
 import { unitsOf } from '@/lib/labelos/splits';
 import { linesOfSheets, listSheets, SplitsNotReadyError } from '@/lib/labelos/splits-store';
 
@@ -74,7 +74,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ org
     }
     return json(200, { fields, artist_parties: artistParties });
   } catch (err) {
-    if (err instanceof ContractsNotReadyError) return json(503, { error: CONTRACTS_NOT_READY });
+    if (err instanceof ContractsNotReadyError) return json(200, { schemaReady: false, fields: [], artist_parties: [] });
     log.error('contract suggestions failed', { orgId: org, error: errorMessage(err) });
     return json(500, { error: 'Could not load suggestions' });
   }

@@ -29,6 +29,7 @@ import { readsAllContracts } from '@/lib/labelos/contracts/access';
 import { contractView } from '@/lib/labelos/contracts/context';
 import { cleanContractClauses, markClauses } from '@/lib/labelos/contracts/clause-edit';
 import { buildHistory, HISTORY_VERBS } from '@/lib/labelos/contracts/history';
+import { copyStatus } from '@/lib/labelos/contracts-document';
 import { contractDocumentFileName } from '@/lib/labelos/contracts/document';
 import { cleanFields } from '@/lib/labelos/contracts/merge-fields';
 import { sameClauses, changedClauseIds } from '@/lib/labelos/contracts/template-edit';
@@ -88,17 +89,17 @@ export async function GET(_req: NextRequest, { params }: Params) {
       const projectId = await contractProjectId(access.admin, access.orgId, row);
       body.clauses = row.clauses;
       body.clause_marks = markClauses(base, row.clauses);
-      const history = buildHistory(await contractEvents(access.admin, access.orgId, row.id, HISTORY_VERBS), (id) => headings.get(id) ?? null);
+      const history = buildHistory(await contractEvents(access.admin, access.orgId, row.id, HISTORY_VERBS), (id) => headings.get(id) ?? null, row.status === 'draft' ? null : row.version);
       const identitiesOfActors = await memberIdentities(access.admin as unknown as IdentityAdmin, access.orgId, [...new Set(history.map((h) => h.actorId).filter((x): x is string => !!x))], { withEmail: false });
       body.history = history;
       body.history_actors = Object.fromEntries([...identitiesOfActors].filter(([, who]) => !!who.name).map(([id, who]) => [id, who.name]));
       body.can_manage = access.capabilities.has('contracts.write') && row.status !== 'void' && scopeAllowsContact(access.artistScope, row.artist_contact_id);
-      body.copy = projectId ? await findContractCopy(access.admin, access.orgId, projectId, contractDocumentFileName(row.id, row.version, row.status)) : null;
+      body.copy = projectId ? await findContractCopy(access.admin, access.orgId, projectId, contractDocumentFileName(row.id, row.version, copyStatus(row.status))) : null;
       body.can_store = projectId !== null;
     }
     return json(200, body);
   } catch (err) {
-    if (err instanceof ContractsNotReadyError) return NOT_FOUND();
+    if (err instanceof ContractsNotReadyError) return json(200, { schemaReady: false });
     log.error('contract read failed', { orgId: access.orgId, error: errorMessage(err) });
     return json(500, { error: 'Could not load the contract' });
   }
@@ -190,7 +191,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         changed.push('parties');
       }
     }
-    const bad = await linkedInOrg(admin, org, { artist: body.artist_contact_id, track: body.track_id, release: body.release_id });
+    const effective = {
+      artist: body.artist_contact_id !== undefined ? body.artist_contact_id : row.artist_contact_id,
+      track: body.track_id !== undefined ? body.track_id : row.track_id,
+      release: body.release_id !== undefined ? body.release_id : row.release_id,
+    };
+    const linksChange = effective.artist !== row.artist_contact_id || effective.track !== row.track_id || effective.release !== row.release_id;
+    const bad = await linkedInOrg(admin, org, { artist: body.artist_contact_id, track: body.track_id, release: body.release_id }, linksChange ? effective : undefined);
     if (bad) return json(404, { error: bad });
 
     if (changed.length === 0) return json(200, { ok: true, version: row.version });
@@ -204,15 +211,28 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (next === null) return json(409, { error: 'Someone saved this contract while you were editing. Reload to see their changes.' });
       version = next;
     }
-    await saveContract(admin, org, access.userId, row.id, patch, parties);
     const changedIds = clauses?.ok ? changedClauseIds(row.clauses, clauses.clauses) : [];
-    await recordEvent(
-      admin,
-      { orgId: org, userId: access.userId },
-      'contract.updated',
-      { ...subject, artistId: body.artist_contact_id !== undefined ? body.artist_contact_id : row.artist_contact_id },
-      { changed, ...(clauses?.ok ? { changed_clauses: changedIds, ...(changedIds.length === 0 ? { reordered: true } : {}) } : {}), ...(contentChanged ? { version } : {}) },
-    );
+    const eventPayload = (extra: Record<string, unknown> = {}) => ({
+      changed,
+      ...(clauses?.ok ? { changed_clauses: changedIds, ...(changedIds.length === 0 ? { reordered: true } : {}) } : {}),
+      ...(contentChanged ? { version } : {}),
+      ...extra,
+    });
+    const eventSubject = { ...subject, artistId: body.artist_contact_id !== undefined ? body.artist_contact_id : row.artist_contact_id };
+    try {
+      await saveContract(admin, org, access.userId, row.id, patch, parties);
+    } catch (err) {
+      // The version (and the wording, if it was edited) is already written; the rest did not apply. Record what DID
+      // happen and say so, instead of leaving a bumped version with no trace.
+      if (contentChanged) {
+        await recordEvent(admin, { orgId: org, userId: access.userId }, 'contract.updated', eventSubject, { changed: clauses?.ok ? ['clauses'] : [], ...(clauses?.ok ? { changed_clauses: changedIds } : {}), version, partial: true });
+        if (!(err instanceof ContractsNotReadyError)) {
+          return json(409, { error: clauses?.ok ? 'The wording was saved, but the other changes were not. Reload and check the form.' : 'These changes were not saved. Reload and try again.', version });
+        }
+      }
+      throw err;
+    }
+    await recordEvent(admin, { orgId: org, userId: access.userId }, 'contract.updated', eventSubject, eventPayload());
     return json(200, { ok: true, version });
   } catch (err) {
     if (err instanceof ContractsNotReadyError) return json(503, { error: CONTRACTS_NOT_READY });

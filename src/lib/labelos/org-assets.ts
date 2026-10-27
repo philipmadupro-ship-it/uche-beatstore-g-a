@@ -74,6 +74,17 @@ export function resolveSensitivity(kind: string, requested?: AssetSensitivity | 
   return requested ?? 'normal';
 }
 
+/**
+ * A contract or split-sheet file is legal evidence, restricted for life: its kind and its sensitivity are not
+ * edited (a PATCH to `document` / `normal` would declassify it). Null = the change is fine.
+ */
+export function declassifyRefusal(current: { kind: string; sensitivity: string }, next: { kind: string; sensitivity: string }): string | null {
+  if (!(ALWAYS_RESTRICTED_KINDS as readonly string[]).includes(current.kind)) return null;
+  if (next.kind !== current.kind) return 'A contract or split sheet file keeps its kind. Upload the file again as the kind you want.';
+  if (next.sensitivity !== current.sensitivity) return 'A contract or split sheet file stays restricted.';
+  return null;
+}
+
 export type OrgAssetAccessFacts = { kind: string; sensitivity: string };
 
 /** Every capability a member needs to open this file (in addition to scope). */

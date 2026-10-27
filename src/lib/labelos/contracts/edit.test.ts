@@ -66,6 +66,16 @@ describe('history', () => {
   });
 });
 
+describe('history of a contract whose sent event lost the race', () => {
+  const ev = (id: string, verb: string, at: string, version: number) => ({ id, verb, actor_id: 'u1', created_at: at, payload: { version } });
+  it('keeps only the oldest sent event of the real sent version, and none while it is a draft', () => {
+    const events = [ev('1', 'contract.sent', '2026-10-02T10:00:00Z', 2), ev('2', 'contract.sent', '2026-10-02T10:00:05Z', 2), ev('3', 'contract.send_failed', '2026-10-02T10:00:06Z', 2), ev('4', 'contract.sent', '2026-10-01T10:00:00Z', 1)];
+    expect(buildHistory(events, () => null, 2).map((e) => [e.id, e.kind])).toEqual([['3', 'send_failed'], ['1', 'sent']]);
+    expect(buildHistory(events, () => null, null).map((e) => e.kind)).toEqual(['send_failed']);
+    expect(buildHistory(events, () => null).filter((e) => e.kind === 'sent')).toHaveLength(3);
+  });
+});
+
 describe('suggestions', () => {
   const parties = [{ party_id: 'p1', role: 'artist' as const, name: 'Nova' }, { party_id: 'p2', role: 'label' as const, name: 'Label Co' }];
   it('offers the artist’s share from the live sheets, exact to four decimals', () => {

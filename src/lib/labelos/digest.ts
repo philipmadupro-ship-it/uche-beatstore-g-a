@@ -442,6 +442,7 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'contract.updated': { one: 'edited a contract', many: 'edited {n} contracts' },
   'contract.voided': { one: 'voided a contract', many: 'voided {n} contracts' },
   'contract.sent': { one: 'sent a contract for signature', many: 'sent {n} contracts for signature' },
+  'contract.send_failed': { one: 'had a contract send fall through', many: 'had {n} contract sends fall through' },
   'contract.document_generated': { one: 'saved a contract PDF', many: 'saved {n} contract PDFs' },
   'contract.document_downloaded': { one: 'downloaded a contract PDF', many: 'downloaded {n} contract PDFs' },
   'contract_template.saved': { one: 'saved a contract template', many: 'saved {n} contract templates' },

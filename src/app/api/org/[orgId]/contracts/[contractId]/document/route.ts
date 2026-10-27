@@ -23,9 +23,11 @@ import { isUUID } from '@/lib/validate';
 import { recordEvent } from '@/lib/labelos/activity';
 import { scopeAllowsContact } from '@/lib/labelos/artist-scope';
 import { contractDocumentFileName, renderContractDocumentPdf } from '@/lib/labelos/contracts/document';
-import { storeContractPdf } from '@/lib/labelos/contracts-document';
+import { copyStatus, rerenderNotice, storeContractPdf } from '@/lib/labelos/contracts-document';
+import { orgProjectAssetKeyOf } from '@/lib/labelos/org-assets';
+import { projectAssetBuckets, streamProjectAsset } from '@/lib/storage/project-assets';
 import { documentInputOf, documentOf, loadContractFor } from '@/lib/labelos/contracts-route';
-import { CONTRACTS_NOT_READY, ContractsNotReadyError } from '@/lib/labelos/contracts-store';
+import { CONTRACTS_NOT_READY, ContractsNotReadyError, contractProjectId, findContractCopy } from '@/lib/labelos/contracts-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,7 +39,7 @@ const NOT_FOUND = () => json(404, { error: 'Contract not found' });
 
 type Params = { params: Promise<{ orgId: string; contractId: string }> };
 
-export async function GET(_req: NextRequest, { params }: Params) {
+export async function GET(req: NextRequest, { params }: Params) {
   const { orgId, contractId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'Contracts need Supabase.' });
   const access = await requireOrgModule(orgId, 'contracts', 'contracts.read');
@@ -47,7 +49,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const loaded = await loadContractFor(access, contractId);
     if (!loaded) return NOT_FOUND();
     const { row, links, identities } = loaded;
-    const rendered = await documentOf(access.admin, access.orgId, row, links, identities);
     // Before a byte leaves: an unauditable download does not happen.
     await recordEvent(
       access.admin,
@@ -56,19 +57,31 @@ export async function GET(_req: NextRequest, { params }: Params) {
       { type: 'contract', id: row.id, artistId: row.artist_contact_id, songId: row.track_id, releaseId: row.release_id },
       { version: row.version, status: row.status },
     );
-    const pdf = await renderContractDocumentPdf(documentInputOf(row, links, identities, rendered));
+    // A contract that left draft is served as it was SENT: the copy filed at send. Party names, addresses and titles
+    // are merged live, so a fresh render after someone edits a party would differ from what was signed off. With no
+    // stored copy (no project, or filing failed) a fresh render is made and says so on its first page.
+    if (row.status !== 'draft') {
+      const projectId = await contractProjectId(access.admin, access.orgId, row);
+      const copy = projectId ? await findContractCopy(access.admin, access.orgId, projectId, contractDocumentFileName(row.id, row.version, 'sent')) : null;
+      if (copy && orgProjectAssetKeyOf(copy.url, access.orgId, copy.project_id, projectAssetBuckets())) {
+        return await streamProjectAsset(req, copy.url, { fileName: contractDocumentFileName(row.id, row.version, 'sent'), mime: 'application/pdf', inline: false });
+      }
+    }
+    const rendered = await documentOf(access.admin, access.orgId, row, links, identities);
+    const input = documentInputOf(row, links, identities, rendered);
+    const pdf = await renderContractDocumentPdf(row.status === 'draft' ? input : { ...input, notice: rerenderNotice(input.generatedOn) });
     return new NextResponse(new Uint8Array(pdf), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${contractDocumentFileName(row.id, row.version, row.status)}"`,
+        'Content-Disposition': `attachment; filename="${contractDocumentFileName(row.id, row.version, copyStatus(row.status))}"`,
         'Content-Length': String(pdf.length),
         'X-Content-Type-Options': 'nosniff',
         ...NO_STORE,
       },
     });
   } catch (err) {
-    if (err instanceof ContractsNotReadyError) return NOT_FOUND();
+    if (err instanceof ContractsNotReadyError) return json(200, { schemaReady: false });
     log.error('contract document failed', { orgId: access.orgId, error: errorMessage(err) });
     return json(500, { error: 'Could not make the document' });
   }

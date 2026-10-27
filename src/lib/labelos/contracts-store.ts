@@ -213,7 +213,16 @@ async function isRosterArtist(admin: AdminClient, org: string, id: string): Prom
   return hasArtistRole(res.data as { category: string | null; secondary_category: string | null });
 }
 
-export async function linkedInOrg(admin: AdminClient, org: string, ids: { artist?: string | null; track?: string | null; release?: string | null }): Promise<string | null> {
+/**
+ * `ids` are probed as before. `effective` (LABEL-58) is the artist / song / release the contract WILL have: a song or
+ * release must belong to the contract's artist (a song in none of the org's projects is fine; a release always has a project).
+ */
+export async function linkedInOrg(
+  admin: AdminClient,
+  org: string,
+  ids: { artist?: string | null; track?: string | null; release?: string | null },
+  effective?: { artist: string | null; track: string | null; release: string | null },
+): Promise<string | null> {
   const probe = async (table: string, id: string | null | undefined): Promise<boolean> => {
     if (!id) return true;
     const res = await admin.from(table).select('id').eq('org_id', org).eq('id', id).maybeSingle();
@@ -223,6 +232,17 @@ export async function linkedInOrg(admin: AdminClient, org: string, ids: { artist
   if (ids.artist && !(await isRosterArtist(admin, org, ids.artist))) return 'That contact is not an artist on your roster';
   if (!(await probe('tracks', ids.track))) return 'That song is not in this organization';
   if (!(await probe('releases', ids.release))) return 'That release is not in this organization';
+  if (effective?.artist) {
+    if (effective.track) {
+      const projects = await songProjectIds(admin, org, effective.track);
+      if (projects.length > 0 && (await artistProjects(admin, org, effective.artist, projects)).length === 0) return 'That song is not in this artist’s projects';
+    }
+    if (effective.release) {
+      const res = await admin.from('releases').select('project_id').eq('org_id', org).eq('id', effective.release).maybeSingle();
+      const pid = (res.data as { project_id?: string } | null)?.project_id;
+      if (pid && (await artistProjects(admin, org, effective.artist, [pid])).length === 0) return 'That release is not in this artist’s projects';
+    }
+  }
   return null;
 }
 
@@ -302,32 +322,71 @@ export async function templateBase(admin: AdminClient, org: string, row: Pick<Co
 }
 
 /**
- * The project a contract's PDF is filed in: its release's project, else the
- * song's (the Inbox project of the artist first, as every other song event is
- * filed). No release and no song in a project → null: the PDF is made on
- * request and not stored, rather than invented a place outside a project.
+ * The projects (of this org) among `projectIds` that belong to the artist: an Inbox for them, or linked to them.
+ * Inbox first, then the oldest, so the answer is stable.
  */
-export async function contractProjectId(admin: AdminClient, org: string, row: Pick<ContractRow, 'release_id' | 'track_id'>): Promise<string | null> {
+async function artistProjects(admin: AdminClient, org: string, artist: string, projectIds: readonly string[]): Promise<string[]> {
+  const ids = [...new Set(projectIds)];
+  if (ids.length === 0) return [];
+  const res = await admin.from('projects').select('id, inbox_for_contact_id, created_at').eq('org_id', org).in('id', ids);
+  check('project read', res.error);
+  const projects = ((res.data ?? []) as { id: string; inbox_for_contact_id: string | null; created_at?: string }[]).sort(
+    (x, y) => Number(!!y.inbox_for_contact_id) - Number(!!x.inbox_for_contact_id) || String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id),
+  );
+  const { projectArtists } = await import('./org-workspace-store');
+  const owners = await projectArtists(admin, projects);
+  return projects.filter((p) => (owners.get(p.id) ?? []).includes(artist)).map((p) => p.id);
+}
+
+async function songProjectIds(admin: AdminClient, org: string, trackId: string): Promise<string[]> {
+  const res = await admin.from('project_tracks').select('project_id').eq('track_id', trackId);
+  check('song projects', res.error);
+  const ids = ((res.data ?? []) as { project_id: string }[]).map((r) => r.project_id);
+  if (ids.length === 0) return [];
+  const inOrg = await admin.from('projects').select('id').eq('org_id', org).in('id', ids);
+  check('project read', inOrg.error);
+  return ((inOrg.data ?? []) as { id: string }[]).map((r) => r.id);
+}
+
+/**
+ * The project a contract's PDF is filed in: its release's, else its song's, and ONLY a project of the contract's
+ * own artist. The PDF then sits where the contract's own scope reaches: a member limited to artist Y must not be
+ * able to open (or find by search) a contract of artist X because the song happens to live in Y's project.
+ * No artist, no release / song, or none of them in that artist's project → null: the PDF is made on request and
+ * not stored.
+ */
+export async function contractProjectId(admin: AdminClient, org: string, row: Pick<ContractRow, 'release_id' | 'track_id' | 'artist_contact_id'>): Promise<string | null> {
+  if (!row.artist_contact_id) return null;
   if (row.release_id) {
     const res = await admin.from('releases').select('project_id').eq('org_id', org).eq('id', row.release_id).maybeSingle();
-    if (!res.error && (res.data as { project_id?: string } | null)?.project_id) return (res.data as { project_id: string }).project_id;
+    const pid = (res.data as { project_id?: string } | null)?.project_id;
+    if (!res.error && pid) return (await artistProjects(admin, org, row.artist_contact_id, [pid]))[0] ?? null;
   }
-  if (row.track_id) {
-    const { songEventSubject } = await import('./song-stage-store');
-    const song = await songEventSubject(admin, org, row.track_id);
-    if (song.projectId) return song.projectId;
-  }
+  if (row.track_id) return (await artistProjects(admin, org, row.artist_contact_id, await songProjectIds(admin, org, row.track_id)))[0] ?? null;
   return null;
 }
 
-export type ContractCopy = { asset_id: string; project_id: string };
+export type ContractCopy = { asset_id: string; project_id: string; url: string };
 
-/** The stored PDF of this contract version, if one was made (the file name is the key: one per version). */
+/** The stored PDF of this contract version, if one was made (the file name is the key: one per version and status). */
 export async function findContractCopy(admin: AdminClient, org: string, projectId: string, fileName: string): Promise<ContractCopy | null> {
-  const res = await admin.from('project_assets').select('id, project_id').eq('org_id', org).eq('project_id', projectId).eq('kind', 'contract').eq('file_name', fileName).limit(1);
+  const all = await listContractCopies(admin, org, projectId, fileName);
+  return all[0] ?? null;
+}
+
+/** Every contract file of the project whose name starts with `prefix`, oldest first (the dedupe key of a contract is its name). */
+export async function listContractCopies(admin: AdminClient, org: string, projectId: string, prefix: string): Promise<(ContractCopy & { file_name: string })[]> {
+  const res = await admin
+    .from('project_assets')
+    .select('id, project_id, url, file_name, created_at')
+    .eq('org_id', org)
+    .eq('project_id', projectId)
+    .eq('kind', 'contract')
+    .ilike('file_name', `${prefix.replace(/[%_]/g, '\\$&')}%`);
   check('contract copy lookup', res.error);
-  const row = ((res.data ?? [])[0] as { id: string; project_id: string } | undefined) ?? null;
-  return row ? { asset_id: row.id, project_id: row.project_id } : null;
+  return ((res.data ?? []) as { id: string; project_id: string; url: string; file_name: string; created_at?: string }[])
+    .sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')) || a.id.localeCompare(b.id))
+    .map((r) => ({ asset_id: r.id, project_id: r.project_id, url: r.url, file_name: r.file_name }));
 }
 
 /** Insert the restricted `contract` project file a generated PDF is kept as (143: a contract file is always restricted). */

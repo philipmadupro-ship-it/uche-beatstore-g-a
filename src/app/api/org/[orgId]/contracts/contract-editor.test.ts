@@ -29,6 +29,8 @@ const C2 = '30000000-0000-4000-8000-0000000000c2';
 const S1 = '50000000-0000-4000-8000-000000000001';
 const S2 = '50000000-0000-4000-8000-000000000002';
 const P1 = '40000000-0000-4000-8000-000000000001';
+const P2 = '40000000-0000-4000-8000-000000000002';
+const S3 = '50000000-0000-4000-8000-000000000003';
 const PL = '60000000-0000-4000-8000-000000000001';
 const PN = '60000000-0000-4000-8000-000000000002';
 const PX = '60000000-0000-4000-8000-000000000003';
@@ -36,21 +38,38 @@ const TPL = '90000000-0000-4000-8000-000000000001';
 
 let current: string | null = null;
 let db: MemoryDb;
-const storage = { stored: [] as { key: string; mime: string; bytes: number }[], deleted: [] as string[] };
+const storage = { stored: [] as { key: string; mime: string; bytes: number }[], deleted: [] as string[], files: new Map<string, Uint8Array>() };
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: current ? { id: current } : null } }) } }),
 }));
-vi.mock('@supabase/supabase-js', () => ({ createClient: () => memoryAdmin(db).client }));
+/** PostgREST's answer for a table that is not there (migration 176 not applied): every call on it resolves to this error. */
+let contractsMissing = false;
+const missingTable = (): unknown => {
+  const chain: unknown = new Proxy(() => chain, {
+    get: (_t, prop) => (prop === 'then' ? (ok: (v: unknown) => unknown) => ok({ data: null, error: { code: 'PGRST205', message: 'Could not find the table' } }) : () => chain),
+    apply: () => chain,
+  });
+  return chain;
+};
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: () => {
+    const client = memoryAdmin(db).client as unknown as { from: (t: string) => unknown };
+    const from = client.from.bind(client);
+    return Object.assign(client, { from: (t: string) => (contractsMissing && t === 'contracts' ? missingTable() : from(t)) });
+  },
+}));
 vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
 vi.mock('@/lib/storage/project-assets', () => ({
   projectAssetBuckets: () => ['priv'],
   storeProjectAsset: async (buffer: Buffer, k: string, mime: string) => {
     storage.stored.push({ key: k, mime, bytes: buffer.length });
+    storage.files.set(`r2://priv/${k}`, new Uint8Array(buffer));
     return `r2://priv/${k}`;
   },
   deleteProjectAssetObject: async (r: string) => { storage.deleted.push(r); },
+  streamProjectAsset: async (_req: unknown, ref: string) => new Response(new Uint8Array(storage.files.get(ref) ?? []), { headers: { 'content-type': 'application/pdf' } }),
 }));
 
 const member = (user: string, role: string, functions: string[] = [], scope = 'org', org = L, cap_revokes: string[] = []) => ({ org_id: org, user_id: user, role, functions, scope, cap_grants: [], cap_revokes });
@@ -71,9 +90,11 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-secret-key';
   current = null;
+  contractsMissing = false;
   seq = 0;
   storage.stored = [];
   storage.deleted = [];
+  storage.files = new Map();
   db = {
     tables: {
       organizations: [{ id: L, kind: 'label', deleted_at: null }, { id: L2, kind: 'label', deleted_at: null }],
@@ -89,9 +110,13 @@ beforeEach(() => {
       tracks: [
         { id: S1, org_id: L, user_id: null, type: 'song', title: 'Midnight', song_stage: 'inbox' },
         { id: S2, org_id: L, user_id: null, type: 'song', title: 'Loose', song_stage: 'inbox' },
+        { id: S3, org_id: L, user_id: null, type: 'song', title: 'Kilo song', song_stage: 'inbox' },
       ],
-      projects: [{ id: P1, org_id: L, user_id: null, name: 'Nova EP', inbox_for_contact_id: null, created_at: '2026-10-01' }],
-      project_tracks: [{ project_id: P1, track_id: S1, position: 0 }],
+      projects: [
+        { id: P1, org_id: L, user_id: null, name: 'Nova EP', inbox_for_contact_id: C1, created_at: '2026-10-01' },
+        { id: P2, org_id: L, user_id: null, name: 'Kilo EP', inbox_for_contact_id: C2, created_at: '2026-10-01' },
+      ],
+      project_tracks: [{ project_id: P1, track_id: S1, position: 0 }, { project_id: P2, track_id: S3, position: 0 }],
       project_contacts: [],
       releases: [],
       parties: [
@@ -402,11 +427,13 @@ describe('document', () => {
     expect(second).toMatchObject({ reused: true, asset_id: first.asset_id });
     expect(db.tables.project_assets).toHaveLength(1);
     expect(events('contract.document_generated')).toHaveLength(1);
-    // an edit is a new version, so a new file
+    // an edit is a new version, so a new file — and the old DRAFT copy goes (row and object)
     await call('detail', 'PATCH', LEG, c.id, { title: 'Nova deal 2' });
     const third = await (await call('document', 'POST', LEG, c.id)).json();
     expect(third.reused).toBe(false);
-    expect(db.tables.project_assets).toHaveLength(2);
+    expect(db.tables.project_assets).toHaveLength(1);
+    expect(db.tables.project_assets[0].id).toBe(third.asset_id);
+    expect(storage.deleted).toHaveLength(1);
   });
 
   it('POST with no project says so and stores nothing; a void contract has no document', async () => {
@@ -426,14 +453,103 @@ describe('document', () => {
   });
 });
 
+describe('the filed PDF follows the contract’s artist (scope)', () => {
+  it('a contract with no artist is not filed, even with a song in a project', async () => {
+    const c = add({ artist_contact_id: null });
+    const res = await call('document', 'POST', LEG, c.id);
+    expect(res.status).toBe(409);
+    const sent = await call('send', 'POST', LEG, c.id, { version: 1 });
+    expect((await sent.json()).copy).toEqual({ stored: false, reason: 'no_project' });
+    expect(db.tables.project_assets).toHaveLength(0);
+  });
+  it('a contract for Nova about a song in Kilo’s project is not filed in Kilo’s project', async () => {
+    const c = add({ artist_contact_id: C1, track_id: S3 });
+    expect((await call('document', 'POST', LEG, c.id)).status).toBe(409);
+    expect(db.tables.project_assets).toHaveLength(0);
+  });
+  it('a song or release outside the contract’s artist is refused when linked, on create and on edit', async () => {
+    const c = add({ track_id: null });
+    expect((await call('detail', 'PATCH', LEG, c.id, { track_id: S3 })).status).toBe(404);
+    expect((await call('detail', 'PATCH', LEG, c.id, { artist_contact_id: C2, track_id: S3 })).status).toBe(200);
+    // moving the artist away from a linked song is refused too
+    expect((await call('detail', 'PATCH', LEG, c.id, { artist_contact_id: C1 })).status).toBe(404);
+    expect(db.tables.contracts[0]).toMatchObject({ artist_contact_id: C2, track_id: S3 });
+  });
+  it('a member limited to Kilo cannot find a Nova contract’s PDF in Kilo’s Files', async () => {
+    const c = add({ artist_contact_id: C1, track_id: S3 });
+    await call('document', 'POST', LEG, c.id);
+    expect(db.tables.project_assets.filter((a) => a.project_id === P2)).toHaveLength(0);
+  });
+});
+
+describe('a sent contract is served as it was sent', () => {
+  it('the download is the copy stored at send, even after a party is edited', async () => {
+    const c = add();
+    await call('send', 'POST', LEG, c.id, { version: 1 });
+    const stored = storage.stored[0].bytes;
+    db.tables.parties.find((p) => p.id === PN)!.legal_name = 'Nova Renamed Ltd';
+    const res = await call('document', 'GET', LEG, c.id);
+    expect(res.status).toBe(200);
+    const text = pdfText(Buffer.from(await res.arrayBuffer()));
+    expect(text).toContain('Nova Okafor');
+    expect(text).not.toContain('Nova Renamed');
+    expect(text).not.toContain('Re-rendered');
+    expect(storage.stored).toHaveLength(1);
+    expect(stored).toBeGreaterThan(0);
+  });
+  it('with no stored copy a re-render says so on its first page', async () => {
+    const c = add({ status: 'sent', track_id: S2 });
+    const text = pdfText(Buffer.from(await (await call('document', 'GET', LEG, c.id)).arrayBuffer()));
+    expect(text).toContain('Re-rendered from current data');
+    expect(text).toContain('not the copy that was sent');
+  });
+  it('a copy made at send has no such line; one made later does', async () => {
+    const c = add({ status: 'sent' });
+    await call('document', 'POST', LEG, c.id);
+    expect(db.tables.project_assets[0].file_name).toMatch(/-sent\.pdf$/);
+  });
+});
+
+describe('a send that loses the claim', () => {
+  it('leaves a send_failed record and the history shows no sent entry for it', async () => {
+    const c = add();
+    const events = db.tables.activity_events;
+    const push = events.push.bind(events);
+    // a concurrent sender wins between our audit write and our claim
+    events.push = (...rows: Record<string, unknown>[]) => {
+      const n = push(...rows);
+      if (rows.some((r) => r.verb === 'contract.sent')) db.tables.contracts[0].status = 'sent';
+      return n;
+    };
+    const res = await call('send', 'POST', LEG, c.id, { version: 1 });
+    expect(res.status).toBe(409);
+    expect(events.filter((e) => e.verb === 'contract.send_failed')).toHaveLength(1);
+    expect(events.find((e) => e.verb === 'contract.send_failed')!.payload).toEqual({ version: 1, reason: 'claim_lost' });
+  });
+});
+
+describe('PATCH when the rest of the save fails after the version moved', () => {
+  it('says the wording was saved, and records that it was', async () => {
+    const c = add();
+    db.rpc!.labelos_contract_save = () => ({ data: null, error: { message: 'boom', code: 'XX000' } });
+    const res = await call('detail', 'PATCH', LEG, c.id, { title: 'New title', clauses: [{ id: 'a', heading: 'Advance', body: 'Rewritten {{advance}}' }, CLAUSES[1]] });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toContain('The wording was saved');
+    expect(db.tables.contracts[0]).toMatchObject({ version: 2, title: 'Nova deal' });
+    expect((db.tables.contracts[0].clauses as { body: string }[])[0].body).toBe('Rewritten {{advance}}');
+    expect(events('contract.updated')[0].payload).toMatchObject({ changed: ['clauses'], changed_clauses: ['a'], version: 2, partial: true });
+  });
+});
+
 describe('not set up yet', () => {
   it('without migration 176 the writes answer 503 and the read a clean 404, never a 500', async () => {
-    delete (db.tables as Record<string, unknown>).contracts;
-    delete (db.tables as Record<string, unknown>).contract_parties;
+    contractsMissing = true;
     const id = '70000000-0000-4000-8000-0000000000aa';
-    const send = await call('send', 'POST', LEG, id, { version: 1 });
-    expect([404, 503]).toContain(send.status);
-    const doc = await call('document', 'GET', LEG, id);
-    expect([404, 503]).toContain(doc.status);
+    expect([404, 503]).toContain((await call('send', 'POST', LEG, id, { version: 1 })).status);
+    for (const where of ['detail', 'document', 'suggestions'] as const) {
+      const res = await call(where, 'GET', LEG, id);
+      expect(res.status, where).toBe(200);
+      expect(await res.json()).toMatchObject({ schemaReady: false });
+    }
   });
 });

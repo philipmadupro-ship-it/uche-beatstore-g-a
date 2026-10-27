@@ -68,6 +68,7 @@ function historyLine(h: HistoryEntry): string {
   switch (h.kind) {
     case 'created': return 'Draft started';
     case 'sent': return 'Sent for signature';
+    case 'send_failed': return 'A send did not go through (someone else sent it first)';
     case 'voided': return 'Voided';
     case 'document': return 'PDF filed in the project';
     case 'edited': {
@@ -182,6 +183,7 @@ export function ContractEditor({ orgId, contractId }: { orgId: string; contractI
       </div>
     );
   }
+  if (detail && (detail as { schemaReady?: boolean }).schemaReady === false) return <p className={NOTICE} data-testid="contract-editor-not-ready">Contracts are not set up yet: the database migrations for them (174 and 176) are not applied.</p>;
   if (!detail || !contract) return <p className="text-[11px] text-white/40" data-testid="contract-editor-loading">Loading the contract…</p>;
 
   const marks = detail.clause_marks;

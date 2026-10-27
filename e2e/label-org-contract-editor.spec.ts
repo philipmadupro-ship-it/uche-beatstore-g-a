@@ -214,6 +214,14 @@ test('4 · the PDF carries the filled values; its download is audited; marketing
   expect(text).toContain('60% of the master');
   expect(text).toContain('Custom wording from our counsel');
   expect(text).toContain('Sent for signature');
+  // The filed contract cannot be declassified by editing the file.
+  const declass = await ctx.request.patch(`/api/org/${ORG}/projects/${EP}/assets/${assets[0].id}`, { data: { kind: 'document', sensitivity: 'normal' } });
+  expect(declass.status()).toBe(409);
+  // A sent contract is served as it was sent, even after a party is edited.
+  await rest(ctx.request, 'PATCH', `parties?id=eq.${P_NOVA}`, { legal_name: `Nova Renamed ${run}` });
+  const frozen = pdfText(Buffer.from(await (await ctx.request.get(`/api/org/${ORG}/contracts/${contractId}/document`)).body()));
+  expect(frozen).toContain(`Nova Okafor ${run}`);
+  expect(frozen).not.toContain('Renamed');
   const audited = (await rest(ctx.request, 'GET', `activity_events?select=audit,visibility&org_id=eq.${ORG}&verb=eq.file.restricted_downloaded`)) as Row[];
   expect(audited).toHaveLength(1);
   expect(audited[0]).toMatchObject({ audit: true, visibility: 'internal' });
@@ -222,7 +230,8 @@ test('4 · the PDF carries the filled values; its download is audited; marketing
   expect(live.status()).toBe(200);
   expect(pdfText(Buffer.from(await live.body()))).toContain('USD 1500');
   const dl = (await rest(ctx.request, 'GET', `activity_events?select=audit&org_id=eq.${ORG}&verb=eq.contract.document_downloaded`)) as Row[];
-  expect(dl).toHaveLength(1);
+  // one for the filled-values check above, one for the sent-as-sent check: every request is audited
+  expect(dl).toHaveLength(2);
   await ctx.close();
 
   const mkt = await as(browser, baseURL!, marketing.id, marketing.email);

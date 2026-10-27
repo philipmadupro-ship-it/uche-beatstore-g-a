@@ -23,6 +23,8 @@ export type ContractDocumentInput = {
   /** Merge values still empty; a draft prints them in brackets and says so. */
   missing: string[];
   generatedOn: string;
+  /** A line under the header (e.g. "re-rendered from current data"). */
+  notice?: string;
 };
 
 // The 27 printable characters cp1252 has above 0x7F that are not Latin-1.
@@ -64,6 +66,10 @@ export function renderContractDocumentPdf(input: ContractDocumentInput): Promise
     doc.moveDown(0.3).font('Helvetica').fontSize(9).fillColor('#555555');
     doc.text(toWinAnsi(`${input.typeLabel} · ${input.statusLabel} · version ${input.version}`));
     doc.fillColor('#000000');
+    if (input.notice) {
+      doc.moveDown(0.5).font('Helvetica-Oblique').fontSize(9).fillColor('#8d3a2f').text(toWinAnsi(input.notice));
+      doc.fillColor('#000000');
+    }
     if (input.parties.length > 0) {
       doc.moveDown(0.8).font('Helvetica-Bold').fontSize(10).text('Parties');
       doc.font('Helvetica').fontSize(10);
