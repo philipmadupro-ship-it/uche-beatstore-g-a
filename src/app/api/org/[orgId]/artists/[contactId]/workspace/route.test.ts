@@ -203,8 +203,12 @@ describe('GET …/artists/[contactId]/workspace', () => {
     expect(whole.releases.map((r: { title: string }) => r.title)).toEqual(['Kilo in Nova project']);
   });
 
-  it('a song on a release that is not cancelled is finished material, so marketing sees it (06 §2.3)', async () => {
+  it('a song on a release that went out is finished material, so marketing sees it (06 §2.3); on a DRAFT release it is still working (LABEL-56)', async () => {
     current = MKT;
+    const draft = await (await workspace(C1)).json();
+    expect(draft.workspace.songs.map((s: { id: string }) => s.id)).toEqual([S1]);
+    expect(draft.workspace.restrictedSongs).toBe(1);
+    db.tables.releases[0].state = 'delivered';
     const { workspace: w } = await (await workspace(C1)).json();
     expect(w.songs.map((s: { id: string }) => s.id)).toEqual([S1, S3]);
     expect(w.restrictedSongs).toBe(0);
@@ -342,6 +346,7 @@ describe('GET …/projects/[id]', () => {
 
   it('lists the project’s artists and visible songs; out of scope is 404', async () => {
     current = MKT;
+    db.tables.releases[0].state = 'delivered'; // S3 is on it: finished only once the release went out (LABEL-56)
     const d = await (await project(LP1)).json();
     expect(d.project).toMatchObject({ id: LP1, name: 'Nova EP', isInbox: false });
     expect(d.artists).toEqual([{ id: C1, name: 'Nova' }]);

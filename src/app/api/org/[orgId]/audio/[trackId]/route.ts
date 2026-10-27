@@ -232,14 +232,14 @@ async function serve(req: NextRequest, { params }: Params, opts: { head: boolean
 async function songIsOnRelease(admin: AdminClient, org: string, trackId: string): Promise<boolean> {
   const { data, error } = await admin
     .from('release_items')
-    .select('release_id, releases!inner(state)')
+    .select('release_id, releases!inner(state, imported_released)')
     .eq('song_track_id', trackId)
     .eq('org_id', org);
   if (error) {
     if (isMissingSchema(error)) return false;
     throw new Error(error.message);
   }
-  return countsAsOnRelease((data ?? []) as unknown as { releases: { state: string } | null }[]);
+  return countsAsOnRelease((data ?? []) as unknown as { releases: { state: string; imported_released: boolean | null } | null }[]);
 }
 
 /** Headers only: the storage stream GET opened is cancelled, never read. */

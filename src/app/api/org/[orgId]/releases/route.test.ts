@@ -557,6 +557,17 @@ describe('GET / PATCH / DELETE /releases/[id]', () => {
     expect(db.tables.releases[0].title).toBe('Nova EP (Deluxe)');
   });
 
+  it('LABEL-56: a delivered or withdrawn release is not cancelled (or reopened) by PATCH, and the answer says to withdraw', async () => {
+    for (const state of ['delivered', 'withdrawn']) {
+      db.tables.releases[0].state = state;
+      const res = await one('PATCH', AR, L, R1, { state: 'cancelled' });
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toMatch(state === 'delivered' ? /withdraw it instead/ : /withdrawn/);
+      expect((await one('PATCH', AR, L, R1, { state: 'draft' })).status).toBe(409);
+      expect(db.tables.releases[0].state).toBe(state);
+    }
+  });
+
   it('cancel and back to draft, but never delivered here; project and artist are fixed', async () => {
     expect((await one('PATCH', AR, L, R1, { state: 'cancelled' })).status).toBe(200);
     expect((await one('PATCH', AR, L, R1, { state: 'draft' })).status).toBe(200);
@@ -579,6 +590,14 @@ describe('GET / PATCH / DELETE /releases/[id]', () => {
     expect((await one('DELETE', AR, L, R2)).status).toBe(200);
     expect(db.tables.releases.map((r) => r.id)).toEqual([R1, RX]);
     db.tables.releases[0].state = 'delivered';
+    const gone = await one('DELETE', AR, L, R1);
+    expect(gone.status).toBe(409);
+    // LABEL-56: it no longer tells the member to "cancel" a release that cannot be cancelled.
+    const message = (await gone.json()).error as string;
+    expect(message).toMatch(/only a draft/i);
+    expect(message).toMatch(/withdraw/i);
+    expect(message).not.toMatch(/cancel it instead/i);
+    db.tables.releases[0].state = 'withdrawn';
     expect((await one('DELETE', AR, L, R1)).status).toBe(409);
     expect((await one('DELETE', AR, L, RX)).status).toBe(404);
   });

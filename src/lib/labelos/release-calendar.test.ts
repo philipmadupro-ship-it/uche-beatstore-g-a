@@ -29,6 +29,7 @@ describe('dates', () => {
   it('puts a release on its release date, else its target (tentative); cancelled and undated are off', () => {
     expect(calendarDay({ releaseDate: '2026-11-06', targetDate: '2026-11-01', state: 'draft' })).toEqual({ day: { y: 2026, m: 11, d: 6 }, tentative: false });
     expect(calendarDay({ releaseDate: null, targetDate: '2026-11-01', state: 'draft' })?.tentative).toBe(true);
+    expect(calendarDay({ releaseDate: '2026-11-06', targetDate: null, state: 'withdrawn' })).toBeNull();
     expect(calendarDay({ releaseDate: '2026-11-06', targetDate: null, state: 'cancelled' })).toBeNull();
     expect(calendarDay({ releaseDate: null, targetDate: null, state: 'draft' })).toBeNull();
   });

@@ -291,6 +291,57 @@ describe('delivery', () => {
   });
 });
 
+describe('withdrawing a delivered release (LABEL-56)', () => {
+  const out = (over: Partial<ReleaseDetail['release']> = {}, me: Partial<ReleaseDetail['me']> = {}) => {
+    const d = detail({ me: { ...detail().me, ...me } });
+    d.release = { ...d.release, state: 'delivered', deliveredTo: 'DistroKid', deliveredAt: '2026-10-12T12:00:00.000Z', ...over };
+    return d;
+  };
+
+  it('a delivered release offers Withdraw, not Cancel, and asks first with an optional reason', async () => {
+    mount(out());
+    expect(screen.queryByText('Cancel release')).toBeNull();
+    expect(screen.queryByTestId('release-withdraw-panel')).toBeNull();
+    fireEvent.click(screen.getByTestId('release-withdraw-open'));
+    expect(screen.getByTestId('release-withdraw-panel').textContent).toMatch(/not cancelled or deleted/);
+    fireEvent.change(screen.getByTestId('release-withdraw-note'), { target: { value: '  wrong master ' } });
+    fireEvent.click(screen.getByTestId('release-withdraw'));
+    await waitFor(() => expect(calls[0]).toMatchObject({ url: `/api/org/${ORG}/releases/${REL}/withdraw`, method: 'POST', body: { note: 'wrong master' } }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Release withdrawn'));
+  });
+
+  it('says it also comes off the store when it is listed, and "Keep it delivered" sends nothing', () => {
+    mount(out({ storeListed: true }));
+    fireEvent.click(screen.getByTestId('release-withdraw-open'));
+    expect(screen.getByTestId('release-withdraw-panel').textContent).toMatch(/comes off the store/);
+    fireEvent.click(screen.getByTestId('release-withdraw-cancel'));
+    expect(screen.queryByTestId('release-withdraw-panel')).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it('shows the server’s words when it refuses', async () => {
+    reply = { status: 503, body: { error: 'Withdrawing a release needs migration 193 applied on Supabase.' } };
+    mount(out());
+    fireEvent.click(screen.getByTestId('release-withdraw-open'));
+    fireEvent.click(screen.getByTestId('release-withdraw'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/migration 193/)));
+    expect(screen.getByTestId('release-withdraw-panel')).toBeTruthy();
+  });
+
+  it('no Withdraw without release.write, and none on a draft or a withdrawn release', () => {
+    mount(out({}, { canWrite: false }));
+    expect(screen.queryByTestId('release-withdraw-open')).toBeNull();
+    cleanup();
+    mount(detail());
+    expect(screen.queryByTestId('release-withdraw-open')).toBeNull();
+    cleanup();
+    mount(out({ state: 'withdrawn' }));
+    expect(screen.queryByTestId('release-withdraw-open')).toBeNull();
+    expect(screen.getByTestId('release-state').textContent).toMatch(/Withdrawn/);
+    expect(screen.getByTestId('release-withdrawn').textContent).toMatch(/then withdrawn/);
+  });
+});
+
 describe('the export and calendar controls (LABEL-34)', () => {
   it('release.write sees the export buttons, the rights note and the calendar link, and drawing them requests nothing', () => {
     mount(detail());

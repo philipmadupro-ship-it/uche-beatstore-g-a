@@ -98,7 +98,8 @@ beforeEach(() => {
         { project_id: LP2, track_id: S2, position: 0 },
         { project_id: XP1, track_id: XS1, position: 0 },
       ],
-      tracks: [track(S1, L, 'Midnight'), track(S2, L, 'Dawn'), track(XS1, L2, 'Other')],
+      // S1 is selected: a song on a DRAFT release is working until the release is delivered (LABEL-56), and a song is selected before it is put on a release.
+      tracks: [{ ...track(S1, L, 'Midnight'), song_stage: 'selected' }, track(S2, L, 'Dawn'), track(XS1, L2, 'Other')],
       releases: [{ id: R1, org_id: L, project_id: LP1, contact_id: C1, title: 'Nova EP', type: 'ep', upc: null, label_name: null, c_line: null, p_line: null, primary_genre: null, target_date: null, release_date: null, artwork_asset_id: ART1, state: 'draft' }],
       release_items: [{ id: t(90), release_id: R1, org_id: L, position: 1, song_track_id: S1, master_track_id: S1 }],
       split_sheets: [sheet({ id: '80000000-0000-4000-8000-000000000001', version: 1, status: 'signed' })],

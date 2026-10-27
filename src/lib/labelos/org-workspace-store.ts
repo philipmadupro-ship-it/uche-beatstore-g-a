@@ -144,21 +144,22 @@ async function orgTrackFactsChunk(admin: AdminClient, org: string, ids: readonly
   return out;
 }
 
-/** Songs that are items of a release that is not cancelled. Before migration 144 there are none. */
+/** Songs that are items of a release that went out (delivered / withdrawn / imported; LABEL-56). Before migration 144 there are none. */
 async function songsOnRelease(admin: AdminClient, org: string, songIds: readonly string[]): Promise<Set<string>> {
   const out = new Set<string>();
   if (songIds.length === 0) return out;
   const res = await admin
     .from('release_items')
-    .select('song_track_id, release_id, releases!inner(state)')
+    .select('song_track_id, release_id, releases!inner(state, imported_released)')
     .in('song_track_id', [...songIds])
     .eq('org_id', org);
   if (res.error) {
     if (isMissingSchema(res.error)) return out;
     throw new Error(`release lookup: ${res.error.message}`);
   }
-  const bySong = new Map<string, { releases: { state: string } | null }[]>();
-  for (const r of (res.data ?? []) as unknown as { song_track_id: string; releases: { state: string } | null }[]) {
+  type Rel = { state: string; imported_released: boolean | null };
+  const bySong = new Map<string, { releases: Rel | null }[]>();
+  for (const r of (res.data ?? []) as unknown as { song_track_id: string; releases: Rel | null }[]) {
     bySong.set(r.song_track_id, [...(bySong.get(r.song_track_id) ?? []), r]);
   }
   for (const [id, list] of bySong) if (countsAsOnRelease(list)) out.add(id);

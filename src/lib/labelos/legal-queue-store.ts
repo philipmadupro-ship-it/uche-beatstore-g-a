@@ -10,6 +10,7 @@
  * `restricted`, never titled. Migration 157 (approvals) may not be applied:
  * that is `schemaReady: false`, as the approvals route answers it.
  */
+import { RELEASE_STATES_NOT_GOING_OUT } from './releases';
 import { restrictedCountFor } from './restricted-counts';
 import { objectAccessFor, type OrgAccessOk } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
@@ -98,8 +99,8 @@ export async function loadLegalQueue(access: OrgAccessOk): Promise<LegalQueue> {
         const rel = await admin.from('releases').select('title, state').eq('id', subject.id).eq('org_id', org).maybeSingle();
         if (rel.error) throw new Error(`release read: ${rel.error.message}`);
         const row = rel.data as { title: string; state: string } | null;
-        // A cancelled release is not going out, and a missing one is gone: nobody needs to clear either, so neither is counted.
-        if (!row || row.state === 'cancelled') return null;
+        // A cancelled or withdrawn release is not going out, and a missing one is gone: nobody needs to clear either, so neither is counted.
+        if (!row || RELEASE_STATES_NOT_GOING_OUT.includes(row.state)) return null;
         title = row.title;
       }
       // A song on a live release is approved at the release (doc 21 #13): it is not this queue's to list, nor counted.

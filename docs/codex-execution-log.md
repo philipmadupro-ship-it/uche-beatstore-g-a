@@ -9416,3 +9416,45 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Gate: 3 checks green on both heads; preview checked on both (`/store` 200, `/library` 307, `/o` and `/api/org` 404 with the flag off).
 - 2026-10-25 — PORTAL-UP (#135, migration 191) was merged into this branch by its own session (`96e9d94`). 191 is not applied; it joins the go-live bundle.
 - 2026-10-25 04:41 UTC — LABEL-54 opened #148 (migration 174, head `7b2a369`). It chose a lock trigger over a snapshot for party identity once a sheet has left draft. `finance.read` now opens Parties for the payee fields. Role `artist` loses legal data on credits, splits and parties.
+- 2026-10-25 — **LABEL-50 Done**: #145 squash-merged (`837ab51`).
+  - One Team and roster window (`TeamRosterEditor`) serves setup wizard step 3 and `/o/<slug>/settings/members`. It adds members (invite or team login), roster artists and collaborators.
+  - Roster rows: "Invite to sign in" (role `artist`, scoped to the existing contact, no duplicate). Collaborator rows: "Invite to a project".
+  - New `GET /api/org/[orgId]/projects` (`share.external`, whole-org viewers only). No migration.
+  - Gate: CI green on `5b92a4f`; preview checked; independent review found nothing blocking, and its regression (no login for an existing roster artist) was fixed before merge.
+- 2026-10-26 — **LABEL-54 Done**: #148 squash-merged (`f7882dd`), migration 174 (not applied).
+  - Party payee data: `tax_id` needs `rights.write` or `finance.read`; `payment_instructions` needs `finance.read` only, so nobody can read them without the finance module (accepted per the spec).
+  - A lock trigger freezes a party's display name and linked account once a non-draft sheet names it. Deleting an auth user is still allowed.
+  - Editing self-correctable fields or relinking resets "confirmed by the person".
+  - Role `artist` loses legal data on credits, splits, parties, party search and readiness reasons (views and RLS).
+  - Gate: CI green on `73b39f8`; preview checked; independent review fixes applied before merge.
+- 2026-10-25 — LABEL-55 (migration 175) started on Sonnet, session_01B78NKcfVzPhjTMAuMGinJ2, PR #150. The next reserved number is 176 (LABEL-57).
+- 2026-10-25 — **Go-live PR #149** (release/label-os-into-main → main) reported.
+  - It contains the bundle `supabase/apply/labelos-go-live.sql` (130–173, 189–192), a production-state rehearsal, both-order safety and sign-out for every org role.
+  - It is under an independent review. 174+ ship as a second paste.
+- 2026-10-25 — **Owner report: library WAV uploads crawl (~20 KB/s) with "Chunk N retrying".**
+  - Cause, reproduced locally: `@aws-sdk/client-s3` 3.1022 presigns `UploadPart` URLs with `x-amz-checksum-crc32` + `x-amz-sdk-checksum-algorithm` (default `requestChecksumCalculation: WHEN_SUPPORTED`). R2 rejects each 8 MiB part after it is sent.
+  - Fix in progress (session_01AZYEkfBpQvzmvfQKBtdN31, branch `fix/upload-slow` → main): set `WHEN_REQUIRED` on the S3 client.
+- Follow-ups noted:
+  - `ui/Dropdown` (z-[200]) renders behind `ui/Modal` (`--z-modal` 240).
+  - Saved-view credit/split filter clauses still key on `rights.read`, so role `artist` can filter by credited names.
+  - eslint-plugin-react-hooks 7.1 needs a code pass.
+- 2026-10-26 — **Upload speed fix live** (#152 → main, `801a3b2`). The r2 S3Client now uses `requestChecksumCalculation`/`responseChecksumValidation: 'WHEN_REQUIRED'`. A presign test guards against the checksum params coming back. The tray's retry text shows the real HTTP status / S3 code and whether the upload is direct or proxied. Waiting on the owner's WAV test.
+- 2026-10-26 — **Label OS go-live merged into main**: #149, merge commit `584b212`.
+  - Gate:
+    - CI green on `a18ec79`; preview checked.
+    - Independent HARD review: safe to merge; bundle byte-identical to its generator; no write to existing producer rows.
+    - Cold rehearsal reported: 63/63 applied twice, fingerprints identical, guard refusals.
+  - Production already has `LABEL_OS_ENABLED=true` (`/o` and `/setup` redirect to login and `/api/org` answers 401 after the deploy). The owner still has to run the go-live.md pre-checks and paste `supabase/apply/labelos-go-live.sql` (130–173, 189–192). 174+ ship in a later rebuilt paste.
+- 2026-10-26 — **LABEL-55 Done**: #150 squash `99f7c49`, migration 175 (not applied).
+  - Adds a New release form, a master chooser (D4-filtered), a per-row master / explicit editor, and release distributor / territories / language.
+  - Single-release routes degrade without 175; writes naming the new fields answer 503 naming 175.
+  - The metadata approval snapshot includes the new fields.
+  - Gate: CI green on `958aca6`; preview checked; independent review fixes M1/M2/L1/L3 applied before merge.
+- 2026-10-26 — LABEL-56 started (session_01EsNbV2xZ8ChWsGtjbL7474, no migration) and LABEL-57 started (session_01DCscGqX56BBP54VFWPemjL, migration 176), both on Sonnet. Next reserved: 177 (LABEL-59).
+- Follow-ups noted:
+  - LABEL-34 export lacks distributor / territories / language.
+  - Deliver does not pre-fill the planned distributor.
+  - The New-release artist list uses main-role artists only.
+  - CI e2e `timeout-minutes` raised 15 → 25 in this status PR: runs take ~12–15 min and were cancelled at the limit (twice on #151, once on #149).
+- 2026-10-27 — **CI e2e timeout raised 15 → 25 min**, on this branch (#151, `98e33d1`) and on main (#153, `1064cef`). Runs take about 12–15 min and were cancelled at the limit without a failing test.
+- 2026-10-27 — **LABEL-56 decisions (orchestrator):** migration **193** approved, the next free number outside the backlog; next free is now 194. A song whose only releases are drafts stays `working` until a release is DELIVERED, not when its gates turn green, because the gates are derived in TS and cannot be mirrored in SQL. Cancelled releases are ignored. The TS rule and its SQL twin (`labelos_track_is_finished`) carry parity tests. Without 193 the old rule applies; 193 ships in the second paste.

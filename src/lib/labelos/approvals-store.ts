@@ -12,6 +12,7 @@
  * `ApprovalsNotReadyError`, which the routes answer as "not set up yet" (GET:
  * `schemaReady: false`; writes: 503), never a raw 500.
  */
+import { RELEASE_STATES_NOT_GOING_OUT } from './releases';
 import { capabilitiesFor } from './capabilities';
 import { objectAccessFor } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
@@ -227,7 +228,7 @@ export async function releasesOfSong(admin: AdminClient, org: string, songId: st
   const rels = await admin.from('releases').select('id, title, state, contact_id').eq('org_id', org).in('id', ids.slice(0, 50));
   if (rels.error) throw new Error(`releases read: ${rels.error.message}`);
   return ((rels.data ?? []) as { id: string; title: string | null; state: string; contact_id: string | null }[])
-    .filter((r) => r.state !== 'cancelled')
+    .filter((r) => !RELEASE_STATES_NOT_GOING_OUT.includes(r.state))
     .map((r) => ({ id: r.id, title: r.title ?? 'Untitled release', contactId: r.contact_id }));
 }
 

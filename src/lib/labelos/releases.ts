@@ -22,7 +22,7 @@ import type { EventSubject } from './activity';
 export const RELEASE_TYPES = ['single', 'ep', 'album', 'mixtape', 'compilation'] as const;
 export type ReleaseType = (typeof RELEASE_TYPES)[number];
 
-export const RELEASE_STATES = ['draft', 'delivered', 'cancelled'] as const;
+export const RELEASE_STATES = ['draft', 'delivered', 'withdrawn', 'cancelled'] as const;
 export type ReleaseState = (typeof RELEASE_STATES)[number];
 
 /** How the recording on a release item may hang off its song (`track_links.relation`, from the song). */
@@ -32,11 +32,25 @@ export const RELEASE_MASTER_RELATIONS = ['master', 'instrumental', 'version'] as
 export const RELEASE_ARTWORK_KINDS = ['artwork', 'photo'] as const;
 
 /**
- * States in which a release does NOT put its songs "on a release" (06 §2.3:
- * a song's current mix is finished when it is selected or on a release). A
- * cancelled release is not going out, so it finishes nothing.
+ * States in which a release puts its songs "on a release" (06 §2.3: a song's
+ * current mix is finished when it is selected or on a release). LABEL-56
+ * (21 §5 row 11): only a release that WENT OUT does. A draft is still being
+ * assembled, so its songs stay working until it is delivered; a cancelled one
+ * is not going out at all. A withdrawn release did go out, so its songs keep
+ * the class they earned. The SQL twin is migration 193's
+ * `labelos_track_is_finished`; `imported_released` (entered as already out)
+ * counts like a delivery. Readiness (the gates) is derived in TS and is NOT
+ * part of this rule: it cannot be mirrored in SQL.
  */
-export const RELEASE_STATES_OFF_RELEASE = ['cancelled'] as const;
+/**
+ * States in which a release is NOT going out any more: cancelled (never was) and withdrawn (pulled back after
+ * delivery, LABEL-56). Nothing is asked of such a release — a song's legal approval is again given on the song, and
+ * its open legal request leaves the queue. (Whether its songs count as "on a release" is the separate rule below:
+ * a withdrawn release DID go out.)
+ */
+export const RELEASE_STATES_NOT_GOING_OUT: readonly string[] = ['cancelled', 'withdrawn'];
+
+export const RELEASE_STATES_ON_RELEASE = ['delivered', 'withdrawn'] as const;
 
 /** A tracklist's ceiling (a box set is well under it); also the reorder body's. */
 export const RELEASE_MAX_ITEMS = 200;
@@ -271,7 +285,7 @@ export function planReorder(items: readonly Positioned[], order: readonly string
  * release_items with their release's state embedded. The SQL twin is the
  * release arm of `labelos_track_is_finished` (144).
  */
-export function countsAsOnRelease(rows: ReadonlyArray<{ releases: { state: string } | null }>): boolean {
-  const off = RELEASE_STATES_OFF_RELEASE as readonly string[];
-  return rows.some((r) => r.releases !== null && !off.includes(r.releases.state));
+export function countsAsOnRelease(rows: ReadonlyArray<{ releases: { state: string; imported_released?: boolean | null } | null }>): boolean {
+  const on = RELEASE_STATES_ON_RELEASE as readonly string[];
+  return rows.some((r) => r.releases !== null && r.releases.state !== 'cancelled' && (on.includes(r.releases.state) || r.releases.imported_released === true));
 }
