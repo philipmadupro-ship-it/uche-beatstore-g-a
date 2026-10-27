@@ -119,6 +119,11 @@ export const VERBS = [
   'split_sheet.circulated',
   'split_sheet.superseded',
   'split_sheet.signed',
+  // Contracts and the org's contract templates (LABEL-57; payloads name fields and kinds, never text or amounts)
+  'contract.created',
+  'contract.updated',
+  'contract.voided',
+  'contract_template.saved',
   // Releases
   'approval.requested',
   'approval.decided',
@@ -301,6 +306,11 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'split_sheet.circulated': 'internal',
   'split_sheet.superseded': 'internal',
   'split_sheet.signed': 'internal',
+  // Contracts are the business side: legal and the owners read them, the creative side does not.
+  'contract.created': 'internal',
+  'contract.updated': 'internal',
+  'contract.voided': 'internal',
+  'contract_template.saved': 'internal',
   'approval.requested': 'internal',
   'approval.decided': 'internal',
   'release.created': 'artist',
@@ -365,6 +375,8 @@ export const SUBJECT_TYPES = [
   'credit',
   'party',
   'split_sheet',
+  'contract',
+  'contract_template',
   'approval',
   'release',
   'connection',

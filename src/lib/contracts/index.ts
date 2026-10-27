@@ -22,6 +22,7 @@ import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
 import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers';
 import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
 import { CONTRACT_TYPE_IDS, type ContractTypeId } from '@/lib/labelos/contract-types';
+import { PARTY_ROLES, TEMPLATE_TYPE_IDS, type PartyRole, type TemplateTypeId } from '@/lib/labelos/contracts/types';
 import { STORE_PLAYBACKS } from '@/lib/labelos/store-listing';
 import { CURSOR_RE } from '@/lib/labelos/activity-feed';
 import { DECISIONS as APPROVAL_DECISIONS, GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
@@ -1841,3 +1842,96 @@ export const OrgTrackMetadataBodySchema = z.object({
   notes: metadataText,
 }).strict();
 export type OrgTrackMetadataBody = z.infer<typeof OrgTrackMetadataBodySchema>;
+
+
+// ── Contracts and contract templates (LABEL-57) ─────────────────────────
+
+const templateTypeEnum = z.enum(TEMPLATE_TYPE_IDS as [TemplateTypeId, ...TemplateTypeId[]]);
+const partyRoleEnum = z.enum(PARTY_ROLES as unknown as [PartyRole, ...PartyRole[]]);
+
+/** PUT /api/org/[orgId]/contract-templates/[type]: save the next version of the org's own template. */
+export const OrgContractTemplateSaveBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    clauses: z
+      .array(
+        z
+          .object({
+            id: z.string().trim().max(40).optional(),
+            heading: z.string().trim().min(1).max(120),
+            body: z.string().max(6000),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(60),
+  })
+  .strict();
+export type OrgContractTemplateSaveBody = z.infer<typeof OrgContractTemplateSaveBodySchema>;
+
+const contractTerritories = z
+  .array(z.string().regex(/^[A-Z]{2}$/, 'Use two-letter country codes (WW for worldwide)'))
+  .min(1)
+  .max(250)
+  .refine((v) => new Set(v).size === v.length, 'List each territory once')
+  .refine((v) => !v.includes('WW') || v.length === 1, 'WW means worldwide on its own')
+  .nullable();
+
+const contractParty = z.object({ party_id: z.string().uuid(), role: partyRoleEnum }).strict();
+const contractFields = z.record(z.string().max(60), z.union([z.string().max(600), z.null()]));
+const contractDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2027-03-01').nullable();
+
+const ContractFields = {
+  title: z.string().trim().min(1).max(200),
+  artist_contact_id: z.string().uuid().nullable(),
+  track_id: z.string().uuid().nullable(),
+  release_id: z.string().uuid().nullable(),
+  effective_date: contractDate,
+  term_months: z.number().int().min(1).max(1200).nullable(),
+  territories: contractTerritories,
+  fields: contractFields,
+  parties: z.array(contractParty).max(20),
+  internal_note: z.string().trim().max(2000).nullable(),
+};
+
+/** POST /api/org/[orgId]/contracts: a draft from a template (the org's latest version of the type, else the platform default). */
+export const OrgContractCreateBodySchema = z
+  .object({
+    type: templateTypeEnum,
+    /** `platform` forces the built-in wording even when the org has its own version. */
+    source: z.enum(['org', 'platform']).optional(),
+    title: ContractFields.title,
+    artist_contact_id: ContractFields.artist_contact_id.optional(),
+    track_id: ContractFields.track_id.optional(),
+    release_id: ContractFields.release_id.optional(),
+    effective_date: ContractFields.effective_date.optional(),
+    term_months: ContractFields.term_months.optional(),
+    territories: ContractFields.territories.optional(),
+    fields: ContractFields.fields.optional(),
+    parties: ContractFields.parties.optional(),
+    internal_note: ContractFields.internal_note.optional(),
+  })
+  .strict();
+export type OrgContractCreateBody = z.infer<typeof OrgContractCreateBodySchema>;
+
+/** PATCH /api/org/[orgId]/contracts/[contractId]: edit a draft, or void the contract. */
+export const OrgContractPatchBodySchema = z
+  .object({
+    title: ContractFields.title.optional(),
+    artist_contact_id: ContractFields.artist_contact_id.optional(),
+    track_id: ContractFields.track_id.optional(),
+    release_id: ContractFields.release_id.optional(),
+    effective_date: ContractFields.effective_date.optional(),
+    term_months: ContractFields.term_months.optional(),
+    territories: ContractFields.territories.optional(),
+    fields: ContractFields.fields.optional(),
+    parties: ContractFields.parties.optional(),
+    internal_note: ContractFields.internal_note.optional(),
+    status: z.literal('void').optional(),
+    void_reason: z.string().trim().max(500).optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' })
+  .refine((b) => !b.void_reason || b.status === 'void', { message: 'A reason goes with voiding' })
+  .refine((b) => b.status !== 'void' || Object.keys(b).every((k) => k === 'status' || k === 'void_reason'), { message: 'Void a contract on its own' });
+export type OrgContractPatchBody = z.infer<typeof OrgContractPatchBodySchema>;

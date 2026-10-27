@@ -146,3 +146,35 @@ describe('mayReadContract', () => {
     expect(mayReadContract(m, row({ partyIds: ['p8'] }))).toBe(false);
   });
 });
+
+import { contractView, formatDate, formatTerm, formatTerritories, renderContext, type ContractRow, type PartyIdentity } from './context';
+
+describe('context and view', () => {
+  const row: ContractRow = {
+    id: 'c', type: 'recording', title: 'T', status: 'sent', template_id: null, template_source: 'platform:recording@1', template_version: 1,
+    clauses: [], artist_contact_id: null, track_id: null, release_id: null, effective_date: '2027-01-01', term_months: 24, territories: ['WW'],
+    fields: { advance: '1' }, internal_note: 'secret note', version: 1, created_by: 'u', voided_at: null, void_reason: 'internal why', created_at: 'a', updated_at: 'b',
+  };
+  const ids = new Map<string, PartyIdentity>([['p1', { id: 'p1', display_name: 'Disp', legal_name: 'Legal Ltd', address: '1 Road' }]]);
+  it('formats', () => {
+    expect(formatDate('2027-01-01')).toBe('1 January 2027');
+    expect(formatDate('nope')).toBeNull();
+    expect(formatTerm(24)).toBe('2 years');
+    expect(formatTerm(13)).toBe('13 months');
+    expect(formatTerm(1)).toBe('1 month');
+    expect(formatTerritories(['WW'])).toBe('Worldwide');
+    expect(formatTerritories(['GB', 'FR'])).toBe('United Kingdom, France');
+    expect(formatTerritories(null)).toBeNull();
+  });
+  it('merges the legal name and address, never anything else', () => {
+    const ctx = renderContext({ row, links: [{ party_id: 'p1', role: 'label', position: 0 }], identities: ids, artistName: 'Nova', songTitle: null, releaseTitle: null });
+    const r = renderClauses([{ id: 'a', heading: 'h', body: '{{party.label}} {{party.label.address}} {{contract.term}} {{song.title}}' }], ctx);
+    expect(r.clauses[0].body).toBe('Legal Ltd 1 Road 2 years [Song title]');
+  });
+  it('hides the business side from a reader without contracts.read', () => {
+    const v = contractView(row, [{ party_id: 'p1', role: 'label', position: 0 }], ids, false);
+    expect(JSON.stringify(v)).not.toMatch(/secret note|internal why|platform:recording|created_by/);
+    expect(v.parties).toEqual([{ party_id: 'p1', role: 'label', name: 'Legal Ltd' }]);
+    expect(contractView(row, [], ids, true).internal_note).toBe('secret note');
+  });
+});

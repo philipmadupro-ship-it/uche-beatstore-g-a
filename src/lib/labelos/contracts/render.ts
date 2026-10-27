@@ -26,7 +26,8 @@ function labelFor(key: string): string {
   if (!k) return key;
   if (k.type === 'field') return k.field.label;
   if (k.type === 'party') return `${PARTY_ROLE_LABELS[k.role]}${k.address ? ' address' : ''}`;
-  return key.replace('.', ' ').replace(/_/g, ' ');
+  const words = key.replace('.', ' ').replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 function valueOf(key: string, ctx: RenderContext): string | null {

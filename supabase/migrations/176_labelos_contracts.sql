@@ -350,7 +350,10 @@ CREATE POLICY contracts_member_read ON public.contracts
 DROP POLICY IF EXISTS contract_parties_member_read ON public.contract_parties;
 CREATE POLICY contract_parties_member_read ON public.contract_parties
   FOR SELECT
-  USING ((org_id, contract_id) IN (SELECT c.org_id, c.id FROM public.contracts c));
+  USING (
+    org_id IN (SELECT mm.org_id FROM public.org_members mm WHERE mm.user_id = (SELECT auth.uid()))
+    AND (org_id, contract_id) IN (SELECT c.org_id, c.id FROM public.contracts c)
+  );
 
 -- ── 6. Atomic create / edit of a draft ───────────────────────────────────
 -- p_id NULL = create. p_row names only the columns to set (edit) or all of
