@@ -201,6 +201,36 @@ SELECT set_config('request.jwt.claims', '{"role":"anon"}', false);
 SELECT public.check_eq('anon reads nothing', public.visible_contracts(), '');
 RESET ROLE;
 
+-- ── 3b. The business columns are unreadable on every API JWT ────────────
+
+SELECT public.check_eq('no table-wide SELECT on contracts for authenticated', has_table_privilege('authenticated', 'public.contracts', 'SELECT'), false);
+SELECT public.check_eq('… nor for anon', has_table_privilege('anon', 'public.contracts', 'SELECT'), false);
+SELECT public.check_eq('service_role keeps the whole table', has_table_privilege('service_role', 'public.contracts', 'SELECT'), true);
+SELECT public.check_eq('the four business columns are not granted',
+  (SELECT count(*)::int FROM unnest(ARRAY['internal_note', 'void_reason', 'created_by', 'voided_by']) c
+   WHERE has_column_privilege('authenticated', 'public.contracts', c, 'SELECT') OR has_column_privilege('anon', 'public.contracts', c, 'SELECT')), 0);
+SELECT public.check_eq('every other column stays readable (the row policy decides who)',
+  (SELECT string_agg(column_name, ',' ORDER BY column_name) FROM information_schema.columns
+   WHERE table_schema = 'public' AND table_name = 'contracts' AND has_column_privilege('authenticated', 'public.contracts', column_name, 'SELECT')),
+  'artist_contact_id,clauses,created_at,effective_date,fields,id,org_id,release_id,status,template_id,template_source,template_version,term_months,territories,title,track_id,type,updated_at,version,voided_at');
+SET ROLE authenticated;
+-- The role artist (Nova, reads her own sent contract) and a producer member who is a party (PRD, reads K1 / K5).
+SELECT public.as_user(:ART);
+SELECT public.check_raises('artist: the internal note by name', $$SELECT internal_note FROM public.contracts$$, 'permission denied');
+SELECT public.check_raises('artist: the void reason', $$SELECT void_reason FROM public.contracts$$, 'permission denied');
+SELECT public.check_raises('artist: who drafted it', $$SELECT created_by FROM public.contracts$$, 'permission denied');
+SELECT public.check_raises('artist: who voided it', $$SELECT voided_by FROM public.contracts$$, 'permission denied');
+SELECT public.check_raises('artist: select * is refused', $$SELECT * FROM public.contracts$$, 'permission denied');
+SELECT public.check_raises('artist: filtering on the note is refused', $$SELECT id FROM public.contracts WHERE internal_note LIKE 'chase%'$$, 'permission denied');
+SELECT public.check_eq('artist: the granted columns still read, her own contract', (SELECT string_agg(title || '/' || status || '/' || (fields::text), ',') FROM public.contracts), 'K1/sent/{"advance": "2500"}');
+SELECT public.as_user(:PRD);
+SELECT public.check_raises('party: the internal note by name', $$SELECT internal_note FROM public.contracts$$, 'permission denied');
+SELECT public.check_raises('party: the whole row as json', $$SELECT to_jsonb(c) FROM public.contracts c$$, 'permission denied');
+SELECT public.check_eq('party: the granted columns still read', (SELECT count(*)::int FROM (SELECT id, title, status, clauses, fields FROM public.contracts) q), 3);
+SELECT public.as_user(:O);
+SELECT public.check_raises('even the owner cannot read the note on their own JWT (the routes serve it)', $$SELECT internal_note FROM public.contracts$$, 'permission denied');
+RESET ROLE;
+
 -- ── 4. No API-role writes ────────────────────────────────────────────────
 
 SET ROLE authenticated;

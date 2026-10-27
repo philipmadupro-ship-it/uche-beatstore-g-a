@@ -18,7 +18,7 @@ import type { PartyRole, TemplateTypeId } from './contracts/types';
 import { inChunks, pageAll, ReadError } from './paged-read';
 import { hasArtistRole } from './roster';
 
-export const CONTRACTS_NOT_READY = 'Contracts are not set up on this database yet (migration 176).';
+export const CONTRACTS_NOT_READY = 'Contracts are not set up on this database yet (migrations 174 and 176).';
 
 export class ContractsNotReadyError extends Error {
   constructor() {
@@ -179,7 +179,11 @@ export async function identitiesOf(admin: AdminClient, org: string, partyIds: re
     partyIds,
     (part, from, to) => admin.from('parties').select('id, display_name, legal_name, address').eq('org_id', org).in('id', part).order('id').range(from, to),
     'party identities',
-  );
+  ).catch((err) => {
+    // `parties.address` is migration 174's: without it contracts cannot name a party's address, and say so (503), not 500.
+    if (err instanceof ReadError && err.raw && (err.raw as { code?: string }).code === '42703') throw new ContractsNotReadyError();
+    return rethrowRead(err);
+  });
   return new Map(rows.map((r) => [r.id, r]));
 }
 

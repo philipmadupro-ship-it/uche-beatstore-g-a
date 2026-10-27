@@ -279,8 +279,14 @@ test('5 · the artist reads her own sent contract only, in the page and on her o
   await page.screenshot({ path: `${D}/artist-contract-390.png`, fullPage: true });
 
   // The same on her own JWT, straight from PostgREST.
-  const own = await readAs(ctx.request, rosterArtist, 'contracts?select=id,title,internal_note');
+  const own = await readAs(ctx.request, rosterArtist, 'contracts?select=id,title,status');
   expect(own.map((r) => r.id)).toEqual([nova.id]);
+  // The business columns are not readable on her JWT at all (column grants), not merely empty.
+  for (const col of ['internal_note', 'void_reason', 'created_by', 'voided_by']) {
+    const res = await ctx.request.fetch(`${REST}/contracts?select=${col}`, { headers: { apikey: ANON_KEY, authorization: `Bearer ${userToken(rosterArtist.id, rosterArtist.email)}` } });
+    expect(res.status(), col).toBeGreaterThanOrEqual(400);
+    expect(await res.text()).not.toContain('Chase counsel');
+  }
   expect(await readAs(ctx.request, rosterArtist, `contracts?select=id&id=eq.${kilo.id}`)).toEqual([]);
   expect(await readAs(ctx.request, rosterArtist, 'contract_templates?select=id')).toEqual([]);
   // The API says the same: Kilo's contract does not exist for her.

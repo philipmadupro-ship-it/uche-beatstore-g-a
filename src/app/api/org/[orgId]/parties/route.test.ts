@@ -358,6 +358,16 @@ describe('LABEL-54: the lock on a name a circulated sheet shows', () => {
   const sheet = (status: string) => ({ id: 'sh-1', org_id: L, track_id: S1, kind: 'composition', version: 1, status });
   const line = (partyId: string) => ({ id: `ln-${partyId}`, split_sheet_id: 'sh-1', org_id: L, track_id: S1, party_id: partyId, role: 'writer', share: 50 });
 
+  it('a party a contract names is not deleted: 409, not a foreign-key 500 (LABEL-57)', async () => {
+    db.tables.contract_parties = [{ contract_id: 'k-1', org_id: L, party_id: PU, role: 'label', position: 0 }];
+    const res = await call('DELETE', OWN, L, PU);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/contract/);
+    expect(db.tables.parties.some((r) => r.id === PU)).toBe(true);
+    db.tables.contract_parties = [];
+    expect((await call('DELETE', OWN, L, PU)).status).toBe(200);
+  });
+
   it('a draft sheet does not lock: rename and re-link are allowed', async () => {
     db.tables.split_sheets = [sheet('draft')];
     db.tables.split_lines = [line(PN), line(PP)];

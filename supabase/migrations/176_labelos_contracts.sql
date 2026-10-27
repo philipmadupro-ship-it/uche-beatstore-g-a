@@ -302,6 +302,12 @@ CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE O
   FOR EACH ROW EXECUTE FUNCTION public.labelos_org_rows_service_only('self', 'org_id');
 
 -- ── 5. Reads ─────────────────────────────────────────────────────────────
+-- The business side of a contract is not readable on ANY API role's JWT. A
+-- party or a roster artist reads their own contract through RLS, and RLS is
+-- row-level: without a column grant they could also read the internal note,
+-- the void reason and who drafted / voided it. The 174 pattern: no table-wide
+-- SELECT, a grant on every other column. The routes (service role) serve
+-- `internal_note` and `void_reason` to `contracts.read` only (contractView).
 -- The caller's own contracts: ones that have left draft and name them, in an
 -- org licensed for contracts. One call, no argument that varies by row.
 
@@ -339,6 +345,11 @@ $$;
 ALTER FUNCTION public.labelos_my_contracts() OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.labelos_my_contracts() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.labelos_my_contracts() TO authenticated, anon;
+
+REVOKE SELECT ON public.contracts FROM anon, authenticated;
+GRANT SELECT (id, org_id, type, title, status, template_id, template_source, template_version, clauses, artist_contact_id,
+              track_id, release_id, effective_date, term_months, territories, fields, version, created_at, updated_at, voided_at)
+  ON public.contracts TO authenticated, anon;
 
 DROP POLICY IF EXISTS contract_templates_member_read ON public.contract_templates;
 CREATE POLICY contract_templates_member_read ON public.contract_templates
