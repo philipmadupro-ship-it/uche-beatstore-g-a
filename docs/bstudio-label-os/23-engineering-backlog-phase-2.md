@@ -157,21 +157,21 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: all seven gates are satisfiable by a human in the UI; `label-org-release-board.spec.ts` rewritten so ISRC and master are set through the UI, not the service key; "Deliver anyway" stays owner-only and audited.
 
 ### LABEL-56 — Delivered-release lifecycle and draft-song class
-**Priority:** P2 · **Risk:** Low · **Deps:** 55 · **Status:** In Progress (session_01EsNbV2xZ8ChWsGtjbL7474)
-- A delivered release cannot be cancelled; it can be **withdrawn** (audited, unlists from the store, keeps the record); fix the DELETE message. Songs on a draft release stay `working` (not `finished`) until the release is ready: update `recording-kind`/org-audio class and tests.
+**Priority:** P2 · **Risk:** Low · **Deps:** 55 · **Status:** Done — #156, squash `4f4f6424389478645fd7172b55b03caff77a4943` (2026-10-27). Migration 193. A song whose only releases are drafts stays `working` until a release is delivered (or withdrawn, or imported as already out); cancelled releases never count
+- A delivered release cannot be cancelled; it can be **withdrawn** (audited, unlists from the store, keeps the record); fix the DELETE message. Songs on a draft release stay `working` (not `finished`) until the release is delivered (decided 2026-10-27: gates are derived in TS and cannot be mirrored in SQL): update `recording-kind`/org-audio class and tests.
 
 ---
 
 ## D. Contracts
 
 ### LABEL-57 — Contract model and templates (all types)
-**Priority:** P0 · **Risk:** High · **Deps:** 49, 54 · **Migration:** 176 · **Status:** In Progress (session_01DCscGqX56BBP54VFWPemjL)
+**Priority:** P0 · **Risk:** High · **Deps:** 49, 54 · **Migration:** 176 · **Status:** Done — #154, squash `a85241956cdf4e8e987c7b046685cea6a23c525e` (2026-10-27). Migration 176. `internal_note`, `void_reason`, `created_by` and `voided_by` have no column grant to API roles
 - Tables `contract_templates` (platform defaults + org-editable copies), `contracts` (type, parties, artist/song/release links, status `draft|sent|signed|void`, term, territory, fields jsonb, version), same-org triggers, RLS keyed on `contract.read` + artist scope (an artist reads only their own contracts).
 - **Template for every type:** recording agreement, distribution, licence (sync/sample), 360, producer agreement / work-for-hire, beat licence/lease, feature, co-writing/co-publishing, management, collaboration, session/engineer, work-made-for-hire, mixing/mastering, NDA. Each template = clauses with merge fields (parties, advance, royalty rate, term, territory, splits) in `lib/labelos/contracts/templates/*`; **text is placeholder legal wording marked "not legal advice, have counsel review"**; the owner/legal replace it in the template editor.
 - Acceptance: every type has a template that renders with sample data; two-org and two-scope tests; template editor (`contract.write`) versions templates.
 
 ### LABEL-58 — Contract editor and document generation
-**Priority:** P0 · **Risk:** Medium · **Deps:** 57 · **Status:** Not Started
+**Priority:** P0 · **Risk:** Medium · **Deps:** 57 · **Status:** In Progress (session_019AUhHbkT7VPBpTf7EocUCZ, no migration)
 - Create a contract from a template for an artist/song/release; fill merge fields (with suggestions from parties and splits); live preview; generate HTML/PDF stored as a restricted `project_assets` row; clause-level edits tracked in versions; "send for signature" moves to `sent`.
 - Acceptance: PDF contains the filled values (test parses text); restricted download audited; 390 px usable.
 
@@ -253,7 +253,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## I. Consent and playback
 
 ### LABEL-71 — Artist consent on store listing + showcase
-**Priority:** P0 · **Risk:** High · **Deps:** 55 · **Migration:** 186 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** 55 · **Migration:** 186 · **Status:** In Progress (session_019AUhHcTrzenYfjeqYpuTqL)
 - `listing_consents(release_id|showcase_id, artist_contact_id, state, decided_by, decided_at)`. The label lists a release (or a "greatest moments" showcase of released songs) → every credited artist gets a notification (new closed-union kind `listing_proposed`) → **any artist's "no" withdraws it and it cannot be re-listed without their yes**; the store-owner list "Releases from connected artists" with Unlist; consent text on the connection-accept screen.
 - Acceptance: a listing never serves until no artist has said no (state machine in `lib/labelos/store-consent.ts`); notification test; coverage and external-matrix updated.
 
