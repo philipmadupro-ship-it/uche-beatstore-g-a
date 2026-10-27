@@ -4,10 +4,15 @@
  * (LABEL-71; owner decisions A and E, doc 21 §5.1, doc 22 §5).
  *
  * WHO. Only an account that stands for a credited artist of THIS release
- * (`answerableFor`: a member whose role is `artist` scoped to that artist, or
- * the account of a party linked to them). Not a capability: a label's A&R
- * scoped to the same artist is not the artist, an owner is not the artist, and
- * the body names no artist, so nobody can answer for somebody else. Anyone
+ * (`answerableFor`: the owner of an artist org for its artist, a member whose
+ * role is `artist` scoped to that artist, or the account of a party linked to
+ * them that CONFIRMED the party itself — a link a rights writer typed in proves
+ * nothing). Not a capability: a label's A&R scoped to the same artist is not
+ * the artist, a manager is not the artist, and the body names no artist.
+ * Accepted deviation: an admin with `members.manage` can invite an address they
+ * control as role `artist` scoped to the contact; that account then answers.
+ * It needs an invitation the invitee accepts with a verified email and leaves
+ * member audit events (`invitation.created`, `member.joined`). Anyone
  * else — a stranger, an external member, a member with no say on this release
  * — gets the same 404 as a release that does not exist.
  *
@@ -38,7 +43,7 @@ import { recordEvent } from '@/lib/labelos/activity';
 import { releaseEventSubject } from '@/lib/labelos/releases';
 import { loadListingRelease, readPlayback } from '@/lib/labelos/store-listing-store';
 import { planDecision } from '@/lib/labelos/store-consent';
-import { NEEDS_186, answerableFor, insertProposals, loadCreditedArtists, readConsents, restoreConsent, setConsent, takeOffStore } from '@/lib/labelos/store-consent-store';
+import { NEEDS_186, answerableFor, enforceRefusal, insertProposals, loadCreditedArtists, readConsents, restoreConsent, setConsent, takeOffStore } from '@/lib/labelos/store-consent-store';
 import { deletePromotedPreviews } from '@/lib/storage/store-release-media';
 
 export const runtime = 'nodejs';
@@ -111,6 +116,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
             // The unsafe direction: put the row back as it was.
             const back = await restoreConsent(admin, org, row);
             if (back.error) log.error('consent put-back FAILED: a yes stands without its event', { releaseId, error: back.error.message });
+            // Undone to a no (no → yes → no): the release may have been listed in the gap — take it off again.
+            else if (row.state === 'no') {
+              const playback = await readPlayback(admin, release.id);
+              await enforceRefusal(admin, org, release.id, playback.schemaReady).catch((e) => log.error('refusal enforcement after put-back failed', { releaseId, error: errorMessage(e) }));
+            }
             return json(500, { error: 'Could not record your answer; nothing was changed. Try again.' });
           }
           unrecorded = true;

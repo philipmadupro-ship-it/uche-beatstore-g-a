@@ -25,6 +25,9 @@ const STAFF = u(11);
 const STRANGER = u(12);
 const AO = u(13);
 const MGR = u(14);
+const WRITER = u(15);
+const PA_ID = 'a0000000-0000-4000-8000-0000000000a1';
+const PF = 'a0000000-0000-4000-8000-0000000000a2';
 const NOVA = '30000000-0000-4000-8000-0000000000c1';
 const FEAT = '30000000-0000-4000-8000-0000000000c2';
 const ENG = '30000000-0000-4000-8000-0000000000c3';
@@ -152,6 +155,7 @@ beforeEach(() => {
         member(AO, 'owner', [], A),
         { ...member(AR, 'member', [], P), cap_grants: ['catalog.read', 'catalog.write', 'release.write'] },
         member(AU1, 'member', [], P),
+        { ...member(WRITER, 'member', [], P), cap_grants: ['catalog.read', 'rights.write'] },
         { ...member(MGR, 'admin', [], A) },
         member(STAFF, 'member', ['a_and_r'], P, { scope: 'artists', cap_grants: ['catalog.read'] }),
       ],
@@ -159,7 +163,8 @@ beforeEach(() => {
       org_connections: [{ id: 'k1', label_org_id: L, artist_org_id: A, status: 'active' }],
       track_links: [],
       song_beats: [],
-      parties: [{ id: 'pa', org_id: P, contact_id: NOVA, user_id: AU1, display_name: 'Nova' }],
+      // Nova's account confirmed this party itself (LABEL-54's stamp): only then does the link stand for her.
+      parties: [{ id: PA_ID, org_id: P, kind: 'person', contact_id: NOVA, user_id: AU1, display_name: 'Nova', details_confirmed_by: AU1, details_confirmed_at: '2026-10-01T00:00:00Z' }],
       contacts: [
         { id: NOVA, org_id: P, user_id: null, name: 'Nova', category: 'artist' },
         { id: FEAT, org_id: P, user_id: null, name: 'Feat', category: 'rapper' },
@@ -200,6 +205,8 @@ const loaders: Record<string, () => Promise<Record<string, Handler>>> = {
   consents: () => import('../../../consents/route') as unknown as Promise<Record<string, Handler>>,
   connected: () => import('../../../connected-releases/route') as unknown as Promise<Record<string, Handler>>,
   veto: () => import('../../../connected-releases/[releaseId]/route') as unknown as Promise<Record<string, Handler>>,
+  parties: () => import('../../../parties/route') as unknown as Promise<Record<string, Handler>>,
+  party: () => import('../../../parties/[partyId]/route') as unknown as Promise<Record<string, Handler>>,
   publicDetail: () => import('@/app/api/store/releases/[id]/route') as unknown as Promise<Record<string, Handler>>,
   publicList: () => import('@/app/api/store/releases/route') as unknown as Promise<Record<string, Handler>>,
   publicAudio: () => import('@/app/api/store/releases/[id]/audio/[itemId]/route') as unknown as Promise<Record<string, Handler>>,
@@ -266,7 +273,7 @@ describe('listing asks the credited artists', () => {
   });
 
   it('a credit through a party resolves to the party’s contact', async () => {
-    db.tables.parties.push({ id: 'p1', org_id: P, contact_id: ENG, user_id: null, display_name: 'X' });
+    db.tables.parties.push({ id: 'p1', org_id: P, kind: 'person', contact_id: ENG, user_id: null, display_name: 'X' });
     db.tables.contacts.find((c) => c.id === ENG)!.category = 'topliner';
     db.tables.track_collaborators.push(credit('c5', t(1), null, 'confirmed', 'p1'));
     await list(AR, P, RP, { listed: true });
@@ -607,6 +614,117 @@ describe('review fixes', () => {
     broken = new Set();
     expect(res.status).toBe(500);
     expect(row(RP).store_listed).toBe(false);
+  });
+});
+
+describe('who can stand for an artist: a link someone typed in is not enough', () => {
+  beforeEach(async () => {
+    await list(AR, P, RP, { listed: true });
+  });
+  const party = (method: string, as: string, params: Record<string, string>, body: unknown) => call(params.partyId ? 'party' : 'parties', method, as, params, body);
+
+  it('a rights writer who creates a party linking THEMSELVES to the artist cannot answer for them', async () => {
+    const made = await party('POST', WRITER, { orgId: P }, { display_name: 'Sneaky', contact_id: FEAT, user_id: WRITER });
+    expect(made.status, await made.clone().text()).toBe(201);
+    expect((await decide(WRITER, P, RP, 'no')).status).toBe(404);
+    expect((await decide(WRITER, P, RP, 'yes')).status).toBe(404);
+    expect(consentOf(RP, FEAT)!.state).toBe('proposed');
+    expect(((await (await call('consents', 'GET', WRITER, { orgId: P })).json()) as { consents: unknown[] }).consents).toEqual([]);
+  });
+
+  it('…nor by editing an existing party to point at themselves', async () => {
+    db.tables.parties.push({ id: PF, org_id: P, kind: 'person', contact_id: FEAT, user_id: null, display_name: 'Feat' });
+    const res = await party('PATCH', WRITER, { orgId: P, partyId: PF }, { user_id: WRITER });
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(db.tables.parties.find((x) => x.id === PF)!.user_id).toBe(WRITER);
+    expect((await decide(WRITER, P, RP, 'no')).status).toBe(404);
+    expect(consentOf(RP, FEAT)!.state).toBe('proposed');
+  });
+
+  it('a link the account confirmed itself answers', async () => {
+    expect((await decide(AU1, P, RP, 'no')).status).toBe(200);
+  });
+
+  it('re-linking the account clears the confirmation, so the old account stops standing for the artist', async () => {
+    const res = await party('PATCH', WRITER, { orgId: P, partyId: PA_ID }, { user_id: STAFF });
+    expect(res.status, await res.clone().text()).toBe(200);
+    const row = db.tables.parties.find((x) => x.id === PA_ID)!;
+    expect(row.details_confirmed_at ?? null).toBeNull();
+    for (const who of [AU1, STAFF]) expect((await decide(who, P, RP, 'no')).status).toBe(404);
+  });
+
+  it('moving a confirmed party to another contact is refused for a writer (and an edit that clears it is not a way round)', async () => {
+    const res = await party('PATCH', WRITER, { orgId: P, partyId: PA_ID }, { contact_id: FEAT });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('party_confirmed');
+    expect(db.tables.parties.find((x) => x.id === PA_ID)).toMatchObject({ contact_id: NOVA, details_confirmed_by: AU1 });
+    expect((await decide(AU1, P, RP, 'yes')).status).toBe(200);
+  });
+
+  it('an unconfirmed party does not even get the notification: that artist is unreachable', async () => {
+    db.tables.parties[0].details_confirmed_at = null;
+    db.tables.notifications.length = 0;
+    await list(AR, P, RP, { listed: false });
+    const res = await list(AR, P, RP, { listed: true });
+    expect((await res.json()).consent).toMatchObject({ unreachable: 2, notified: 0 });
+    expect(db.tables.notifications).toHaveLength(0);
+  });
+});
+
+describe('put-backs never re-open a refused release; caches never hold a governed one', () => {
+  it('a listing whose event cannot be written, after an artist said no in the gap, ends off the store', async () => {
+    await list(AR, P, RP, { listed: true });
+    // Already listed; an artist refuses while a later save of the listing cannot be recorded.
+    promote.mockImplementation(async (_o: string, _r: string, items: { masterTrackId: string }[]) => items.map((i) => i.masterTrackId));
+    const orig = mem.client.from.bind(mem.client);
+    mem = { ...mem, client: { ...mem.client, from: (tb: string) => {
+      if (tb === 'activity_events') {
+        // The refusal lands just before the audit write, which then fails.
+        const ins = (row: Record<string, unknown>) => {
+          if (row.verb === 'release.store_listed') db.tables.listing_consents.find((c) => c.artist_contact_id === NOVA)!.state = 'no';
+          const res = { data: null, error: { message: 'insert failed' } };
+          const q: Record<string, unknown> = { select: () => q, single: async () => res, maybeSingle: async () => res };
+          return q;
+        };
+        return { insert: ins };
+      }
+      return orig(tb);
+    } } } as typeof mem;
+    const res = await list(AR, P, RP, { listed: true, playback: 'preview' });
+    expect(res.status).toBe(500);
+    expect(row(RP).store_listed).toBe(false);
+  });
+
+  it('a yes undone to a no after the release was listed in the gap is taken off again', async () => {
+    await list(AR, P, RP, { listed: true });
+    await decide(AU1, P, RP, 'no'); // off the store
+    expect(row(RP).store_listed).toBe(false);
+    // Another artist (Feat) has no account; the lister can list again only once Nova says yes. Simulate the gap:
+    failVerb = 'listing.consent_decided';
+    const orig = mem.client.from.bind(mem.client);
+    mem = { ...mem, client: { ...mem.client, from: (tb: string) => {
+      if (tb === 'activity_events') {
+        return { insert: (r: Record<string, unknown>) => {
+          if (r.verb === 'listing.consent_decided') row(RP).store_listed = true; // someone listed it meanwhile
+          const res = { data: null, error: { message: 'insert failed' } };
+          const q: Record<string, unknown> = { select: () => q, single: async () => res, maybeSingle: async () => res };
+          return q;
+        } };
+      }
+      return orig(tb);
+    } } } as typeof mem;
+    expect((await decide(AU1, P, RP, 'yes')).status).toBe(500);
+    expect(consentOf(RP, NOVA)!.state).toBe('no');
+    expect(row(RP).store_listed).toBe(false);
+  });
+
+  it('a release an artist has a say on is never cached; one without consent rows keeps the store’s window', async () => {
+    Object.assign(row(RP), { store_listed: true, store_listed_at: '2026-10-10T00:00:00Z' });
+    expect((await publicDetail(RP)).headers.get('cache-control')).toMatch(/s-maxage=30/);
+    db.tables.listing_consents.push({ id: 'g', org_id: P, release_id: RP, artist_contact_id: NOVA, state: 'proposed', proposed_by: AR, proposed_at: '2026-10-01', decided_by: null, decided_at: null });
+    expect((await publicDetail(RP)).headers.get('cache-control')).toBe('no-store');
+    expect((await publicAudio(RP, I1)).headers.get('cache-control')).toBe('no-store');
+    expect((await call('publicList', 'GET', null, {})).headers.get('cache-control')).toBe('no-store');
   });
 });
 

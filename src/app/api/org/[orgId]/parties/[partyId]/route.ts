@@ -101,6 +101,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (locked) return json(409, { error: locked, code: 'party_locked' });
     }
     if (parsed.data.contact_id && !(await contactInOrg(admin, org, parsed.data.contact_id))) return json(404, { error: 'Contact not found' });
+    // LABEL-71: a confirmed party stands for its artist in store consent. Moving it to another contact would hand the
+    // confirmed account someone else's say, so only that account (who can re-confirm) may; a change clears the stamp.
+    if (current.details_confirmed_at && parsed.data.contact_id !== undefined && parsed.data.contact_id !== current.contact_id && current.user_id !== access.userId) {
+      return json(409, { error: 'The person this party names confirmed it, so it cannot be linked to another contact without them.', code: 'party_confirmed' });
+    }
     if (parsed.data.user_id && !(await accountBelongsToOrg(admin, org, parsed.data.user_id))) {
       return json(400, { error: 'That account is not a member of this organization or one of its projects' });
     }

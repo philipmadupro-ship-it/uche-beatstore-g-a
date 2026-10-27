@@ -46,7 +46,7 @@ import { recordEvent } from '@/lib/labelos/activity';
 import { releaseEventSubject } from '@/lib/labelos/releases';
 import { planList, planUnlist, releasedPublicly, type ListingFacts } from '@/lib/labelos/store-listing';
 import { proposalRecipients, summarizeConsents, planProposal, answerableContacts } from '@/lib/labelos/store-consent';
-import { blockedByConsent, insertProposals, loadAccountLinks, loadCreditedArtists, readConsents, readVeto } from '@/lib/labelos/store-consent-store';
+import { blockedByConsent, enforceRefusal, insertProposals, loadAccountLinks, loadCreditedArtists, readConsents, readVeto } from '@/lib/labelos/store-consent-store';
 import { askArtistsAboutListing } from '@/lib/labelos/store-consent-notify';
 import { askerName } from '@/lib/labelos/tasks-store';
 import {
@@ -313,6 +313,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
       .eq('id', release.id)
       .eq('org_id', org);
     if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
+    // The put-back restores `store_listed` as it was; if an artist said no meanwhile, "as it was" must not re-open it.
+    await enforceRefusal(admin, org, release.id, current.schemaReady).catch((e) => log.error('refusal enforcement after put-back failed', { releaseId, error: errorMessage(e) }));
   };
   const listedAt = release.store_listed_at ?? now.toISOString();
   // Guarded: the statement itself repeats what the plan judged (state, import flag and release date as
@@ -378,6 +380,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
       .eq('id', release.id)
       .eq('org_id', org);
+    await enforceRefusal(admin, org, release.id, current.schemaReady).catch((e) => log.error('refusal enforcement after put-back failed', { releaseId, error: errorMessage(e) }));
     if (revertError) {
       // A public listing with no event: say so loudly. The release stays listed until an owner unlists it.
       log.error('list put-back FAILED: release is listed without its event', { releaseId, error: revertError.message });

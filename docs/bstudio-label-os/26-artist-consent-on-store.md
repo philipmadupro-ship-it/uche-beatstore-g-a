@@ -25,12 +25,27 @@ releases cannot be listed yet):
 - **Artist org**: its **owners** stand for its one roster artist (D1: the artist is the org). Admins and members
   (a manager) do not — a manager lists, the artist is asked.
 - **Any org**: the account of a **party** linked to the artist contact (`parties.contact_id` + `parties.user_id`),
-  while that account is a member of the org.
+  while that account is a member of the org **and has confirmed the party itself** (`details_confirmed_by` = the
+  account, stamped by `/parties/[id]/confirm`). A rights writer can type any account onto a party, so the bare link
+  proves nothing. Changing a party's `contact_id` or `user_id` clears the stamp (route + migration 174's trigger for
+  `user_id`), and a writer cannot move a confirmed party to another contact (409 `party_confirmed`).
+  *Residual (accepted):* a rights writer who links THEMSELVES can also confirm themselves; both leave events.
 - **Label org** (future-proof): a member whose role is `artist`, scoped to the contact.
+
+*Accepted deviation:* an admin with `members.manage` can invite an address they control as role `artist` scoped to the
+contact (needs an invitation the invitee accepts with a verified email; leaves `invitation.created` / `member.joined`).
+An artist whose account later leaves the org leaves a refusal nobody can lift (known; the store owner can delete the
+release or ask the artist back).
 
 An artist with **no such account is unreachable**: nobody can be told and nobody can answer for them. The listing
 says so ("1 has no account in this organization, so nobody could be told"); the event carries the count. **No email
 address is read off a contact card and no email path is invented.** This is the main product gap — see the PR.
+
+## Caches
+
+A release an artist has a say on (any consent row) or the owner vetoed is served `Cache-Control: no-store` (detail,
+audio, cover, and the list when it holds one), so a no is never held by an edge cache. Releases without consent rows
+keep the store's usual window (`s-maxage=30`, swr 60).
 
 ## Notification
 

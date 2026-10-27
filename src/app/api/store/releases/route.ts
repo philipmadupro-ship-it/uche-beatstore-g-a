@@ -28,7 +28,8 @@ export async function GET() {
     const admin = createServiceClient();
     const list = await loadPublicReleaseList(admin, new Date());
     const res = NextResponse.json({ releases: list.map((l) => publicReleaseTile(l.row, l.trackCount)) });
-    res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+    // A release an artist has a say on is taken off the store the moment they say no: nothing of it may sit in a cache.
+    res.headers.set('Cache-Control', list.consentGoverned ? 'no-store' : 'public, s-maxage=30, stale-while-revalidate=60');
     return res;
   } catch (err) {
     log.error('list failed', { error: errorMessage(err) });

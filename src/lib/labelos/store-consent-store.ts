@@ -73,16 +73,18 @@ export async function readVeto(admin: any, releaseId: string): Promise<{ vetoed:
  * are chunked and paged, and a failed read throws. Before migration 186 there
  * is nothing to consult: both sets come back empty.
  */
-export async function refusalsAndVetoes(admin: any, releaseIds: readonly string[]): Promise<{ refused: Set<string>; vetoed: Set<string> }> {
+export async function refusalsAndVetoes(admin: any, releaseIds: readonly string[]): Promise<{ refused: Set<string>; vetoed: Set<string>; governed: Set<string> }> {
   const ids = cleanIds(releaseIds);
   const refused = new Set<string>();
   const vetoed = new Set<string>();
-  if (ids.length === 0) return { refused, vetoed };
+  /** Releases an artist has a say on (any consent row) or the owner vetoed: their public answers must not sit in a cache. */
+  const governed = new Set<string>();
+  if (ids.length === 0) return { refused, vetoed, governed };
   try {
-    const [no, veto] = await Promise.all([
-      inChunks<{ release_id: string }>(
+    const [rows, veto] = await Promise.all([
+      inChunks<{ release_id: string; state: string }>(
         ids,
-        (part, from, to) => admin.from('listing_consents').select('release_id').in('release_id', part).eq('state', 'no').order('release_id', { ascending: true }).order('artist_contact_id', { ascending: true }).range(from, to),
+        (part, from, to) => admin.from('listing_consents').select('release_id, state').in('release_id', part).order('release_id', { ascending: true }).order('artist_contact_id', { ascending: true }).range(from, to),
         'consent read',
       ),
       inChunks<{ release_id: string }>(
@@ -91,15 +93,21 @@ export async function refusalsAndVetoes(admin: any, releaseIds: readonly string[
         'veto read',
       ),
     ]);
-    for (const r of no) refused.add(r.release_id.toLowerCase());
-    for (const r of veto) vetoed.add(r.release_id.toLowerCase());
+    for (const r of rows) {
+      governed.add(r.release_id.toLowerCase());
+      if (r.state === 'no') refused.add(r.release_id.toLowerCase());
+    }
+    for (const r of veto) {
+      vetoed.add(r.release_id.toLowerCase());
+      governed.add(r.release_id.toLowerCase());
+    }
   } catch (err) {
     const raw = (err as { raw?: unknown } | null)?.raw;
     // Before 186 there is nothing to consult: the store behaves as it did.
-    if (raw && isMissingSchema(raw)) return { refused: new Set(), vetoed: new Set() };
+    if (raw && isMissingSchema(raw)) return { refused: new Set(), vetoed: new Set(), governed: new Set() };
     throw err;
   }
-  return { refused, vetoed };
+  return { refused, vetoed, governed };
 }
 
 /**
@@ -181,9 +189,9 @@ export async function loadAccountLinks(admin: any, orgId: string, contactIds: re
     (part, from, to) => admin.from('member_artist_scopes').select('user_id, contact_id').eq('org_id', orgId).in('contact_id', part).order('user_id', { ascending: true }).order('contact_id', { ascending: true }).range(from, to),
     'artist scopes',
   );
-  const parties = await inChunks<{ id: string; contact_id: string | null; user_id: string | null }>(
+  const parties = await inChunks<{ id: string; contact_id: string | null; user_id: string | null; details_confirmed_at: string | null; details_confirmed_by: string | null }>(
     ids,
-    (part, from, to) => admin.from('parties').select('id, contact_id, user_id').eq('org_id', orgId).in('contact_id', part).not('user_id', 'is', null).order('id', { ascending: true }).range(from, to),
+    (part, from, to) => admin.from('parties').select('id, contact_id, user_id, details_confirmed_at, details_confirmed_by').eq('org_id', orgId).in('contact_id', part).not('user_id', 'is', null).not('details_confirmed_at', 'is', null).order('id', { ascending: true }).range(from, to),
     'party accounts',
   );
   const userIds = [...new Set([...scopes.map((s) => s.user_id), ...parties.map((p) => p.user_id).filter((u): u is string => !!u)])];
@@ -226,7 +234,8 @@ export async function answerableFor(admin: any, orgId: string, userId: string): 
     ),
     inChunks<{ contact_id: string | null }>(
       [userId],
-      (part, from, to) => admin.from('parties').select('contact_id').eq('org_id', orgId).in('user_id', part).not('contact_id', 'is', null).order('id', { ascending: true }).range(from, to),
+      // Only a party this account confirmed ITSELF (its own act, cleared when the link changes) stands for the artist.
+      (part, from, to) => admin.from('parties').select('contact_id, details_confirmed_by').eq('org_id', orgId).in('user_id', part).eq('details_confirmed_by', userId).not('details_confirmed_at', 'is', null).not('contact_id', 'is', null).order('id', { ascending: true }).range(from, to),
       'party accounts',
     ),
   ]);
@@ -377,4 +386,15 @@ export async function loadListedReleasesOfArtist(admin: any, orgId: string, cont
     'listed releases of the credits',
   );
   return [...new Set([...own, ...viaCredits].map((r) => r.id.toLowerCase()))];
+}
+
+/**
+ * After any put-back that could have re-opened a release an artist has since refused (a listing whose event
+ * could not be written, a yes that was undone to a no), take it off the store again. Refusals only: a veto lives
+ * in the store owner's own rows and never needs the artist org's flag written.
+ */
+export async function enforceRefusal(admin: any, orgId: string, releaseId: string, playbackColumn: boolean): Promise<boolean> {
+  const { refused } = await refusalsAndVetoes(admin, [releaseId]);
+  if (!refused.has(releaseId.toLowerCase())) return false;
+  return (await takeOffStore(admin, orgId, releaseId, playbackColumn)).changed;
 }
