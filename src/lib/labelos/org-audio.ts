@@ -12,8 +12,9 @@
  *    `tracks.beat_track_id`): the relation decides — a song-type file linked
  *    as a song's master is a master;
  *  - a song's own audio is also its current `mix` — finished only when the
- *    song is `selected` or on a release that is not cancelled (LABEL-16;
- *    `on_release`, the twin of migration 144's labelos_track_is_finished) — UNLESS a song
+ *    song is `selected` or on a release that went out — delivered, withdrawn or
+ *    imported, never a draft (LABEL-16, LABEL-56; `on_release`, the twin of
+ *    migration 193's labelos_track_is_finished) — UNLESS a song
  *    vouches for the file as its master / instrumental, which is what such a
  *    file is (a master is usually uploaded as a song-type file);
  *  - with no song link, the track type alone (a beat is a `beat_source`; a
@@ -76,7 +77,7 @@ export function parseOrgAudioVariant(raw: string | null | undefined): OrgAudioVa
 export interface OrgAudioTrack {
   type: string | null;
   song_stage: string | null;
-  /** The song is an item of a release that is not cancelled (lib/labelos/releases#countsAsOnRelease). */
+  /** The song is an item of a release that went out — delivered, withdrawn or imported; NOT a draft (lib/labelos/releases#countsAsOnRelease). */
   on_release?: boolean;
 }
 

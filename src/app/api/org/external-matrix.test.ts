@@ -447,6 +447,26 @@ describe('LABEL-33: delivering a release is not an external member\'s', () => {
   }
 });
 
+describe('LABEL-56: withdrawing a delivered release is not an external member\'s', () => {
+  const route = '[orgId]/releases/[releaseId]/withdraw/route.ts';
+
+  it('the route exists and is not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(externalRouteKeys()).not.toContain(`${route}:POST`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: withdrawing is 403/404, the release stays delivered and nothing is written or recorded`, async () => {
+      db.tables.releases[0].state = 'delivered';
+      const res = await call(route, 'POST', user, { body: { note: 'let me' } });
+      expect([403, 404], `answered ${res.status}`).toContain(res.status);
+      expect(db.tables.releases[0].state).toBe('delivered');
+      expect(db.tables.activity_events ?? []).toEqual([]);
+      expect(mem.writes).toEqual([]);
+    });
+  }
+});
+
 describe('LABEL-42: putting a release on the store is not an external member\'s', () => {
   const route = '[orgId]/releases/[releaseId]/store/route.ts';
 

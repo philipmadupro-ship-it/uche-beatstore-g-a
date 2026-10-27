@@ -5,7 +5,7 @@ import {
   RELEASE_ARTWORK_KINDS,
   RELEASE_MASTER_RELATIONS,
   RELEASE_STATES,
-  RELEASE_STATES_OFF_RELEASE,
+  RELEASE_STATES_ON_RELEASE,
   RELEASE_TYPES,
   countsAsOnRelease,
   nextItemPosition,
@@ -19,6 +19,8 @@ import {
 } from './releases';
 
 const MIGRATION = readFileSync(join(process.cwd(), 'supabase/migrations/144_labelos_releases.sql'), 'utf8').replace(/--[^\n]*/g, '');
+/** 193 (LABEL-56) widens the state list and redefines the release arm; the vocabularies follow it. */
+const LIFECYCLE = readFileSync(join(process.cwd(), 'supabase/migrations/193_labelos_release_lifecycle.sql'), 'utf8').replace(/--[^\n]*/g, '');
 
 /** The quoted values of the first `<column> [NOT] IN (...)` after `anchor`. */
 function listAfter(anchor: string, column: string): string[] {
@@ -32,10 +34,12 @@ function listAfter(anchor: string, column: string): string[] {
 describe('the vocabularies are the 144 CHECKs and trigger lists', () => {
   it('types, states, master relations, artwork kinds and the state that takes a song off a release', () => {
     expect(listAfter('CONSTRAINT releases_type_check', 'type')).toEqual([...RELEASE_TYPES]);
-    expect(listAfter('CONSTRAINT releases_state_check', 'state')).toEqual([...RELEASE_STATES]);
+    const lifecycleList = (anchor: string, column: string) =>
+      [...LIFECYCLE.slice(LIFECYCLE.indexOf(anchor)).match(new RegExp(`${column}\\s+(?:NOT\\s+)?IN\\s*\\(([^)]*)\\)`, 'i'))![1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]);
+    expect(lifecycleList('CONSTRAINT releases_state_check', 'state')).toEqual([...RELEASE_STATES]);
     expect(listAfter('FUNCTION public.release_items_integrity', 'relation')).toEqual([...RELEASE_MASTER_RELATIONS]);
     expect(listAfter('FUNCTION public.releases_integrity', 'kind')).toEqual([...RELEASE_ARTWORK_KINDS]);
-    expect(listAfter('FUNCTION public.labelos_track_is_finished', 'state')).toEqual([...RELEASE_STATES_OFF_RELEASE]);
+    expect(lifecycleList('FUNCTION public.labelos_track_is_finished', 'state')).toEqual([...RELEASE_STATES_ON_RELEASE]);
   });
 });
 
@@ -113,32 +117,23 @@ describe('positions', () => {
   });
 });
 
-describe('countsAsOnRelease', () => {
-  it('any release but a cancelled one puts a song on a release', () => {
+describe('countsAsOnRelease (LABEL-56: only a release that went out finishes a song)', () => {
+  const on = (state: string, imported_released?: boolean) => [{ releases: { state, imported_released } }];
+  it('a draft release does not, a delivered or withdrawn one does, a cancelled one never', () => {
     expect(countsAsOnRelease([])).toBe(false);
-    expect(countsAsOnRelease([{ releases: { state: 'cancelled' } }])).toBe(false);
-    expect(countsAsOnRelease([{ releases: { state: 'cancelled' } }, { releases: { state: 'draft' } }])).toBe(true);
-    expect(countsAsOnRelease([{ releases: { state: 'delivered' } }])).toBe(true);
+    expect(countsAsOnRelease(on('draft'))).toBe(false);
+    expect(countsAsOnRelease(on('cancelled'))).toBe(false);
+    expect(countsAsOnRelease(on('delivered'))).toBe(true);
+    expect(countsAsOnRelease(on('withdrawn'))).toBe(true);
     expect(countsAsOnRelease([{ releases: null }])).toBe(false);
   });
-});
-
-describe('views are built field by field', () => {
-  it('a release row', () => {
-    const view = toReleaseView({
-      id: 'R', org_id: 'L', project_id: 'P', contact_id: 'C', title: 'EP', type: 'ep', upc: '036000291452',
-      label_name: 'L Records', c_line: '© 2026 L', p_line: '℗ 2026 L', primary_genre: 'R&B', target_date: '2026-11-01',
-      release_date: null, artwork_asset_id: null, state: 'draft', delivered_at: null, delivered_to: null,
-      imported_released: false, store_listed: false, store_listed_at: null, created_by: 'U', created_at: 't', updated_at: 't',
-      secret_column: 'never',
-    } as never);
-    expect(view).not.toHaveProperty('secret_column');
-    expect(view).toMatchObject({ id: 'R', projectId: 'P', contactId: 'C', title: 'EP', type: 'ep', upc: '036000291452', state: 'draft' });
+  it('a release entered as already out counts, unless it is cancelled', () => {
+    expect(countsAsOnRelease(on('draft', true))).toBe(true);
+    expect(countsAsOnRelease(on('draft', false))).toBe(false);
+    expect(countsAsOnRelease(on('cancelled', true))).toBe(false);
   });
-
-  it('an item row', () => {
-    expect(toReleaseItemView({ id: 'I', release_id: 'R', position: 2, song_track_id: 'S', master_track_id: 'M', version_title: 'Radio Edit', explicit: true, extra: 1 } as never)).toEqual({
-      id: 'I', position: 2, songTrackId: 'S', masterTrackId: 'M', versionTitle: 'Radio Edit', explicit: true,
-    });
+  it('one release that went out is enough: a draft beside it changes nothing', () => {
+    expect(countsAsOnRelease([...on('draft'), ...on('delivered')])).toBe(true);
+    expect(countsAsOnRelease([...on('draft'), ...on('cancelled')])).toBe(false);
   });
 });

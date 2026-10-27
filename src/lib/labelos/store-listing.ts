@@ -46,9 +46,12 @@ export function todayUtc(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
 
-/** Released: imported as already out, or delivered with a date that has come (or none). Cancelled and draft: never. */
+/**
+ * Released: imported as already out, or delivered with a date that has come (or none). Cancelled, draft and
+ * WITHDRAWN (LABEL-56: pulled back after delivery, even one entered as already out): never.
+ */
 export function isReleasedForStore(r: Pick<ListingFacts, 'state' | 'imported_released' | 'release_date'>, now: Date): boolean {
-  if (r.state === 'cancelled') return false;
+  if (r.state === 'cancelled' || r.state === 'withdrawn') return false;
   if (r.imported_released) return true;
   if (r.state !== 'delivered') return false;
   // A date that has come, and only a RELEASE date: a target date is a plan, never "out", and a delivery
@@ -68,7 +71,7 @@ export function isReleasedForStore(r: Pick<ListingFacts, 'state' | 'imported_rel
 export function releasedPublicly(r: Pick<ListingFacts, 'state' | 'imported_released' | 'release_date' | 'store_listed_at'>, now: Date): boolean {
   if (isReleasedForStore(r, now)) return true;
   if (r.store_listed_at && !Number.isNaN(Date.parse(r.store_listed_at))) {
-    return isReleasedForStore({ ...r, state: r.state === 'cancelled' ? 'delivered' : r.state }, new Date(r.store_listed_at));
+    return isReleasedForStore({ ...r, state: r.state === 'cancelled' || r.state === 'withdrawn' ? 'delivered' : r.state }, new Date(r.store_listed_at));
   }
   return false;
 }
@@ -115,6 +118,7 @@ export function planList(input: ListInput, now: Date): ListPlan {
     };
   }
   if (release.state === 'cancelled') return { ok: false, status: 409, error: 'A cancelled release cannot be listed', field: 'state' };
+  if (release.state === 'withdrawn') return { ok: false, status: 409, error: 'A withdrawn release cannot be listed', field: 'state' };
   if (!isReleasedForStore(release, now)) {
     return {
       ok: false,

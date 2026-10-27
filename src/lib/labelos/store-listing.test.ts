@@ -45,6 +45,10 @@ describe('isReleasedForStore', () => {
   it('a cancelled release is never released, even imported', () => {
     expect(isReleasedForStore(facts({ state: 'cancelled', imported_released: true }), NOW)).toBe(false);
   });
+  it('a withdrawn release is never released, even imported or dated in the past (LABEL-56)', () => {
+    expect(isReleasedForStore(facts({ state: 'withdrawn', release_date: '2020-01-01' }), NOW)).toBe(false);
+    expect(isReleasedForStore(facts({ state: 'withdrawn', imported_released: true }), NOW)).toBe(false);
+  });
   it('an import is released without a delivery', () => {
     expect(isReleasedForStore(facts({ imported_released: true, release_date: '2019-05-01' }), NOW)).toBe(true);
   });
@@ -85,6 +89,9 @@ describe('planList', () => {
   });
   it('a cancelled release is 409', () => {
     expect(planList(input({ release: facts({ state: 'cancelled', imported_released: true }) }), NOW)).toMatchObject({ ok: false, field: 'state' });
+  });
+  it('a withdrawn release is 409 and cannot be put back on the store', () => {
+    expect(planList(input({ release: facts({ state: 'withdrawn', release_date: '2024-02-02', imported_released: true }) }), NOW)).toMatchObject({ ok: false, status: 409, field: 'state' });
   });
   it('a release of another org, or with no store owner, is 409', () => {
     expect(planList(input({ orgId: OTHER }), NOW)).toMatchObject({ ok: false, status: 409, field: 'org' });
@@ -145,6 +152,8 @@ describe('isPubliclyVisible', () => {
     expect(isPubliclyVisible(facts({ state: 'delivered', store_listed: true, release_date: '2024-02-02' }), NOW)).toBe(true);
     expect(isPubliclyVisible(facts({ state: 'delivered', release_date: '2024-02-02' }), NOW)).toBe(false);
     expect(isPubliclyVisible(facts({ state: 'delivered', store_listed: true, release_date: '2027-01-01' }), NOW)).toBe(false);
+    // Even if a withdrawn release somehow kept its listing flag, the public never sees it.
+    expect(isPubliclyVisible(facts({ state: 'withdrawn', store_listed: true, release_date: '2024-02-02' }), NOW)).toBe(false);
   });
 });
 
