@@ -14,7 +14,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { memoryAdmin, type MemoryDb } from '@/lib/labelos/mocks/memory-db';
 import { assertCanSign } from '@/lib/labelos/contract-splits-store';
-import { createServiceClient } from '@/lib/supabase/server';
 
 const L = '10000000-0000-4000-8000-000000000001';
 const u = (n: number) => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -42,7 +41,6 @@ let contractsMissing = false;
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: current ? { id: current } : null } }) } }),
-  createServiceClient: () => memoryAdmin(db).client,
 }));
 const missingTable = (): unknown => {
   const chain: unknown = new Proxy(() => chain, {
@@ -389,7 +387,7 @@ describe('the song’s splits view carries the contract’s drift', () => {
 });
 
 describe('assertCanSign — what LABEL-60 calls', () => {
-  const admin = () => createServiceClient() as unknown as Parameters<typeof assertCanSign>[0];
+  const admin = () => memoryAdmin(db).client as unknown as Parameters<typeof assertCanSign>[0];
   const feature = { type: 'feature' as const, track_id: S1 };
 
   it('passes while the setting is off (the default)', async () => {

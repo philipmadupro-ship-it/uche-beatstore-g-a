@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Plus, Trash2, Upload } from 'lucide-react';
 import { Dropdown, type DropdownOption } from '@/components/ui/Dropdown';
+import { DriftNotice } from '@/components/labelos/DriftNotice';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import type { PartyView } from '@/lib/labelos/credits';
@@ -61,7 +62,7 @@ function currentSheet(sheets: SplitSheetView[], kind: SplitKind): SplitSheetView
   return of.find((s) => s.status === 'draft') ?? of.find((s) => s.status === 'circulated' || s.status === 'signed' || s.status === 'disputed') ?? of[0] ?? null;
 }
 
-export function OrgSplits({ orgId, trackId }: { orgId: string; trackId: string }) {
+export function OrgSplits({ orgId, trackId, orgSlug }: { orgId: string; trackId: string; orgSlug?: string }) {
   const [data, setData] = useState<SplitsPayload | null>(null);
   const [hidden, setHidden] = useState(false);
   const [kind, setKind] = useState<SplitKind>('composition');
@@ -149,6 +150,17 @@ export function OrgSplits({ orgId, trackId }: { orgId: string; trackId: string }
           ))}
         </div>
       )}
+
+      {sheet &&
+        (data.contracts ?? []).flatMap((c) =>
+          c.drift
+            .filter((d) => d.sheetId === sheet.id)
+            .map((d) => (
+              <div key={`${c.contractId}-${d.sheetId}`} className="mb-3">
+                <DriftNotice entry={d} against={`its contract “${c.title}”`} href={orgSlug ? `/o/${orgSlug}/rights/contracts/${c.contractId}` : undefined} />
+              </div>
+            )),
+        )}
 
       {!sheet ? (
         <EmptyKind

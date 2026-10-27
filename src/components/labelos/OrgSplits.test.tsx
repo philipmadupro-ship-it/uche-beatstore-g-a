@@ -291,3 +291,34 @@ describe('OrgSplits — own line only (D2)', () => {
     expect(screen.queryByTestId('org-splits')).toBeNull();
   });
 });
+
+describe('OrgSplits — drift against a contract (LABEL-59)', () => {
+  const circulated = (over: Partial<SplitSheetView> = {}) =>
+    sheet({ id: 's9', kind: 'composition', status: 'circulated', statusLabel: 'Circulated', total: '100', can: { edit: false, circulate: false, supersede: true }, ...over });
+
+  it('warns on the sheet that differs from its contract, with the contract linked', async () => {
+    serve(payload([circulated()], { contracts: [{ contractId: 'c1', title: 'Feature deal', status: 'sent', type: 'feature', drift: [{ kind: 'composition', drifted: true, sheetId: 's9', items: [{ partyId: 'pa', name: 'Nova', code: 'differs', contract: '10', sheet: '12.5' }] }] }] }));
+    render(<OrgSplits orgId="o1" orgSlug="acme" trackId="t1" />);
+    const notice = await screen.findByTestId('drift-composition');
+    expect(notice.textContent).toContain('differs from its contract “Feature deal”');
+    expect(screen.getByTestId('drift-composition-items').textContent).toContain('Nova: contract 10%, sheet 12.5%');
+    expect(notice.querySelector('a')?.getAttribute('href')).toBe('/o/acme/rights/contracts/c1');
+  });
+
+  it('D2: for an own-line reader it is only the sentence', async () => {
+    serve(payload([circulated({ total: undefined, can: { edit: false, circulate: false, supersede: false } })], {
+      me: { reach: 'own', canWrite: false },
+      contracts: [{ contractId: 'c1', title: 'Feature deal', status: 'sent', type: 'feature', drift: [{ kind: 'composition', drifted: true, sheetId: 's9' }] }],
+    }));
+    render(<OrgSplits orgId="o1" trackId="t1" />);
+    expect((await screen.findByTestId('drift-composition')).textContent).toContain('differs from its contract');
+    expect(screen.queryByTestId('drift-composition-items')).toBeNull();
+  });
+
+  it('no warning when the sheet matches, or when the drift belongs to another sheet', async () => {
+    serve(payload([circulated()], { contracts: [{ contractId: 'c1', title: 'Feature deal', status: 'sent', type: 'feature', drift: [{ kind: 'composition', drifted: false, sheetId: 's9' }, { kind: 'composition', drifted: true, sheetId: 'other' }] }] }));
+    render(<OrgSplits orgId="o1" trackId="t1" />);
+    await screen.findByTestId('org-splits');
+    expect(screen.queryByTestId('drift-composition')).toBeNull();
+  });
+});
