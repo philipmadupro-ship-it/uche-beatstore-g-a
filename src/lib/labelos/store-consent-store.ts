@@ -20,7 +20,6 @@ import {
   creditedArtistContactIds,
   isConsentState,
   ownerLinks,
-  partyLinks,
   scopeLinks,
   type AccountLink,
   type ConsentRow,
@@ -177,8 +176,9 @@ export async function loadCreditedArtists(admin: any, release: ReleaseRef): Prom
 /**
  * The accounts that stand for these artist contacts in the org: members whose
  * role is `artist` scoped to the contact (`member_artist_scopes`), and the
- * account of a party linked to the contact while it is a member of the org.
- * Nobody else — in particular not the label staff scoped to the same artist,
+ * owners of an artist org for its one artist. NOT a party's linked account — a
+ * rights writer can put any account on a party and even confirm it as themself,
+ * so a party proves nothing about who the ARTIST is. Nobody else — in particular not the label staff scoped to the same artist,
  * and never an address read off a contact card.
  */
 export async function loadAccountLinks(admin: any, orgId: string, contactIds: readonly string[]): Promise<AccountLink[]> {
@@ -189,14 +189,11 @@ export async function loadAccountLinks(admin: any, orgId: string, contactIds: re
     (part, from, to) => admin.from('member_artist_scopes').select('user_id, contact_id').eq('org_id', orgId).in('contact_id', part).order('user_id', { ascending: true }).order('contact_id', { ascending: true }).range(from, to),
     'artist scopes',
   );
-  const parties = await inChunks<{ id: string; contact_id: string | null; user_id: string | null; details_confirmed_at: string | null; details_confirmed_by: string | null }>(
-    ids,
-    (part, from, to) => admin.from('parties').select('id, contact_id, user_id, details_confirmed_at, details_confirmed_by').eq('org_id', orgId).in('contact_id', part).not('user_id', 'is', null).not('details_confirmed_at', 'is', null).order('id', { ascending: true }).range(from, to),
-    'party accounts',
-  );
-  const userIds = [...new Set([...scopes.map((s) => s.user_id), ...parties.map((p) => p.user_id).filter((u): u is string => !!u)])];
+  const userIds = [...new Set(scopes.map((s) => s.user_id))];
   const owners = await artistOrgOwners(admin, orgId);
-  if (userIds.length === 0) return ownerLinks(owners.kind, owners.userIds, ids);
+  const selfIds = owners.kind === 'artist' ? new Set((await selfArtistIds(admin, orgId)).map((c) => c.toLowerCase())) : new Set<string>();
+  const ownerOf = ownerLinks(owners.kind, owners.userIds, ids.filter((c) => selfIds.has(c)));
+  if (userIds.length === 0) return ownerOf;
   const members = await inChunks<{ user_id: string; role: string }>(
     userIds,
     (part, from, to) => admin.from('org_members').select('user_id, role').eq('org_id', orgId).in('user_id', part).order('user_id', { ascending: true }).range(from, to),
@@ -206,8 +203,23 @@ export async function loadAccountLinks(admin: any, orgId: string, contactIds: re
   const byUser = new Map<string, string[]>();
   for (const s of scopes) byUser.set(s.user_id.toLowerCase(), [...(byUser.get(s.user_id.toLowerCase()) ?? []), s.contact_id]);
   const fromScopes = scopeLinks([...byUser].filter(([u]) => roleOf.has(u)).map(([user_id, contact_ids]) => ({ user_id, role: roleOf.get(user_id) as string, contact_ids })));
-  const fromParties = partyLinks(parties, new Set(roleOf.keys()));
-  return [...fromScopes, ...fromParties, ...ownerLinks(owners.kind, owners.userIds, ids)];
+  return [...fromScopes, ...ownerOf];
+}
+
+/**
+ * The ONE roster artist of an artist org (D1, migration 166: `contacts.org_self_artist`, at most one per org).
+ * Before 166 the column does not exist: fall back to the artist-role rule (the roster rule 166 itself mirrors).
+ */
+async function selfArtistIds(admin: any, orgId: string): Promise<string[]> {
+  const flagged = await admin.from('contacts').select('id').eq('org_id', orgId).eq('org_self_artist', true).limit(5);
+  if (!flagged.error) return ((flagged.data ?? []) as { id: string }[]).map((c) => c.id);
+  if (!isMissingSchema(flagged.error)) throw new Error(flagged.error.message);
+  const contacts = await inChunks<{ id: string; category: string | null; secondary_category: string | null }>(
+    [orgId],
+    (part, from, to) => admin.from('contacts').select('id, category, secondary_category').in('org_id', part).order('id', { ascending: true }).range(from, to),
+    'contacts',
+  );
+  return contacts.filter((c) => hasArtistRole(c)).map((c) => c.id);
 }
 
 /** The owners of an ARTIST org (who stand for its one roster artist, D1); other kinds answer `kind` and no owners. */
@@ -226,19 +238,11 @@ async function artistOrgOwners(admin: any, orgId: string): Promise<{ kind: strin
 
 /** The contacts of this org a user answers for, among `contactIds` (or every contact they stand for when omitted). */
 export async function answerableFor(admin: any, orgId: string, userId: string): Promise<string[]> {
-  const [scopes, parties] = await Promise.all([
-    inChunks<{ contact_id: string }>(
-      [userId],
-      (part, from, to) => admin.from('member_artist_scopes').select('contact_id').eq('org_id', orgId).in('user_id', part).order('contact_id', { ascending: true }).range(from, to),
-      'artist scopes',
-    ),
-    inChunks<{ contact_id: string | null }>(
-      [userId],
-      // Only a party this account confirmed ITSELF (its own act, cleared when the link changes) stands for the artist.
-      (part, from, to) => admin.from('parties').select('contact_id, details_confirmed_by').eq('org_id', orgId).in('user_id', part).eq('details_confirmed_by', userId).not('details_confirmed_at', 'is', null).not('contact_id', 'is', null).order('id', { ascending: true }).range(from, to),
-      'party accounts',
-    ),
-  ]);
+  const scopes = await inChunks<{ contact_id: string }>(
+    [userId],
+    (part, from, to) => admin.from('member_artist_scopes').select('contact_id').eq('org_id', orgId).in('user_id', part).order('contact_id', { ascending: true }).range(from, to),
+    'artist scopes',
+  );
   const { data: member, error } = await admin.from('org_members').select('role').eq('org_id', orgId).eq('user_id', userId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!member) return [];
@@ -247,15 +251,10 @@ export async function answerableFor(admin: any, orgId: string, userId: string): 
   if ((member as { role: string }).role === 'owner') {
     const { kind } = await artistOrgOwners(admin, orgId);
     if (kind === 'artist') {
-      const contacts = await inChunks<{ id: string; category: string | null; secondary_category: string | null }>(
-        [orgId],
-        (part, from, to) => admin.from('contacts').select('id, category, secondary_category').in('org_id', part).order('id', { ascending: true }).range(from, to),
-        'contacts',
-      );
-      fromOwner = contacts.filter((c) => hasArtistRole(c)).map((c) => c.id);
+      fromOwner = await selfArtistIds(admin, orgId);
     }
   }
-  return cleanIds([...fromScopes, ...fromOwner, ...parties.map((p) => p.contact_id).filter((c): c is string => !!c)]);
+  return cleanIds([...fromScopes, ...fromOwner]);
 }
 
 /* ── Writes ──────────────────────────────────────────────────────────── */

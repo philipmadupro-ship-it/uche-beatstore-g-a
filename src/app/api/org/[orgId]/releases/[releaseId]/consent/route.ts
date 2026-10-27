@@ -4,10 +4,10 @@
  * (LABEL-71; owner decisions A and E, doc 21 §5.1, doc 22 §5).
  *
  * WHO. Only an account that stands for a credited artist of THIS release
- * (`answerableFor`: the owner of an artist org for its artist, a member whose
- * role is `artist` scoped to that artist, or the account of a party linked to
- * them that CONFIRMED the party itself — a link a rights writer typed in proves
- * nothing). Not a capability: a label's A&R scoped to the same artist is not
+ * (`answerableFor`: the owner of an artist org for its artist, or a member whose
+ * role is `artist` scoped to that artist). NOT the account of a party linked to
+ * the artist — a rights writer can put any account on a party and confirm it as
+ * themself. Not a capability: a label's A&R scoped to the same artist is not
  * the artist, a manager is not the artist, and the body names no artist.
  * Accepted deviation: an admin with `members.manage` can invite an address they
  * control as role `artist` scoped to the contact; that account then answers.

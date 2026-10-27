@@ -15,10 +15,11 @@
  *    (orchestrator's reading of "the artist always has the final say", doc 22 §5).
  *  - WHO answers. Only the artist's own account (`answerableContacts`): the
  *    OWNER of an artist org for that org's one roster artist (D1: the artist
- *    is the org), a member whose role is `artist` scoped to the contact
- *    (label orgs, the only kind that has the role), or the account a party
- *    linked to the contact belongs to while it is a member of the org AND has
- *    confirmed that party itself. A
+ *    is the org) or a member whose role is `artist` scoped to the contact
+ *    (label orgs, the only kind that has the role). NOT the account a party is
+ *    linked to: a rights writer can create or edit a party with any account on
+ *    it and confirm it as themself, which proves nothing about who the ARTIST
+ *    is. A credited artist who has neither of the two is unreachable. A
  *    manager of an artist org, or A&R staff scoped to the same artist, is NOT
  *    the artist. Nobody answers FOR an artist. (Accepted deviation: an admin with
  *    `members.manage` can invite an address they control as role `artist`
@@ -165,31 +166,6 @@ export function scopeLinks(members: readonly { user_id: string; role: string; co
 export function ownerLinks(orgKind: string, ownerUserIds: readonly string[], contactIds: readonly string[]): AccountLink[] {
   if (orgKind !== 'artist') return [];
   return ownerUserIds.flatMap((u) => contactIds.map((c) => ({ contact_id: low(c), user_id: low(u) })));
-}
-
-/**
- * The account a party stands for — only while that account is a member of the org AND has CONFIRMED the
- * party itself (LABEL-54: `details_confirmed_at`, stamped by the party's own account through
- * `/parties/[id]/confirm`, and cleared when the link or the details change). A rights writer can create or edit
- * a party and put any account on it, so the link alone proves nothing about who the artist is; the stamp is
- * the account's own act. (Residual, accepted: a rights writer who links THEMSELVES can also confirm themselves,
- * which leaves `party.updated` / `party.confirmed` events.)
- */
-export function partyLinks(
-  parties: readonly { contact_id: string | null; user_id: string | null; details_confirmed_at?: string | null; details_confirmed_by?: string | null }[],
-  memberUserIds: ReadonlySet<string>,
-): AccountLink[] {
-  return parties
-    .filter(
-      (p): p is { contact_id: string; user_id: string; details_confirmed_at: string; details_confirmed_by: string } =>
-        !!p.contact_id &&
-        !!p.user_id &&
-        memberUserIds.has(low(p.user_id)) &&
-        !!p.details_confirmed_at &&
-        !!p.details_confirmed_by &&
-        low(p.details_confirmed_by) === low(p.user_id),
-    )
-    .map((p) => ({ contact_id: low(p.contact_id), user_id: low(p.user_id) }));
 }
 
 function uniqueLinks(links: readonly AccountLink[]): AccountLink[] {

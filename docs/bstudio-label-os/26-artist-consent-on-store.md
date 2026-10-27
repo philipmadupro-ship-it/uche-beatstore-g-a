@@ -19,27 +19,24 @@ Migration **186**, not applied (apply at the final merge). Without it the store 
 
 ## Who is "the artist's account" (and who is not asked)
 
-The roles an org can hold decide it (`ROLES_BY_ORG_KIND`: only a **label** has role `artist`, and a label's own
-releases cannot be listed yet):
+Only an account that IS the artist can answer — never one a writer could have typed in:
 
-- **Artist org**: its **owners** stand for its one roster artist (D1: the artist is the org). Admins and members
-  (a manager) do not — a manager lists, the artist is asked.
-- **Any org**: the account of a **party** linked to the artist contact (`parties.contact_id` + `parties.user_id`),
-  while that account is a member of the org **and has confirmed the party itself** (`details_confirmed_by` = the
-  account, stamped by `/parties/[id]/confirm`). A rights writer can type any account onto a party, so the bare link
-  proves nothing. Changing a party's `contact_id` or `user_id` clears the stamp (route + migration 174's trigger for
-  `user_id`), and a writer cannot move a confirmed party to another contact (409 `party_confirmed`).
-  *Residual (accepted):* a rights writer who links THEMSELVES can also confirm themselves; both leave events.
-- **Label org** (future-proof): a member whose role is `artist`, scoped to the contact.
+- **Artist org**: its **owner(s)** stand for its one roster artist (D1: the artist is the org; `contacts.org_self_artist`,
+  migration 166). Admins and members (a manager) do not — a manager lists, the artist is asked.
+- **Label org** (future-proof; only labels offer role `artist`, and label releases cannot be listed yet): a member whose
+  role is `artist` scoped to the contact (`member_artist_scopes`).
+- **NOT a party's linked account.** A rights writer can create or edit a party with any account on it and confirm it as
+  themself (the confirm route only checks `party.user_id`), so a party proves nothing about who the artist is.
+  A credited artist who has neither of the two above is **unreachable**: nobody can be told, nobody can answer for them
+  (this is every credited artist in the studio's own *producer* org, which offers no `artist` role).
 
 *Accepted deviation:* an admin with `members.manage` can invite an address they control as role `artist` scoped to the
-contact (needs an invitation the invitee accepts with a verified email; leaves `invitation.created` / `member.joined`).
-An artist whose account later leaves the org leaves a refusal nobody can lift (known; the store owner can delete the
-release or ask the artist back).
+contact (label orgs only; needs an invitation accepted with a verified email; leaves `invitation.created` /
+`member.joined`). An artist whose account later leaves the org leaves a refusal nobody can lift (known; the store owner
+can delete the release or ask the artist back).
 
-An artist with **no such account is unreachable**: nobody can be told and nobody can answer for them. The listing
-says so ("1 has no account in this organization, so nobody could be told"); the event carries the count. **No email
-address is read off a contact card and no email path is invented.** This is the main product gap — see the PR.
+The listing says so ("N have no account in this organization, so nobody could be told"); the event carries the count.
+**No email address is read off a contact card and no email path is invented.** This is the main product gap — see the PR.
 
 ## Caches
 

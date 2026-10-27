@@ -4,7 +4,6 @@ import {
   cleanIds,
   creditedArtistContactIds,
   ownerLinks,
-  partyLinks,
   planConsentGate,
   planDecision,
   planProposal,
@@ -149,21 +148,6 @@ describe('who answers, and who is told', () => {
     expect(ownerLinks('producer', [U1], [A])).toEqual([]);
     expect(ownerLinks('label', [U1], [A])).toEqual([]);
     expect(answerableContacts(ownerLinks('artist', [U1], [A]), STAFF)).toEqual([]);
-  });
-
-  it('a party’s account stands for its contact only while it is a member of the org AND confirmed the party itself', () => {
-    const ok = { details_confirmed_at: '2026-10-01', details_confirmed_by: U2 };
-    const parties = [
-      { contact_id: B, user_id: U2, ...ok },
-      { contact_id: C, user_id: STAFF, details_confirmed_at: '2026-10-01', details_confirmed_by: STAFF }, // not a member
-      { contact_id: A, user_id: U1 }, // typed in by a writer, never confirmed
-      { contact_id: A, user_id: U2, details_confirmed_at: '2026-10-01', details_confirmed_by: STAFF }, // confirmed by somebody else
-      { contact_id: null, user_id: U1, ...ok },
-      { contact_id: A, user_id: null, ...ok },
-    ];
-    const links = partyLinks(parties, new Set([U1, U2]));
-    expect(links).toEqual([{ contact_id: B, user_id: U2 }]);
-    expect(answerableContacts(links, U2)).toEqual([B]);
   });
 
   it('tells each linked account once, never the asker, and names who has nobody', () => {

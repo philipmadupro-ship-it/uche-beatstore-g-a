@@ -114,11 +114,8 @@ describe('clearsConfirmation', () => {
       expect(clearsConfirmation({ [key]: 'x' }), key).toBe(true);
     }
   });
-  it('is false for the display name, the kind, the email and payee data', () => {
-    expect(clearsConfirmation({ display_name: 'x', kind: 'company', email: 'e', tax_id: 't', payment_instructions: 'p' })).toBe(false);
+  it('is false for the display name, the kind, the contact link, the email and payee data', () => {
+    expect(clearsConfirmation({ display_name: 'x', kind: 'company', contact_id: 'c', email: 'e', tax_id: 't', payment_instructions: 'p' })).toBe(false);
     expect(clearsConfirmation({})).toBe(false);
-  });
-  it('is true for the contact link (LABEL-71: a confirmed party stands for its artist in store consent, so moving it clears it)', () => {
-    expect(clearsConfirmation({ contact_id: 'c' })).toBe(true);
   });
 });

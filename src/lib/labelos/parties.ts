@@ -163,7 +163,7 @@ export const SELF_CORRECTABLE = [
  * `parties_confirmation_reset` is the same rule in the database).
  */
 export function clearsConfirmation(columns: Record<string, unknown>): boolean {
-  return [...SELF_CORRECTABLE, 'user_id', 'contact_id'].some((key) => key in columns);
+  return [...SELF_CORRECTABLE, 'user_id'].some((key) => key in columns);
 }
 
 export function pickSelfCorrections(input: PartyInput): PartyInput {
