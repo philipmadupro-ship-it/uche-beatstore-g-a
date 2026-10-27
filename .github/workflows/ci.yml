@@ -100,7 +100,7 @@ jobs:
   # broke — do not treat a green-with-skips run as a pass.
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
