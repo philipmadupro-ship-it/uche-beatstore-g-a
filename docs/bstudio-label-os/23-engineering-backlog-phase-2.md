@@ -171,12 +171,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: every type has a template that renders with sample data; two-org and two-scope tests; template editor (`contract.write`) versions templates.
 
 ### LABEL-58 — Contract editor and document generation
-**Priority:** P0 · **Risk:** Medium · **Deps:** 57 · **Status:** In Progress (session_019AUhHbkT7VPBpTf7EocUCZ, no migration)
+**Priority:** P0 · **Risk:** Medium · **Deps:** 57 · **Status:** Done — #158, squash `0bcd988467cea5ec1c8f490c6729d55d55ffaa86` (2026-10-27). No migration. The PDF is filed only in the contract artist's own project; a sent contract downloads its frozen sent copy; contract / split-sheet files cannot be declassified through the asset PATCH
 - Create a contract from a template for an artist/song/release; fill merge fields (with suggestions from parties and splits); live preview; generate HTML/PDF stored as a restricted `project_assets` row; clause-level edits tracked in versions; "send for signature" moves to `sent`.
 - Acceptance: PDF contains the filled values (test parses text); restricted download audited; 390 px usable.
 
 ### LABEL-59 — Contract ↔ split sheets
-**Priority:** P0 · **Risk:** High · **Deps:** 58 · **Migration:** 177 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** 58 · **Migration:** 177 · **Status:** In Progress (session_019AUhHeZHycRGnNjDPKTMAr, #160)
 - A contract of an applicable type creates or pre-fills the split sheet (master/publishing percentages from the contract fields); a circulated sheet that disagrees with its contract shows a drift warning on both; signing the contract can require a signed sheet (`require_signed_master_split`). Splits stay integer-unit exact (no float); 33.3333×3 refusal stays.
 - Acceptance: tests for prefill, drift, and the signed-sheet requirement; D2 holds (note never leaves the route).
 
@@ -253,12 +253,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## I. Consent and playback
 
 ### LABEL-71 — Artist consent on store listing + showcase
-**Priority:** P0 · **Risk:** High · **Deps:** 55 · **Migration:** 186 · **Status:** In Progress (session_019AUhHcTrzenYfjeqYpuTqL)
+**Priority:** P0 · **Risk:** High · **Deps:** 55 · **Migration:** 186 · **Status:** Done — #159, squash `6eea56c068863670c98cbc98848bda8f39b57d5a` (2026-10-28). Migration 186. Only a role-`artist` member scoped to the contact, or the owner of an artist org (its self artist), answers for an artist; a party's linked account never does. Credited artists in the producer org are unreachable (product gap, doc 26)
 - `listing_consents(release_id|showcase_id, artist_contact_id, state, decided_by, decided_at)`. The label lists a release (or a "greatest moments" showcase of released songs) → every credited artist gets a notification (new closed-union kind `listing_proposed`) → **any artist's "no" withdraws it and it cannot be re-listed without their yes**; the store-owner list "Releases from connected artists" with Unlist; consent text on the connection-accept screen.
 - Acceptance: a listing never serves until no artist has said no (state machine in `lib/labelos/store-consent.ts`); notification test; coverage and external-matrix updated.
 
 ### LABEL-72 — Playback rules
-**Priority:** P1 · **Risk:** Medium · **Deps:** 71 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 71 · **Status:** In Progress (session_019AUhHf7cB5hZ5AzMkogSjr, no migration reserved)
 - Default `preview`; `preview`-only listing allowed from delivery (teaser); `full` only from the release date, auto-fall back to `preview` if the date moves; `full` and listen-only external roles stream a **lossy full-length derivative, never the master**; durable per-IP limiter (`rateLimitDurable`); `Range` handling cannot return the whole file in one request for the derivative.
 - Acceptance: tests for the date rules and fallback; the master URL is unreachable from public routes; throttle test.
 
