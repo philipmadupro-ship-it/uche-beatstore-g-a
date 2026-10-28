@@ -59,7 +59,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ id: string; ite
     const upstream = await streamAudioPreviewSource(req, source);
     const headers = new Headers(upstream.headers);
     // Short, so an unlisted release stops playing within the store's ~90 s window.
-    headers.set('cache-control', plan?.kind === 'public-preview' ? 'public, max-age=60, s-maxage=60' : 'private, max-age=60');
+    headers.set('cache-control', loaded.consentGoverned ? 'no-store' : plan?.kind === 'public-preview' ? 'public, max-age=60, s-maxage=60' : 'private, max-age=60');
     return new Response(upstream.body, { status: upstream.status, headers });
   } catch (err) {
     log.error('audio failed', { id, itemId, error: errorMessage(err) });

@@ -3,7 +3,7 @@
  * 13 R-19). Kept apart from `notify.ts` (the server-side writer) so a client
  * component can read the vocabulary without the writer's imports.
  */
-export const DIRECT_ASK_KINDS = ['task_assigned', 'approval_requested', 'mention', 'credit_named_you', 'invitation', 'party_confirmation'] as const;
+export const DIRECT_ASK_KINDS = ['task_assigned', 'approval_requested', 'mention', 'credit_named_you', 'invitation', 'party_confirmation', 'listing_proposed'] as const;
 export type DirectAskKind = (typeof DIRECT_ASK_KINDS)[number];
 
 export function isDirectAskKind(v: unknown): v is DirectAskKind {

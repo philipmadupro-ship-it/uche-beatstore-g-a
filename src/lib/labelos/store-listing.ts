@@ -22,6 +22,7 @@
  *    creator ids. The item id is the public handle of a playable track.
  */
 import { isUUID } from '@/lib/validate';
+import { planConsentGate, type ConsentRow } from './store-consent';
 
 export const STORE_PLAYBACKS = ['preview', 'full'] as const;
 export type StorePlayback = (typeof STORE_PLAYBACKS)[number];
@@ -104,6 +105,12 @@ export interface ListInput {
   /** Requested playback; omitted keeps the release's current one. */
   playback?: StorePlayback;
   currentPlayback: StorePlayback;
+  /**
+   * Artist consent rows of the release (LABEL-71; absent before migration 186 = no rows). Any `no` blocks the
+   * listing until that artist says yes; so does the store owner's veto.
+   */
+  consent?: readonly ConsentRow[];
+  vetoed?: boolean;
 }
 
 /** Can this release go on the store, and with what playback? */
@@ -137,6 +144,8 @@ export function planList(input: ListInput, now: Date): ListPlan {
     };
   }
   if (input.itemCount === 0) return { ok: false, status: 409, error: 'Add the songs of the release before listing it', field: 'items' };
+  const consent = planConsentGate(input.consent ?? [], input.vetoed === true);
+  if (!consent.ok) return consent;
   return { ok: true, playback: input.playback ?? input.currentPlayback, alreadyListed: release.store_listed };
 }
 

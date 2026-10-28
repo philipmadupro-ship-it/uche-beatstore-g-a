@@ -80,6 +80,9 @@ describe('verb vocabulary', () => {
       'release.store_listed',
       'release.store_unlisted',
       'release.imported',
+      'listing.consent_decided',
+      'listing.vetoed',
+      'listing.veto_lifted',
     ] as const) {
       expect(isAuditVerb(v)).toBe(true);
     }

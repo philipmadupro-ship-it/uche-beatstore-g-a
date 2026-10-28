@@ -187,6 +187,11 @@ export function ConnectionsPanel({ orgId, orgSlug, orgKind }: { orgId: string; o
         <h2 id="connections-heading" className={`${LABEL} mb-3`}>
           Connections
         </h2>
+        <p className="mb-3 max-w-xl text-[11px] leading-relaxed text-white/60" data-testid="store-consent-note">
+          {orgKind === 'label'
+            ? 'Music that a connected artist puts on your store appears under Store listings, where you can unlist it. Every artist credited on a release is asked first, and any one artist’s no takes it off the store until they say yes.'
+            : 'Once you are connected, released music you list can appear on the label owner’s store. Every artist credited on a release is asked first, and an artist’s no is final: the release comes off the store and stays off until they say yes. The label owner can also take it off their store.'}
+        </p>
         {load.state === 'loading' && (
           <p role="status" className="text-[11px] text-white/60">
             Loading connections…
