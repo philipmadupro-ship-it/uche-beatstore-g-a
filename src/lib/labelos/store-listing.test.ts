@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   boundedPut,
+  canListOnStore,
+  effectivePlayback,
   isPubliclyVisible,
   isReleasedForStore,
   orgMayListOnStore,
@@ -73,16 +75,34 @@ describe('orgMayListOnStore', () => {
 
 describe('planList', () => {
   it('lists a delivered release with songs', () => {
-    expect(planList(input(), NOW)).toEqual({ ok: true, playback: 'preview', alreadyListed: false });
+    expect(planList(input(), NOW)).toEqual({ ok: true, playback: 'preview', effective: 'preview', alreadyListed: false });
   });
   it('an unreleased (draft) release is 409', () => {
     const plan = planList(input({ release: facts() }), NOW);
     expect(plan).toMatchObject({ ok: false, status: 409, field: 'state' });
   });
-  it('a delivered release before its date is 409 and says when', () => {
-    const plan = planList(input({ release: facts({ state: 'delivered', release_date: '2027-01-01' }) }), NOW);
-    expect(plan).toMatchObject({ ok: false, status: 409 });
-    expect((plan as { error: string }).error).toMatch(/not out yet/);
+  it('a delivered release before its date (or with none) may be listed as a TEASER: previews only (LABEL-72)', () => {
+    for (const release_date of ['2027-01-01', null]) {
+      const release = facts({ state: 'delivered', release_date });
+      expect(planList(input({ release }), NOW)).toMatchObject({ ok: true, playback: 'preview', effective: 'preview' });
+      expect(planList(input({ release, playback: 'preview' }), NOW)).toMatchObject({ ok: true, effective: 'preview' });
+    }
+  });
+  it('choosing FULL songs before the release date is 409 and says when they can be chosen', () => {
+    const plan = planList(input({ release: facts({ state: 'delivered', release_date: '2027-01-01' }), playback: 'full' }), NOW);
+    expect(plan).toMatchObject({ ok: false, status: 409, field: 'playback' });
+    expect((plan as { error: string }).error).toMatch(/from the release date/);
+    expect(planList(input({ release: facts({ state: 'delivered', release_date: null }), playback: 'full' }), NOW)).toMatchObject({ ok: false, field: 'playback' });
+  });
+  it('full is chosen on the release date itself, and an imported release keeps LABEL-42’s rules', () => {
+    expect(planList(input({ release: facts({ state: 'delivered', release_date: '2026-10-13' }), playback: 'full' }), NOW)).toMatchObject({ ok: true, playback: 'full', effective: 'full' });
+    expect(planList(input({ release: facts({ imported_released: true, release_date: '2018-03-02' }), playback: 'full' }), NOW)).toMatchObject({ ok: true, effective: 'full' });
+    // Entered as already out with no date at all: out, so full is allowed (as before).
+    expect(planList(input({ release: facts({ imported_released: true }), playback: 'full' }), NOW)).toMatchObject({ ok: true, effective: 'full' });
+  });
+  it('a stored full that meets a later date is not refused and reads as preview (derived, never stored down)', () => {
+    const plan = planList(input({ release: facts({ state: 'delivered', release_date: '2027-01-01', store_listed: true }), currentPlayback: 'full' }), NOW);
+    expect(plan).toMatchObject({ ok: true, playback: 'full', effective: 'preview', alreadyListed: true });
   });
   it('an imported already-released album lists without a delivery', () => {
     expect(planList(input({ release: facts({ imported_released: true, release_date: '2018-03-02' }) }), NOW)).toMatchObject({ ok: true });
@@ -105,6 +125,7 @@ describe('planList', () => {
     expect(planList(input({ currentPlayback: 'full', release: facts({ state: 'delivered', store_listed: true, release_date: '2024-02-02' }) }), NOW)).toEqual({
       ok: true,
       playback: 'full',
+      effective: 'full',
       alreadyListed: true,
     });
   });
@@ -147,11 +168,45 @@ describe('planUnlist', () => {
   });
 });
 
+describe('effectivePlayback', () => {
+  const delivered = (release_date: string | null) => facts({ state: 'delivered', release_date });
+  it('is preview by default and whatever the date says for a stored preview', () => {
+    expect(effectivePlayback('preview', delivered('2024-02-02'), NOW)).toBe('preview');
+  });
+  it('full only once the release date has come', () => {
+    expect(effectivePlayback('full', delivered('2026-10-13'), NOW)).toBe('full');
+    expect(effectivePlayback('full', delivered('2026-10-12'), NOW)).toBe('full');
+    expect(effectivePlayback('full', delivered('2026-10-14'), NOW)).toBe('preview');
+    expect(effectivePlayback('full', delivered(null), NOW)).toBe('preview');
+  });
+  it('falls back to preview by itself when the date moves later, and returns to full when it has come', () => {
+    expect(effectivePlayback('full', delivered('2026-10-01'), NOW)).toBe('full');
+    expect(effectivePlayback('full', delivered('2026-12-01'), NOW)).toBe('preview');
+    expect(effectivePlayback('full', delivered('2026-12-01'), new Date('2026-12-01T00:00:01Z'))).toBe('full');
+  });
+  it('an imported release is released by definition; a withdrawn or cancelled one never plays full', () => {
+    expect(effectivePlayback('full', facts({ imported_released: true, release_date: null }), NOW)).toBe('full');
+    expect(effectivePlayback('full', facts({ state: 'withdrawn', imported_released: true }), NOW)).toBe('preview');
+    expect(effectivePlayback('full', facts({ state: 'cancelled', imported_released: true }), NOW)).toBe('preview');
+  });
+});
+
+describe('canListOnStore', () => {
+  it('delivered (teaser) and imported yes; draft, cancelled, withdrawn no', () => {
+    expect(canListOnStore(facts({ state: 'delivered' }))).toBe(true);
+    expect(canListOnStore(facts({ imported_released: true }))).toBe(true);
+    expect(canListOnStore(facts({ state: 'draft' }))).toBe(false);
+    expect(canListOnStore(facts({ state: 'cancelled', imported_released: true }))).toBe(false);
+    expect(canListOnStore(facts({ state: 'withdrawn', imported_released: true }))).toBe(false);
+  });
+});
+
 describe('isPubliclyVisible', () => {
-  it('needs the listing AND the release to still hold', () => {
+  it('needs the listing AND a release that can still be on the store (a teaser counts)', () => {
     expect(isPubliclyVisible(facts({ state: 'delivered', store_listed: true, release_date: '2024-02-02' }), NOW)).toBe(true);
     expect(isPubliclyVisible(facts({ state: 'delivered', release_date: '2024-02-02' }), NOW)).toBe(false);
-    expect(isPubliclyVisible(facts({ state: 'delivered', store_listed: true, release_date: '2027-01-01' }), NOW)).toBe(false);
+    expect(isPubliclyVisible(facts({ state: 'delivered', store_listed: true, release_date: '2027-01-01' }), NOW)).toBe(true);
+    expect(isPubliclyVisible(facts({ state: 'draft', store_listed: true }), NOW)).toBe(false);
     // Even if a withdrawn release somehow kept its listing flag, the public never sees it.
     expect(isPubliclyVisible(facts({ state: 'withdrawn', store_listed: true, release_date: '2024-02-02' }), NOW)).toBe(false);
   });
@@ -165,11 +220,14 @@ describe('public keys', () => {
     expect(publicReleasePrefix(R)).toBe(`store-releases/${R}/`);
     expect(publicReleasePrefix('nope')).toBeNull();
   });
-  it('preview streams the promoted copy; full streams the master through the server; nothing to play is null', () => {
+  it('preview streams the promoted copy; full streams the private derivative — no plan names the master (LABEL-72)', () => {
     const item = { master_track_id: T, master_audio_ref: 'r2://private/orgs/x/tracks/a.wav' };
-    expect(publicStreamPlan('preview', R, item)).toEqual({ kind: 'public-preview', key: `store-releases/${R}/${T}` });
-    expect(publicStreamPlan('full', R, item)).toEqual({ kind: 'private-master', ref: item.master_audio_ref });
-    expect(publicStreamPlan('full', R, { ...item, master_audio_ref: null })).toBeNull();
+    expect(publicStreamPlan('preview', R, item, ORG)).toEqual({ kind: 'public-preview', key: `store-releases/${R}/${T}` });
+    const full = publicStreamPlan('full', R, item, ORG.toUpperCase());
+    expect(full).toEqual({ kind: 'private-derivative', orgId: ORG, masterTrackId: T });
+    expect(JSON.stringify(full)).not.toContain('r2://');
+    expect(publicStreamPlan('full', R, { master_track_id: 'x/../y' }, ORG)).toBeNull();
+    expect(publicStreamPlan('full', R, item, 'nope')).toBeNull();
   });
 });
 

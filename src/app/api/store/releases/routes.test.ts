@@ -29,6 +29,11 @@ let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
 const streamed: string[] = [];
 const coverStreamed: string[] = [];
+// Every derivative a visitor was allowed to open: `<org>:<track>@<range header>`.
+const derivatives: string[] = [];
+let derivativeExists = true;
+let durableAllows = true;
+const durableKeys: string[] = [];
 
 vi.mock('server-only', () => ({}));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: (t: string) => mem.client.from(t), rpc: (n: string, a: Record<string, unknown>) => mem.client.rpc(n, a) }) }));
@@ -39,6 +44,23 @@ vi.mock('@/lib/audio/stream-source', () => ({
     return new Response('audio', { status: 200, headers: { 'content-type': 'audio/mpeg', 'cache-control': 'private, no-store' } });
   },
 }));
+vi.mock('@/lib/storage/org-derivative', () => ({
+  openFullDerivative: async (org: string, track: string, range: string | null) => {
+    derivatives.push(`${org}:${track}@${range ?? ''}`);
+    if (!derivativeExists) return null;
+    return new Response('mp3', { status: 206, headers: { 'content-type': 'audio/mpeg', 'content-range': 'bytes 0-2/3', 'content-length': '3' } });
+  },
+}));
+vi.mock('@/lib/security/rate-limit', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/security/rate-limit')>();
+  return {
+    ...real,
+    rateLimitDurable: async (key: string, limit: number, windowMs?: number) => {
+      durableKeys.push(key);
+      return durableAllows ? real.rateLimitDurable(key, limit, windowMs) : false;
+    },
+  };
+});
 vi.mock('@/lib/storage/project-assets', () => ({
   streamProjectAsset: async (_req: unknown, ref: string) => {
     coverStreamed.push(ref);
@@ -60,6 +82,10 @@ beforeEach(async () => {
   delete process.env.R2_BUCKET_NAME;
   streamed.length = 0;
   coverStreamed.length = 0;
+  derivatives.length = 0;
+  durableKeys.length = 0;
+  derivativeExists = true;
+  durableAllows = true;
   db = {
     tables: {
       creator_profiles: [{ user_id: PU, display_name: 'Uche', default_artwork_url: null }],
@@ -112,12 +138,15 @@ describe('the list', () => {
     expect(body.releases[0]).toMatchObject({ id: RP, title: 'Night Shift', artist: 'Nova', track_count: 2, already_out: false, cover_url: null });
     expect(JSON.stringify(body)).not.toMatch(/org_id|r2:\/\/|\/uploads\/|audio_url|master|user_id/);
   });
-  it('an unlisted, draft, future-dated or another org’s release is not in it', async () => {
+  it('an unlisted, draft, cancelled or another org’s release is not in it', async () => {
     rel(RP).store_listed = false;
     expect((await (await list()).json()).releases).toEqual([]);
     Object.assign(rel(RP), { store_listed: true, state: 'draft' });
     expect((await (await list()).json()).releases).toEqual([]);
+    // A delivered release before its date is a TEASER (LABEL-72): on the store, as previews.
     Object.assign(rel(RP), { state: 'delivered', release_date: '2999-01-01' });
+    expect((await (await list()).json()).releases.map((r: { id: string }) => r.id)).toEqual([RP]);
+    rel(RP).state = 'cancelled';
     expect((await (await list()).json()).releases).toEqual([]);
     // The label's release is listed in the table but is not the store owner's.
     expect(rel(RL).store_listed).toBe(true);
@@ -151,10 +180,12 @@ describe('the detail', () => {
 });
 
 describe('the audio', () => {
-  it('full mode streams the item’s master through the server and never anything else', async () => {
+  it('full mode streams the private lossy derivative as a bounded partial — the master is never opened (LABEL-72)', async () => {
     const res = await audio(RP, I2);
-    expect(res.status).toBe(200);
-    expect(streamed).toEqual(['/uploads/orgs/p/tracks/2.wav']);
+    expect(res.status).toBe(206);
+    expect(res.headers.get('content-range')).toBe('bytes 0-2/3');
+    expect(derivatives).toEqual([`${P}:${T2}@`]);
+    expect(streamed).toEqual([]);
     expect(res.headers.get('cache-control')).toBe('private, max-age=60');
   });
   it('preview mode with no promoted copy is 404 — never the master, never the private clip', async () => {
@@ -175,12 +206,8 @@ describe('the audio', () => {
       for (const k of ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME', 'R2_PRIVATE_BUCKET_NAME']) delete process.env[k];
     }
   });
-  it('a master in the PUBLIC bucket is refused in full mode (private bucket only)', async () => {
-    process.env.R2_PRIVATE_BUCKET_NAME = 'priv';
-    db.tables.tracks[0].audio_url = 'r2://pub/anything.wav';
-    expect((await audio(RP, I1)).status).toBe(404);
-    expect(streamed).toEqual([]);
-  });
+  // A master in the PUBLIC bucket is refused when the derivative is cut (lib/storage/org-derivative.test.ts); the
+  // route never reads a master reference at all (LABEL-72), so there is nothing here left to refuse.
   it('an item of another release, an unknown item, an unlisted release: 404', async () => {
     expect((await audio(RP, IL)).status).toBe(404);
     expect((await audio(RP, '80000000-0000-4000-8000-0000000000ff')).status).toBe(404);
@@ -223,8 +250,9 @@ describe('review fixes (LABEL-42)', () => {
     const body = await (await detail(RP)).json();
     expect(body.tracks.map((t: { title: string }) => t.title)).toEqual(['One']);
     expect((await audio(RP, I2)).status).toBe(404);
-    expect((await audio(RP, I1)).status).toBe(200);
-    expect(streamed).toEqual(['/uploads/orgs/p/tracks/1.wav']);
+    expect((await audio(RP, I1)).status).toBe(206);
+    expect(derivatives).toEqual([`${P}:${T1}@`]);
+    expect(streamed).toEqual([]);
   });
 
   it('a release whose every item is unfinished is a 404 and not in the strip’s detail', async () => {
@@ -275,11 +303,14 @@ describe('review fixes (LABEL-42)', () => {
 });
 
 describe('re-review fixes (LABEL-42)', () => {
-  it('a delivery with only a future target date and no release date is not public — list, detail and audio all say no', async () => {
+  it('a delivery with only a future target date and no release date is a teaser: listed as previews, and its audio never plays full', async () => {
     Object.assign(rel(RP), { release_date: null, target_date: '2999-01-01' });
-    expect((await (await list()).json()).releases).toEqual([]);
-    expect((await detail(RP)).status).toBe(404);
+    expect((await (await list()).json()).releases[0]).toMatchObject({ id: RP });
+    const body = await (await detail(RP)).json();
+    expect(body.release.playback).toBe('preview');
+    // Stored `full`, but the date has not come: the derivative is not opened, and with no promoted copy there is nothing to play.
     expect((await audio(RP, I1)).status).toBe(404);
+    expect(derivatives).toEqual([]);
     expect(streamed).toEqual([]);
   });
 
@@ -326,9 +357,9 @@ describe('re-review fixes (LABEL-42)', () => {
   });
 
   it('the D4 result is kept for a few seconds, but the release row (listed, state, date) is read fresh', async () => {
-    expect((await audio(RP, I1)).status).toBe(200);
+    expect((await audio(RP, I1)).status).toBe(206);
     db.tables.tracks[0].song_stage = 'inbox'; // changes a recording’s input: seen after the short cache
-    expect((await audio(RP, I1)).status).toBe(200);
+    expect((await audio(RP, I1)).status).toBe(206);
     rel(RP).store_listed = false; // changes the release row: seen at once
     expect((await audio(RP, I1)).status).toBe(404);
     rel(RP).store_listed = true;
@@ -352,8 +383,8 @@ describe('round 3 (LABEL-42)', () => {
       if (table === 'release_items') itemReads += 1;
       return real(table);
     }) as typeof mem.client.from);
-    expect((await hit(RP, I1)).status).toBe(200);
-    expect((await hit(upper(RP), upper(I1))).status).toBe(200);
+    expect((await hit(RP, I1)).status).toBe(206);
+    expect((await hit(upper(RP), upper(I1))).status).toBe(206);
     expect(itemReads).toBe(1); // the second request found the first one's cache entry
     vi.restoreAllMocks();
     // 90 per minute in total across both spellings, not 90 each.
@@ -376,7 +407,7 @@ describe('round 3 (LABEL-42)', () => {
     const late = '80000000-0000-4000-8000-0000000000aa';
     expect((await audio(RP, late)).status).toBe(404);
     db.tables.release_items.push({ id: late, release_id: RP, org_id: P, position: 3, song_track_id: T1, master_track_id: T1, version_title: null, explicit: false });
-    expect((await audio(RP, late)).status).toBe(200);
+    expect((await audio(RP, late)).status).toBe(206);
   });
 
   it('empty or unfinished listings are filtered BEFORE the cut: 30 newer tile-less releases do not hide the real one', async () => {
@@ -424,5 +455,87 @@ describe('round 3 (LABEL-42)', () => {
     expect(res.status).toBe(500);
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(await res.json()).not.toHaveProperty('releases');
+  });
+});
+
+
+describe('playback rules and the master’s privacy (LABEL-72)', () => {
+  const hit = (range?: string, ip = '203.0.113.31', release = RP, item = I1) => {
+    const mod = import('./[id]/audio/[itemId]/route') as Promise<Record<string, Handler>>;
+    return mod.then((m) =>
+      m.GET(new NextRequest(`https://app.test/api/store/releases/${release}/audio/${item}`, { headers: { 'x-forwarded-for': ip, ...(range ? { range } : {}) } }), {
+        params: Promise.resolve({ id: release, itemId: item }),
+      }),
+    );
+  };
+
+  it('the visitor’s Range goes to the derivative reader, which is the one that caps it; an absent one is passed as absent', async () => {
+    await hit('bytes=0-');
+    await hit('bytes=100-5000000');
+    await hit();
+    expect(derivatives).toEqual([`${P}:${T1}@bytes=0-`, `${P}:${T1}@bytes=100-5000000`, `${P}:${T1}@`]);
+  });
+
+  it('a missing derivative is a 404 — never a fallback to the master', async () => {
+    derivativeExists = false;
+    const res = await hit();
+    expect(res.status).toBe(404);
+    expect(streamed).toEqual([]);
+  });
+
+  it('full playback is limited by the DURABLE limiter per IP across releases; a refusal is 429 with Retry-After', async () => {
+    await hit(undefined, '203.0.113.41');
+    await hit(undefined, '203.0.113.41', RP, I2);
+    expect(durableKeys).toEqual(['store-release-full:203.0.113.41', 'store-release-full:203.0.113.41']);
+    durableAllows = false;
+    const res = await hit(undefined, '203.0.113.42');
+    expect(res.status).toBe(429);
+    expect(res.headers.get('retry-after')).toBe('60');
+    expect(derivatives).toHaveLength(2);
+  });
+
+  it('preview playback does not spend the full-playback limiter', async () => {
+    rel(RP).store_playback = 'preview';
+    await hit(undefined, '203.0.113.43');
+    expect(durableKeys).toEqual([]);
+  });
+
+  it('full is derived from the date on every read: a later date reads as preview at once, and full again when it has come', async () => {
+    expect((await (await detail(RP)).json()).release.playback).toBe('full');
+    rel(RP).release_date = '2999-01-01';
+    expect((await (await detail(RP)).json()).release.playback).toBe('preview');
+    expect((await hit()).status).toBe(404);
+    expect(derivatives).toEqual([]);
+    rel(RP).release_date = '2024-02-02';
+    expect((await (await detail(RP)).json()).release.playback).toBe('full');
+    expect((await hit()).status).toBe(206);
+  });
+
+  it('an imported release keeps LABEL-42’s rules: released by definition, so full plays', async () => {
+    Object.assign(rel(RP), { imported_released: true, release_date: null });
+    expect((await (await detail(RP)).json()).release.playback).toBe('full');
+    expect((await hit()).status).toBe(206);
+  });
+
+  it('the master’s reference is in no public JSON, header or body — list, detail, audio, cover', async () => {
+    rel(RP).artwork_asset_id = ART;
+    const texts: string[] = [];
+    for (const res of [await list(), await detail(RP), await cover(RP), await hit(), await hit('bytes=0-')]) {
+      texts.push([...res.headers.entries()].map(([k, v]) => `${k}: ${v}`).join('\n'), await res.text());
+    }
+    const everything = texts.join('\n');
+    for (const secret of ['/uploads/orgs', 'r2://', 'tracks/1.wav', 'tracks/2.wav', 'orgs/', 'derivatives', 'master_audio_ref', 'audio_url": "/uploads', T1.replace(/-/g, '')]) {
+      expect(everything).not.toContain(secret);
+    }
+    // Nothing public ever asked storage for a master.
+    expect(streamed).toEqual([]);
+  });
+
+  it('no public route module can name a master: the stream plan has no such kind', async () => {
+    const { publicStreamPlan } = await import('@/lib/labelos/store-listing');
+    for (const playback of ['preview', 'full'] as const) {
+      const plan = publicStreamPlan(playback, RP, { master_track_id: T1 }, P);
+      expect(JSON.stringify(plan)).not.toMatch(/uploads|r2:|\.wav/);
+    }
   });
 });

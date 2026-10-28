@@ -8,13 +8,17 @@
  * `release.write` on the release (requireObjectAccess: 404 for another org's
  * release, one outside the member's artists or a producer-side id). The rules
  * are the pure lib/labelos/store-listing:
- *   - only a released release lists (delivered with its date come, or
- *     imported as already out); anything else is 409, nothing is written;
+ *   - a delivered release lists, even before its date, as a TEASER (preview
+ *     clips only, LABEL-72); an imported one lists as already out; a draft,
+ *     cancelled or withdrawn release is 409, nothing is written;
  *   - only the store owner's studio, or an artist connected to it, may list
  *     (Phase 8 brings label / artist storefronts): any other org is 409;
  *   - listing in `preview` mode COPIES each item's private clip to the public
- *     bucket (`promotePreviews`); `full` mode copies nothing — the master is
- *     streamed through the server by /api/store/releases/[id]/audio/[item];
+ *     bucket (`promotePreviews`); `full` mode (only from the release date; a
+ *     stored `full` reads as preview whenever the date has not come) cuts a lossy
+ *     full-length copy of each master into the PRIVATE bucket
+ *     (`ensureFullDerivative`) and the server streams that copy in bounded
+ *     partials from /api/store/releases/[id]/audio/[item] — never the master;
  *   - unlisting deletes the promoted previews only if the music was never
  *     publicly out AND the owner asked for it (the GET says when to ask).
  * Both directions are AUDIT events (`release.store_listed` / `…_unlisted`):
@@ -44,7 +48,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { releaseEventSubject } from '@/lib/labelos/releases';
-import { planList, planUnlist, releasedPublicly, type ListingFacts } from '@/lib/labelos/store-listing';
+import { effectivePlayback, isReleasedForStore, planList, planUnlist, releasedPublicly, type ListingFacts } from '@/lib/labelos/store-listing';
 import { proposalRecipients, summarizeConsents, planProposal, answerableContacts } from '@/lib/labelos/store-consent';
 import { blockedByConsent, enforceRefusal, insertProposals, loadAccountLinks, loadCreditedArtists, readConsents, readVeto } from '@/lib/labelos/store-consent-store';
 import { askArtistsAboutListing } from '@/lib/labelos/store-consent-notify';
@@ -57,11 +61,14 @@ import {
   readPlayback,
 } from '@/lib/labelos/store-listing-store';
 import { deletePromotedPreviews, promotePreviews } from '@/lib/storage/store-release-media';
+import { ensureFullDerivative } from '@/lib/storage/org-derivative';
 import { isR2Configured } from '@/lib/local-store';
 import { fail, importedNeedsOwnerOrAdmin, schemaAware } from '../../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Cutting the full-length listening copies of a long tracklist is ffmpeg work; a retry skips the ones already made.
+export const maxDuration = 300;
 
 const log = createLogger('api.org.releases.store');
 
@@ -143,6 +150,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return json(200, {
       ...stateOf(release, playback, plan.ok ? { ok: true } : { ok: false, error: plan.error, field: plan.field ?? null }, unlist.ok && unlist.askToDeletePreviews),
       playbackChoice: schemaReady,
+      // LABEL-72: what visitors hear now, and whether full songs can be chosen yet (they can from the release date).
+      effectivePlayback: effectivePlayback(playback, release, now),
+      fullAvailable: isReleasedForStore(release, now),
+      releaseDate: release.release_date,
       consent: await consentView(access, release, consents),
       vetoed: veto.vetoed,
     });
@@ -283,8 +294,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   // What a visitor can play must exist before the release is public.
   let promoted: string[] = [];
+  let derivatives = 0;
   try {
-    if (plan.playback === 'preview') {
+    if (plan.effective === 'preview') {
       promoted = await promotePreviews(org, release.id, items.map((i) => ({ masterTrackId: i.master_track_id, privatePreviewRef: i.master_preview_ref })));
       // ALL or nothing: a listed release with a silent track is worse than one that waits a few minutes.
       const missing = items.filter((i) => !promoted.includes(i.master_track_id));
@@ -296,8 +308,29 @@ export async function PUT(req: NextRequest, { params }: Params) {
           items: missing.map((i) => i.id),
         });
       }
-    } else if (!items.some((i) => i.master_audio_ref)) {
-      return json(409, { error: 'None of the recordings on this release can be played', field: 'items' });
+    } else {
+      // Full songs (LABEL-72) are a lossy full-length copy cut from each master into the private bucket; the
+      // master itself is never what a visitor streams. All or nothing, like the previews; a retry only cuts what
+      // is missing. A few at a time: ffmpeg is the cost.
+      const ready: boolean[] = new Array(items.length).fill(false);
+      let next = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(3, items.length) }, async () => {
+          while (next < items.length) {
+            const at = next++;
+            ready[at] = await ensureFullDerivative(org, items[at].master_track_id, items[at].master_audio_ref);
+          }
+        }),
+      );
+      const missing = items.filter((_, i) => !ready[i]);
+      if (missing.length > 0) {
+        return json(409, {
+          error: `The full-length listening copy of ${missing.map((i) => `“${i.title}”`).join(', ')} is not ready yet; try again in a few minutes`,
+          field: 'items',
+          items: missing.map((i) => i.id),
+        });
+      }
+      derivatives = items.length;
     }
   } catch (err) {
     log.error('promote failed', { releaseId, error: errorMessage(err) });
@@ -366,8 +399,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   try {
     await recordEvent(admin, actor, 'release.store_listed', subject, {
       playback: plan.playback,
+      effectivePlayback: plan.effective,
       items: items.length,
       promoted: promoted.length,
+      derivatives,
       relisted: plan.alreadyListed,
       // LABEL-71: counts only — never who, never what they answered.
       consentAsked: proposal.asked.length,
@@ -406,6 +441,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   return json(200, {
     listed: true,
     playback: plan.playback,
+    effectivePlayback: plan.effective,
     promoted: promoted.length,
     consent: consents.schemaReady
       ? { schemaReady: true, asked: proposal.asked.length, notified, unreachable: proposal.unreachable.length, status: await consentStatus(admin, release.id) }

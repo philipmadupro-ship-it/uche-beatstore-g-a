@@ -71,13 +71,24 @@ export function isOrgMasterRef(ref: string | null | undefined): boolean {
   return typeof ref === 'string' && /^r2:\/\/[^/]+\/orgs\/[0-9a-f-]{36}\/tracks\//i.test(ref);
 }
 
-export type OrgMediaKind = 'previews' | 'peaks';
+export type OrgMediaKind = 'previews' | 'peaks' | 'derivatives';
 
 /** `orgs/<org>/<kind>/<id>.<ext>` — the private home of a derived file. */
 export function orgMediaKey(orgId: string, kind: OrgMediaKind, id: string, ext: string): string {
   const safeExt = ext.replace(/[^a-z0-9]/gi, '').toLowerCase() || 'bin';
   const safeId = id.replace(/[^A-Za-z0-9_-]/g, '') || 'x';
   return `orgs/${org(orgId)}/${kind}/${safeId}.${safeExt}`;
+}
+
+/**
+ * Where the lossy FULL-LENGTH derivative of a recording lives (LABEL-72): deterministic from the org and the
+ * master track, so it needs no column, is found again after a re-list, and goes with `orgs/<org>/` when the
+ * organization is purged. Private bucket only; never a public URL. Null for anything that is not a UUID.
+ */
+export function orgDerivativeKey(orgId: string, masterTrackId: string): string | null {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuid.test(orgId) || !uuid.test(masterTrackId)) return null;
+  return orgMediaKey(orgId, 'derivatives', masterTrackId.toLowerCase(), 'mp3');
 }
 
 /**

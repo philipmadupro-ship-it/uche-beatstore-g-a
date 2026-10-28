@@ -20,6 +20,7 @@ import { refusalsAndVetoes } from './store-consent-store';
 import { orgTrackReadClass, type InboundLink } from './org-read';
 import {
   boundedPut,
+  effectivePlayback,
   isPubliclyVisible,
   isStorePlayback,
   orgMayListOnStore,
@@ -307,8 +308,12 @@ async function artistNames(admin: any, releases: readonly { contact_id: string; 
   return out;
 }
 
-function playbackOf(r: ListingRelease): StorePlayback {
-  return isStorePlayback(r.store_playback) ? r.store_playback : 'preview';
+/**
+ * How a visitor hears this release RIGHT NOW (LABEL-72): the stored choice, but `full` only once the release date
+ * has come. Derived on every read, so a date stated later turns the release back into a preview by itself.
+ */
+function playbackOf(r: ListingRelease, now: Date): StorePlayback {
+  return effectivePlayback(isStorePlayback(r.store_playback) ? r.store_playback : 'preview', r, now);
 }
 
 function toPublicRow(r: ListingRelease, playback: StorePlayback, artist: string | null): PublicReleaseRow {
@@ -360,7 +365,7 @@ export async function loadPublicRelease(admin: any, releaseId: string, now: Date
   // Per item: a recording that is not finished music is never served, even from a listed release.
   const items = listableItems(loaded);
   if (items.length === 0) return null;
-  const playback = playbackOf(release);
+  const playback = playbackOf(release, now);
   return { release, playback, consentGoverned: consent.governed.has(key), row: toPublicRow(release, playback, names.get(`${release.org_id}:${release.contact_id}`) ?? null), items };
 }
 
@@ -447,7 +452,7 @@ export async function loadPublicReleaseList(admin: any, now: Date, limit = 24): 
           if (out.length >= limit) break;
           const trackCount = listableItems(itemsByRelease.get(r.id) ?? []).length;
           if (trackCount === 0) continue;
-          out.push({ row: toPublicRow(r, playbackOf(r), names.get(`${r.org_id}:${r.contact_id}`) ?? null), trackCount });
+          out.push({ row: toPublicRow(r, playbackOf(r, now), names.get(`${r.org_id}:${r.contact_id}`) ?? null), trackCount });
         }
       }
     }
