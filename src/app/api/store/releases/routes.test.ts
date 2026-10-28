@@ -308,6 +308,7 @@ describe('re-review fixes (LABEL-42)', () => {
     expect((await (await list()).json()).releases[0]).toMatchObject({ id: RP });
     const body = await (await detail(RP)).json();
     expect(body.release.playback).toBe('preview');
+    expect(body.release.out).toBe(false);
     // Stored `full`, but the date has not come: the derivative is not opened, and with no promoted copy there is nothing to play.
     expect((await audio(RP, I1)).status).toBe(404);
     expect(derivatives).toEqual([]);

@@ -243,6 +243,7 @@ describe('publicReleaseView', () => {
     store_listed_at: '2026-10-13T00:00:00Z',
     store_playback: 'full',
     has_artwork: true,
+    out: true,
     artist_name: 'Nova',
   };
   it('is built field by field: playable tracks in order, same-origin streams, nothing private', () => {

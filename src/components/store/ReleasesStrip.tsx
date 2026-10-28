@@ -22,6 +22,8 @@ export interface ReleaseTile {
   primary_genre: string | null;
   release_date: string | null;
   already_out: boolean;
+  /** false = a teaser listed before its release date; absent from an older server = out. */
+  out?: boolean;
   cover_url: string | null;
   track_count: number;
 }
@@ -66,7 +68,7 @@ export function ReleasesStrip() {
                 {[r.artist, releaseYear(r.release_date)].filter(Boolean).join(' · ') || r.type}
               </p>
               <span className="mt-1 inline-block rounded-md border border-white/10 px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">
-                Released
+                {r.out === false ? 'Coming soon' : 'Released'}
               </span>
             </Link>
           </li>

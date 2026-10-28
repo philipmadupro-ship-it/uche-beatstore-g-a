@@ -22,6 +22,7 @@ import {
   boundedPut,
   effectivePlayback,
   isPubliclyVisible,
+  isReleasedForStore,
   isStorePlayback,
   orgMayListOnStore,
   type ListingFacts,
@@ -316,7 +317,7 @@ function playbackOf(r: ListingRelease, now: Date): StorePlayback {
   return effectivePlayback(isStorePlayback(r.store_playback) ? r.store_playback : 'preview', r, now);
 }
 
-function toPublicRow(r: ListingRelease, playback: StorePlayback, artist: string | null): PublicReleaseRow {
+function toPublicRow(r: ListingRelease, playback: StorePlayback, artist: string | null, now: Date): PublicReleaseRow {
   return {
     id: r.id,
     title: r.title,
@@ -329,6 +330,7 @@ function toPublicRow(r: ListingRelease, playback: StorePlayback, artist: string 
     store_playback: playback,
     has_artwork: !!r.artwork_asset_id,
     artist_name: artist,
+    out: isReleasedForStore(r, now),
   };
 }
 
@@ -366,7 +368,7 @@ export async function loadPublicRelease(admin: any, releaseId: string, now: Date
   const items = listableItems(loaded);
   if (items.length === 0) return null;
   const playback = playbackOf(release, now);
-  return { release, playback, consentGoverned: consent.governed.has(key), row: toPublicRow(release, playback, names.get(`${release.org_id}:${release.contact_id}`) ?? null), items };
+  return { release, playback, consentGoverned: consent.governed.has(key), row: toPublicRow(release, playback, names.get(`${release.org_id}:${release.contact_id}`) ?? null, now), items };
 }
 
 /**
@@ -452,7 +454,7 @@ export async function loadPublicReleaseList(admin: any, now: Date, limit = 24): 
           if (out.length >= limit) break;
           const trackCount = listableItems(itemsByRelease.get(r.id) ?? []).length;
           if (trackCount === 0) continue;
-          out.push({ row: toPublicRow(r, playbackOf(r, now), names.get(`${r.org_id}:${r.contact_id}`) ?? null), trackCount });
+          out.push({ row: toPublicRow(r, playbackOf(r, now), names.get(`${r.org_id}:${r.contact_id}`) ?? null, now), trackCount });
         }
       }
     }

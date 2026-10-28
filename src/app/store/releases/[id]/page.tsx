@@ -43,6 +43,7 @@ interface ReleaseDetail {
     primary_genre: string | null;
     release_date: string | null;
     already_out: boolean;
+    out?: boolean;
     cover_url: string | null;
     track_count: number;
     playback: 'preview' | 'full';
@@ -111,7 +112,7 @@ export default function StoreReleasePage({ params }: { params: Promise<{ id: str
         meta={
           <>
             <span className="rounded-md border border-white/10 px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/55" data-testid="released-badge">
-              Released
+              {release.out === false ? 'Coming soon' : 'Released'}
             </span>
             {meta.map((m, i) => (
               <span key={i} className="flex items-center gap-2">

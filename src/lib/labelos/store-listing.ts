@@ -259,6 +259,8 @@ export interface PublicReleaseRow {
   store_playback: StorePlayback;
   has_artwork: boolean;
   artist_name: string | null;
+  /** Out now (`isReleasedForStore`); false for a teaser listed before its release date (LABEL-72). */
+  out: boolean;
 }
 
 export interface PublicReleaseItemRow {
@@ -303,6 +305,7 @@ export function publicReleaseTile(r: PublicReleaseRow, trackCount: number) {
     primary_genre: r.primary_genre,
     release_date: r.release_date,
     already_out: r.imported_released,
+    out: r.out,
     cover_url: r.has_artwork ? publicReleaseCoverUrl(r.id) : null,
     track_count: trackCount,
   };
