@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const loaded = await loadPublicRelease(admin, id, new Date());
     if (!loaded) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const res = NextResponse.json(publicReleaseView(loaded.row, toPublicItems(loaded.items)));
-    res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+    res.headers.set('Cache-Control', loaded.consentGoverned ? 'no-store' : 'public, s-maxage=30, stale-while-revalidate=60');
     return res;
   } catch (err) {
     log.error('detail failed', { id, error: errorMessage(err) });

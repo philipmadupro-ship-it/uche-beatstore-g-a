@@ -79,7 +79,7 @@ describe('navGroupsFor', () => {
     const groups = navGroupsFor('producer', new Set(ALL_CAPABILITIES), { slug: 'uche', viewerIsProducer: true });
     expect(shape(groups.slice(0, 3))).toEqual(PRODUCER_HUBS);
     expect(shape(groups.slice(3))).toEqual([
-      { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/uche/settings/members', icon: 'UsersRound' }] },
+      { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/uche/settings/members', icon: 'UsersRound' }, { label: 'Store listings', href: '/o/uche/releases/store', icon: 'Store' }] },
     ]);
   });
 
@@ -94,7 +94,7 @@ describe('navGroupsFor', () => {
     expect(shape(groups)).toEqual([
       { key: 'roster', label: 'Artists', icon: 'MicVocal', items: [{ label: 'Artists', href: '/o/night-shift/artists', icon: 'MicVocal' }, { label: 'Music', href: '/o/night-shift/music', icon: 'Music2' }] },
       { key: 'releases', label: 'Releases', icon: 'Disc3', items: [{ label: 'Releases', href: '/o/night-shift/releases', icon: 'Disc3' }] },
-      { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/night-shift/settings/members', icon: 'UsersRound' }] },
+      { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/night-shift/settings/members', icon: 'UsersRound' }, { label: 'Store listings', href: '/o/night-shift/releases/store', icon: 'Store' }] },
     ]);
   });
 
@@ -188,11 +188,19 @@ describe('navGroupsFor', () => {
   });
 
   it('Connections (LABEL-41) is for label and artist orgs, for whoever holds org.manage', () => {
+    // Store listings (LABEL-71) sits between Members and Connections for every kind that is licensed for the store.
     const items = (kind: string, caps: string[]) => navGroupsFor(kind, new Set(caps), { slug: 's', viewerIsProducer: false }).find((g) => g.key === 'org')?.items.map((i) => i.href);
-    expect(items('label', ['org.manage', 'catalog.read'])).toEqual(['/o/s/settings/members', '/o/s/settings/connections']);
-    expect(items('artist', ['org.manage'])).toEqual(['/o/s/settings/members', '/o/s/settings/connections']);
-    expect(items('label', ['catalog.read'])).toEqual(['/o/s/settings/members']);
-    expect(items('producer', ['org.manage'])).toEqual(['/o/s/settings/members']);
+    const STORE = '/o/s/releases/store';
+    expect(items('label', ['org.manage', 'catalog.read'])).toEqual(['/o/s/settings/members', STORE, '/o/s/settings/connections']);
+    expect(items('artist', ['org.manage'])).toEqual(['/o/s/settings/members', STORE, '/o/s/settings/connections']);
+    expect(items('label', ['catalog.read'])).toEqual(['/o/s/settings/members', STORE]);
+    expect(items('producer', ['org.manage'])).toEqual(['/o/s/settings/members', STORE]);
+  });
+
+  it('Store listings (LABEL-71) is drawn only for an org licensed for the store', () => {
+    const items = (modules: string[]) => navGroupsFor('label', new Set(['catalog.read']), { slug: 's', viewerIsProducer: false, modules }).find((g) => g.key === 'org')?.items.map((i) => i.label);
+    expect(items(['store'])).toContain('Store listings');
+    expect(items(['finance'])).not.toContain('Store listings');
   });
 
   it('an org without its slug, or of an unknown kind, has nothing to link to', () => {

@@ -139,6 +139,9 @@ function seed(): MemoryDb {
       org_saved_views: [{ id: VIEW, org_id: L, created_by: OWNER, subject: 'songs', name: 'Nova demos', definition: { v: 1, subject: 'songs', filter: { artistIds: [C1] } }, shared: true, created_at: '2026-10-01', updated_at: '2026-10-01' }],
       tasks: [{ id: TASK, org_id: L, title: 'Clear the sample', assignee_id: EDITOR, created_by: OWNER, song_id: S1, artist_id: null, project_id: null, release_id: null, created_at: '2026-10-01', done_at: null }],
       notifications: [{ id: NOTE, user_id: EDITOR, org_id: L, kind: 'task_assigned', title: 'Owner assigned you a task', body: 'Clear the sample', data: null, read: false, created_at: '2026-10-01' }],
+      // LABEL-71: an artist's pending question on the release (Nova's contact), and the store owner's veto table
+      listing_consents: [{ id: 'c1710000-0000-4000-8000-000000000001', org_id: L, release_id: RELEASE, artist_contact_id: C1, state: 'proposed', proposed_by: OWNER, proposed_at: '2026-10-01', decided_by: null, decided_at: null }],
+      store_listing_vetoes: [],
       user_profiles: [],
       creator_profiles: [],
       track_links: [],
@@ -488,6 +491,43 @@ describe('LABEL-42: putting a release on the store is not an external member\'s'
       expect(mem.writes).toEqual([]);
     });
   }
+});
+
+describe('LABEL-71: artist consent on the store is not an external member\'s (route by route)', () => {
+  const routes: [string, string, unknown][] = [
+    ['[orgId]/releases/[releaseId]/consent/route.ts', 'PUT', { decision: 'no' }],
+    ['[orgId]/consents/route.ts', 'GET', undefined],
+    ['[orgId]/connected-releases/route.ts', 'GET', undefined],
+    ['[orgId]/connected-releases/[releaseId]/route.ts', 'PUT', { listed: false }],
+  ];
+
+  it('the routes exist and none is on the external allowlist', () => {
+    for (const [route, method] of routes) {
+      expect(files).toContain(route);
+      expect(externalRouteKeys()).not.toContain(`${route}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: cannot answer for an artist, read the questions or reach the store owner's list; nothing is written`, async () => {
+      for (const [path, method, body] of routes) {
+        const res = await call(path, method, user, { body });
+        expect([403, 404], `${method} ${path} answered ${res.status}`).toContain(res.status);
+      }
+      expect(db.tables.listing_consents[0].state).toBe('proposed');
+      expect(db.tables.store_listing_vetoes).toEqual([]);
+      expect(db.tables.releases[0].store_listed).not.toBe(true);
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+
+  it('the owner of the org is not the artist either: only the account that stands for Nova may answer', async () => {
+    const res = await call(routes[0][0], 'PUT', OWNER, { body: { decision: 'no' } });
+    expect(res.status).toBe(404);
+    expect(db.tables.listing_consents[0].state).toBe('proposed');
+    const strangers = [STRANGER, null];
+    for (const who of strangers) expect([401, 403, 404]).toContain((await call(routes[0][0], 'PUT', who, { body: { decision: 'no' } })).status);
+  });
 });
 
 describe('LABEL-27: credits and parties (route by route)', () => {

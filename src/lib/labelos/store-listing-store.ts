@@ -16,6 +16,7 @@
  */
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { resolveStoreOwner } from '@/lib/store/owner';
+import { refusalsAndVetoes } from './store-consent-store';
 import { orgTrackReadClass, type InboundLink } from './org-read';
 import {
   boundedPut,
@@ -331,6 +332,8 @@ export type PublicReleaseLoad = {
   playback: StorePlayback;
   row: PublicReleaseRow;
   items: ListingItem[];
+  /** An artist has a say on this release (a consent row exists) or the owner vetoed it: nothing about it may sit in a cache. */
+  consentGoverned: boolean;
 };
 
 /**
@@ -348,12 +351,17 @@ export async function loadPublicRelease(admin: any, releaseId: string, now: Date
   if (!release || !isPubliclyVisible(release, now)) return null;
   const owner = await cachedStoreOwnerOrgs(admin);
   if (!owner || !orgMayListOnStore(release.org_id, owner)) return null;
-  const [loaded, names] = await Promise.all([cachedItems(admin, release, opts.itemId), artistNames(admin, [release])]);
+  // LABEL-71: a credited artist's no, or the store owner's veto, takes the release off the store on this very
+  // request. Read fresh every time (never cached), like `store_listed`, in parallel with the other reads; an
+  // unreadable consent table fails closed.
+  const [consent, loaded, names] = await Promise.all([refusalsAndVetoes(admin, [release.id]), cachedItems(admin, release, opts.itemId), artistNames(admin, [release])]);
+  const key = release.id.toLowerCase();
+  if (consent.refused.has(key) || consent.vetoed.has(key)) return null;
   // Per item: a recording that is not finished music is never served, even from a listed release.
   const items = listableItems(loaded);
   if (items.length === 0) return null;
   const playback = playbackOf(release);
-  return { release, playback, row: toPublicRow(release, playback, names.get(`${release.org_id}:${release.contact_id}`) ?? null), items };
+  return { release, playback, consentGoverned: consent.governed.has(key), row: toPublicRow(release, playback, names.get(`${release.org_id}:${release.contact_id}`) ?? null), items };
 }
 
 /**
@@ -404,8 +412,11 @@ const LIST_MAX_PAGES = 5;
  * ones out. A failed read throws (the route answers 5xx, never a cacheable
  * empty list).
  */
-export async function loadPublicReleaseList(admin: any, now: Date, limit = 24): Promise<{ row: PublicReleaseRow; trackCount: number }[]> {
-  const out: { row: PublicReleaseRow; trackCount: number }[] = [];
+export type PublicReleaseList = { row: PublicReleaseRow; trackCount: number }[] & { consentGoverned?: boolean };
+
+export async function loadPublicReleaseList(admin: any, now: Date, limit = 24): Promise<PublicReleaseList> {
+  /** `consentGoverned`: some tile belongs to a release an artist has a say on, so the list must not sit in a cache. */
+  const out: PublicReleaseList = [];
   let owner: StoreOwnerOrgs | null | undefined;
   for (let page = 0; page < LIST_MAX_PAGES && out.length < limit; page += 1) {
     const { data, error } = await selectPublic(admin, (q) =>
@@ -425,7 +436,11 @@ export async function loadPublicReleaseList(admin: any, now: Date, limit = 24): 
     if (visible.length > 0) {
       if (owner === undefined) owner = await cachedStoreOwnerOrgs(admin);
       if (!owner) return out;
-      const rows = visible.filter((r) => orgMayListOnStore(r.org_id, owner as StoreOwnerOrgs));
+      const mine = visible.filter((r) => orgMayListOnStore(r.org_id, owner as StoreOwnerOrgs));
+      // LABEL-71: one batched read per page; a release with an artist's no (or a veto) has no tile.
+      const consent = mine.length > 0 ? await refusalsAndVetoes(admin, mine.map((r) => r.id)) : { refused: new Set<string>(), vetoed: new Set<string>(), governed: new Set<string>() };
+      const rows = mine.filter((r) => !consent.refused.has(r.id.toLowerCase()) && !consent.vetoed.has(r.id.toLowerCase()));
+      if (rows.some((r) => consent.governed.has(r.id.toLowerCase()))) out.consentGoverned = true;
       if (rows.length > 0) {
         const [itemsByRelease, names] = await Promise.all([loadItemsFor(admin, rows), artistNames(admin, rows)]);
         for (const r of rows) {

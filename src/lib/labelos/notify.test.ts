@@ -20,8 +20,8 @@ const YOU = '20000000-0000-4000-8000-000000000002';
 const ask = (over: Partial<DirectAsk> = {}): DirectAsk => ({ kind: 'task_assigned', orgId: ORG, recipientId: YOU, actorId: ME, actorName: 'Sam', subject: 'Clear the sample', ...over });
 
 describe('the closed union', () => {
-  it('is exactly the five direct asks of 08 §B6', () => {
-    expect([...DIRECT_ASK_KINDS]).toEqual(['task_assigned', 'approval_requested', 'mention', 'credit_named_you', 'invitation', 'party_confirmation']);
+  it('is exactly the direct asks of 08 §B6, plus the two later single-recipient asks (rights details LABEL-54, store listing LABEL-71)', () => {
+    expect([...DIRECT_ASK_KINDS]).toEqual(['task_assigned', 'approval_requested', 'mention', 'credit_named_you', 'invitation', 'party_confirmation', 'listing_proposed']);
   });
 
   it('forbids broadcast kinds: nothing about uploads, stages, reviews, members or "everyone"', () => {
@@ -169,9 +169,26 @@ describe('nothing else writes org notifications', () => {
       .sort();
     // Direct asks arise where one person asks another for something: assigning a task, or asking one
     // member to decide an approval gate (LABEL-30; the route that takes the request, not the decision), or
-    // asking the one person a party names to confirm their own rights details (LABEL-54).
+    // asking the one person a party names to confirm their own rights details (LABEL-54), or asking each artist
+    // credited on a release for their say on putting it on the store (LABEL-71: the one module
+    // store-consent-notify, which only the store-listing route imports — see the next test).
     // A new caller is a visible edit here, with a reason, not an upload hook.
-    expect(callers).toEqual(['app/api/org/[orgId]/approvals/route.ts', 'app/api/org/[orgId]/parties/[partyId]/invite/route.ts', 'app/api/org/[orgId]/tasks/[taskId]/route.ts', 'app/api/org/[orgId]/tasks/route.ts']);
+    expect(callers).toEqual([
+      'app/api/org/[orgId]/approvals/route.ts',
+      'app/api/org/[orgId]/parties/[partyId]/invite/route.ts',
+      'app/api/org/[orgId]/tasks/[taskId]/route.ts',
+      'app/api/org/[orgId]/tasks/route.ts',
+      'lib/labelos/store-consent-notify.ts',
+    ]);
     for (const c of callers) expect(c).not.toMatch(/upload|song|stage|review|release/i);
+  });
+
+  it('the listing_proposed ask is sent from exactly one route: the store-listing PUT', () => {
+    const importers = files(SRC)
+      .filter((f) => /store-consent-notify/.test(strip(readFileSync(f, 'utf8'))))
+      .map((f) => relative(SRC, f).split(sep).join('/'))
+      .filter((f) => !/store-consent-notify(\.test)?\.ts$/.test(f))
+      .sort();
+    expect([...new Set(importers)]).toEqual(['app/api/org/[orgId]/releases/[releaseId]/store/route.ts']);
   });
 });

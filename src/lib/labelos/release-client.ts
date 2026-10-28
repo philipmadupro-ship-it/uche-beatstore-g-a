@@ -86,6 +86,15 @@ export const deliverRelease = (orgId: string, releaseId: string, input: DeliverI
 
 /* ── The store bridge (LABEL-42) ─────────────────────────────────────── */
 
+/** Where artist consent stands on a release (LABEL-71); the artists listed are only those in the viewer's own scope. */
+export type ConsentView =
+  | { schemaReady: false }
+  | {
+      schemaReady: true;
+      status: 'none' | 'waiting' | 'agreed' | 'refused';
+      artists: { contactId: string; name: string; state: 'proposed' | 'yes' | 'no'; decidedAt: string | null; mine: boolean }[];
+    };
+
 export type StoreState = {
   listed: boolean;
   listedAt: string | null;
@@ -94,12 +103,23 @@ export type StoreState = {
   playbackChoice: boolean;
   canList: { ok: true } | { ok: false; error: string; field: string | null };
   unlist: { askToDeletePreviews: boolean };
+  /** LABEL-71; absent from an older server. */
+  consent?: ConsentView;
+  vetoed?: boolean;
 };
 
 export const getReleaseStore = (orgId: string, releaseId: string) => send<StoreState>(`${base(orgId, releaseId)}/store`, 'GET');
 
+export type ListedAnswer = {
+  listed: true;
+  playback: string;
+  promoted: number;
+  /** LABEL-71: how many artists were asked, told, and could not be (no account to tell). */
+  consent?: { schemaReady: boolean; asked?: number; notified?: number; unreachable?: number; status?: string };
+};
+
 export const listReleaseOnStore = (orgId: string, releaseId: string, playback: 'preview' | 'full') =>
-  send<{ listed: true; playback: string; promoted: number }>(`${base(orgId, releaseId)}/store`, 'PUT', { listed: true, playback });
+  send<ListedAnswer>(`${base(orgId, releaseId)}/store`, 'PUT', { listed: true, playback });
 
 export const unlistReleaseFromStore = (orgId: string, releaseId: string, deletePreviews: boolean) =>
   send<{ listed: false; previewsDeleted: boolean }>(`${base(orgId, releaseId)}/store`, 'PUT', { listed: false, delete_previews: deletePreviews });
@@ -116,3 +136,44 @@ export const importReleasedRelease = (orgId: string, input: ImportInput) =>
     ...(input.upc ? { upc: input.upc } : {}),
     imported_released: true,
   });
+
+/* ── Artist consent and the store owner's list (LABEL-71) ────────────── */
+
+/** The artist's own answer on a listing (the server decides who the artist is). */
+export const answerListing = (orgId: string, releaseId: string, decision: 'yes' | 'no') =>
+  send<{ decision: 'yes' | 'no'; changed: boolean; unlisted: boolean }>(`${base(orgId, releaseId)}/consent`, 'PUT', { decision });
+
+export type MyConsent = {
+  releaseId: string;
+  title: string;
+  type: string;
+  releaseDate: string | null;
+  listed: boolean;
+  releaseState: string;
+  state: 'proposed' | 'yes' | 'no';
+  proposedAt: string;
+  decidedAt: string | null;
+};
+
+export const getMyConsents = (orgId: string) => send<{ schemaReady?: boolean; consents: MyConsent[] }>(`/api/org/${orgId}/consents`, 'GET');
+
+export type ConnectedRelease = {
+  releaseId: string;
+  title: string;
+  type: string;
+  artist: string | null;
+  artistOrg: string;
+  releaseDate: string | null;
+  listed: boolean;
+  listedAt: string | null;
+  playback: 'preview' | 'full';
+  vetoed: boolean;
+  refused: boolean;
+  serving: boolean;
+};
+
+export const getConnectedReleases = (orgId: string) => send<{ schemaReady: boolean; releases: ConnectedRelease[]; truncated?: boolean }>(`/api/org/${orgId}/connected-releases`, 'GET');
+
+/** The store owner's Unlist (`listed: false`) and Allow again (`listed: true`). */
+export const setConnectedRelease = (orgId: string, releaseId: string, listed: boolean) =>
+  send<{ listed: boolean; changed: boolean }>(`/api/org/${orgId}/connected-releases/${releaseId}`, 'PUT', { listed });

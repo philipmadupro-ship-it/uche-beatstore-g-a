@@ -154,4 +154,70 @@ describe('ReleaseStoreCard', () => {
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
     expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ listed: true, playback: 'preview' });
   });
+
+  describe('artist consent (LABEL-71)', () => {
+    const consent = (over: Record<string, unknown> = {}) => ({
+      schemaReady: true,
+      status: 'waiting',
+      artists: [
+        { contactId: 'c1', name: 'Nova', state: 'proposed', decidedAt: null, mine: false },
+        { contactId: 'c2', name: 'Feat', state: 'yes', decidedAt: '2026-10-02', mine: false },
+      ],
+      ...over,
+    });
+
+    it('shows each artist in the viewer’s scope with where they stand, and what that means for the release', async () => {
+      state = { ...base, listed: true, consent: consent() };
+      mount();
+      const block = await screen.findByTestId('release-store-consent');
+      expect(block.getAttribute('data-status')).toBe('waiting');
+      expect(block.textContent).toMatch(/Nova/);
+      expect(block.textContent).toMatch(/an artist’s no takes it off at once/);
+      expect(screen.getAllByTestId('release-store-consent-artist').map((e) => e.getAttribute('data-state'))).toEqual(['proposed', 'yes']);
+      // Nobody but the artist has Yes / No buttons.
+      expect(screen.queryByTestId('release-store-consent-no')).toBeNull();
+    });
+
+    it('the artist’s own row has the buttons; a no is confirmed and sent as { decision: "no" }', async () => {
+      confirmToast.mockResolvedValue(true);
+      state = { ...base, listed: true, consent: consent({ artists: [{ contactId: 'c1', name: 'Nova', state: 'proposed', decidedAt: null, mine: true }] }) };
+      mount(false, false);
+      fireEvent.click(await screen.findByTestId('release-store-consent-no'));
+      await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+      expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ url: '/api/org/o1/releases/r1/consent', body: { decision: 'no' } });
+    });
+
+    it('a refused release says so, and offers no way around it', async () => {
+      state = {
+        ...base,
+        listed: false,
+        canList: { ok: false, error: 'An artist on this release has said no to the store. It can be listed again once they say yes.', field: 'consent' },
+        consent: consent({ status: 'refused', artists: [{ contactId: 'c1', name: 'Nova', state: 'no', decidedAt: '2026-10-02', mine: false }] }),
+      };
+      mount();
+      expect((await screen.findByTestId('release-store-blocked')).textContent).toMatch(/said no/);
+      expect(screen.getByTestId('release-store-consent').textContent).toMatch(/stays off the store until they say yes/);
+      expect(screen.queryByTestId('release-store-list')).toBeNull();
+    });
+
+    it('after listing, says how many artists were asked and how many nobody could tell', async () => {
+      vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? 'GET';
+        calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+        return { ok: true, status: 200, json: async () => (method === 'GET' ? state : { listed: true, playback: 'preview', promoted: 1, consent: { schemaReady: true, asked: 2, notified: 1, unreachable: 1, status: 'waiting' } }) } as Response;
+      });
+      mount();
+      fireEvent.click(await screen.findByTestId('release-store-list'));
+      const note = await screen.findByTestId('release-store-asked');
+      expect(note.textContent).toMatch(/2 artists were asked/);
+      expect(note.textContent).toMatch(/1 has no account in this organization, so nobody could be told/);
+    });
+
+    it('the store owner’s veto is stated', async () => {
+      state = { ...base, listed: false, vetoed: true };
+      mount();
+      expect((await screen.findByTestId('release-store-vetoed')).textContent).toMatch(/store owner has taken this release off/);
+    });
+  });
 });
+

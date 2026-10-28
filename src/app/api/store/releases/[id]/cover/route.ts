@@ -48,7 +48,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     const upstream = await streamProjectAsset(req, asset.url, { fileName: asset.file_name, mime: asset.mime, inline: true });
     const headers = new Headers(upstream.headers);
-    headers.set('cache-control', 'public, max-age=60, s-maxage=60');
+    headers.set('cache-control', loaded.consentGoverned ? 'no-store' : 'public, max-age=60, s-maxage=60');
     return new Response(upstream.body, { status: upstream.status, headers });
   } catch (err) {
     log.error('cover failed', { id, error: errorMessage(err) });
