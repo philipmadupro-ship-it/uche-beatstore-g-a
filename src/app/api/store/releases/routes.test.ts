@@ -461,7 +461,7 @@ describe('round 3 (LABEL-42)', () => {
 
 describe('playback rules and the master’s privacy (LABEL-72)', () => {
   const hit = (range?: string, ip = '203.0.113.31', release = RP, item = I1) => {
-    const mod = import('./[id]/audio/[itemId]/route') as Promise<Record<string, Handler>>;
+    const mod = import('./[id]/audio/[itemId]/route') as unknown as Promise<Record<string, Handler>>;
     return mod.then((m) =>
       m.GET(new NextRequest(`https://app.test/api/store/releases/${release}/audio/${item}`, { headers: { 'x-forwarded-for': ip, ...(range ? { range } : {}) } }), {
         params: Promise.resolve({ id: release, itemId: item }),

@@ -33,12 +33,25 @@ let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
 let auditFails = false;
 const r2Gets: { key: string; range: string | null }[] = [];
+const ensured: { org: string; track: string; source: string | null }[] = [];
+const opened: { org: string; track: string; range: string | null }[] = [];
+let derivativeReady = true;
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: current ? { id: current } : null } }) } }),
 }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => mem.client }));
 vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
+vi.mock('@/lib/storage/org-derivative', () => ({
+  ensureFullDerivative: async (org: string, track: string, source: string | null) => {
+    ensured.push({ org, track, source });
+    return derivativeReady;
+  },
+  openFullDerivative: async (org: string, track: string, range: string | null) => {
+    opened.push({ org, track, range });
+    return new Response('lossy', { status: 206, headers: { 'content-type': 'audio/mpeg', 'content-range': 'bytes 0-4/5', 'content-length': '5' } });
+  },
+}));
 vi.mock('@/lib/storage/upload', () => {
   const parse = (value: string) => {
     if (!value.startsWith('r2://')) return null;
@@ -82,6 +95,9 @@ beforeEach(() => {
   current = null;
   auditFails = false;
   r2Gets.length = 0;
+  ensured.length = 0;
+  opened.length = 0;
+  derivativeReady = true;
   db = {
     tables: {
       organizations: [
@@ -136,22 +152,57 @@ async function get(as: string | null, trackId: string, query = '', org = L, meth
 const downloads = () => db.tables.activity_events.filter((e) => e.verb === 'recording.downloaded');
 
 describe('listening: every role, the recordings of their project only', () => {
-  it.each([['viewer', VIEWER], ['commenter', COMMENTER], ['contributor', CONTRIBUTOR], ['editor', EDITOR]])('%s streams the master, the preview and the peaks', async (_r, user) => {
-    for (const variant of ['full', 'preview', 'peaks']) {
+  it.each([['viewer', VIEWER], ['commenter', COMMENTER]])('%s (listen-only) hears a lossy full-length derivative, never the master; preview and peaks as before', async (_r, user) => {
+    const full = await get(user, T.s1, '?variant=full');
+    expect(full.status).toBe(206);
+    expect(full.headers.get('content-range')).toBe('bytes 0-4/5');
+    expect(full.headers.get('cache-control')).toBe('private, no-store');
+    expect(ensured).toEqual([{ org: L, track: T.s1, source: 'r2://priv/01.mp3' }]);
+    expect(opened).toEqual([{ org: L, track: T.s1, range: null }]);
+    expect(r2Gets).toEqual([]);
+    for (const variant of ['preview', 'peaks']) {
       const res = await get(user, T.s1, `?variant=${variant}`);
       expect(res.status, variant).toBe(200);
       expect(res.headers.get('cache-control')).toBe('private, no-store');
       expect(res.headers.get('location')).toBeNull();
     }
+    expect(r2Gets.map((g) => g.key)).toEqual(['01.preview.mp3', '01.peaks.json']);
     expect(downloads()).toEqual([]); // listening is not audited
   });
 
+  it('the visitor’s Range reaches the capped reader, and a derivative that cannot be made is 503 — not the master', async () => {
+    await get(VIEWER, T.s1, '?variant=full');
+    current = VIEWER;
+    const req = new NextRequest(`https://app.test/api/org/${L}/audio/${T.s1}?variant=full`, { headers: { range: 'bytes=0-' } });
+    const mod = await import('./route');
+    expect((await mod.GET(req, { params: Promise.resolve({ orgId: L, trackId: T.s1 }) })).status).toBe(206);
+    expect(opened[1].range).toBe('bytes=0-');
+    derivativeReady = false;
+    const res = await get(VIEWER, T.s1, '?variant=full');
+    expect(res.status).toBe(503);
+    expect(r2Gets).toEqual([]);
+  });
+
+  it.each([['contributor', CONTRIBUTOR], ['editor', EDITOR]])('%s may download, so listening streams the master as before', async (_r, user) => {
+    expect((await get(user, T.s1, '?variant=full')).status).toBe(200);
+    expect(r2Gets.map((g) => g.key)).toEqual(['01.mp3']);
+    expect(ensured).toEqual([]);
+    for (const variant of ['preview', 'peaks']) expect((await get(user, T.s1, `?variant=${variant}`)).status, variant).toBe(200);
+    expect(downloads()).toEqual([]);
+  });
+
+  it('a viewer WITH allow_downloads may take the file, so listening is the master too', async () => {
+    db.tables.project_members.find((m) => m.user_id === VIEWER)!.allow_downloads = true;
+    expect((await get(VIEWER, T.s1, '?variant=full')).status).toBe(200);
+    expect(ensured).toEqual([]);
+  });
+
   it('a version in their project is theirs to hear too', async () => {
-    expect((await get(VIEWER, T.s1v)).status).toBe(200);
+    expect((await get(VIEWER, T.s1v)).status).toBe(206); // listen-only: the derivative
   });
 
   it('a track in two projects is reachable through the one they belong to', async () => {
-    expect((await get(VIEWER, T.both)).status).toBe(200);
+    expect((await get(VIEWER, T.both)).status).toBe(206);
   });
 
   it.each([
@@ -267,7 +318,8 @@ describe('revocation takes effect on the next request', () => {
     db.tables.project_members.find((m) => m.user_id === CONTRIBUTOR)!.expires_at = new Date(Date.now() - 1000).toISOString();
     expect((await get(CONTRIBUTOR, T.s1)).status).toBe(404);
     db.tables.project_members.find((m) => m.user_id === EDITOR)!.role = 'viewer';
-    expect((await get(EDITOR, T.s1)).status).toBe(200);
+    // The downgrade also changes what listening is: the derivative, not the master.
+    expect((await get(EDITOR, T.s1)).status).toBe(206);
     expect((await get(EDITOR, T.s1, '?variant=full&download=1')).status).toBe(403);
   });
 

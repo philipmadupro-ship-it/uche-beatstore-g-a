@@ -155,6 +155,24 @@ describe('ReleaseStoreCard', () => {
     expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ listed: true, playback: 'preview' });
   });
 
+  it('before the release date full songs cannot be chosen: the button is off, the teaser says when, and nothing full is sent (LABEL-72)', async () => {
+    state = { ...base, listed: false, playback: 'full', fullAvailable: false, releaseDate: '2999-01-01', effectivePlayback: 'preview' };
+    mount(true, true);
+    await screen.findByTestId('release-store');
+    expect((screen.getByTestId('release-store-playback-full') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('release-store-teaser').textContent).toMatch(/Not out yet.*2999-01-01/);
+    expect(screen.getByTestId('release-store-playback-preview').getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByTestId('release-store-list'));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ listed: true, playback: 'preview' });
+  });
+
+  it('a stored full that the date no longer supports is said to play as preview', async () => {
+    state = { ...base, listed: true, playback: 'full', fullAvailable: false, effectivePlayback: 'preview' };
+    mount(true, true);
+    expect((await screen.findByTestId('release-store-playback-fallback')).textContent).toMatch(/hear preview clips/);
+  });
+
   describe('artist consent (LABEL-71)', () => {
     const consent = (over: Record<string, unknown> = {}) => ({
       schemaReady: true,
