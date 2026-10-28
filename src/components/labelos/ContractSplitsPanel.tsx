@@ -71,13 +71,13 @@ export function ContractSplitsPanel({ orgId, contractId, trackId, version }: { o
     setBusy(false);
     setConfirmReplace(false);
     if (!res.ok) {
-      if (res.status === 409) {
-        setConfirmReplace(true);
-        return void toast.error(res.error);
-      }
+      // Ask before replacing only when the server says a draft is what stopped it (a void contract is also a 409).
+      if (res.results?.some((r) => r.reason === 'draft_exists')) setConfirmReplace(true);
       return void toast.error(res.error);
     }
     toast.success(resultSentence(res.results));
+    // A kind that was skipped because its draft exists can still be refreshed, after a second, explicit click.
+    if (res.results.some((r) => r.reason === 'draft_exists')) setConfirmReplace(true);
     void load();
   };
 

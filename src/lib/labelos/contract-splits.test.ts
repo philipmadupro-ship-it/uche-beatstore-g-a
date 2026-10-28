@@ -68,7 +68,7 @@ describe('prefill', () => {
     if (!master.ok || !comp.ok) throw new Error('plan');
     expect(master.lines).toEqual([
       { partyId: 'F', role: 'master_owner', units: u('33.3333'), firm: true },
-      { partyId: 'A', role: 'master_owner', units: u('66.6667'), firm: true },
+      { partyId: 'A', role: 'master_owner', units: u('66.6667'), firm: false },
     ]);
     expect(validateSheet('master', master.lines).ok).toBe(true);
     expect(comp.lines.map((l) => [l.partyId, l.role, l.units])).toEqual([['F', 'writer', u('10')], ['A', 'writer', u('90')]]);
@@ -166,14 +166,17 @@ describe('drift', () => {
     expect(hasDrift(d)).toBe(false);
   });
 
-  it('a different share is drift, in a circulated and in a signed sheet', () => {
+  it('a different STATED share is drift, in a circulated and in a signed sheet', () => {
     for (const status of ['circulated', 'signed']) {
       const d = deriveDrift(feature, sheet([['F', '25'], ['A', '75']], status))!;
-      expect(d.items).toEqual([
-        { partyId: 'F', code: 'differs', expected: u('30'), actual: u('25') },
-        { partyId: 'A', code: 'differs', expected: u('70'), actual: u('75') },
-      ]);
+      expect(d.items).toEqual([{ partyId: 'F', code: 'differs', expected: u('30'), actual: u('25') }]);
     }
+  });
+
+  it('a remainder is not stated by the contract: giving part of it to someone else is not drift', () => {
+    const d = deriveDrift(feature, sheet([['F', '30'], ['A', '50'], ['M', '20']]))!;
+    expect(d.checked).toBe(true);
+    expect(hasDrift(d)).toBe(false);
   });
 
   it('a contract party missing from the sheet is drift', () => {

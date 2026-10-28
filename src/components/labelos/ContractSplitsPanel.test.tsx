@@ -81,7 +81,7 @@ describe('ContractSplitsPanel', () => {
       if (c.method === 'GET') return { status: 200, body: payload({ drafts: { master: true } }) };
       return c.body && (c.body as { replace_draft?: boolean }).replace_draft
         ? { status: 200, body: { results: [{ kind: 'master', action: 'replaced', sheetId: 's1' }] } }
-        : { status: 409, body: { error: 'There is already a draft split sheet for this song.' } };
+        : { status: 409, body: { error: 'There is already a draft split sheet for this song.', results: [{ kind: 'master', action: 'skipped', reason: 'draft_exists' }] } };
     };
     mount();
     fireEvent.click(await screen.findByTestId('contract-splits-prefill'));

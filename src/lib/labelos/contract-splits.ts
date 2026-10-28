@@ -97,10 +97,10 @@ export type ExpectedLine = {
   role: SplitRole;
   units: number;
   /**
-   * `true` when the contract states this number (or it follows by subtraction
-   * from one it states). An equal division the contract did not state is
-   * `false`: it is offered in the draft, but a sheet that divides differently
-   * is not "drift".
+   * `true` only when the contract itself states this number. A remainder (what
+   * is left after the stated shares) and an equal division the contract did
+   * not state are `false`: they are offered in the draft, but a sheet that
+   * divides them differently is not "drift".
    */
   firm: boolean;
 };
@@ -165,7 +165,8 @@ export function expectedForRule(contract: ContractFacts, rule: ContractSplitRule
   if (rule.remainder && left > 0) {
     // A party that already holds a line keeps just that one: the same person cannot take the remainder too.
     const takers = partiesIn(contract, rule.remainder.roles).filter((id) => !holders.includes(id));
-    if (takers.length === 1) lines.push({ partyId: takers[0], role: rule.remainder.role, units: left, firm });
+    // A remainder is arithmetic, not something the contract states: a sheet may legitimately give part of it to someone else.
+    if (takers.length === 1) lines.push({ partyId: takers[0], role: rule.remainder.role, units: left, firm: false });
     else if (takers.length > 1) {
       const parts = spreadUnits(left, takers.length);
       takers.forEach((partyId, i) => lines.push({ partyId, role: rule.remainder!.role, units: parts[i], firm: false }));

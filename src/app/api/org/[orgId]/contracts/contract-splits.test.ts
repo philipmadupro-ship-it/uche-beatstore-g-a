@@ -278,7 +278,6 @@ describe('GET — what would be filled, and drift', () => {
         kind: 'master', drifted: true, sheetId: s,
         items: [
           { partyId: PF, name: 'Feat', code: 'differs', contract: '30', sheet: '25' },
-          { partyId: PN, name: 'Nova', code: 'differs', contract: '70', sheet: '75' },
         ],
       },
     ]);
