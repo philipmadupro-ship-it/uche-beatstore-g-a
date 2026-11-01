@@ -290,8 +290,13 @@ test('2 · a role change and a removal take effect on the very next request; the
   expect((await events(api, 'project.member_changed')).map((e) => (e.payload as { changes: Record<string, unknown> }).changes)).toEqual([
     { role: { from: 'contributor', to: 'viewer' } },
   ]);
-  // The very next request: still listens; no longer downloads or uploads.
-  expect((await api.get(`/api/org/${ORG}/audio/${S1}?variant=full`)).status()).toBe(200);
+  // The very next request: still listens — now to the lossy full-length derivative, in a bounded partial, never
+  // the master (LABEL-72) — and no longer downloads or uploads.
+  const viewerListen = await api.get(`/api/org/${ORG}/audio/${S1}?variant=full`);
+  expect(viewerListen.status()).toBe(206);
+  expect(viewerListen.headers()['content-type']).toBe('audio/mpeg');
+  expect(viewerListen.headers()['content-range']).toMatch(/^bytes 0-\d+\/\d+$/);
+  expect((await viewerListen.body()).subarray(0, 4).toString('latin1')).not.toBe('RIFF');
   expect((await api.get(`/api/org/${ORG}/audio/${S1}?variant=full&download=1`)).status()).toBe(403);
   expect((await api.get(`/api/org/${ORG}/audio/${S1}?variant=wav`)).status()).toBe(403);
   expect((await api.post(`/api/org/${ORG}/upload/init`, { data: { fileName: 'x.wav', fileSize: 1000, as: { kind: 'link', songId: S1, relation: 'version' } } })).status()).toBe(403);
@@ -348,7 +353,9 @@ test('3 · an expired membership is refused; a future expiry is live', async ({ 
   expect((await api.get(`/api/org/${ORG}/projects/${P1}`)).status()).toBe(403); // no live membership: the proxy's coarse gate
   await rest(request, 'PATCH', `project_members?user_id=eq.${BUYER_ID}&project_id=eq.${P1}`, { expires_at: new Date(Date.now() + 3_600_000).toISOString() });
   expect((await api.get(`/api/org/${ORG}/projects/${P1}`)).status()).toBe(200);
-  expect((await api.get(`/api/org/${ORG}/audio/${S1}?variant=full`)).status()).toBe(200);
+  const expiring = await api.get(`/api/org/${ORG}/audio/${S1}?variant=full`);
+  expect(expiring.status()).toBe(206); // a viewer: the derivative, not the master
+  expect(expiring.headers()['content-type']).toBe('audio/mpeg');
   await rest(request, 'PATCH', `project_members?user_id=eq.${BUYER_ID}&project_id=eq.${P1}`, { expires_at: new Date(Date.now() - 1000).toISOString() });
   expect((await api.get(`/api/org/${ORG}/audio/${S1}?variant=full`)).status()).toBe(403);
   await rest(request, 'DELETE', `project_members?user_id=eq.${BUYER_ID}`);

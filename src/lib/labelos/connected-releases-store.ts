@@ -14,7 +14,7 @@ import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { resolveStoreOwner } from '@/lib/store/owner';
 import { pageAll, inChunks } from './paged-read';
 import { refusalsAndVetoes } from './store-consent-store';
-import { isStorePlayback, isReleasedForStore, type StorePlayback } from './store-listing';
+import { effectivePlayback, isPubliclyVisible, isStorePlayback, type StorePlayback } from './store-listing';
 
 /** Is `userId` the owner of the store (and so entitled to this list)? */
 export async function isStoreOwner(admin: any, userId: string): Promise<boolean> {
@@ -133,10 +133,10 @@ export async function loadConnectedReleases(
         releaseDate: r.release_date,
         listed: r.store_listed === true,
         listedAt: r.store_listed_at ?? null,
-        playback: isStorePlayback(r.store_playback) ? r.store_playback : 'preview',
+        playback: effectivePlayback(isStorePlayback(r.store_playback) ? r.store_playback : 'preview', r, now),
         vetoed: isVetoed,
         refused: isRefused,
-        serving: r.store_listed === true && isReleasedForStore(r, now) && !isVetoed && !isRefused,
+        serving: r.store_listed === true && isPubliclyVisible(r, now) && !isVetoed && !isRefused,
       };
     }),
   };

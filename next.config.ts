@@ -100,6 +100,10 @@ const nextConfig: NextConfig = {
     '/api/cron/process-uploads': ['./node_modules/ffmpeg-static/ffmpeg'],
     '/api/tracks/previews/backfill': ['./node_modules/ffmpeg-static/ffmpeg'],
     '/api/audio/diagnostics': ['./node_modules/ffmpeg-static/ffmpeg'],
+    // LABEL-72: the lossy full-length listening copy of a master is cut with ffmpeg when full songs are put on
+    // the store, and on first listen for a project member who may listen but not download.
+    '/api/org/[orgId]/releases/[releaseId]/store': ['./node_modules/ffmpeg-static/ffmpeg'],
+    '/api/org/[orgId]/audio/[trackId]': ['./node_modules/ffmpeg-static/ffmpeg'],
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {

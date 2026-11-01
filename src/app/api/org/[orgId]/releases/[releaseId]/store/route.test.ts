@@ -37,6 +37,7 @@ let mem: ReturnType<typeof memoryAdmin>;
 let failEvents = false;
 const promote = vi.fn();
 const del = vi.fn();
+const derive = vi.fn();
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({
@@ -64,6 +65,10 @@ vi.mock('@/lib/storage/store-release-media', () => ({
   deletePromotedPreviews: (...args: unknown[]) => del(...args),
 }));
 
+vi.mock('@/lib/storage/org-derivative', () => ({
+  ensureFullDerivative: (...args: unknown[]) => derive(...args),
+}));
+
 const member = (user: string, role: string, functions: string[] = [], org = L) => ({
   org_id: org, user_id: user, role, functions, scope: 'org', cap_grants: [], cap_revokes: [],
 });
@@ -85,6 +90,7 @@ beforeEach(() => {
   promote.mockReset().mockImplementation(async (_o: string, _r: string, items: { masterTrackId: string; privatePreviewRef: string | null }[]) =>
     items.filter((i) => i.privatePreviewRef).map((i) => i.masterTrackId));
   del.mockReset().mockResolvedValue(1);
+  derive.mockReset().mockResolvedValue(true);
   db = {
     tables: {
       creator_profiles: [{ user_id: PU, display_name: 'Uche', default_artwork_url: null }],
@@ -159,10 +165,38 @@ describe('putting a release on the store', () => {
     expect(events('release.store_listed')).toHaveLength(0);
   });
 
-  it('a delivered release whose street date has not come is 409', async () => {
+  it('a delivered release whose street date has not come lists as a TEASER: previews only, never full (LABEL-72)', async () => {
     row(RP).release_date = '2999-01-01';
-    expect((await put(PU, P, RP, { listed: true })).status).toBe(409);
+    const res = await put(PU, P, RP, { listed: true });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ listed: true, playback: 'preview', effectivePlayback: 'preview' });
+    expect(promote).toHaveBeenCalledTimes(1);
+    expect(derive).not.toHaveBeenCalled();
+    expect(row(RP)).toMatchObject({ store_listed: true, store_playback: 'preview' });
+  });
+
+  it('choosing full songs before the release date is 409 (field playback): nothing is cut, copied or written', async () => {
+    for (const release_date of ['2999-01-01', null]) {
+      row(RP).release_date = release_date;
+      const res = await put(PU, P, RP, { listed: true, playback: 'full' });
+      expect(res.status).toBe(409);
+      expect((await res.json()).field).toBe('playback');
+    }
+    expect(derive).not.toHaveBeenCalled();
     expect(promote).not.toHaveBeenCalled();
+    expect(row(RP).store_listed).toBe(false);
+    expect(events('release.store_listed')).toHaveLength(0);
+  });
+
+  it('the GET says whether full songs can be chosen yet, and what visitors hear now', async () => {
+    row(RP).release_date = '2999-01-01';
+    expect(await (await call('GET', PU, P, RP)).json()).toMatchObject({ fullAvailable: false, effectivePlayback: 'preview', releaseDate: '2999-01-01' });
+    row(RP).release_date = '2024-02-02';
+    row(RP).store_playback = 'full';
+    expect(await (await call('GET', PU, P, RP)).json()).toMatchObject({ fullAvailable: true, effectivePlayback: 'full', playback: 'full' });
+    // The date is stated later than it was read: the stored choice stays, what is heard is derived.
+    row(RP).release_date = '2999-01-01';
+    expect(await (await call('GET', PU, P, RP)).json()).toMatchObject({ fullAvailable: false, effectivePlayback: 'preview', playback: 'full' });
   });
 
   it('an imported already-released album lists without a delivery', async () => {
@@ -214,12 +248,38 @@ describe('putting a release on the store', () => {
     }
   });
 
-  it('full playback is stored and copies nothing to the public bucket', async () => {
+  it('full playback is stored, cuts a private derivative of each master and copies nothing to the public bucket', async () => {
     const res = await put(PU, P, RP, { listed: true, playback: 'full' });
     expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ playback: 'full', effectivePlayback: 'full', promoted: 0 });
     expect(row(RP).store_playback).toBe('full');
     expect(promote).not.toHaveBeenCalled();
-    expect(events('release.store_listed')[0].payload).toMatchObject({ playback: 'full', promoted: 0 });
+    expect(derive.mock.calls.map((c) => [c[0], c[1], c[2]])).toEqual([
+      [P, t(1), 'r2://priv/orgs/p/tracks/1.wav'],
+      [P, t(2), 'r2://priv/orgs/p/tracks/2.wav'],
+    ]);
+    expect(events('release.store_listed')[0].payload).toMatchObject({ playback: 'full', effectivePlayback: 'full', promoted: 0, derivatives: 2 });
+  });
+
+  it('full is all or nothing: a master that cannot be cut is named, and nothing is listed or recorded', async () => {
+    derive.mockImplementation(async (_o: string, track: string) => track !== t(2));
+    const res = await put(PU, P, RP, { listed: true, playback: 'full' });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toContain('Two');
+    expect(body.error).not.toContain('One');
+    expect(row(RP)).toMatchObject({ store_listed: false, store_playback: 'preview' });
+    expect(events('release.store_listed')).toHaveLength(0);
+  });
+
+  it('re-listing a stored full whose date has not come plays as preview: previews are promoted, no derivative is cut', async () => {
+    Object.assign(row(RP), { store_listed: true, store_listed_at: '2026-10-01T00:00:00Z', store_playback: 'full', release_date: '2999-01-01' });
+    const res = await put(PU, P, RP, { listed: true });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ playback: 'full', effectivePlayback: 'preview' });
+    expect(row(RP).store_playback).toBe('full');
+    expect(promote).toHaveBeenCalledTimes(1);
+    expect(derive).not.toHaveBeenCalled();
   });
 
   it('a member without release.write is 403, a stranger 404, signed out 401', async () => {
@@ -426,14 +486,15 @@ describe('the store state (GET)', () => {
 });
 
 describe('re-review fixes (LABEL-42)', () => {
-  it('a delivery with only a FUTURE target date and no release date cannot be listed (409), and is not public', async () => {
+  it('a delivery with only a FUTURE target date and no release date can be a teaser, never full', async () => {
     Object.assign(row(RP), { release_date: null, target_date: '2999-01-01' });
-    const res = await put(PU, P, RP, { listed: true, playback: 'full' });
-    expect(res.status).toBe(409);
-    expect((await res.json()).error).toMatch(/not out yet/);
+    const full = await put(PU, P, RP, { listed: true, playback: 'full' });
+    expect(full.status).toBe(409);
+    expect((await full.json()).error).toMatch(/from the release date/);
     expect(row(RP).store_listed).toBe(false);
-    expect(promote).not.toHaveBeenCalled();
     expect(events('release.store_listed')).toHaveLength(0);
+    expect((await put(PU, P, RP, { listed: true })).status).toBe(200);
+    expect(row(RP)).toMatchObject({ store_listed: true, store_playback: 'preview' });
   });
 
   it('choosing full songs is the owner’s or an admin’s: A&R gets 403 and nothing is written; preview is theirs', async () => {
