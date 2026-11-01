@@ -129,6 +129,8 @@ export const VERBS = [
   'contract.document_generated',
   'contract.document_downloaded',
   'contract_template.saved',
+  // Finance (LABEL-61; payloads name ids and fields, never amounts, names or references)
+  'payee.created',
   // Releases
   'approval.requested',
   'approval.decided',
@@ -333,6 +335,8 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'contract.document_generated': 'internal',
   'contract.document_downloaded': 'internal',
   'contract_template.saved': 'internal',
+  // Money is the business side: finance and the owners read it, the creative side does not.
+  'payee.created': 'internal',
   'approval.requested': 'internal',
   'approval.decided': 'internal',
   'release.created': 'artist',
@@ -404,6 +408,7 @@ export const SUBJECT_TYPES = [
   'split_sheet',
   'contract',
   'contract_template',
+  'payee',
   'approval',
   'release',
   'connection',

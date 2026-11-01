@@ -14,6 +14,7 @@
  * Convention: every export pair is `XSchema` (Zod) + `X` (the inferred TS
  * type). e.g. `RateBodySchema` and `RateBody = z.infer<typeof RateBodySchema>`.
  */
+import { isCurrency as isFinanceCurrency } from '@/lib/labelos/finance/money';
 import { z } from 'zod';
 import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
 import { DECISIONS } from '@/lib/contacts/decisions';
@@ -2005,3 +2006,21 @@ export const OrgContractPatchBodySchema = z
   .refine((b) => b.status !== 'void' || Object.keys(b).every((k) => k === 'status' || k === 'void_reason'), { message: 'Void a contract on its own' })
   .refine((b) => Object.keys(b).some((k) => k !== 'base_version'), { message: 'Nothing to update' });
 export type OrgContractPatchBody = z.infer<typeof OrgContractPatchBodySchema>;
+
+// ── Finance (LABEL-61) ──────────────────────────────────────────────────
+
+/** A payee: a rights holder (`parties`) who is paid. The currency is an ISO-4217 code the money helpers know. */
+export const OrgPayeeCreateBodySchema = z
+  .object({
+    party_id: z.string().uuid(),
+    currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine((c) => isFinanceCurrency(c), 'Unknown currency')
+      .default('USD'),
+    // Free text for finance ("wire details on file"), never an account number: the route and the database refuse one.
+    payment_reference: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+export type OrgPayeeCreateBody = z.infer<typeof OrgPayeeCreateBodySchema>;

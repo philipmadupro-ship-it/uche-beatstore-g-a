@@ -70,6 +70,15 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'connection_projects', source: { by: 'org' }, order: ['connection_id', 'project_id'] },
   // LABEL-37: filter definitions only (ids and enums, never results)
   { name: 'org_saved_views', source: { by: 'org' }, order: ['id'] },
+  // Finance (LABEL-61): payees, periods, advances, imported earnings, statements and payment RECORDS. Parents before children.
+  { name: 'payees', source: { by: 'org' }, order: ['id'] },
+  { name: 'finance_periods', source: { by: 'org' }, order: ['id'] },
+  { name: 'advances', source: { by: 'org' }, order: ['id'] },
+  { name: 'earnings_imports', source: { by: 'org' }, order: ['id'] },
+  { name: 'earnings_lines', source: { by: 'org' }, order: ['id'] },
+  { name: 'statements', source: { by: 'org' }, order: ['id'] },
+  { name: 'statement_lines', source: { by: 'org' }, order: ['id'] },
+  { name: 'payments', source: { by: 'org' }, order: ['id'] },
   // LABEL-71: every credited artist's answer on listing a release, and the store owner's own vetoes.
   { name: 'listing_consents', source: { by: 'org' }, order: ['id'] },
   { name: 'store_listing_vetoes', source: { by: 'org' }, order: ['release_id'] },

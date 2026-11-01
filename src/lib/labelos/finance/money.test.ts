@@ -54,12 +54,12 @@ describe('arithmetic', () => {
   it('adds, subtracts and compares in one currency', () => {
     const a = money(1050, 'USD');
     const b = money(250, 'USD');
-    expect(add(a, b).minor).toBe(1300n);
-    expect(sub(b, a).minor).toBe(-800n);
+    expect(add(a, b).minor).toBe(BigInt(1300));
+    expect(sub(b, a).minor).toBe(-BigInt(800));
     expect(compare(a, b)).toBe(1);
     expect(compare(b, a)).toBe(-1);
     expect(compare(a, a)).toBe(0);
-    expect(negate(a).minor).toBe(-1050n);
+    expect(negate(a).minor).toBe(-BigInt(1050));
   });
   it('refuses mixed currencies everywhere', () => {
     const usd = money(100, 'USD');
@@ -70,27 +70,27 @@ describe('arithmetic', () => {
     expect(() => sum([usd, eur], 'USD')).toThrow(CurrencyMismatchError);
   });
   it('sums an empty list to a zero of the stated currency', () => {
-    expect(sum([], 'JPY')).toEqual({ minor: 0n, currency: 'JPY' });
+    expect(sum([], 'JPY')).toEqual({ minor: BigInt(0), currency: 'JPY' });
   });
   it('does not lose units where a double would', () => {
-    const big = money(9_007_199_254_740_993n, 'USD');
-    expect(add(big, money(1, 'USD')).minor).toBe(9_007_199_254_740_994n);
+    const big = money(BigInt('9007199254740993'), 'USD');
+    expect(add(big, money(1, 'USD')).minor).toBe(BigInt('9007199254740994'));
   });
 });
 
 describe('rounding: half to even', () => {
   it.each([
-    [5n, 2n, 2n], // 2.5 → 2
-    [7n, 2n, 4n], // 3.5 → 4
-    [3n, 2n, 2n], // 1.5 → 2
-    [1n, 2n, 0n], // 0.5 → 0
-    [-5n, 2n, -2n],
-    [-7n, 2n, -4n],
-    [-1n, 2n, 0n],
-    [10n, 3n, 3n],
-    [11n, 3n, 4n],
-    [-11n, 3n, -4n],
-    [0n, 7n, 0n],
+    [BigInt(5), BigInt(2), BigInt(2)], // 2.5 → 2
+    [BigInt(7), BigInt(2), BigInt(4)], // 3.5 → 4
+    [BigInt(3), BigInt(2), BigInt(2)], // 1.5 → 2
+    [BigInt(1), BigInt(2), BigInt(0)], // 0.5 → 0
+    [-BigInt(5), BigInt(2), -BigInt(2)],
+    [-BigInt(7), BigInt(2), -BigInt(4)],
+    [-BigInt(1), BigInt(2), BigInt(0)],
+    [BigInt(10), BigInt(3), BigInt(3)],
+    [BigInt(11), BigInt(3), BigInt(4)],
+    [-BigInt(11), BigInt(3), -BigInt(4)],
+    [BigInt(0), BigInt(7), BigInt(0)],
   ])('%s / %s = %s', (n, d, expected) => {
     expect(divRoundHalfEven(n, d)).toBe(expected);
   });
@@ -110,15 +110,15 @@ describe('rounding: half to even', () => {
       const q = divRoundHalfEven(n, d);
       // |q·d − n| ≤ d/2  ⇔  2|q·d − n| ≤ d
       const diff = q * d - n;
-      expect((diff < 0n ? -diff : diff) * 2n <= d).toBe(true);
+      expect((diff < BigInt(0) ? -diff : diff) * BigInt(2) <= d).toBe(true);
     }
   });
   it('applies a rate and a share', () => {
-    expect(mulRatio(money(1005, 'USD'), 1, 2).minor).toBe(502n); // 502.5 → 502
-    expect(mulRatio(money(1007, 'USD'), 1, 2).minor).toBe(504n); // 503.5 → 504
-    expect(applyShare(money(10_000, 'USD'), FULL_SHARE / 2).minor).toBe(5_000n);
-    expect(applyShare(money(1, 'USD'), FULL_SHARE / 2).minor).toBe(0n); // 0.5 → 0
-    expect(applyShare(money(3, 'USD'), FULL_SHARE / 2).minor).toBe(2n); // 1.5 → 2
+    expect(mulRatio(money(1005, 'USD'), 1, 2).minor).toBe(BigInt(502)); // 502.5 → 502
+    expect(mulRatio(money(1007, 'USD'), 1, 2).minor).toBe(BigInt(504)); // 503.5 → 504
+    expect(applyShare(money(10_000, 'USD'), FULL_SHARE / 2).minor).toBe(BigInt(5000));
+    expect(applyShare(money(1, 'USD'), FULL_SHARE / 2).minor).toBe(BigInt(0)); // 0.5 → 0
+    expect(applyShare(money(3, 'USD'), FULL_SHARE / 2).minor).toBe(BigInt(2)); // 1.5 → 2
     expect(() => applyShare(money(1, 'USD'), -1)).toThrow(RangeError);
     expect(() => applyShare(money(1, 'USD'), 0.5)).toThrow(RangeError);
   });
@@ -145,7 +145,7 @@ describe('largest-remainder allocation', () => {
   it('allocates a split sheet exactly', () => {
     const w = [333_333, 333_333, 333_334];
     const out = allocate(money(1_000_001, 'USD'), w);
-    expect(out.reduce((s, m) => s + m.minor, 0n)).toBe(1_000_001n);
+    expect(out.reduce((s, m) => s + m.minor, BigInt(0))).toBe(BigInt(1000001));
   });
   it('gives a zero weight nothing and refuses nonsense', () => {
     expect(parts(7, [0, 1, 0])).toEqual([0, 7, 0]);
@@ -162,24 +162,24 @@ describe('largest-remainder allocation', () => {
     const r = rng(2026);
     for (let i = 0; i < 3000; i++) {
       const n = int(r, 1, 12);
-      const weights = Array.from({ length: n }, () => (r() < 0.15 ? 0 : int(r, 0, FULL_SHARE)));
-      if (weights.every((x) => x === 0)) weights[int(r, 0, n - 1)] = int(r, 1, FULL_SHARE);
+      const weights: number[] = Array.from({ length: n }, () => (r() < 0.15 ? 0 : int(r, 0, FULL_SHARE)));
+      if (!weights.some((x) => x !== 0)) weights[int(r, 0, n - 1)] = int(r, 1, FULL_SHARE);
       const totalMinor = int(r, -2_000_000_000, 2_000_000_000);
       const total = money(totalMinor, 'USD');
       const out = allocate(total, weights);
 
       expect(out).toHaveLength(n);
-      expect(out.reduce((s, m) => s + m.minor, 0n)).toBe(total.minor);
+      expect(out.reduce((s, m) => s + m.minor, BigInt(0))).toBe(total.minor);
       expect(allocate(total, weights)).toEqual(out); // deterministic
       const wsum = weights.reduce((s, x) => s + x, 0);
       weights.forEach((w, k) => {
-        if (w === 0) expect(out[k].minor).toBe(0n);
+        if (w === 0) expect(out[k].minor).toBe(BigInt(0));
         // |part − total·w/Σ| < 1 unit, checked exactly: |part·Σ − total·w| < Σ
         const diff = out[k].minor * BigInt(wsum) - total.minor * BigInt(w);
-        expect((diff < 0n ? -diff : diff) < BigInt(wsum)).toBe(true);
+        expect((diff < BigInt(0) ? -diff : diff) < BigInt(wsum)).toBe(true);
         // never of the opposite sign to the total
-        if (totalMinor >= 0) expect(out[k].minor >= 0n).toBe(true);
-        else expect(out[k].minor <= 0n).toBe(true);
+        if (totalMinor >= 0) expect(out[k].minor >= BigInt(0)).toBe(true);
+        else expect(out[k].minor <= BigInt(0)).toBe(true);
       });
       // mirror property
       expect(allocate(negate(total), weights).map((m) => m.minor)).toEqual(out.map((m) => -m.minor));
@@ -190,30 +190,30 @@ describe('largest-remainder allocation', () => {
     const r = rng(7);
     for (let i = 0; i < 1000; i++) {
       const n = int(r, 1, 20);
-      const out = allocate(money(int(r, 0, 1_000_000), 'EUR'), Array(n).fill(1));
+      const out = allocate(money(int(r, 0, 1_000_000), 'EUR'), Array.from({ length: n }, () => 1));
       const min = out.reduce((a, m) => (m.minor < a ? m.minor : a), out[0].minor);
       const max = out.reduce((a, m) => (m.minor > a ? m.minor : a), out[0].minor);
-      expect(max - min <= 1n).toBe(true);
+      expect(max - min <= BigInt(1)).toBe(true);
     }
   });
 });
 
 describe('database and screen forms', () => {
   it('reads bigint columns exactly', () => {
-    expect(minorFromDb(12)).toBe(12n);
-    expect(minorFromDb('-9007199254740993')).toBe(-9_007_199_254_740_993n);
+    expect(minorFromDb(12)).toBe(BigInt(12));
+    expect(minorFromDb('-9007199254740993')).toBe(-BigInt('9007199254740993'));
     expect(() => minorFromDb(1.5)).toThrow(RangeError);
     expect(() => minorFromDb(Number.MAX_SAFE_INTEGER + 2)).toThrow(RangeError);
     expect(() => minorFromDb(null)).toThrow(RangeError);
     expect(() => minorFromDb('1e3')).toThrow(RangeError);
   });
   it('parses typed amounts without floats', () => {
-    expect(parseMajor('12.34', 'USD')?.minor).toBe(1234n);
-    expect(parseMajor('1,234.5', 'USD')?.minor).toBe(123450n);
-    expect(parseMajor('-3', 'USD')?.minor).toBe(-300n);
-    expect(parseMajor('500', 'JPY')?.minor).toBe(500n);
-    expect(parseMajor('1.234', 'KWD')?.minor).toBe(1234n);
-    expect(parseMajor('0.1', 'USD')?.minor).toBe(10n);
+    expect(parseMajor('12.34', 'USD')?.minor).toBe(BigInt(1234));
+    expect(parseMajor('1,234.5', 'USD')?.minor).toBe(BigInt(123450));
+    expect(parseMajor('-3', 'USD')?.minor).toBe(-BigInt(300));
+    expect(parseMajor('500', 'JPY')?.minor).toBe(BigInt(500));
+    expect(parseMajor('1.234', 'KWD')?.minor).toBe(BigInt(1234));
+    expect(parseMajor('0.1', 'USD')?.minor).toBe(BigInt(10));
   });
   it('refuses more precision than the currency has, and junk', () => {
     expect(parseMajor('0.005', 'USD')).toBeNull();

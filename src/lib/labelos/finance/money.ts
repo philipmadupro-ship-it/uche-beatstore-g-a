@@ -79,7 +79,7 @@ function same(a: Money, b: Money): void {
 export const add = (a: Money, b: Money): Money => (same(a, b), { minor: a.minor + b.minor, currency: a.currency });
 export const sub = (a: Money, b: Money): Money => (same(a, b), { minor: a.minor - b.minor, currency: a.currency });
 export const negate = (a: Money): Money => ({ minor: -a.minor, currency: a.currency });
-export const isZero = (a: Money): boolean => a.minor === 0n;
+export const isZero = (a: Money): boolean => a.minor === BigInt(0);
 
 /** -1 | 0 | 1. Refuses mixed currencies. */
 export function compare(a: Money, b: Money): -1 | 0 | 1 {
@@ -89,24 +89,24 @@ export function compare(a: Money, b: Money): -1 | 0 | 1 {
 
 /** Sum of amounts; an empty list needs the currency to say what zero it is. */
 export function sum(items: readonly Money[], currency: string): Money {
-  let total = money(0n, currency);
+  let total = money(BigInt(0), currency);
   for (const m of items) total = add(total, m);
   return total;
 }
 
-const abs = (n: bigint): bigint => (n < 0n ? -n : n);
+const abs = (n: bigint): bigint => (n < BigInt(0) ? -n : n);
 
 /**
  * round-half-to-even of numerator / denominator (denominator > 0), exact in
  * integers. Symmetric in the sign of the numerator.
  */
 export function divRoundHalfEven(numerator: bigint, denominator: bigint): bigint {
-  if (denominator <= 0n) throw new RangeError('The denominator must be positive');
-  const neg = numerator < 0n;
+  if (denominator <= BigInt(0)) throw new RangeError('The denominator must be positive');
+  const neg = numerator < BigInt(0);
   const n = abs(numerator);
   let q = n / denominator;
-  const r2 = (n % denominator) * 2n;
-  if (r2 > denominator || (r2 === denominator && q % 2n === 1n)) q += 1n;
+  const r2 = (n % denominator) * BigInt(2);
+  if (r2 > denominator || (r2 === denominator && q % BigInt(2) === BigInt(1))) q += BigInt(1);
   return neg ? -q : q;
 }
 
@@ -131,17 +131,17 @@ export function allocate(total: Money, weights: readonly (number | bigint)[]): M
   if (weights.length === 0) throw new RangeError('Nothing to allocate to');
   const w = weights.map((x) => {
     const b = typeof x === 'bigint' ? x : Number.isSafeInteger(x) ? BigInt(x) : null;
-    if (b === null || b < 0n) throw new RangeError('Weights are non-negative whole numbers');
+    if (b === null || b < BigInt(0)) throw new RangeError('Weights are non-negative whole numbers');
     return b;
   });
-  const weightSum = w.reduce((s, x) => s + x, 0n);
-  if (weightSum === 0n) throw new RangeError('The weights sum to zero: there is no one to allocate to');
+  const weightSum = w.reduce((s, x) => s + x, BigInt(0));
+  if (weightSum === BigInt(0)) throw new RangeError('The weights sum to zero: there is no one to allocate to');
 
-  const neg = total.minor < 0n;
+  const neg = total.minor < BigInt(0);
   const t = abs(total.minor);
   const floors = w.map((x) => (t * x) / weightSum);
   const remainders = w.map((x) => (t * x) % weightSum);
-  let left = t - floors.reduce((s, x) => s + x, 0n);
+  let left = t - floors.reduce((s, x) => s + x, BigInt(0));
 
   // Largest remainder first; equal remainders → lower index first.
   const order = remainders
@@ -149,11 +149,11 @@ export function allocate(total: Money, weights: readonly (number | bigint)[]): M
     .sort((a, b) => (a.r === b.r ? a.i - b.i : a.r > b.r ? -1 : 1));
   const parts = floors.slice();
   for (const { i } of order) {
-    if (left === 0n) break;
+    if (left === BigInt(0)) break;
     // A zero weight has remainder 0: it can only be reached after every positive remainder, and `left` < number of positive remainders.
-    if (w[i] === 0n) continue;
-    parts[i] += 1n;
-    left -= 1n;
+    if (w[i] === BigInt(0)) continue;
+    parts[i] += BigInt(1);
+    left -= BigInt(1);
   }
   return parts.map((p) => ({ minor: neg ? -p : p, currency: total.currency }));
 }
@@ -200,7 +200,7 @@ export function parseMajor(input: string, currency: string): Money | null {
 /** "1234.50" — plain, no grouping, no symbol; the screen's formatter adds those. */
 export function formatMajor(m: Money): string {
   const exp = currencyExponent(m.currency);
-  const neg = m.minor < 0n;
+  const neg = m.minor < BigInt(0);
   const digits = abs(m.minor).toString().padStart(exp + 1, '0');
   const body = exp === 0 ? digits : `${digits.slice(0, -exp)}.${digits.slice(-exp)}`;
   return neg ? `-${body}` : body;
