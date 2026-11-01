@@ -25,6 +25,7 @@ import { readBody } from '@/lib/validate';
 import { OrgPartyPatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { stampPartyLinkedBy } from '@/lib/labelos/contract-signing-store';
 import { recordEvent } from '@/lib/labelos/activity';
 import { CREDITS_NOT_READY } from '@/lib/labelos/audit-rpc';
 import { mayReadPayee, orgActor, partyViewWithLink } from '@/lib/labelos/credits';
@@ -109,6 +110,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if ('locked' in result) return json(409, { error: 'This party is on a circulated split sheet, so its name and account cannot change.', code: 'party_locked' });
     if ('duplicate' in result) return json(409, { error: 'That account already has a party in this organization' });
 
+    // Who made the account link (migration 178): signing as the party needs a link someone else made.
+    if (cols.columns.user_id) await stampPartyLinkedBy(admin, org, partyId, access.userId);
     await recordEvent(admin, { orgId: org, userId: access.userId }, 'party.updated', { type: 'party', id: partyId }, { fields: Object.keys(cols.columns).sort() });
     return json(200, { party: partyViewWithLink(result.party, orgActor(access.userId, access.capabilities, access.role)) });
   } catch (err) {

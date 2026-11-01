@@ -1980,6 +1980,40 @@ export type OrgContractPreviewBody = z.infer<typeof OrgContractPreviewBodySchema
 /** POST …/contracts/[contractId]/send: the version the sender reviewed; a newer one is refused. */
 export const OrgContractSendBodySchema = z.object({ version: z.number().int().min(1) }).strict();
 
+/**
+ * LABEL-60 — signing. A drawn signature is a PNG data URL (parseDrawnSignature re-checks magic bytes and size);
+ * `version` is the contract version the signer read, so a contract that moved on is a 409, not a signature on text
+ * they did not see.
+ */
+const signatureName = z.string().min(2).max(200);
+const signatureDrawing = z.string().max(400_000).optional();
+
+/** POST /api/org/[orgId]/contracts/[contractId]/signing — a signed-in member signs for a party. */
+export const OrgContractSignBodySchema = z
+  .object({
+    party_id: z.string().uuid(),
+    version: z.number().int().min(1),
+    /** The SHA-256 the signer's page showed (GET …/signing `documentSha256`): what they read is what is signed. */
+    document_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    name: signatureName,
+    drawing: signatureDrawing,
+  })
+  .strict();
+
+/** POST /api/sign/[token] — an external signer signs through their link (the party is the link's). */
+export const PublicContractSignBodySchema = z
+  .object({ version: z.number().int().min(1), document_sha256: z.string().regex(/^[0-9a-f]{64}$/), name: signatureName, drawing: signatureDrawing })
+  .strict();
+
+/** POST|DELETE …/signing/links — issue / rotate, or revoke, one party's signing link. */
+export const OrgContractLinkBodySchema = z.object({ party_id: z.string().uuid() }).strict();
+
+/** PUT …/signing/provider — the external e-signature address (https only; null clears it). */
+export const OrgContractProviderBodySchema = z.object({ url: z.string().max(500).nullable() }).strict();
+
+/** POST …/supersede — void a sent or signed contract and start its replacement draft. */
+export const OrgContractSupersedeBodySchema = z.object({ reason: z.string().trim().max(500).optional() }).strict();
+
 /** PATCH /api/org/[orgId]/contracts/[contractId]: edit a draft, or void the contract. */
 export const OrgContractPatchBodySchema = z
   .object({

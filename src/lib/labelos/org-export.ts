@@ -62,6 +62,10 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'contract_templates', source: { by: 'org' }, order: ['id'] },
   { name: 'contracts', source: { by: 'org' }, order: ['id'] },
   { name: 'contract_parties', source: { by: 'org' }, order: ['contract_id', 'party_id', 'role'] },
+  // LABEL-60: the signing links (never the hash that opens one) and the append-only signatures. A drawn signature's PNG is
+  // an object reference (`signature_image`), so it lands in the manifest like any other private file, never as a URL.
+  { name: 'contract_signers', source: { by: 'org' }, order: ['id'], omit: ['token_hash'] },
+  { name: 'contract_signatures', source: { by: 'org' }, order: ['id'] },
   // Creative direction (LABEL-26) and what an artist org shares with a label (LABEL-41, the artist side's rows)
   { name: 'artist_direction', source: { by: 'org' }, order: ['contact_id'] },
   { name: 'artist_references', source: { by: 'org' }, order: ['id'] },

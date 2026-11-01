@@ -14,6 +14,9 @@
  *    catalog.read ends the feed on the next fetch.
  *  - Titles and dates only, of the releases that member's artist scope shows
  *    (the same narrowing as the releases list). No artist, no project, no link.
+ *    LABEL-60 adds one all-day event per sent or signed contract whose term has an
+ *    end ("Contract ends: <title>", reminders 30 and 7 days before), for the
+ *    contracts the member may read, in an org licensed for the contracts module.
  *  - Rate-limited, in this order so a stranger can never spend a member's
  *    allowance: ids are validated and lower-cased first; a coarse per-
  *    (address, org) bucket, generous because Google/Apple/Outlook fetch from
@@ -33,7 +36,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { feedEventUid, feedSecret, parseFeedToken, verifyFeedToken } from '@/lib/labelos/feed-token';
-import { feedReleases, readFeedState } from '@/lib/labelos/feed-store';
+import { feedContracts, feedReleases, readFeedState } from '@/lib/labelos/feed-store';
 import { buildIcs } from '@/lib/labelos/release-calendar';
 import { clientIp, rateLimitDurable } from '@/lib/security/rate-limit';
 import { isUUID } from '@/lib/validate';
@@ -82,8 +85,16 @@ export async function GET(req: NextRequest, { params }: Params) {
     }
 
     const releases = await feedReleases(access.admin, access);
+    // LABEL-60: the end of a contract's term, for the contracts this member may read in an org licensed for them.
+    const contracts = await feedContracts(access);
     // Generic name and opaque UIDs: neither the org name nor any row id is in the file.
-    const body = buildIcs({ name: 'Releases', uidFor: (id) => feedEventUid(secret, id), releases });
+    const body = buildIcs({
+      name: 'Releases',
+      uidFor: (id) => feedEventUid(secret, id),
+      releases,
+      contracts,
+      contractUidFor: (id) => feedEventUid(secret, `contract:${id}`),
+    });
     return new NextResponse(body, {
       headers: { ...PRIVATE, 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'inline; filename="releases.ics"' },
     });

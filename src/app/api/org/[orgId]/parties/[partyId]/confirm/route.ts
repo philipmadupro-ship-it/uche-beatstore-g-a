@@ -17,6 +17,7 @@ import { readBody } from '@/lib/validate';
 import { OrgPartyConfirmBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { partyLinkedBy } from '@/lib/labelos/contract-signing-store';
 import { recordEvent } from '@/lib/labelos/activity';
 import { CREDITS_NOT_READY } from '@/lib/labelos/audit-rpc';
 import { mayReadPayee, orgActor, partyViewWithLink } from '@/lib/labelos/credits';
@@ -49,6 +50,12 @@ export async function POST(req: NextRequest, { params }: Params) {
     const party = await readParty(admin, org, partyId);
     // Not their party: it does not exist for them.
     if (!party || party.user_id !== access.userId) return json(404, { error: 'Not found' });
+
+    // Review H1 (#166): confirming is the PARTY's act. Someone who linked their own account to the party made that link
+    // themself, so their confirmation proves nothing and would let them sign as it.
+    if ((await partyLinkedBy(admin, org, partyId)) === access.userId) {
+      return json(403, { error: 'You linked your own account to this party, so someone else has to link it. Ask a colleague who can edit parties to link you, then confirm.', code: 'self_linked' });
+    }
 
     // The same view the list gave them: a rights writer confirming themselves keeps their link and payee block.
     const actor = orgActor(access.userId, access.capabilities, access.role);

@@ -47,7 +47,7 @@ export async function storeContractPdf(
   links: readonly ContractPartyLink[],
   identities: ReadonlyMap<string, PartyIdentity>,
   rendered: Rendered,
-  opts: { atSend?: boolean } = {},
+  opts: { atSend?: boolean; /** The bytes already made (and hashed) at send: filed as they are, never re-rendered. */ pdf?: Buffer } = {},
 ): Promise<StoredCopy | NotStored> {
   const projectId = await contractProjectId(admin, org, row);
   if (!projectId) return { stored: false, reason: 'no_project' };
@@ -57,7 +57,7 @@ export async function storeContractPdf(
   if (existing) return { stored: true, reused: true, asset_id: existing.asset_id, project_id: existing.project_id, file_name: fileName };
 
   const notice = status === 'sent' && !opts.atSend ? rerenderNotice(today()) : undefined;
-  const pdf = await renderContractDocumentPdf({ ...documentInputOf(row, links, identities, rendered), ...(notice ? { notice } : {}) });
+  const pdf = opts.pdf ?? (await renderContractDocumentPdf({ ...documentInputOf(row, links, identities, rendered), ...(notice ? { notice } : {}) }));
   const url = await storeProjectAsset(pdf, orgAssetObjectKey(org, projectId, nanoid(16), 'pdf'), 'application/pdf');
   let assetId: string;
   try {

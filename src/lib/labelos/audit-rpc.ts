@@ -21,6 +21,10 @@
  *   creditDecide             credit.confirmed | credit.disputed (153, LABEL-27)
  *   creditWithdraw           credit.withdrawn (174, LABEL-54; the credit is removed with its event)
  *   contractVoid             contract.voided (176, LABEL-57; the contract is voided with its event)
+ *   contractLinkIssue        contract.signer_link_issued (178, LABEL-60)
+ *   contractLinkRevoke       contract.signer_link_revoked (178)
+ *   contractSign             contract.signature_added (+ contract.signed in the same transaction when it was the last party) (178)
+ *   contractSupersede        contract.superseded (178; the old contract is voided and a draft copy made with its event)
  *   splitCirculate           split_sheet.circulated (+ .superseded for the version it replaces) (155, LABEL-28)
  *   splitSign                split_sheet.signed (155, LABEL-28)
  *   platformCreateLicensee   org.created + org.entitlements_changed in the new org (170, LABEL-47)
@@ -67,6 +71,11 @@ export const AUDIT_RPCS = {
   creditWithdraw: 'labelos_audit_credit_withdraw',
   // Migration 176 (LABEL-57): a contract is voided, with its event.
   contractVoid: 'labelos_audit_contract_void',
+  // Migration 178 (LABEL-60): signing links, signatures and the supersede chain, each with its event.
+  contractLinkIssue: 'labelos_audit_contract_link_issue',
+  contractLinkRevoke: 'labelos_audit_contract_link_revoke',
+  contractSign: 'labelos_audit_contract_sign',
+  contractSupersede: 'labelos_audit_contract_supersede',
   // Migration 155 (LABEL-28): a split sheet is circulated (superseding the live one) or signed, with its event.
   splitCirculate: 'labelos_audit_split_circulate',
   splitSign: 'labelos_audit_split_sign',
@@ -186,6 +195,30 @@ export type AuditRpcArgs = {
     p_reason: string | null;
     p_payload: EventPayload;
   };
+  contractLinkIssue: { p_org: string; p_actor: string; p_contract: string; p_party: string; p_token_hash: string; p_expires_at: string; p_payload: EventPayload };
+  contractLinkRevoke: { p_org: string; p_actor: string; p_contract: string; p_party: string; p_payload: EventPayload };
+  contractSign: {
+    p_org: string;
+    /** The signing account; null for someone who signed through a link. */
+    p_actor: string | null;
+    p_contract: string;
+    p_party: string;
+    p_role: string;
+    p_version: number;
+    /** SHA-256 of the document as the signer read it (lib/labelos/contract-signing documentHash). */
+    p_sha: string;
+    p_name: string;
+    p_method: 'typed' | 'drawn';
+    /** A private-bucket reference of the drawn PNG; null when typed. */
+    p_image: string | null;
+    p_via: 'member' | 'link';
+    p_countersign: boolean;
+    p_ip_hash: string | null;
+    /** A link signer's token hash: the database re-checks it (live, unexpired) under the contract's row lock. */
+    p_link_hash: string | null;
+    p_payload: EventPayload;
+  };
+  contractSupersede: { p_org: string; p_actor: string; p_contract: string; p_reason: string | null; p_payload: EventPayload };
   splitCirculate: {
     p_org: string;
     p_actor: string;
