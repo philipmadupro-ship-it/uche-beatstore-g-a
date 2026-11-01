@@ -21,6 +21,7 @@ import { isUUID } from '@/lib/validate';
 import type { ContractPartyLink, ContractRow, PartyIdentity } from './contracts/context';
 import type { Rendered } from './contracts/render';
 import { documentHash, type SignatureFact } from './contract-signing';
+import { orgEntitlements, type EntitlementRow } from './entitlements';
 import { documentInputOf, documentOf } from './contracts-route';
 import { orgAssetObjectKey } from './org-assets';
 import { ReadError, pageAll } from './paged-read';
@@ -201,4 +202,17 @@ export function ipHashOf(req: NextRequest): string {
   const fwd = req.headers.get('x-forwarded-for') || '';
   const ip = fwd.split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown';
   return createHash('sha256').update(`label-os.sign:${ip}:${process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'antigravity'}`).digest('hex').slice(0, 32);
+}
+
+// ── The public entrance ──────────────────────────────────────────────────
+
+/** A link works only inside a live organization that is still licensed for contracts. */
+export async function orgAllowsSigning(admin: AdminClient, orgId: string): Promise<boolean> {
+  const org = await admin.from('organizations').select('kind, deleted_at').eq('id', orgId).maybeSingle();
+  if (org.error) throw new Error(`org read: ${org.error.message}`);
+  const o = org.data as { kind: string | null; deleted_at: string | null } | null;
+  if (!o || o.deleted_at) return false;
+  const ent = await admin.from('org_entitlements').select('modules, max_seats, max_artists, setup_done').eq('org_id', orgId).maybeSingle();
+  if (ent.error && !['PGRST205', '42P01'].includes(ent.error.code ?? '')) throw new Error(`entitlements read: ${ent.error.message}`);
+  return orgEntitlements(o, (ent.error ? null : ent.data) as EntitlementRow | null).modules.has('contracts');
 }

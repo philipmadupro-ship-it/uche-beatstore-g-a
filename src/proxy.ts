@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildCsp, cspHeaderName as cspHeaderNameFor } from '@/lib/security/csp';
-import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath, isLabelOsRestorePagePath, isLabelOsSetupPagePath, isPlatformApiPath, isPlatformPagePath } from '@/lib/security/api-gate';
+import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath, isLabelOsRestorePagePath, isLabelOsSetupPagePath, isLabelOsSignApiPath, isLabelOsSignPagePath, isPlatformApiPath, isPlatformPagePath } from '@/lib/security/api-gate';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
 import { memberLanding } from '@/lib/labelos/member-landing';
@@ -68,6 +68,9 @@ export async function proxy(request: NextRequest) {
   // invitee is not a member until the page has accepted for them.
   // The platform console (LABEL-47, `/platform`, `/api/platform/*`) is behind the same flag and needs the
   // same database, but takes no membership redirect: it answers 404 itself to anyone who is not an operator.
+  // The external signer's entrance (LABEL-60, `/sign/<token>` and `/api/sign/<token>`) shares the flag and the database
+  // check and nothing else: no membership, no session — the signing link is the credential.
+  const labelOsSign = isLabelOsSignApiPath(request.nextUrl.pathname) || isLabelOsSignPagePath(request.nextUrl.pathname);
   const labelOsApi = isLabelOsApiPath(request.nextUrl.pathname) || isPlatformApiPath(request.nextUrl.pathname);
   const labelOsPage = isLabelOsPagePath(request.nextUrl.pathname);
   // `/restore/<org id>` (LABEL-39) likewise: the org it brings back is not live, so no live membership is required.
@@ -77,14 +80,14 @@ export async function proxy(request: NextRequest) {
     isLabelOsRestorePagePath(request.nextUrl.pathname) ||
     isLabelOsSetupPagePath(request.nextUrl.pathname) ||
     isPlatformPagePath(request.nextUrl.pathname);
-  if (labelOsApi || labelOsPage || labelOsJoinPage) {
+  if (labelOsApi || labelOsPage || labelOsJoinPage || labelOsSign) {
     if (!isLabelOsEnabled()) {
-      return labelOsApi
+      return labelOsApi || isLabelOsSignApiPath(request.nextUrl.pathname)
         ? NextResponse.json({ error: 'Not found' }, { status: 404 })
         : new NextResponse('Not found', { status: 404 });
     }
     if (!supabaseUrl || !supabaseAnon || !isSupabaseConfigured()) {
-      return labelOsApi
+      return labelOsApi || isLabelOsSignApiPath(request.nextUrl.pathname)
         ? NextResponse.json({ error: 'Label OS requires a database' }, { status: 503 })
         : new NextResponse('Label OS requires a database', { status: 503 });
     }

@@ -9,6 +9,8 @@ import {
   isLabelOsRestorePagePath,
   isLabelOsSetupApiPath,
   isLabelOsSetupPagePath,
+  isLabelOsSignApiPath,
+  isLabelOsSignPagePath,
   isPublicApiPath,
   requiresProducerForApi,
 } from './api-gate';
@@ -92,6 +94,26 @@ describe('the join exception (LABEL-08)', () => {
     for (const p of ['/join', '/join/', '/joiner/x', '/o/join/x', '/api/org/join', '/store/join/x']) {
       expect(isLabelOsJoinPagePath(p), p).toBe(false);
     }
+  });
+
+  it('the external signer’s entrance is exactly /api/sign/<token> and /sign/<token> (LABEL-60)', () => {
+    for (const p of ['/api/sign/abc', '/api/sign/abc/']) expect(isLabelOsSignApiPath(p), p).toBe(true);
+    for (const p of ['/api/sign', '/api/sign/', '/api/sign/abc/def', '/api/signer/abc', '/api/org/sign/abc', '/api/signx/abc', '/api/store/sign/abc']) {
+      expect(isLabelOsSignApiPath(p), p).toBe(false);
+    }
+    for (const p of ['/sign/abc', '/sign/abc/']) expect(isLabelOsSignPagePath(p), p).toBe(true);
+    for (const p of ['/sign', '/sign/', '/sign/abc/def', '/signer/abc', '/o/x/sign/abc', '/store/sign/abc', '/api/sign/abc']) {
+      expect(isLabelOsSignPagePath(p), p).toBe(false);
+    }
+  });
+
+  it('any caller — signed in or out, member or buyer — reaches /api/sign/<token> without a producer or membership check; the route authorises with the link', () => {
+    expect(apiGateFor('/api/sign/abc', true)).toBe('none');
+    expect(apiGateFor('/api/sign/abc', false)).toBe('none');
+    expect(requiresProducerForApi('/api/sign/abc', true)).toBe(false);
+    // Nothing else under that name is opened: a look-alike stays producer-only for a signed-in caller.
+    expect(apiGateFor('/api/sign/abc/def', true)).toBe('producer');
+    expect(apiGateFor('/api/signer/abc', true)).toBe('producer');
   });
 
   it('admits any signed-in caller to /api/org/join only; the route authorises', () => {
