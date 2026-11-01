@@ -3,11 +3,14 @@
  * result instead of throwing, so a screen shows the server's own words ("The
  * shares add up to 99.9999%; 0.0001% is still unassigned.").
  */
+import type { DriftEntry } from './contract-splits-client';
 import type { SplitKind, SplitSheetView } from './splits';
 
 export type SplitsPayload = {
   schemaReady: boolean;
   sheets: SplitSheetView[];
+  /** Contracts that name this song the caller may read, with the drift of the sheets against each (LABEL-59). */
+  contracts?: { contractId: string; title: string; status: string; type: string; drift: DriftEntry[] }[];
   me: { reach: 'all' | 'own' | 'none'; canWrite: boolean };
   kinds: { key: SplitKind; label: string; roles: { key: string; label: string }[] }[];
 };

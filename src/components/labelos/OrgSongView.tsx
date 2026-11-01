@@ -191,7 +191,7 @@ export function OrgSongView({ orgId, orgSlug, detail, editTrackId = null }: { or
 
       <OrgCredits key={`credits-${song.id}`} orgId={orgId} trackId={song.id} />
 
-      <OrgSplits key={`splits-${song.id}`} orgId={orgId} trackId={song.id} />
+      <OrgSplits key={`splits-${song.id}`} orgId={orgId} orgSlug={orgSlug} trackId={song.id} />
 
       <OrgLegalReadiness key={`legal-${song.id}`} orgId={orgId} trackId={song.id} />
 

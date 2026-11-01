@@ -24,7 +24,7 @@ const decodeHex = (hex: string): string => {
 export function pdfTextRuns(pdf: Buffer): string[] {
   const text = pdf.toString('latin1');
   const runs: string[] = [];
-  for (const m of text.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+  for (const m of text.matchAll(/stream\r?\n([\s\S]*?)\nendstream/g)) {
     let content = m[1];
     try {
       content = inflateSync(Buffer.from(content, 'latin1')).toString('latin1');
