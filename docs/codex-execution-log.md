@@ -9465,3 +9465,17 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - L2: org contact delete gives the right message for a contract artist.
   - L3: POST answers 503 when 174 is also missing.
 - 2026-10-27 — LABEL-58 started (session_019AUhHbkT7VPBpTf7EocUCZ, no migration; reuses pdfkit) and LABEL-71 started (session_019AUhHcTrzenYfjeqYpuTqL, migration 186 as reserved). Both on Sonnet. Next reserved is still 177 (LABEL-59, after 58).
+- 2026-10-27 — **LABEL-58 Done**: #158 squash `0bcd988`, no migration. Adds the contract editor, a pdfkit PDF stored as a restricted `contract` asset, and an audited send.
+  - Gate: CI green on `0925bab`; preview checked; independent review (not blocking). Fixed before merge:
+    - the PDF is filed only in the contract artist's own project;
+    - a sent contract always serves its frozen sent copy;
+    - `contract.send_failed` is recorded when the send claim is lost;
+    - a partially saved PATCH records its event and answers 409;
+    - older draft copies are deleted when a new one is filed;
+    - GETs answer `schemaReady: false` without 176;
+    - the asset PATCH refuses to declassify contract or split-sheet files.
+  - `pdfkit` moved to `serverExternalPackages`. This also affects the Stripe webhook's best-effort licence PDF; check a real licence PDF after the next main integration.
+- 2026-10-28 — **LABEL-71 Done**: #159 squash `6eea56c`, migration 186 (not applied; second paste). Adds artist consent on store listing: any credited artist's no unlists, and it stays unlisted until that artist says yes; no-store caching on governed releases.
+  - Gate: CI green on `8db767b`; preview checked. The independent review was BLOCKING. H1: a `rights.write` member could link a party to their own account, confirm it themself and answer as the artist. The first fix (confirmation-only) still allowed self-confirm. The final rule: a party never answers; only a role-artist scoped member, or an artist org's owner.
+  - Accepted deviation: an admin can invite an address they control as role artist (label orgs). Known gap: credited artists in the producer org are unreachable.
+- 2026-10-28 — LABEL-59 resumed after the usage limit (#160, migration 177). LABEL-72 started (session_019AUhHf7cB5hZ5AzMkogSjr, no migration reserved; 194 on request). LABEL-60 waits for 59 (both touch contract signing).
