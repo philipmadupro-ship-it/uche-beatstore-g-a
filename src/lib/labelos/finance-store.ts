@@ -137,17 +137,19 @@ export async function insertPayee(
   orgId: string,
   userId: string,
   body: { party_id: string; currency: string; payment_reference?: string },
-  /** The party's roster contact. The database trigger sets the same value itself and ignores what is sent; sending it keeps the row honest in a test double. */
-  partyContactId: string | null,
-): Promise<{ payee: PayeeRow } | { duplicate: true } | { invalid: true }> {
+  /** The artist the caller expects the party to stand for. The database refuses the insert if the party says otherwise. */
+  expectedArtistId: string | null,
+): Promise<{ payee: PayeeRow } | { duplicate: true } | { invalid: true } | { changed: true }> {
   await assertFinanceSchema(admin);
   const res = await admin
     .from('payees')
-    .insert({ org_id: orgId, party_id: body.party_id, artist_contact_id: partyContactId, currency: body.currency, payment_reference: body.payment_reference ?? null, created_by: userId })
+    .insert({ org_id: orgId, party_id: body.party_id, artist_contact_id: expectedArtistId, currency: body.currency, payment_reference: body.payment_reference ?? null, created_by: userId })
     .select(`${PAYEE_COLUMNS}, payment_reference`)
     .single();
   if (res.error) {
     if (res.error.code === '23505') return { duplicate: true };
+    // The party's artist changed between the caller's read and this insert (migration 179's payees_guard).
+    if (/party_contact_changed/.test(res.error.message ?? '')) return { changed: true };
     if (res.error.code === '23514') return { invalid: true };
     check('payee insert', res.error);
   }

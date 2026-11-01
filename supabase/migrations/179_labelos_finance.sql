@@ -56,6 +56,8 @@
 --     caller is an owner of an ARTIST org and the payee's artist is that org's one
 --     self artist (contacts.org_self_artist, 166) — the identity rule LABEL-71 used
 --     for consent. A party's linked account proves nothing here.
+--   · A role-artist member's statement visibility FOLLOWS their member_artist_scopes: adding a
+--     contact to their scope shows that artist's issued statements (same identity rule as LABEL-71).
 --   · external project members, other orgs, anon: nothing. An org without the
 --     `finance` module (entitlements, 170) reads nothing through any of these.
 --   · advances, earnings, draft/approved/void statements: staff only.
@@ -93,6 +95,7 @@ AS $$
 DECLARE
   a jsonb;
   b jsonb;
+  u text;
   i int := 0;
 BEGIN
   IF TG_OP = 'DELETE' THEN
@@ -103,6 +106,15 @@ BEGIN
   END IF;
   a := to_jsonb(OLD);
   b := to_jsonb(NEW);
+  -- The account columns (who created / imported / recorded / approved / voided / closed) are nulled by
+  -- their FKs (ON DELETE SET NULL) when that person's account is deleted. That, and only that, is allowed
+  -- to change on any of these rows: a set value going to NULL — never a change to another value.
+  FOREACH u IN ARRAY ARRAY['created_by', 'imported_by', 'recorded_by', 'approved_by', 'voided_by', 'closed_by'] LOOP
+    IF a ->> u IS NOT NULL AND b ? u AND b ->> u IS NULL THEN
+      a := a - u;
+      b := b - u;
+    END IF;
+  END LOOP;
   WHILE i < TG_NARGS LOOP
     a := a - TG_ARGV[i];
     b := b - TG_ARGV[i];
@@ -350,11 +362,15 @@ BEGIN
     IF NOT FOUND THEN
       RAISE EXCEPTION 'payees: the party belongs to another organization' USING ERRCODE = 'check_violation';
     END IF;
-    -- The snapshot: only ever what the party said when the payee was made, never what the writer sent.
+    -- The snapshot is what the party says AT THIS STATEMENT. The writer must name the artist it expects
+    -- (NULL = none) and the insert is refused when the party says otherwise, so a party re-pointed a moment
+    -- before (or a scope check made on an earlier read) cannot decide who is paid.
     IF v_contact IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.contacts c WHERE c.id = v_contact AND c.org_id = NEW.org_id) THEN
       v_contact := NULL;
     END IF;
-    NEW.artist_contact_id := v_contact;
+    IF NEW.artist_contact_id IS DISTINCT FROM v_contact THEN
+      RAISE EXCEPTION 'payees: party_contact_changed — the party''s artist is not the one named' USING ERRCODE = 'serialization_failure';
+    END IF;
   ELSE
     IF NEW.org_id <> OLD.org_id OR NEW.party_id <> OLD.party_id OR NEW.artist_contact_id IS DISTINCT FROM OLD.artist_contact_id THEN
       RAISE EXCEPTION 'payees: the organization, party and artist of a payee never change' USING ERRCODE = 'check_violation';
@@ -426,7 +442,7 @@ BEGIN
       RAISE EXCEPTION 'advances: a new advance is not void' USING ERRCODE = 'check_violation';
     END IF;
     NEW.artist_contact_id := v_payee.artist_contact_id;
-  ELSIF OLD.voided_at IS NOT NULL THEN
+  ELSIF OLD.voided_at IS NOT NULL AND (NEW.voided_at IS DISTINCT FROM OLD.voided_at OR (NEW.voided_by IS DISTINCT FROM OLD.voided_by AND NEW.voided_by IS NOT NULL)) THEN
     RAISE EXCEPTION 'advances: a void advance is final' USING ERRCODE = 'check_violation';
   END IF;
   RETURN NEW;
@@ -554,7 +570,9 @@ BEGIN
     RAISE EXCEPTION 'statements: % cannot become %', OLD.status, NEW.status USING ERRCODE = 'check_violation';
   END IF;
   -- Approval is written once.
-  IF OLD.approved_at IS NOT NULL AND (NEW.approved_at IS DISTINCT FROM OLD.approved_at OR NEW.approved_by IS DISTINCT FROM OLD.approved_by) THEN
+  -- (approved_by going to NULL is the FK nulling a deleted account; nothing else about the approval moves)
+  IF OLD.approved_at IS NOT NULL AND (NEW.approved_at IS DISTINCT FROM OLD.approved_at
+     OR (NEW.approved_by IS DISTINCT FROM OLD.approved_by AND NOT (OLD.approved_by IS NOT NULL AND NEW.approved_by IS NULL))) THEN
     RAISE EXCEPTION 'statements: an approval is never rewritten' USING ERRCODE = 'check_violation';
   END IF;
   IF OLD.issued_at IS NOT NULL AND NEW.issued_at IS DISTINCT FROM OLD.issued_at THEN
@@ -671,7 +689,7 @@ BEGIN
       END IF;
     END IF;
     NEW.artist_contact_id := v_payee.artist_contact_id;
-  ELSIF OLD.voided_at IS NOT NULL THEN
+  ELSIF OLD.voided_at IS NOT NULL AND (NEW.voided_at IS DISTINCT FROM OLD.voided_at OR (NEW.voided_by IS DISTINCT FROM OLD.voided_by AND NEW.voided_by IS NOT NULL)) THEN
     RAISE EXCEPTION 'payments: a void payment is final' USING ERRCODE = 'check_violation';
   END IF;
   RETURN NEW;

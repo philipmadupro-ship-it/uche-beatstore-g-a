@@ -33,6 +33,15 @@ import { CURRENCY_EXPONENT, currencyExponent, isCurrency } from './currency';
 
 export { CURRENCY_EXPONENT, currencyExponent, isCurrency };
 
+/** The database column is a signed 64-bit integer: nothing outside it is ever money. */
+export const INT64_MAX = BigInt('9223372036854775807');
+export const INT64_MIN = -INT64_MAX - BigInt(1);
+
+function inRange(n: bigint): bigint {
+  if (n > INT64_MAX || n < INT64_MIN) throw new RangeError('Amount is outside the range of a 64-bit integer');
+  return n;
+}
+
 export class CurrencyMismatchError extends Error {
   constructor(a: string, b: string) {
     super(`Cannot combine ${a} with ${b}: amounts in different currencies are never mixed.`);
@@ -53,15 +62,15 @@ export function money(minor: bigint | number, currency: string): Money {
     if (!Number.isSafeInteger(minor)) throw new RangeError('Money must be a whole number of minor units');
     return { minor: BigInt(minor), currency };
   }
-  return { minor, currency };
+  return { minor: inRange(minor), currency };
 }
 
 function same(a: Money, b: Money): void {
   if (a.currency !== b.currency) throw new CurrencyMismatchError(a.currency, b.currency);
 }
 
-export const add = (a: Money, b: Money): Money => (same(a, b), { minor: a.minor + b.minor, currency: a.currency });
-export const sub = (a: Money, b: Money): Money => (same(a, b), { minor: a.minor - b.minor, currency: a.currency });
+export const add = (a: Money, b: Money): Money => (same(a, b), { minor: inRange(a.minor + b.minor), currency: a.currency });
+export const sub = (a: Money, b: Money): Money => (same(a, b), { minor: inRange(a.minor - b.minor), currency: a.currency });
 export const negate = (a: Money): Money => ({ minor: -a.minor, currency: a.currency });
 export const isZero = (a: Money): boolean => a.minor === BigInt(0);
 
@@ -98,7 +107,7 @@ export function divRoundHalfEven(numerator: bigint, denominator: bigint): bigint
 export function mulRatio(amount: Money, num: bigint | number, den: bigint | number): Money {
   const n = BigInt(num);
   const d = BigInt(den);
-  return { minor: divRoundHalfEven(amount.minor * n, d), currency: amount.currency };
+  return { minor: inRange(divRoundHalfEven(amount.minor * n, d)), currency: amount.currency };
 }
 
 /** amount × a split share (100 % = 1 000 000 units, `lib/labelos/splits.ts`), rounded half to even. */
@@ -150,12 +159,12 @@ export function allocate(total: Money, weights: readonly (number | bigint)[]): M
  * integer, so a lossy double is never turned into money.
  */
 export function minorFromDb(value: unknown): bigint {
-  if (typeof value === 'bigint') return value;
+  if (typeof value === 'bigint') return inRange(value);
   if (typeof value === 'number') {
     if (!Number.isSafeInteger(value)) throw new RangeError('Amount is not an exact integer');
     return BigInt(value);
   }
-  if (typeof value === 'string' && /^-?\d{1,19}$/.test(value)) return BigInt(value);
+  if (typeof value === 'string' && /^-?\d{1,19}$/.test(value)) return inRange(BigInt(value));
   throw new RangeError('Amount is not an integer');
 }
 

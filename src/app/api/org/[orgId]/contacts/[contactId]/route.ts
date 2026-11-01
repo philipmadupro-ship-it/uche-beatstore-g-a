@@ -156,6 +156,10 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
         if (/"contracts"|contracts_artist_contact/.test(deleteErr.message ?? '')) {
           return NextResponse.json({ error: 'This contact is the artist on a contract. Contracts are kept as a record, so the contact cannot be removed.' }, { status: 409 });
         }
+        // LABEL-61: finance records (payee, advance, statement, payment) keep naming the artist they were made for.
+        if (/payees|advances|statements|payments/.test(deleteErr.message ?? '')) {
+          return NextResponse.json({ error: 'This artist is paid through finance (a payee, advance, statement or payment names them), so they cannot be removed. Finance keeps those records.' }, { status: 409 });
+        }
         return NextResponse.json({ error: 'This contact is the artist of a release. Delete the release first.' }, { status: 409 });
       }
       throw new Error(deleteErr.message);

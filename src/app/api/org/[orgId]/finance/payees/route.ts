@@ -4,7 +4,7 @@
  *   GET   the payees the caller may read: `finance.read` (never a roster
  *         artist), inside their artist scope. The payment reference is sent
  *         only with `finance.write`.
- *   POST  make a payee of a rights holder (a `parties` row) `{ party_id,
+ *   POST  make a payee of a rights holder (a `parties` row) `{ party_id, artist_contact_id,
  *         currency?, payment_reference? }`. `finance.write`. A member limited
  *         to some artists can only make a payee of a party that names one of
  *         them. The payee takes the party's roster contact AT THIS MOMENT as its
@@ -74,7 +74,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (access.artistScope !== null && !(party.contact_id && scopeAllowsContact(access.artistScope, party.contact_id))) {
       return json(404, { error: 'Party not found' });
     }
-    const result = await insertPayee(access.admin, access.orgId, access.userId, body, party.contact_id);
+    // The caller names the artist this payee is for; a party that stands for someone else now is a conflict, not a guess.
+    if ((party.contact_id ?? null) !== body.artist_contact_id) return json(409, { error: 'That party’s artist has changed. Reload and try again.', code: 'party_contact_changed' });
+    const result = await insertPayee(access.admin, access.orgId, access.userId, body, body.artist_contact_id);
+    if ('changed' in result) return json(409, { error: 'That party’s artist has changed. Reload and try again.', code: 'party_contact_changed' });
     if ('duplicate' in result) return json(409, { error: 'That party is already a payee' });
     if ('invalid' in result) return json(400, { error: 'The payee details were refused (no account numbers; keep the reference short).' });
 

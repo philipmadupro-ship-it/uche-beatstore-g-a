@@ -113,13 +113,13 @@ test.afterAll(async ({ request }) => {
 test('1 · payees are made through the route; duplicates and bank numbers are refused', async ({ browser, baseURL }) => {
   const ctx = await as(browser, baseURL!, owner);
   const post = (data: unknown) => ctx.request.post(`/api/org/${ORG}/finance/payees`, { data });
-  const nova = await post({ party_id: P_NOVA, currency: 'usd', payment_reference: 'wire details on file' });
+  const nova = await post({ party_id: P_NOVA, artist_contact_id: NOVA, currency: 'usd', payment_reference: 'wire details on file' });
   expect(nova.status(), await nova.text()).toBe(201);
   expect((await nova.json()).payee).toMatchObject({ partyId: P_NOVA, artistContactId: NOVA, currency: 'USD' });
-  expect((await post({ party_id: P_KILO })).status()).toBe(201);
-  expect((await post({ party_id: P_PAT, currency: 'EUR' })).status()).toBe(201);
-  expect((await post({ party_id: P_NOVA })).status()).toBe(409);
-  expect((await post({ party_id: P_PAT, payment_reference: 'GB29 NWBK 6016 1331 9268 19' })).status()).toBe(400);
+  expect((await post({ party_id: P_KILO, artist_contact_id: KILO })).status()).toBe(201);
+  expect((await post({ party_id: P_PAT, artist_contact_id: null, currency: 'EUR' })).status()).toBe(201);
+  expect((await post({ party_id: P_NOVA, artist_contact_id: NOVA })).status()).toBe(409);
+  expect((await post({ party_id: P_PAT, artist_contact_id: null, payment_reference: 'GB29 NWBK 6016 1331 9268 19' })).status()).toBe(400);
   const events = (await rest(ctx.request, 'GET', `activity_events?select=verb,visibility,payload&org_id=eq.${ORG}&verb=eq.payee.created`)) as Row[];
   expect(events).toHaveLength(3);
   expect(events.every((e) => e.visibility === 'internal')).toBe(true);
@@ -189,7 +189,7 @@ test('3 · staff: the owner reads all, a scoped finance member only Nova’s, ma
   expect(ids(direct.body)).toEqual([statementIds.novaDraft, statementIds.novaIssued].sort());
   expect((await readAs(request, financeScoped, 'earnings_lines?select=id')).body).toEqual([]);
   // Their scope does not reach a party outside it.
-  expect((await fin.request.post(`/api/org/${ORG}/finance/payees`, { data: { party_id: P_PAT } })).status()).toBe(404);
+  expect((await fin.request.post(`/api/org/${ORG}/finance/payees`, { data: { party_id: P_PAT, artist_contact_id: null } })).status()).toBe(404);
   await fin.close();
 
   // Marketing: the same member, with a function that has no finance.
@@ -249,6 +249,15 @@ test('6 · with the finance module off, nobody reads anything', async ({ browser
     await ctx.close();
   }
   // (the licence row goes with the organization when it is deleted)
+});
+
+test('6b · an artist who is paid through finance cannot be removed from the directory, and the message says why', async ({ browser, baseURL, request }) => {
+  const ctx = await as(browser, baseURL!, owner);
+  const res = await ctx.request.delete(`/api/org/${ORG}/contacts/${NOVA}`);
+  expect(res.status(), await res.text()).toBe(409);
+  expect((await res.json()).error).toMatch(/finance/i);
+  expect(await rest(request, 'GET', `contacts?select=id&id=eq.${NOVA}`)).toHaveLength(1);
+  await ctx.close();
 });
 
 test('7 · the producer dashboard, the org shell and /store still load (1440 and 390)', async ({ browser, baseURL }) => {

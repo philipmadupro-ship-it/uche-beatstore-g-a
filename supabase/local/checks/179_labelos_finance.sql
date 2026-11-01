@@ -141,14 +141,21 @@ SELECT public.check_eq('payments carries no processor or account column',
 
 -- ── Payees: the snapshot ────────────────────────────────────────────────
 
-INSERT INTO public.payees (id, org_id, party_id, currency, created_by) VALUES
-  (:PY1, :L, :P1, 'USD', :F), (:PY2, :L, :P2, 'USD', :F), (:PY3, :L, :P3, 'EUR', :F), (:PYX, :L2, :PX, 'USD', :Z), (:PYA, :AR, :PA, 'USD', :X);
+INSERT INTO public.payees (id, org_id, party_id, artist_contact_id, currency, created_by) VALUES
+  (:PY1, :L, :P1, :A1, 'USD', :F), (:PY2, :L, :P2, :A2, 'USD', :F), (:PY3, :L, :P3, NULL, 'EUR', :F), (:PYX, :L2, :PX, :CX, 'USD', :Z), (:PYA, :AR, :PA, :CA, 'USD', :X);
+SELECT public.check_raises('a payee naming an artist the party does not have is refused (party re-pointed / wrong artist)',
+  format($$INSERT INTO public.payees (org_id, party_id, artist_contact_id) VALUES (%L, %L, %L)$$, 'b1790000-0000-4000-8000-000000000001', 'd1790000-0000-4000-8000-000000000003', 'c1790000-0000-4000-8000-0000000000a1'),
+  'party_contact_changed');
+SELECT public.check_raises('a payee omitting the artist its party has is refused',
+  format($$UPDATE public.parties SET contact_id = %L WHERE id = %L; INSERT INTO public.payees (org_id, party_id) VALUES (%L, %L)$$, 'c1790000-0000-4000-8000-0000000000a1', 'd1790000-0000-4000-8000-000000000003', 'b1790000-0000-4000-8000-000000000001', 'd1790000-0000-4000-8000-000000000003'),
+  'party_contact_changed|payees_one_per_party');
+UPDATE public.parties SET contact_id = NULL WHERE id = :P3;
 SELECT public.check_eq('a payee takes the party''s roster contact as its artist',
   (SELECT artist_contact_id FROM public.payees WHERE id = 'e2790000-0000-4000-8000-000000000001'), 'c1790000-0000-4000-8000-0000000000a1'::uuid);
 SELECT public.check_eq('a party with no contact makes a payee with no artist',
   (SELECT artist_contact_id IS NULL FROM public.payees WHERE id = 'e2790000-0000-4000-8000-000000000003'), true);
 SELECT public.check_raises('one payee per party',
-  format($$INSERT INTO public.payees (org_id, party_id) VALUES (%L, %L)$$, 'b1790000-0000-4000-8000-000000000001', 'd1790000-0000-4000-8000-000000000001'),
+  format($$INSERT INTO public.payees (org_id, party_id, artist_contact_id) VALUES (%L, %L, %L)$$, 'b1790000-0000-4000-8000-000000000001', 'd1790000-0000-4000-8000-000000000001', 'c1790000-0000-4000-8000-0000000000a1'),
   'payees_one_per_party|duplicate key');
 SELECT public.check_raises('a party of another organization is refused',
   format($$INSERT INTO public.payees (org_id, party_id) VALUES (%L, %L)$$, 'b1790000-0000-4000-8000-000000000001', 'd1790000-0000-4000-8000-000000000004'),
@@ -425,6 +432,17 @@ UPDATE public.earnings_lines SET track_id = 'e8790000-0000-4000-8000-00000000000
 DELETE FROM public.tracks WHERE id = 'e8790000-0000-4000-8000-000000000001';
 SELECT public.check_eq('a deleted recording nulls the match, nothing else',
   (SELECT track_id IS NULL AND gross_minor = 100000 FROM public.earnings_lines LIMIT 1), true);
+
+-- ── M1: deleting an account that wrote finance rows works, and changes nothing else ──
+SELECT public.check_eq('setup: the finance member wrote rows', (SELECT count(*)::int FROM public.statements WHERE approved_by = 'a1790000-0000-4000-8000-000000000002'), 2);
+DELETE FROM public.org_members WHERE user_id = 'a1790000-0000-4000-8000-000000000002';
+DELETE FROM auth.users WHERE id = 'a1790000-0000-4000-8000-000000000002';
+SELECT public.check_eq('account deleted: approved_by / created_by / recorded_by are nulled, the rows keep their amounts and status',
+  (SELECT (SELECT count(*) FROM public.statements WHERE id = 'e4790000-0000-4000-8000-000000000001' AND approved_by IS NULL AND approved_at IS NOT NULL AND status = 'issued' AND net_minor = 75000 AND created_by IS NULL)
+        + (SELECT count(*) FROM public.payments WHERE id = 'e6790000-0000-4000-8000-000000000001' AND recorded_by IS NULL AND amount_minor = 75000)
+        + (SELECT count(*) FROM public.finance_periods WHERE id = 'e3790000-0000-4000-8000-000000000001' AND created_by IS NULL AND closed_by IS NULL AND status = 'closed'))::int, 3);
+SELECT public.check_raises('...but a user column still cannot be changed to another user',
+  format($$UPDATE public.payments SET recorded_by = %L WHERE id = %L$$, 'a1790000-0000-4000-8000-000000000001', 'e6790000-0000-4000-8000-000000000001'), 'fixed once written');
 
 -- ── The party and the contact are protected by the payee's foreign keys ──
 SELECT public.check_raises('a party named by a payee cannot be deleted',

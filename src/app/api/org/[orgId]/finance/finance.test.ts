@@ -173,7 +173,7 @@ describe('/finance/payees', () => {
   });
 
   it('POST makes a payee of a party, records a payee.created event with ids only, and refuses a second', async () => {
-    const res = await call('payees', 'POST', OWN, L, { party_id: PNONE, currency: 'eur', payment_reference: 'wire details on file' });
+    const res = await call('payees', 'POST', OWN, L, { party_id: PNONE, artist_contact_id: null, currency: 'eur', payment_reference: 'wire details on file' });
     expect(res.status).toBe(201);
     const made = (await res.json()).payee;
     expect(made).toMatchObject({ partyId: PNONE, artistContactId: null, currency: 'EUR' });
@@ -181,27 +181,33 @@ describe('/finance/payees', () => {
     expect(ev).toHaveLength(1);
     expect(ev[0]).toMatchObject({ subject_type: 'payee', visibility: 'internal' });
     expect(JSON.stringify(ev[0].payload)).not.toMatch(/EUR|wire|Pat/);
-    expect((await call('payees', 'POST', OWN, L, { party_id: PNONE })).status).toBe(409);
+    expect((await call('payees', 'POST', OWN, L, { party_id: PNONE, artist_contact_id: null })).status).toBe(409);
   });
 
   it('POST: unknown currency, account-number-like reference, a foreign party and unknown keys are refused', async () => {
-    expect((await call('payees', 'POST', OWN, L, { party_id: PNONE, currency: 'XXX' })).status).toBe(400);
-    expect((await call('payees', 'POST', OWN, L, { party_id: PNONE, payment_reference: 'GB29 NWBK 6016 1331 9268 19' })).status).toBe(400);
-    expect((await call('payees', 'POST', OWN, L, { party_id: POTHER })).status).toBe(404);
-    expect((await call('payees', 'POST', OWN, L, { party_id: PNONE, artist_contact_id: BO })).status).toBe(400);
+    expect((await call('payees', 'POST', OWN, L, { party_id: PNONE, artist_contact_id: null, currency: 'XXX' })).status).toBe(400);
+    expect((await call('payees', 'POST', OWN, L, { party_id: PNONE, artist_contact_id: null, payment_reference: 'GB29 NWBK 6016 1331 9268 19' })).status).toBe(400);
+    expect((await call('payees', 'POST', OWN, L, { party_id: POTHER, artist_contact_id: null })).status).toBe(404);
+    expect((await call('payees', 'POST', OWN, L, { party_id: PNONE, artist_contact_id: null, bogus: BO })).status).toBe(400);
   });
 
   it('POST needs finance.write; a scoped member can only pay a party of their own artist', async () => {
-    for (const who of [R1, MKT, STR]) expect((await call('payees', 'POST', who, L, { party_id: PNONE })).status).toBeGreaterThanOrEqual(403);
-    expect((await call('payees', 'POST', FSC, L, { party_id: PNONE })).status).toBe(404); // no artist: whole-org only
-    expect((await call('payees', 'POST', FSC, L, { party_id: PBO })).status).toBe(404); // Bo is outside their scope
+    for (const who of [R1, MKT, STR]) expect((await call('payees', 'POST', who, L, { party_id: PNONE, artist_contact_id: null })).status).toBeGreaterThanOrEqual(403);
+    expect((await call('payees', 'POST', FSC, L, { party_id: PNONE, artist_contact_id: null })).status).toBe(404); // no artist: whole-org only
+    expect((await call('payees', 'POST', FSC, L, { party_id: PBO, artist_contact_id: BO })).status).toBe(404); // Bo is outside their scope
     db.tables.payees = [];
-    expect((await call('payees', 'POST', FSC, L, { party_id: PARA })).status).toBe(201);
+    expect((await call('payees', 'POST', FSC, L, { party_id: PARA, artist_contact_id: ARA })).status).toBe(201);
   });
 
-  it('POST answers 503 naming 179 when the migration is missing', async () => {
+  it('POST names the artist it expects: a party that stands for someone else is a 409; omitting it is a 400', async () => {
+    expect((await call('payees', 'POST', OWN, L, { party_id: PARA, artist_contact_id: BO })).status).toBe(409);
+    expect((await call('payees', 'POST', OWN, L, { party_id: PNONE, artist_contact_id: ARA })).status).toBe(409);
+    expect((await call('payees', 'POST', OWN, L, { party_id: PNONE })).status).toBe(400);
+  });
+
+  it('POST answers 503  naming 179 when the migration is missing', async () => {
     db.missingTables = ['payees'];
-    const res = await call('payees', 'POST', OWN, L, { party_id: PNONE });
+    const res = await call('payees', 'POST', OWN, L, { party_id: PNONE, artist_contact_id: null });
     expect(res.status).toBe(503);
     expect((await res.json()).error).toMatch(/179/);
   });

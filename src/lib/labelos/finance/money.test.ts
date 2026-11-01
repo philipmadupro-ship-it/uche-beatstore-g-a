@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FULL_SHARE } from '@/lib/labelos/splits';
+import { OrgMinorAmountSchema } from '@/lib/contracts';
 import {
   CurrencyMismatchError,
   add,
@@ -198,6 +199,20 @@ describe('largest-remainder allocation', () => {
   });
 });
 
+describe('64-bit bounds', () => {
+  const MAX = BigInt('9223372036854775807');
+  it('refuses anything a bigint column cannot hold', () => {
+    expect(money(MAX, 'USD').minor).toBe(MAX);
+    expect(() => money(MAX + BigInt(1), 'USD')).toThrow(RangeError);
+    expect(() => add(money(MAX, 'USD'), money(1, 'USD'))).toThrow(RangeError);
+    expect(() => sub(money(-MAX, 'USD'), money(2, 'USD'))).toThrow(RangeError);
+    expect(() => mulRatio(money(MAX, 'USD'), 2, 1)).toThrow(RangeError);
+    expect(() => minorFromDb('9223372036854775808')).toThrow(RangeError);
+    expect(() => minorFromDb('9999999999999999999')).toThrow(RangeError);
+    expect(minorFromDb('9223372036854775807')).toBe(MAX);
+  });
+});
+
 describe('database and screen forms', () => {
   it('reads bigint columns exactly', () => {
     expect(minorFromDb(12)).toBe(BigInt(12));
@@ -236,5 +251,20 @@ describe('database and screen forms', () => {
         expect(parseMajor(formatMajor(m), cur)).toEqual(m);
       }
     }
+  });
+});
+
+describe('amounts sent by a client (400, never a silently different amount)', () => {
+  it('accepts exact integers and in-range digit strings', () => {
+    expect(OrgMinorAmountSchema.safeParse(12345).success).toBe(true);
+    expect(OrgMinorAmountSchema.safeParse('9223372036854775807').success).toBe(true);
+    expect(OrgMinorAmountSchema.safeParse('-9223372036854775808').success).toBe(true);
+  });
+  it('refuses a JSON number past 2^53 (already rounded by the parser), fractions, and out-of-range strings', () => {
+    expect(JSON.parse('{"a": 9007199254740993}').a).toBe(9007199254740992); // what the parser did to it
+    expect(OrgMinorAmountSchema.safeParse(9007199254740992).success).toBe(false);
+    expect(OrgMinorAmountSchema.safeParse(1.5).success).toBe(false);
+    expect(OrgMinorAmountSchema.safeParse('9223372036854775808').success).toBe(false);
+    expect(OrgMinorAmountSchema.safeParse('1e3').success).toBe(false);
   });
 });
