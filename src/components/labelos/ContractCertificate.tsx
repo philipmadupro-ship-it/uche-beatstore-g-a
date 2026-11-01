@@ -71,7 +71,7 @@ export function ContractCertificate({ orgId, contractId }: { orgId: string; cont
           {view.signers.map((s) => (
             <li key={s.partyId} className="space-y-1.5 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid={`certificate-signer-${s.partyId}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[12px] text-white/80">{s.name} <span className="text-white/40">· {s.roleLabel}</span></p>
+                <p className="text-[11px] text-white/80">{s.name} <span className="text-white/40">· {s.roleLabel}</span></p>
                 <StateChip status={s.status} />
               </div>
               {s.signature ? (

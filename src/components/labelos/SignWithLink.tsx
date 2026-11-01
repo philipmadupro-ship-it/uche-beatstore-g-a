@@ -104,7 +104,7 @@ export function SignWithLink({ token }: { token: string }) {
 
       {data.state === 'signed' && data.receipt ? (
         <section className="space-y-2 rounded-xl border border-[#6DC6A4]/30 bg-[#0D0D0A] p-4" data-testid="sign-receipt">
-          <p className="inline-flex items-center gap-1.5 text-[12px] text-[#6DC6A4]"><Check size={13} aria-hidden="true" />You signed this contract</p>
+          <p className="inline-flex items-center gap-1.5 text-[11px] text-[#6DC6A4]"><Check size={13} aria-hidden="true" />You signed this contract</p>
           <p className="text-[11px] text-white/60">{data.receipt.signerName ?? data.you.name} · {when(data.receipt.signedAt)}</p>
           <p className="break-all font-mono text-[10px] text-white/40">Text fingerprint (SHA-256): {data.receipt.documentSha256}</p>
           <p className="text-[11px] text-white/60">{data.completed ? 'Every party has now signed.' : 'The contract is complete once every party has signed.'}</p>

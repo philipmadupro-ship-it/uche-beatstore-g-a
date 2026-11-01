@@ -131,8 +131,8 @@ describe('proxy login redirect', () => {
 const API_DIR = path.join(process.cwd(), 'src', 'app', 'api');
 const EXISTING_API_FOLDERS = fs
   .readdirSync(API_DIR, { withFileTypes: true })
-  // `org` and `platform` (LABEL-47) are the Label OS namespaces, tested on their own below.
-  .filter((d) => d.isDirectory() && d.name !== 'org' && d.name !== 'platform')
+  // `org` and `platform` (LABEL-47) are the Label OS namespaces, tested on their own below; so is `sign` (LABEL-60).
+  .filter((d) => d.isDirectory() && d.name !== 'org' && d.name !== 'platform' && d.name !== 'sign')
   .map((d) => d.name)
   .sort();
 
@@ -387,6 +387,45 @@ describe('Platform console paths (LABEL-47)', () => {
     currentUser = { id: 'member-1' };
     expect((await run('/api/platforms')).status).toBe(403);
     expect((await run('/api/platform-x')).status).toBe(403);
+  });
+});
+
+describe('Contract signing entrance (LABEL-60)', () => {
+  const PATHS = ['/api/sign/abc', '/sign/abc'];
+
+  it('does not exist while the flag is off, for anyone', async () => {
+    for (const id of [null, 'buyer-1', 'producer-1', 'member-1']) {
+      currentUser = id ? { id } : null;
+      for (const p of PATHS) expect((await run(p)).status, `${id} ${p}`).toBe(404);
+    }
+  });
+
+  it('flag on: open to anyone — signed in or out, member or not — with no login redirect and no membership read; the route checks the link', async () => {
+    vi.stubEnv('LABEL_OS_ENABLED', 'true');
+    memberIds.add('member-1');
+    for (const id of [null, 'buyer-1', 'producer-1', 'member-1']) {
+      currentUser = id ? { id } : null;
+      for (const p of PATHS) {
+        const res = await run(p);
+        expect(res.status, `${id} ${p}`).toBe(200);
+        expect(res.headers.get('location'), `${id} ${p}: no login or membership redirect`).toBeNull();
+      }
+    }
+    expect(membershipReads).toBe(0);
+  });
+
+  it('flag on: answer 503 without a database', async () => {
+    vi.stubEnv('LABEL_OS_ENABLED', 'true');
+    vi.stubEnv('ENABLE_LOCAL_STORE', 'true');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '');
+    for (const p of PATHS) expect((await run(p)).status, p).toBe(503);
+  });
+
+  it('look-alikes are ordinary producer paths: nothing below the token, nothing beside it', async () => {
+    vi.stubEnv('LABEL_OS_ENABLED', 'true');
+    currentUser = { id: 'buyer-1' };
+    for (const p of ['/api/sign', '/api/sign/abc/def', '/api/signer/abc', '/api/signx']) expect((await run(p)).status, p).toBe(403);
   });
 });
 
