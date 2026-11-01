@@ -6,6 +6,7 @@ import {
   CONTRACT_SPLIT_RULES,
   canSignContract,
   deriveDrift,
+  driftDetailFor,
   driftView,
   expectedForRule,
   hasDrift,
@@ -232,5 +233,18 @@ describe('canSignContract', () => {
   it('does not apply to a contract with no master rule or no song', () => {
     expect(canSignContract({ requireSignedMasterSplit: true, contract: { type: 'producer', trackId: 'song-1' }, masterSheets: [] })).toEqual({ ok: true });
     expect(canSignContract({ requireSignedMasterSplit: true, contract: { type: 'feature', trackId: null }, masterSheets: [] })).toEqual({ ok: true });
+  });
+});
+
+describe('driftDetailFor — the one rule both routes use', () => {
+  const caps = (...c: string[]) => new Set(c);
+  it('rights.read, not a roster artist: detail', () => {
+    expect(driftDetailFor({ userId: 'u', caps: caps('rights.read', 'rights.read.own_line') })).toBe(true);
+  });
+  it('a roster artist, an own-line reader and an external member: the yes/no only', () => {
+    expect(driftDetailFor({ userId: 'u', caps: caps('rights.read', 'rights.read.own_line'), rosterArtist: true })).toBe(false);
+    expect(driftDetailFor({ userId: 'u', caps: caps('rights.read.own_line') })).toBe(false);
+    expect(driftDetailFor({ userId: 'u', caps: caps('rights.read'), externalRole: 'viewer' })).toBe(false);
+    expect(driftDetailFor({ userId: 'u', caps: caps() })).toBe(false);
   });
 });

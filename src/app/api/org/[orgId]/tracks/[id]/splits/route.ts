@@ -28,6 +28,7 @@ import { SPLITS_NOT_READY } from '@/lib/labelos/audit-rpc';
 import { creditActorOf } from '@/lib/labelos/credit-actor';
 import { canWriteRights, creditReach } from '@/lib/labelos/credits';
 import { ContractsNotReadyError } from '@/lib/labelos/contracts-store';
+import { driftDetailFor } from '@/lib/labelos/contract-splits';
 import { contractsOfSong } from '@/lib/labelos/contract-splits-store';
 import { contractActor } from '@/lib/labelos/contracts-route';
 import { SPLIT_KIND_LABEL, SPLIT_KINDS, SPLIT_ROLE_LABEL, ROLES_BY_KIND } from '@/lib/labelos/splits';
@@ -64,7 +65,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     if (access.kind === 'org' && orgHasModule(access.access, 'contracts')) {
       try {
         const visible = new Set(sheets.map((s) => s.id));
-        contracts = (await contractsOfSong(admin, org, id, await contractActor(access.access), { detail: reach === 'all' && !actor.rosterArtist })).map((c) => ({
+        contracts = (await contractsOfSong(admin, org, id, await contractActor(access.access), { detail: driftDetailFor(actor) })).map((c) => ({
           ...c,
           drift: c.drift.filter((d) => visible.has(d.sheetId)),
         }));
