@@ -18,6 +18,7 @@ import { confirmToast, toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import type { ContractView } from '@/lib/labelos/contracts/context';
 import { mergeField } from '@/lib/labelos/contracts/merge-fields';
+import { contractEnd, expiryState, filterStore } from '@/lib/labelos/contract-store-model';
 import { platformTemplate } from '@/lib/labelos/contracts/templates';
 import { CONTRACT_STATUS_LABELS, PARTY_ROLE_LABELS, TEMPLATE_TYPES, TEMPLATE_TYPE_LABELS, isEditable, type PartyRole, type TemplateTypeId } from '@/lib/labelos/contracts/types';
 import { bodyFromContractForm, contractFormError, emptyContractForm, fieldHint, formFromContract, type ContractForm } from '@/lib/labelos/contracts-form';
@@ -189,6 +190,11 @@ export function ContractsView({ orgId }: { orgId: string }) {
   const [songTitle, setSongTitle] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The contract store (LABEL-60): search and filter what the server sent.
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | ContractView['status']>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | TemplateTypeId>('all');
+  const [expiring, setExpiring] = useState(false);
 
   const reload = useCallback(async () => {
     const res = await loadContracts(orgId);
@@ -237,6 +243,16 @@ export function ContractsView({ orgId }: { orgId: string }) {
   }, [orgId, selected]);
 
   const typeOptions = useMemo(() => TEMPLATE_TYPES.map((t) => ({ value: t.id, label: t.label })), []);
+  const typeFilterOptions = useMemo(() => [{ value: 'all', label: 'All types' }, ...TEMPLATE_TYPES.map((t) => ({ value: t.id, label: t.label }))], []);
+  const statusFilterOptions = useMemo(
+    () => [{ value: 'all', label: 'Any status' }, ...(['draft', 'sent', 'signed', 'void'] as const).map((st) => ({ value: st, label: CONTRACT_STATUS_LABELS[st] }))],
+    [],
+  );
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const shown = useMemo(
+    () => filterStore(data?.contracts ?? [], { q, status: statusFilter, type: typeFilter, expiring }, today),
+    [data?.contracts, q, statusFilter, typeFilter, expiring, today],
+  );
 
   if (failed) {
     return (
@@ -308,7 +324,7 @@ export function ContractsView({ orgId }: { orgId: string }) {
     <div className="grid gap-6 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]" data-testid="contracts">
       <section aria-label="Contracts" className="min-w-0 space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <p className={LABEL}>{data.contracts.length} contract{data.contracts.length === 1 ? '' : 's'}</p>
+          <p className={LABEL} data-testid="contracts-count">{shown.length === data.contracts.length ? `${data.contracts.length} contract${data.contracts.length === 1 ? '' : 's'}` : `${shown.length} of ${data.contracts.length}`}</p>
           <div className="flex items-center gap-2">
             {data.canWrite && (
               <Link className={BTN} href="./contracts/templates" data-testid="contract-templates-link">Templates</Link>
@@ -320,11 +336,26 @@ export function ContractsView({ orgId }: { orgId: string }) {
             )}
           </div>
         </div>
+        {data.contracts.length > 1 && (
+          <div className="space-y-2" role="search" aria-label="Search the contracts" data-testid="contracts-search">
+            <input className={FIELD} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by title, party, type or status" aria-label="Search contracts" data-testid="contracts-search-input" />
+            <div className="grid grid-cols-2 gap-2">
+              <Dropdown className="w-full" value={statusFilter} onChange={(v) => setStatusFilter(v as typeof statusFilter)} options={statusFilterOptions} aria-label="Filter by status" />
+              <Dropdown className="w-full" value={typeFilter} onChange={(v) => setTypeFilter(v as typeof typeFilter)} options={typeFilterOptions} aria-label="Filter by type" />
+            </div>
+            <label className="flex items-center gap-2 text-[11px] text-white/60">
+              <input type="checkbox" checked={expiring} onChange={(e) => setExpiring(e.target.checked)} data-testid="contracts-expiring" />
+              Ending within 60 days, or ended
+            </label>
+          </div>
+        )}
         {data.contracts.length === 0 ? (
           <p className={NOTICE} data-testid="contracts-empty">{data.canWrite ? 'No contracts yet. Start one from a template.' : 'No contracts to show.'}</p>
+        ) : shown.length === 0 ? (
+          <p className={NOTICE} data-testid="contracts-none-match">No contract matches. <button type="button" className="underline" onClick={() => { setQ(''); setStatusFilter('all'); setTypeFilter('all'); setExpiring(false); }}>Clear the search</button></p>
         ) : (
           <ul className="space-y-2">
-            {data.contracts.map((c) => (
+            {shown.map((c) => (
               <li key={c.id}>
                 <button
                   type="button"
@@ -337,7 +368,19 @@ export function ContractsView({ orgId }: { orgId: string }) {
                     <span className="min-w-0 truncate text-[11px] text-white/80">{c.title}</span>
                     <StatusBadge status={c.status} />
                   </span>
-                  <span className="mt-1 block text-[10px] text-white/40">{TEMPLATE_TYPE_LABELS[c.type]}</span>
+                  <span className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-white/40">
+                    <span>{TEMPLATE_TYPE_LABELS[c.type]}</span>
+                    {(() => {
+                      const e = expiryState(c, today);
+                      const end = contractEnd(c.effective_date, c.term_months);
+                      if (e.kind === 'none' || !end) return null;
+                      return (
+                        <span className={cn(e.kind === 'expired' ? 'text-[#ff8b73]' : e.kind === 'soon' ? 'text-[#c8a47a]' : 'text-white/40')} data-testid={`contract-expiry-${c.id}`}>
+                          {e.kind === 'expired' ? `ended ${end}` : `ends ${end}`}
+                        </span>
+                      );
+                    })()}
+                  </span>
                 </button>
               </li>
             ))}

@@ -127,6 +127,9 @@ function labelOsTables(): string[] {
     'contract_templates',
     'contracts',
     'contract_parties',
+    // 178_labelos_contract_signing.sql (LABEL-60): service-role only behind a deny-all policy; signatures are append-only.
+    'contract_signers',
+    'contract_signatures',
     // 190_labelos_team_accounts.sql (doc 25): service-role only, no policy.
     'org_managed_accounts',
     // 186_labelos_listing_consent.sql (LABEL-71): service-role only behind a deny-all policy.
@@ -798,6 +801,54 @@ describe('final RLS policy state', () => {
     it('an artist’s answer is not erased by erasing the artist: the contact key has no cascade', () => {
       const sql = readFileSync(join(DIR, '186_labelos_listing_consent.sql'), 'utf8').replace(/--[^\n]*/g, '');
       expect(sql).toMatch(/artist_contact_id uuid NOT NULL REFERENCES public\.contacts\(id\),/);
+    });
+  });
+
+  describe('Label OS contract signing (mig 178, LABEL-60)', () => {
+    const TABLES = ['contract_signers', 'contract_signatures'];
+    const sql = () => readFileSync(join(DIR, '178_labelos_contract_signing.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('each table has exactly one policy and it says no: a signature carries an address hash and an image reference, so it is read through the route or not at all', () => {
+      for (const table of TABLES) {
+        const own = [...policies].filter(([k]) => k.startsWith(`${table}.`));
+        expect(own.map(([k]) => k), table).toEqual([`${table}.${table}_no_direct_access`]);
+        expect(own[0][1], table).toMatch(/FOR ALL TO anon, authenticated\s+USING \(false\)\s+WITH CHECK \(false\)/i);
+      }
+    });
+
+    it('row level security is on, the API roles hold no privilege, the service-only trigger is attached, and both cascade from the organization', () => {
+      for (const table of TABLES) {
+        expect(sql(), table).toMatch(new RegExp(`ALTER TABLE public\\.${table} ENABLE ROW LEVEL SECURITY`));
+        expect(sql(), table).toMatch(new RegExp(`REVOKE ALL ON public\\.${table} FROM anon, authenticated`));
+        expect(sql(), table).toMatch(new RegExp(`ON public\\.${table}\\s+FOR EACH ROW EXECUTE FUNCTION public\\.labelos_org_rows_service_only\\('self', 'org_id'\\)`));
+      }
+      expect(sql()).not.toMatch(/\buser_id\b/);
+      expect((sql().match(/org_id\s+uuid NOT NULL REFERENCES public\.organizations\(id\) ON DELETE CASCADE/g) ?? []).length).toBe(2);
+    });
+
+    it('signatures are append-only: an UPDATE is refused, a direct DELETE and a TRUNCATE are refused, and no foreign key can UPDATE a row behind the trigger', () => {
+      expect(sql()).toMatch(/CREATE TRIGGER contract_signatures_immutable BEFORE UPDATE OR DELETE ON public\.contract_signatures/);
+      expect(sql()).toMatch(/CREATE TRIGGER contract_signatures_no_truncate BEFORE TRUNCATE ON public\.contract_signatures/);
+      // The signing account is a plain uuid: an ON DELETE SET NULL to auth.users would UPDATE the row.
+      const table = /CREATE TABLE IF NOT EXISTS public\.contract_signatures \(([\s\S]*?)\n\);/.exec(sql())?.[1] ?? '';
+      expect(table).not.toMatch(/ON DELETE SET NULL/);
+      expect(table).not.toMatch(/auth\.users/);
+      // Only the contract and the organization cascade; the party is NO ACTION, so a signed party cannot be deleted.
+      expect(table).toMatch(/contract_id\s+uuid NOT NULL REFERENCES public\.contracts\(id\) ON DELETE CASCADE/);
+      expect(table).toMatch(/party_id\s+uuid NOT NULL REFERENCES public\.parties\(id\),/);
+    });
+
+    it('the signing functions are service_role only, and nothing is granted to an API role', () => {
+      for (const fn of ['link_issue', 'link_revoke', 'sign', 'supersede']) {
+        expect(sql(), fn).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.labelos_audit_contract_${fn}\\([^)]*\\) FROM PUBLIC, anon, authenticated`));
+        expect(sql(), fn).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.labelos_audit_contract_${fn}\\([^)]*\\) TO service_role`));
+      }
+      expect(sql()).not.toMatch(/GRANT\s+(SELECT|INSERT|UPDATE|DELETE|ALL)[^;]*contract_sign(ers|atures)/i);
+    });
+
+    it('the contracts table gains columns but no read for an API role: the provider address stays behind the route', () => {
+      expect(sql()).not.toMatch(/GRANT[^;]*ON public\.contracts/i);
+      expect(sql()).toMatch(/esign_provider_url ~ '\^https:\/\/\[\^\[:space:\]@\]\+\$'/);
     });
   });
 

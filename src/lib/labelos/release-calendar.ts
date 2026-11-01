@@ -14,7 +14,7 @@
  *    <its title>") with reminders a month and a week before. The caller passes only the contracts this member may read in
  *    an org licensed for them; the rows carry no party, amount or term length.
  */
-import { contractEnd } from './contract-signing';
+import { contractEnd } from './contract-store-model';
 
 export type CalendarRelease = {
   id: string;

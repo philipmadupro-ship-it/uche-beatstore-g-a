@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { ArrowDown, ArrowUp, Download, Plus, Trash2 } from 'lucide-react';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { ContractSplitsPanel } from '@/components/labelos/ContractSplitsPanel';
+import { ContractSigningPanel } from '@/components/labelos/ContractSigningPanel';
 import { cn } from '@/lib/utils';
 import type { Rendered } from '@/lib/labelos/contracts/render';
 import { fieldKeysOf } from '@/lib/labelos/contracts/render';
@@ -347,6 +348,8 @@ export function ContractEditor({ orgId, contractId }: { orgId: string; contractI
           </div>
         )}
       </header>
+
+      {contract.status !== 'draft' && <ContractSigningPanel orgId={orgId} contractId={contractId} onChanged={() => void reload()} />}
 
       {contract.status !== 'void' && (
         <ContractSplitsPanel orgId={orgId} contractId={contractId} trackId={contract.track_id} version={contract.version} />
