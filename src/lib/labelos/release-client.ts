@@ -101,6 +101,11 @@ export type StoreState = {
   playback: 'preview' | 'full';
   /** Whether the playback choice can be stored (migration 158). */
   playbackChoice: boolean;
+  /** LABEL-72: what visitors hear now (`full` only once the release date has come); absent from an older server. */
+  effectivePlayback?: 'preview' | 'full';
+  /** LABEL-72: full songs can be chosen (the release date has come, or it is imported); absent = assume yes. */
+  fullAvailable?: boolean;
+  releaseDate?: string | null;
   canList: { ok: true } | { ok: false; error: string; field: string | null };
   unlist: { askToDeletePreviews: boolean };
   /** LABEL-71; absent from an older server. */

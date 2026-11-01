@@ -32,6 +32,7 @@
  * total, only that the sheet differs from its contract.
  */
 import type { PartyRole, TemplateTypeId } from './contracts/types';
+import { creditReach, type CreditActor } from './credits';
 import { FULL_SHARE, draftIssues, formatShare, parseShare, type SplitKind, type SplitLineInput, type SplitRole } from './splits';
 
 export type ShareField = 'master_share' | 'publishing_share';
@@ -267,6 +268,14 @@ function isSplitKindName(v: string): v is SplitKind {
 }
 
 export const hasDrift = (d: DriftResult | null): boolean => !!d && d.checked && d.items.length > 0;
+
+/**
+ * Who is told WHO drifted and by how much: a reader of every sheet who is not a
+ * roster artist (`rights.read`). Everyone else gets the yes/no only (D2). The
+ * contract route and the song's splits route both ask this, so they cannot
+ * disagree.
+ */
+export const driftDetailFor = (actor: CreditActor): boolean => creditReach(actor) === 'all' && !actor.rosterArtist;
 
 export type DriftView = {
   kind: SplitKind;

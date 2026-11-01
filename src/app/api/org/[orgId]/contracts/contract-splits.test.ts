@@ -308,6 +308,19 @@ describe('GET — what would be filled, and drift', () => {
     for (const secret of ['"sheet"', '"actual"', '"total"', 'INTERNAL-NOTE']) expect(text).not.toContain(secret);
   });
 
+  it('D2: an own-line reader hears only about sheets they are on — a sheet they have no line on is not disclosed (id, existence or match)', async () => {
+    const c = add();
+    const mine = sheet('master', 'circulated', [[PF, '25'], [PN, '75']]);
+    sheet('composition', 'circulated', [[PN, '10'], [PL, '90']]); // PF (PRD) is not on it, and it drifts from the contract
+    const text = await (await contractSplits('GET', PRD, c.id)).text();
+    const body = JSON.parse(text);
+    expect(body.drift).toEqual([{ kind: 'master', drifted: true, sheetId: mine }]);
+    expect(JSON.stringify(body.drift)).not.toContain('composition');
+    // The owner (reads every sheet) still sees both.
+    const owner = await (await contractSplits('GET', LEG, c.id)).json();
+    expect(owner.drift.map((d: { kind: string }) => d.kind).sort()).toEqual(['composition', 'master']);
+  });
+
   it('a member without rights.read gets the yes/no only', async () => {
     const c = add();
     sheet('master', 'circulated', [[PF, '25'], [PN, '75']]);

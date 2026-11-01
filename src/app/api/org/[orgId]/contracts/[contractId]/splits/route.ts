@@ -36,10 +36,11 @@ import { partyName } from '@/lib/labelos/contracts/context';
 import { CONTRACTS_NOT_READY, ContractsNotReadyError, assertContractsSchema } from '@/lib/labelos/contracts-store';
 import { loadContractFor } from '@/lib/labelos/contracts-route';
 import { contractFacts, driftOfContract, sheetFactsOfSong } from '@/lib/labelos/contract-splits-store';
-import { SKIP_MESSAGE, driftView, planDraftWrite, planPrefill, rulesFor, type KindPlan } from '@/lib/labelos/contract-splits';
+import { SKIP_MESSAGE, driftDetailFor, driftView, planDraftWrite, planPrefill, rulesFor, type KindPlan } from '@/lib/labelos/contract-splits';
+import { orgActor } from '@/lib/labelos/credits';
 import { partiesByIds } from '@/lib/labelos/credits-store';
 import { SPLIT_KIND_LABEL, SPLIT_ROLE_LABEL, formatShare, type SplitKind, type SplitLineInput } from '@/lib/labelos/splits';
-import { createDraft, resolveLines, saveDraft, splitEventSubject, SplitsNotReadyError } from '@/lib/labelos/splits-store';
+import { createDraft, loadSheetViews, resolveLines, saveDraft, splitEventSubject, SplitsNotReadyError } from '@/lib/labelos/splits-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -77,9 +78,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
     if (row.track_id) {
       const song = await requireObjectAccess({ table: 'tracks', id: row.track_id, cap: 'rights.read.own_line', orgId: org });
       if (song.ok) {
-        const detail = access.role !== 'artist' && access.capabilities.has('rights.read');
+        const actor = orgActor(access.userId, access.capabilities, access.role);
+        const detail = driftDetailFor(actor);
         const { facts: sheetFacts } = await sheetFactsOfSong(admin, org, row.track_id);
-        const found = driftOfContract(facts, sheetFacts);
+        let found = driftOfContract(facts, sheetFacts);
+        // Same rule as the song's splits view: a caller who does not read every sheet (an own line, a roster
+        // artist) hears only about sheets THEY can see, so the existence of the others is not disclosed (D2).
+        if (!detail) {
+          const visible = new Set((await loadSheetViews(admin, org, row.track_id, actor)).map((v) => v.id));
+          found = found.filter((d) => visible.has(d.sheetId));
+        }
         const ids = detail ? [...new Set(found.flatMap((d) => d.items.map((i) => i.partyId)))] : [];
         const parties = ids.length > 0 ? await partiesByIds(admin, org, ids) : new Map();
         drift = found.map((d) => ({ ...driftView(d, detail, (id) => parties.get(id)?.display_name ?? 'Unknown'), sheetId: d.sheetId }));

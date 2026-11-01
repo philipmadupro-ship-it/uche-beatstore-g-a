@@ -33,7 +33,7 @@ const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
 
 const PLAYBACKS = [
   { value: 'preview', label: 'Preview clips', hint: 'Visitors hear a 75 second clip of each song.' },
-  { value: 'full', label: 'Full songs', hint: 'Visitors hear each whole recording, streamed from our server.' },
+  { value: 'full', label: 'Full songs', hint: 'Visitors hear each whole recording as a compressed copy streamed from our server. The original file stays private.' },
 ] as const;
 
 export function ReleaseStoreCard({
@@ -64,8 +64,8 @@ export function ReleaseStoreCard({
     const res = await getReleaseStore(orgId, releaseId);
     if (res.ok) {
       setStore(res);
-      // Someone who may not choose full songs never starts on them (an old value on an unlisted release).
-      if (!picked.current) setPlayback(!canManagePublic && !res.listed ? 'preview' : res.playback);
+      // Someone who may not choose full songs, or before the release date, never starts on them (an old value on an unlisted release).
+      if (!picked.current) setPlayback((!canManagePublic || res.fullAvailable === false) && !res.listed ? 'preview' : res.playback);
     }
   }, [orgId, releaseId, canManagePublic]);
 
@@ -123,6 +123,12 @@ export function ReleaseStoreCard({
   // The server refuses these for anyone else (403); the card says so up front instead of offering a dead button.
   const importedLocked = imported && !canManagePublic;
   const fullLocked = !canManagePublic;
+  // LABEL-72: whole songs wait for the release date; until then the release is a teaser of preview clips.
+  const notOutYet = store.fullAvailable === false;
+  const teaserNote = notOutYet
+    ? `Not out yet${store.releaseDate ? ` (${store.releaseDate})` : ''}: visitors hear preview clips until the release date, and full songs can be chosen then.`
+    : null;
+  const fallbackNote = store.listed && store.playback === 'full' && store.effectivePlayback === 'preview' ? 'Full songs were chosen, but the release date has not come, so visitors hear preview clips.' : null;
   const mayAct = canWrite && !importedLocked;
 
   return (
@@ -188,8 +194,8 @@ export function ReleaseStoreCard({
                     type="button"
                     role="radio"
                     aria-checked={playback === p.value}
-                    disabled={p.value === 'full' && fullLocked}
-                    title={p.value === 'full' && fullLocked ? 'Only an owner or an admin can choose full songs' : undefined}
+                    disabled={p.value === 'full' && (fullLocked || notOutYet)}
+                    title={p.value === 'full' && fullLocked ? 'Only an owner or an admin can choose full songs' : p.value === 'full' && notOutYet ? 'Full songs can be chosen from the release date' : undefined}
                     onClick={() => {
                       picked.current = true;
                       setPlayback(p.value);
@@ -202,6 +208,8 @@ export function ReleaseStoreCard({
                 ))}
               </div>
               <p className="mt-2 text-[11px] text-white/40">{PLAYBACKS.find((p) => p.value === playback)?.hint}</p>
+              {teaserNote && <p className="mt-1 text-[11px] text-white/40" data-testid="release-store-teaser">{teaserNote}</p>}
+              {fallbackNote && <p className="mt-1 text-[11px] text-white/40" data-testid="release-store-playback-fallback">{fallbackNote}</p>}
               {fullLocked && <p className="mt-1 text-[11px] text-white/40" data-testid="release-store-full-locked">Full songs are chosen by an owner or an admin.</p>}
             </div>
           ) : (
