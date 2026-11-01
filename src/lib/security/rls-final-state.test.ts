@@ -822,7 +822,9 @@ describe('final RLS policy state', () => {
         expect(sql(), table).toMatch(new RegExp(`REVOKE ALL ON public\\.${table} FROM anon, authenticated`));
         expect(sql(), table).toMatch(new RegExp(`ON public\\.${table}\\s+FOR EACH ROW EXECUTE FUNCTION public\\.labelos_org_rows_service_only\\('self', 'org_id'\\)`));
       }
-      expect(sql()).not.toMatch(/\buser_id\b/);
+      // The signing tables name no account column (a plain uuid, no FK). The parties trigger (who linked a party's
+      // account) legitimately reads parties.user_id, so that one block is set aside.
+      expect(sql().replace(/CREATE OR REPLACE FUNCTION public\.parties_linked_by_reset[\s\S]*?EXECUTE FUNCTION public\.parties_linked_by_reset\(\);/, '')).not.toMatch(/\buser_id\b/);
       expect((sql().match(/org_id\s+uuid NOT NULL REFERENCES public\.organizations\(id\) ON DELETE CASCADE/g) ?? []).length).toBe(2);
     });
 
