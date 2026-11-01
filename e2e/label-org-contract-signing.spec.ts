@@ -111,9 +111,9 @@ test.beforeAll(async ({ request }) => {
   ]);
   await rest(request, 'POST', 'contacts', { id: NOVA, org_id: ORG, user_id: null, name: `Nova ${run}`, category: 'artist' });
   await rest(request, 'POST', 'member_artist_scopes', { org_id: ORG, user_id: ARTIST_A_ID, contact_id: NOVA });
-  const party = (id: string, kind: string, name: string, extra: Record<string, unknown>) => ({ id, org_id: ORG, kind, display_name: name, legal_name: null, ipi: null, contact_id: null, user_id: null, details_confirmed_by: null, details_confirmed_at: null, ...extra });
+  const party = (id: string, kind: string, name: string, extra: Record<string, unknown>) => ({ id, org_id: ORG, kind, display_name: name, legal_name: null, ipi: null, email: null, user_linked_by: null, contact_id: null, user_id: null, details_confirmed_by: null, details_confirmed_at: null, ...extra });
   await rest(request, 'POST', 'parties', [
-    party(P_LABEL, 'company', `CSign Records ${run}`, { legal_name: `CSign Records Ltd ${run}`, address: '1 Label Way, London', user_id: PRODUCER_ID, details_confirmed_by: PRODUCER_ID, details_confirmed_at: new Date().toISOString() }),
+    party(P_LABEL, 'company', `CSign Records ${run}`, { legal_name: `CSign Records Ltd ${run}`, address: '1 Label Way, London', user_id: PRODUCER_ID, user_linked_by: ARTIST_A_ID, details_confirmed_by: PRODUCER_ID, details_confirmed_at: new Date().toISOString() }),
     party(P_KILO, 'person', `Kilo ${run}`, { legal_name: `Kilo Mensah ${run}`, address: '9 Feature Street, Accra', email: KILO_EMAIL }),
   ]);
 });
@@ -458,6 +458,8 @@ test('10 · 390 px: no sideways scroll anywhere; the producer dashboard and /sto
 
 test('H1 · a member who links their OWN account to a party cannot confirm it or sign as it (real database)', async ({ browser, baseURL }) => {
   const ctx = await as(browser, baseURL!, owner.id, owner.email);
+  // One party per account: free the owner's account from the label party first.
+  await rest(ctx.request, 'PATCH', `parties?id=eq.${P_LABEL}`, { user_id: null });
   const patched = await ctx.request.patch(`/api/org/${ORG}/parties/${P_KILO}`, { data: { user_id: PRODUCER_ID } });
   expect(patched.status(), await patched.text()).toBe(200);
   // The route stamped who made the link; the database trigger keeps the stamp honest.
