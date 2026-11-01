@@ -176,12 +176,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: PDF contains the filled values (test parses text); restricted download audited; 390 px usable.
 
 ### LABEL-59 — Contract ↔ split sheets
-**Priority:** P0 · **Risk:** High · **Deps:** 58 · **Migration:** 177 · **Status:** In Progress (session_019AUhHeZHycRGnNjDPKTMAr, #160)
+**Priority:** P0 · **Risk:** High · **Deps:** 58 · **Migration:** none (177 released) · **Status:** Done (#160, `cd0d9d9`)
 - A contract of an applicable type creates or pre-fills the split sheet (master/publishing percentages from the contract fields); a circulated sheet that disagrees with its contract shows a drift warning on both; signing the contract can require a signed sheet (`require_signed_master_split`). Splits stay integer-unit exact (no float); 33.3333×3 refusal stays.
 - Acceptance: tests for prefill, drift, and the signed-sheet requirement; D2 holds (note never leaves the route).
 
 ### LABEL-60 — In-app signature and contract store
-**Priority:** P1 · **Risk:** High · **Deps:** 58 · **Migration:** 178 · **Status:** Not Started
+**Priority:** P1 · **Risk:** High · **Deps:** 58 · **Migration:** 178 · **Status:** In Progress (session_019AUhHfrxtwvQbCJYPndU7q)
 - Signing flow for members and external signers (token link like the artist portal): typed/drawn signature, timestamp, IP hash, document SHA-256 recorded in an append-only `contract_signatures` table, countersign, certificate page; void/supersede. Contract store with search and expiry reminders (calendar feed).
 - Acceptance: signature rows immutable (trigger); a changed document hash invalidates earlier signatures; audit events; the page states plainly this is an in-app signature, with a field for an external e-signature provider URL (provider integration is a later decision).
 - Out of scope: third-party e-signature vendors.
@@ -258,7 +258,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: a listing never serves until no artist has said no (state machine in `lib/labelos/store-consent.ts`); notification test; coverage and external-matrix updated.
 
 ### LABEL-72 — Playback rules
-**Priority:** P1 · **Risk:** Medium · **Deps:** 71 · **Status:** In Progress (session_019AUhHf7cB5hZ5AzMkogSjr, no migration reserved)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 71 · **Status:** In Progress (session_019AUhHf7cB5hZ5AzMkogSjr, #162, no migration)
 - Default `preview`; `preview`-only listing allowed from delivery (teaser); `full` only from the release date, auto-fall back to `preview` if the date moves; `full` and listen-only external roles stream a **lossy full-length derivative, never the master**; durable per-IP limiter (`rateLimitDurable`); `Range` handling cannot return the whole file in one request for the derivative.
 - Acceptance: tests for the date rules and fallback; the master URL is unreachable from public routes; throttle test.
 
