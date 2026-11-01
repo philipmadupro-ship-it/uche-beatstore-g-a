@@ -9,6 +9,7 @@ import {
   filterStore,
   hashSignToken,
   isWellFormedSignToken,
+  linkReadable,
   linkUsable,
   maySignAs,
   newSignToken,
@@ -205,6 +206,17 @@ describe('signer links', () => {
     expect(linkUsable({ ...live, contractStatus: 'void' }, now)).toBe(false);
     expect(linkUsable({ ...live, contractStatus: 'signed' }, now)).toBe(false);
     expect(linkUsable({ ...live, contractStatus: 'draft' }, now)).toBe(false);
+  });
+
+  it('a signed contract’s link can still be opened for the receipt, but not signed; void and revoked cannot', () => {
+    const now = new Date('2026-11-01T00:00:00Z');
+    const live = { contractStatus: 'signed' as const, tokenRevoked: false, expiresAt: '2026-11-10T00:00:00Z' };
+    expect(linkReadable(live, now)).toBe(true);
+    expect(linkUsable(live, now)).toBe(false);
+    expect(linkReadable({ ...live, contractStatus: 'void' }, now)).toBe(false);
+    expect(linkReadable({ ...live, tokenRevoked: true }, now)).toBe(false);
+    expect(linkReadable({ ...live, expiresAt: '2026-10-01T00:00:00Z' }, now)).toBe(false);
+    expect(linkReadable({ ...live, contractStatus: 'draft' }, now)).toBe(false);
   });
 });
 

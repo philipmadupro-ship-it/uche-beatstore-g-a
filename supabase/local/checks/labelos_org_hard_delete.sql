@@ -108,6 +108,24 @@ INSERT INTO public.release_items (release_id, org_id, position, song_track_id, m
 INSERT INTO public.listing_consents (org_id, release_id, artist_contact_id, state, decided_at) VALUES
   (:L, :REL, :C1, 'no', now()), (:L2, :XREL, :CX, 'proposed', NULL);
 
+-- LABEL-60: a signed contract with its append-only signatures, a signer link and a superseded copy, in each org.
+-- (NO ACTION toward parties; the immutable table must still go with the org.)
+INSERT INTO public.parties (id, org_id, kind, display_name) VALUES
+  ('f3900000-0000-4000-8000-0000000000a1', :L, 'person', 'Nova'), ('f3900000-0000-4000-8000-0000000000a2', :L2, 'person', 'Other');
+INSERT INTO public.contracts (id, org_id, type, title, template_source, clauses) VALUES
+  ('f3900000-0000-4000-8000-0000000000c1', :L, 'nda', 'L contract', 'platform:nda@1', '[{"id":"a","heading":"H","body":"B"}]'),
+  ('f3900000-0000-4000-8000-0000000000c2', :L2, 'nda', 'L2 contract', 'platform:nda@1', '[{"id":"a","heading":"H","body":"B"}]');
+INSERT INTO public.contract_parties (contract_id, party_id, org_id, role) VALUES
+  ('f3900000-0000-4000-8000-0000000000c1', 'f3900000-0000-4000-8000-0000000000a1', :L, 'disclosing'),
+  ('f3900000-0000-4000-8000-0000000000c2', 'f3900000-0000-4000-8000-0000000000a2', :L2, 'disclosing');
+UPDATE public.contracts SET status = 'sent' WHERE id IN ('f3900000-0000-4000-8000-0000000000c1', 'f3900000-0000-4000-8000-0000000000c2');
+INSERT INTO public.contract_signatures (contract_id, org_id, party_id, role, contract_version, document_sha256, signer_name, method, via) VALUES
+  ('f3900000-0000-4000-8000-0000000000c1', :L, 'f3900000-0000-4000-8000-0000000000a1', 'disclosing', 1, repeat('a', 64), 'Nova', 'typed', 'link'),
+  ('f3900000-0000-4000-8000-0000000000c2', :L2, 'f3900000-0000-4000-8000-0000000000a2', 'disclosing', 1, repeat('b', 64), 'Other', 'typed', 'link');
+INSERT INTO public.contract_signers (contract_id, org_id, party_id, role, token_hash) VALUES
+  ('f3900000-0000-4000-8000-0000000000c1', :L, 'f3900000-0000-4000-8000-0000000000a1', 'disclosing', repeat('c', 64)),
+  ('f3900000-0000-4000-8000-0000000000c2', :L2, 'f3900000-0000-4000-8000-0000000000a2', 'disclosing', repeat('d', 64));
+
 INSERT INTO public.tasks (org_id, title, assignee_id, created_by, project_id) VALUES
   (:L, 'Clear the sample', :M, :O, :LP1), (:L2, 'L2 task', :X, :X, NULL);
 INSERT INTO public.notifications (user_id, org_id, kind, title) VALUES
@@ -291,10 +309,13 @@ SELECT public.check_eq('… artist consents on its releases', public.n('public.l
 SELECT public.check_eq('… releases and their items', public.n('public.releases', 'id = ' || quote_literal(:REL::text)) + public.n('public.release_items', 'release_id = ' || quote_literal(:REL::text)), 0::bigint);
 SELECT public.check_eq('… reviews, tasks and notifications', public.n('public.song_reviews', 'track_id = ' || quote_literal(:S1::text)) + public.n('public.tasks', 'title = ''Clear the sample''') + public.n('public.notifications', 'title = ''Assigned'''), 0::bigint);
 
+SELECT public.check_eq('… contracts, their signatures and signer links', public.n('public.contracts', 'org_id = ' || quote_literal(:L::text)) + public.n('public.contract_signatures', 'org_id = ' || quote_literal(:L::text)) + public.n('public.contract_signers', 'org_id = ' || quote_literal(:L::text)), 0::bigint);
+
 -- ── …and nothing that is not the org's ──────────────────────────────────
 
 SELECT public.check_eq('another org: still there, every row',
   public.org_rows_anywhere(:L2) >= 10, true);
+SELECT public.check_eq('another org: its signed contract, signature and signer link survive', public.n('public.contracts', 'org_id = ' || quote_literal(:L2::text)) + public.n('public.contract_signatures', 'org_id = ' || quote_literal(:L2::text)) + public.n('public.contract_signers', 'org_id = ' || quote_literal(:L2::text)), 3::bigint);
 SELECT public.check_eq('another org: its artist consent survives', public.n('public.listing_consents', 'org_id = ' || quote_literal(:L2::text)), 1::bigint);
 SELECT public.check_eq('another org: its audit event survives', public.n('public.activity_events', 'org_id = ' || quote_literal(:L2::text) || ' AND audit'), 1::bigint);
 SELECT public.check_eq('another org: its song, tags, links, stems, review, release, comment and file',

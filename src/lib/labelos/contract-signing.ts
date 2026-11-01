@@ -222,10 +222,19 @@ export const signLinkPath = (token: string): string => `/sign/${token}`;
 
 export type LinkRow = { contractStatus: ContractStatus; tokenRevoked: boolean; expiresAt: string | null };
 
-/** A link works while its contract is out for signature and it is neither revoked nor expired. */
+const notExpired = (row: LinkRow, now: Date) => row.expiresAt === null || new Date(row.expiresAt).getTime() > now.getTime();
+
+/** A link SIGNS while its contract is out for signature and it is neither revoked nor expired. */
 export function linkUsable(row: LinkRow, now: Date = new Date()): boolean {
-  if (row.contractStatus !== 'sent' || row.tokenRevoked) return false;
-  return row.expiresAt === null || new Date(row.expiresAt).getTime() > now.getTime();
+  return row.contractStatus === 'sent' && !row.tokenRevoked && notExpired(row, now);
+}
+
+/**
+ * A link can still be OPENED once the contract is fully signed (the signer wants their receipt), until it expires or
+ * is revoked. A void contract, a draft or a stranger's guess is not readable.
+ */
+export function linkReadable(row: LinkRow, now: Date = new Date()): boolean {
+  return (row.contractStatus === 'sent' || row.contractStatus === 'signed') && !row.tokenRevoked && notExpired(row, now);
 }
 
 /** Only the address of a hosted e-signature, https, no credentials, no control characters. */
