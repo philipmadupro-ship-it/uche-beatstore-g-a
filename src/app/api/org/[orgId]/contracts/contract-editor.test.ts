@@ -9,6 +9,7 @@
  *   Song S1 sits in project P1 (so its contract PDFs are filed there); S2 in
  *   no project.
  */
+import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { memoryAdmin, type MemoryDb } from '@/lib/labelos/mocks/memory-db';
@@ -69,6 +70,7 @@ vi.mock('@/lib/storage/project-assets', () => ({
     return `r2://priv/${k}`;
   },
   deleteProjectAssetObject: async (r: string) => { storage.deleted.push(r); },
+  openProjectAsset: async (ref: string) => storage.files.get(ref) ?? null,
   streamProjectAsset: async (_req: unknown, ref: string) => new Response(new Uint8Array(storage.files.get(ref) ?? []), { headers: { 'content-type': 'application/pdf' } }),
 }));
 
@@ -333,6 +335,10 @@ describe('POST send — the last edit', () => {
     const body = await res.json();
     expect(body).toMatchObject({ ok: true, status: 'sent', version: 1, copy: { stored: true, reused: false, project_id: P1 } });
     expect(db.tables.contracts[0].status).toBe('sent');
+    // LABEL-60: the sent copy's hash is of the STORED BYTES, written with the move to sent, with the text it was made from.
+    const frozen = db.tables.contracts[0] as { sent_document_sha256: string; sent_document_ref: string; sent_snapshot: { title: string } };
+    expect(frozen.sent_document_sha256).toBe(createHash('sha256').update(Buffer.from(storage.files.get(frozen.sent_document_ref)!)).digest('hex'));
+    expect(frozen.sent_snapshot.title).toBe(c.title);
     const ev = events('contract.sent')[0];
     expect(ev).toMatchObject({ audit: true, visibility: 'internal', subject_id: c.id });
     expect(ev.payload).toMatchObject({ version: 1, fields: ['advance', 'currency'], party_roles: ['label', 'artist'], clauses_changed: 0 });
@@ -341,8 +347,9 @@ describe('POST send — the last edit', () => {
     const asset = db.tables.project_assets[0];
     expect(asset).toMatchObject({ kind: 'contract', sensitivity: 'restricted', project_id: P1, org_id: L, mime: 'application/pdf', in_portal: false });
     expect(asset.file_name).toMatch(/^contract-.*-v1-sent\.pdf$/);
-    expect(storage.stored).toHaveLength(1);
-    expect(storage.stored[0].key).toMatch(new RegExp(`^orgs/${L}/`));
+    // Two objects: the frozen sent copy (LABEL-60, keyed under the contract) and the project's filed copy, made from the same bytes.
+    expect(storage.stored).toHaveLength(2);
+    expect(storage.stored.every((o) => new RegExp(`^orgs/${L}/`).test(o.key))).toBe(true);
   });
 
   it('after sending the content is frozen: edit, second send and preview are all refused', async () => {
@@ -383,7 +390,9 @@ describe('POST send — the last edit', () => {
     const body = await (await call('send', 'POST', LEG, c.id, { version: 1 })).json();
     expect(body.copy).toEqual({ stored: false, reason: 'no_project' });
     expect(db.tables.project_assets).toHaveLength(0);
-    expect(storage.stored).toHaveLength(0);
+    // Nothing filed in a project, but the frozen sent copy every signature will bind to is stored, and hashed on the contract.
+    expect(storage.stored).toHaveLength(1);
+    expect(db.tables.contracts.find((x) => x.id === c.id)!.sent_document_sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('marketing, a roster artist and signed-out callers cannot send; a scoped member cannot send another artist’s', async () => {
@@ -494,8 +503,19 @@ describe('a sent contract is served as it was sent', () => {
     expect(text).toContain('Nova Okafor');
     expect(text).not.toContain('Nova Renamed');
     expect(text).not.toContain('Re-rendered');
-    expect(storage.stored).toHaveLength(1);
+    expect(storage.stored).toHaveLength(2);
     expect(stored).toBeGreaterThan(0);
+  });
+  it('L5 (#166): bytes that no longer match the recorded hash are not served', async () => {
+    const c = add();
+    await call('send', 'POST', LEG, c.id, { version: 1 });
+    const ref = db.tables.contracts.find((r) => r.id === c.id)!.sent_document_ref as string;
+    storage.files.set(ref, new Uint8Array([...storage.files.get(ref)!, 0x20]));
+    const res = await call('document', 'GET', LEG, c.id);
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('frozen_mismatch');
+    storage.files.delete(ref);
+    expect((await (await call('document', 'GET', LEG, c.id)).json()).code).toBe('frozen_missing');
   });
   it('with no stored copy a re-render says so on its first page', async () => {
     const c = add({ status: 'sent', track_id: S2 });

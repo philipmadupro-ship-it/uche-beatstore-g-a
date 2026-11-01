@@ -279,6 +279,29 @@ export async function makePreviewMp3Buffer(
   }
 }
 
+/**
+ * The lossy FULL-LENGTH listening derivative of a master (LABEL-72): the whole recording as a 128 kbps stereo
+ * MP3, so the public store can play a released song without the master ever being streamed. Same ffmpeg path
+ * as the preview clip, without the truncation, and a timeout sized for a full track. Null when ffmpeg is
+ * unavailable or the input is unreadable — callers must NOT fall back to the master.
+ */
+export async function makeFullLossyMp3Buffer(input: Buffer): Promise<Buffer | null> {
+  if (!(await checkFfmpeg())) {
+    console.warn('ffmpeg not available - full-length derivative was not generated.');
+    return null;
+  }
+  try {
+    return await runFfmpegToBuffer(
+      ['-i', 'pipe:0', '-vn', '-map_metadata', '-1', '-ac', '2', '-ar', '44100', '-c:a', 'libmp3lame', '-b:a', '128k', '-f', 'mp3', 'pipe:1'],
+      input,
+      240_000,
+    );
+  } catch (err) {
+    console.warn('full-length derivative conversion failed:', err);
+    return null;
+  }
+}
+
 /** Exposed for tests / diagnostics. */
 export async function isFfmpegInstalled(): Promise<boolean> {
   return checkFfmpeg();

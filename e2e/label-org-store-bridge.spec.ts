@@ -14,7 +14,9 @@
  * not an owner. The "stranger" is an anonymous browser context.
  *
  * Playback is `full` here: without R2 there is no private bucket to hold a
- * preview clip, and full songs are streamed by the server from the master.
+ * preview clip, and full songs are streamed by the server from a lossy
+ * full-length derivative cut with ffmpeg into data/orgs/<org>/derivatives
+ * (LABEL-72) — never from the master.
  *
  * Skipped unless E2E_REAL_DB=1. Run: `npm run e2e:real-db`.
  */
@@ -206,10 +208,12 @@ for (const [label, size] of [['1440 px', { width: 1440, height: 900 }], ['390 px
   });
 }
 
-test('5 · nothing private reaches the public JSON, and the cache window is the store’s', async ({ request }) => {
+test('5 · nothing private reaches the public JSON, and a release an artist has a say on is never cached (LABEL-71)', async ({ request }) => {
   const list = await request.get('/api/store/releases');
   expect(list.status()).toBe(200);
-  expect(list.headers()['cache-control']).toMatch(/s-maxage=30/);
+  // Listing asked the album's artist (a `proposed` consent row), so the list holds a consent-governed release:
+  // doc 26 serves that no-store, so an artist's no is never held by an edge cache.
+  expect(list.headers()['cache-control']).toBe('no-store');
   const text = await list.text();
   expect(text).toContain(ALBUM);
   const detail = await request.get(`/api/store/releases/${ids.album}`);
@@ -217,7 +221,18 @@ test('5 · nothing private reaches the public JSON, and the cache window is the 
   expect(body).not.toMatch(new RegExp(`${ORG}|${SONG_1}|/uploads/|r2://|user_id|org_id`));
   const item = (JSON.parse(body) as { tracks: { id: string }[] }).tracks[0];
   const audio = await request.get(`/api/store/releases/${ids.album}/audio/${item.id}`, { headers: { range: 'bytes=0-99' } });
-  expect([200, 206]).toContain(audio.status());
+  // LABEL-72: always a bounded partial of the derivative, whatever was asked — the master is never what is streamed.
+  expect(audio.status()).toBe(206);
+  expect(audio.headers()['content-range']).toMatch(/^bytes 0-99\/\d+$/);
+  expect(audio.headers()['content-type']).toBe('audio/mpeg');
+  for (const range of [undefined, 'bytes=0-']) {
+    const res = await request.get(`/api/store/releases/${ids.album}/audio/${item.id}`, range ? { headers: { range } } : undefined);
+    expect(res.status(), String(range)).toBe(206);
+    expect(res.headers()['content-range']).toMatch(/^bytes 0-\d+\/\d+$/);
+    expect((await res.body()).length).toBeLessThanOrEqual(1024 * 1024);
+  }
+  expect((await request.get(`/api/store/releases/${ids.album}/audio/${item.id}`, { headers: { range: 'bytes=99999999-' } })).status()).toBe(416);
+  expect(Buffer.from(await audio.body()).subarray(0, 4).toString('latin1')).not.toBe('RIFF'); // an MP3, not the WAV master
   // An org song id is not a handle: only items are.
   expect((await request.get(`/api/store/releases/${ids.album}/audio/${SONG_1}`)).status()).toBe(404);
 });
@@ -272,5 +287,45 @@ test('7 · withdrawing a listed release takes it off the store in the same step,
   const again = await ctx.request.put(`${api}/releases/${ids.album}/store`, { data: { listed: true } });
   expect(again.status()).toBe(409);
   expect((await again.json()).field).toBe('state');
+  await ctx.close();
+});
+
+
+test('8 · a delivered release before its date is a TEASER: previews only, full songs cannot be chosen, and the public sees no whole song (LABEL-72)', async ({ browser, baseURL, request }) => {
+  const ctx = await as(browser, baseURL!, producer.id, producer.email);
+  const future = new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10);
+  const created = await ctx.request.post(`${api}/releases`, { data: { title: `Teaser ${run}`, contact_id: NOVA, type: 'single', release_date: future } });
+  expect(created.status(), await created.text()).toBe(201);
+  ids.teaser = (await created.json()).release.id;
+  const add = await ctx.request.post(`${api}/releases/${ids.teaser}/items`, { data: { song_track_id: SONG_2 } });
+  expect(add.status(), await add.text()).toBe(201);
+  const delivered = await ctx.request.post(`${api}/releases/${ids.teaser}/deliver`, { data: { distributor: 'DistroKid', override: true, override_note: 'e2e teaser' } });
+  expect(delivered.status(), await delivered.text()).toBe(200);
+
+  const page = await ctx.newPage();
+  await page.goto(`/o/${SLUG}/releases/${ids.teaser}`);
+  await expect(page.getByTestId('release-store')).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByTestId('release-store-teaser')).toContainText(future);
+  await expect(page.getByTestId('release-store-playback-full')).toBeDisabled();
+  await expect(page.getByTestId('release-store-playback-preview')).toHaveAttribute('aria-checked', 'true');
+
+  // The real route refuses full before the date, with the reason, and writes nothing.
+  const full = await ctx.request.put(`${api}/releases/${ids.teaser}/store`, { data: { listed: true, playback: 'full' } });
+  expect(full.status()).toBe(409);
+  expect((await full.json()).field).toBe('playback');
+  expect(((await rest(request, 'GET', `releases?select=store_listed&id=eq.${ids.teaser}`)) as { store_listed: boolean }[])[0].store_listed).toBe(false);
+
+  await page.getByTestId('release-store-list').click();
+  await expect(page.getByTestId('release-store')).toHaveAttribute('data-listed', 'true', { timeout: 60_000 });
+  const row = ((await rest(request, 'GET', `releases?select=store_listed,store_playback&id=eq.${ids.teaser}`)) as Record<string, unknown>[])[0];
+  expect(row).toMatchObject({ store_listed: true, store_playback: 'preview' });
+
+  // The public sees the teaser as a preview release; no whole song is reachable (nothing is promoted without R2).
+  const detail = await request.get(`/api/store/releases/${ids.teaser}`);
+  expect(detail.status()).toBe(200);
+  const body = (await detail.json()) as { release: { playback: string }; tracks: { id: string }[] };
+  expect(body.release.playback).toBe('preview');
+  expect((body.release as { out?: boolean }).out).toBe(false);
+  expect((await request.get(`/api/store/releases/${ids.teaser}/audio/${body.tracks[0].id}`)).status()).toBe(404);
   await ctx.close();
 });

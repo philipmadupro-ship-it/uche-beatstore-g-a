@@ -305,9 +305,17 @@ export async function writeDraftVersion(admin: AdminClient, org: string, id: str
 }
 
 /** draft → sent in one conditional UPDATE: of two requests only one claims it. The content-freeze trigger (176) takes over from here. */
-export async function claimSend(admin: AdminClient, org: string, id: string, version: number): Promise<boolean> {
+export async function claimSend(
+  admin: AdminClient,
+  org: string,
+  id: string,
+  version: number,
+  /** LABEL-60 (migration 178): the frozen sent copy, written by the same UPDATE that leaves draft. Omitted where 178 is not applied. */
+  frozen?: { sha: string; ref: string; snapshot: unknown },
+): Promise<boolean> {
   await assertContractsSchema(admin);
-  const res = await admin.from('contracts').update({ status: 'sent' }).eq('org_id', org).eq('id', id).eq('status', 'draft').eq('version', version).select('id');
+  const patch = frozen ? { status: 'sent', sent_document_sha256: frozen.sha, sent_document_ref: frozen.ref, sent_snapshot: frozen.snapshot } : { status: 'sent' };
+  const res = await admin.from('contracts').update(patch).eq('org_id', org).eq('id', id).eq('status', 'draft').eq('version', version).select('id');
   check('contract send', res.error);
   return (res.data ?? []).length === 1;
 }

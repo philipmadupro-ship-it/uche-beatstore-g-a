@@ -633,8 +633,10 @@ describe('who can stand for an artist: a party is not the artist', () => {
     const made = await party('POST', WRITER, { orgId: P }, { display_name: 'Sneaky', contact_id: FEAT, user_id: WRITER });
     expect(made.status, await made.clone().text()).toBe(201);
     const id = (await made.json()).party.id as string;
+    // Since #166 the self-linker cannot even confirm; force the stamp to keep proving the consent gate on its own.
     const confirmed = await confirm(WRITER, id);
-    expect(confirmed.status, await confirmed.clone().text()).toBe(200);
+    expect(confirmed.status, await confirmed.clone().text()).toBe(403);
+    Object.assign(db.tables.parties.find((x) => x.id === id)!, { details_confirmed_by: WRITER });
     expect(db.tables.parties.find((x) => x.id === id)).toMatchObject({ contact_id: FEAT, user_id: WRITER, details_confirmed_by: WRITER });
     for (const d of ['no', 'yes'] as const) expect((await decide(WRITER, P, RP, d)).status).toBe(404);
     expect(consentOf(RP, FEAT)!.state).toBe('proposed');
@@ -645,7 +647,8 @@ describe('who can stand for an artist: a party is not the artist', () => {
     db.tables.parties.push({ id: PF, org_id: P, kind: 'person', contact_id: FEAT, user_id: null, display_name: 'Feat' });
     const res = await party('PATCH', WRITER, { orgId: P, partyId: PF }, { user_id: WRITER });
     expect(res.status, await res.clone().text()).toBe(200);
-    expect((await confirm(WRITER, PF)).status).toBe(200);
+    expect((await confirm(WRITER, PF)).status).toBe(403);
+    Object.assign(db.tables.parties.find((x) => x.id === PF)!, { details_confirmed_by: WRITER });
     expect(db.tables.parties.find((x) => x.id === PF)).toMatchObject({ user_id: WRITER, details_confirmed_by: WRITER });
     expect((await decide(WRITER, P, RP, 'no')).status).toBe(404);
     expect(consentOf(RP, FEAT)!.state).toBe('proposed');

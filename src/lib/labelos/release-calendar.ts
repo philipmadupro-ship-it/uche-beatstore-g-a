@@ -10,7 +10,12 @@
  *  - UID is stable per release (the feed makes it an opaque keyed hash); DTSTAMP is the release's own updated_at, so a
  *    re-fetch with nothing changed is byte-identical and clients do not churn.
  *  - All-day DATE values; DTEND is the next day (exclusive), as the RFC says.
+ *  - LABEL-60: a sent or signed contract with a term is one more all-day event on the day its term ends ("Contract ends:
+ *    <its title>") with reminders a month and a week before. The caller passes only the contracts this member may read in
+ *    an org licensed for them; the rows carry no party, amount or term length.
  */
+import { contractEnd } from './contract-store-model';
+
 export type CalendarRelease = {
   id: string;
   title: string;
@@ -20,6 +25,22 @@ export type CalendarRelease = {
   state: string;
   updatedAt: string;
 };
+
+/**
+ * A contract's term ending (LABEL-60). Title and date only, like a release: no party, no amount, no term length. The
+ * title is the contract's own (what the label typed), never a legal name the app merged in.
+ */
+export type CalendarContract = {
+  id: string;
+  title: string;
+  status: string;
+  effectiveDate: string | null;
+  termMonths: number | null;
+  updatedAt: string;
+};
+
+/** Reminder offsets before the end date: a month and a week. */
+export const CONTRACT_REMINDERS = ['-P30D', '-P7D'] as const;
 
 const CRLF = '\r\n';
 const FOLD_OCTETS = 75;
@@ -95,11 +116,20 @@ export function calendarDay(r: Pick<CalendarRelease, 'releaseDate' | 'targetDate
   return target ? { day: target, tentative: true } : null;
 }
 
+/** The all-day end date of a sent or signed contract's term, else null (drafts and void contracts never expire). */
+export function contractEndDay(c: Pick<CalendarContract, 'status' | 'effectiveDate' | 'termMonths'>): { y: number; m: number; d: number } | null {
+  if (c.status !== 'sent' && c.status !== 'signed') return null;
+  return parseDay(contractEnd(c.effectiveDate, c.termMonths));
+}
+
 export function buildIcs(opts: {
   name: string;
   /** UID of an event. Defaults to the release id; the feed passes a keyed hash so no row id leaves the building. */
   uidFor?: (releaseId: string) => string;
   releases: readonly CalendarRelease[];
+  /** Contracts the member may read, in a licensed contracts module (LABEL-60). */
+  contracts?: readonly CalendarContract[];
+  contractUidFor?: (contractId: string) => string;
 }): string {
   const uidFor = opts.uidFor ?? ((id: string) => `release-${id}@label-os`);
   const lines: string[] = [
@@ -124,6 +154,25 @@ export function buildIcs(opts: {
       `SUMMARY:${escapeText(r.title)}`,
       `STATUS:${when.tentative ? 'TENTATIVE' : 'CONFIRMED'}`,
       'TRANSP:TRANSPARENT',
+      'END:VEVENT',
+    );
+  }
+  const contractUid = opts.contractUidFor ?? ((id: string) => `contract-${id}@label-os`);
+  const ending = (opts.contracts ?? [])
+    .map((c) => ({ c, end: contractEndDay(c) }))
+    .filter((e): e is { c: CalendarContract; end: NonNullable<ReturnType<typeof contractEndDay>> } => e.end !== null)
+    .sort((a, b) => icsDate(a.end).localeCompare(icsDate(b.end)) || a.c.id.localeCompare(b.c.id));
+  for (const { c, end } of ending) {
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${contractUid(c.id)}`,
+      `DTSTAMP:${icsStamp(c.updatedAt)}`,
+      `DTSTART;VALUE=DATE:${icsDate(end)}`,
+      `DTEND;VALUE=DATE:${icsDate(nextDay(end))}`,
+      `SUMMARY:${escapeText(`Contract ends: ${c.title}`)}`,
+      'STATUS:CONFIRMED',
+      'TRANSP:TRANSPARENT',
+      ...CONTRACT_REMINDERS.flatMap((trigger) => ['BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Contract term ending', `TRIGGER:${trigger}`, 'END:VALARM']),
       'END:VEVENT',
     );
   }

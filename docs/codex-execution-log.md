@@ -9479,3 +9479,29 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Gate: CI green on `8db767b`; preview checked. The independent review was BLOCKING. H1: a `rights.write` member could link a party to their own account, confirm it themself and answer as the artist. The first fix (confirmation-only) still allowed self-confirm. The final rule: a party never answers; only a role-artist scoped member, or an artist org's owner.
   - Accepted deviation: an admin can invite an address they control as role artist (label orgs). Known gap: credited artists in the producer org are unreachable.
 - 2026-10-28 — LABEL-59 resumed after the usage limit (#160, migration 177). LABEL-72 started (session_019AUhHf7cB5hZ5AzMkogSjr, no migration reserved; 194 on request). LABEL-60 waits for 59 (both touch contract signing).
+- 2026-11-01 — **LABEL-59 Done**: #160 squash `cd0d9d9`, **no migration — 177 is released** (a contract already names its song, so the link is derived). It adds:
+  - a contract → draft split sheet pre-fill (drafts only; an existing draft is replaced only on request);
+  - drift between a live sheet and a sent or signed contract, derived on read and warned on both pages;
+  - `assertCanSign` for LABEL-60.
+  - Gate: CI green on `4bce528`; preview checked; independent review (not blocking). Fixed before merge:
+    - L1: the contract page's drift covers only sheets the caller can see, so the other sheets' existence is not disclosed (D2);
+    - L2: one shared `driftDetailFor` rule for both routes.
+  - Also fixes the test helper `pdf-text.ts`, which dropped a final CR byte from a compressed stream. That made `contract-editor.test` fail on some dates; it broke #161's CI on 2026-10-28.
+  - Noted for LABEL-60: `canSignContract` accepts a signed master sheet that disagrees with the contract.
+- 2026-11-01 — LABEL-72 resumed after the weekly usage limit (#162, no migration). LABEL-60 started at the owner's request (session_019AUhHfrxtwvQbCJYPndU7q, migration 178), branched from LABEL-59 just before it merged. Next reserved: 179 (LABEL-62).
+- 2026-11-01 — LABEL-61 started (session_019AUhHecUE3Bs5jsSUugPNK, migration 179): finance schema, permissions and money helpers only. Next reserved: 180 (LABEL-62).
+- 2026-11-01 — **LABEL-72 Done**: #162 squash `4592fdf`, no migration.
+  - What it adds:
+    - teaser listing before the release date, preview clips only;
+    - `full` derived from the release date on every read;
+    - full playback and listen-only project members stream a 128 kbps MP3 derivative in the private bucket (`orgs/<org>/derivatives/`), never the master;
+    - each Range response is capped at 1 MiB;
+    - a durable per-IP limiter (120/min) on public full playback.
+  - Gate: CI green on `5fe78c0` (one re-run for an `ArInboxView` timing flake outside the PR); preview checked; independent review not blocking.
+  - Accepted: a release listed `full` before this change needs a re-list to get its derivative. None exist on production (158 is not applied).
+  - Follow-ups (low):
+    - `clientIp` trusts the first `x-forwarded-for` entry, which is safe only on Vercel;
+    - the limiter caps volume, not scraping;
+    - the first-listen cut for external members has no negative cache and no `maxDuration`, and reads the whole master into memory;
+    - HEAD spends the limiter;
+    - a reversed range gets 416.

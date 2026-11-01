@@ -26,7 +26,10 @@ import { markClauses } from '@/lib/labelos/contracts/clause-edit';
 import { planSend } from '@/lib/labelos/contracts/send';
 import { platformTemplate } from '@/lib/labelos/contracts/templates';
 import { storeContractPdf } from '@/lib/labelos/contracts-document';
-import { documentOf, loadContractFor } from '@/lib/labelos/contracts-route';
+import { documentInputOf, documentOf, loadContractFor } from '@/lib/labelos/contracts-route';
+import { renderContractDocumentPdf } from '@/lib/labelos/contracts/document';
+import { bytesSha256, sentSnapshotOf, type SentSnapshot } from '@/lib/labelos/contract-signing';
+import { removeSignatureImage, signingReady, storeSentPdf } from '@/lib/labelos/contract-signing-store';
 import { CONTRACTS_NOT_READY, ContractsNotReadyError, claimSend, templateBase } from '@/lib/labelos/contracts-store';
 
 export const runtime = 'nodejs';
@@ -81,7 +84,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
       }
       throw err;
     }
-    if (!(await claimSend(admin, org, row.id, row.version))) {
+    // LABEL-60: the sent copy is made ONCE, here. Its bytes are stored and hashed; the hash, the reference and the text
+    // it was made from are written by the same UPDATE that leaves draft, so every signature binds to these bytes and
+    // renaming a party or a song later changes nothing a signer signed. Without migration 178 the send is as before.
+    let frozen: { sha: string; ref: string; snapshot: SentSnapshot; pdf: Buffer } | undefined;
+    if (await signingReady(admin)) {
+      const input = { ...documentInputOf({ ...row, status: 'sent' }, links, identities, rendered) };
+      const pdf = await renderContractDocumentPdf(input);
+      const ref = await storeSentPdf(org, row.id, pdf).catch((err) => {
+        log.error('sent copy not stored', { orgId: org, contractId: row.id, error: errorMessage(err) });
+        return null;
+      });
+      if (!ref) return json(500, { error: 'The sent copy could not be stored, so the contract was not sent. Try again.' });
+      frozen = { sha: bytesSha256(pdf), ref, snapshot: sentSnapshotOf(input), pdf };
+    }
+    if (!(await claimSend(admin, org, row.id, row.version, frozen && { sha: frozen.sha, ref: frozen.ref, snapshot: frozen.snapshot }))) {
+      if (frozen) await removeSignatureImage(frozen.ref);
       // The `contract.sent` above was written for a send that did not happen: say so in the record.
       await recordEvent(admin, { orgId: org, userId: access.userId }, 'contract.send_failed', { type: 'contract', id: row.id, artistId: row.artist_contact_id, songId: row.track_id, releaseId: row.release_id }, { version: row.version, reason: 'claim_lost' });
       return json(409, { error: 'This contract was changed or sent by someone else just now. Reload it.' });
@@ -89,7 +107,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
 
     let copy: Awaited<ReturnType<typeof storeContractPdf>> = { stored: false, reason: 'no_project' };
     try {
-      copy = await storeContractPdf(admin, org, access.userId, { ...row, status: 'sent' }, links, identities, rendered, { atSend: true });
+      copy = await storeContractPdf(admin, org, access.userId, { ...row, status: 'sent' }, links, identities, rendered, { atSend: true, ...(frozen ? { pdf: frozen.pdf } : {}) });
       if (copy.stored && !copy.reused) {
         await recordEvent(admin, { orgId: org, userId: access.userId }, 'contract.document_generated', { type: 'contract', id: row.id, artistId: row.artist_contact_id, projectId: copy.project_id, songId: row.track_id, releaseId: row.release_id }, { version: row.version, status: 'sent' });
       }
