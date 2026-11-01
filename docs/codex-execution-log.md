@@ -9489,3 +9489,19 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Also fixes the test helper `pdf-text.ts`, which dropped a final CR byte from a compressed stream. That made `contract-editor.test` fail on some dates; it broke #161's CI on 2026-10-28.
   - Noted for LABEL-60: `canSignContract` accepts a signed master sheet that disagrees with the contract.
 - 2026-11-01 — LABEL-72 resumed after the weekly usage limit (#162, no migration). LABEL-60 started at the owner's request (session_019AUhHfrxtwvQbCJYPndU7q, migration 178), branched from LABEL-59 just before it merged. Next reserved: 179 (LABEL-62).
+- 2026-11-01 — LABEL-61 started (session_019AUhHecUE3Bs5jsSUugPNK, migration 179): finance schema, permissions and money helpers only. Next reserved: 180 (LABEL-62).
+- 2026-11-01 — **LABEL-72 Done**: #162 squash `4592fdf`, no migration.
+  - What it adds:
+    - teaser listing before the release date, preview clips only;
+    - `full` derived from the release date on every read;
+    - full playback and listen-only project members stream a 128 kbps MP3 derivative in the private bucket (`orgs/<org>/derivatives/`), never the master;
+    - each Range response is capped at 1 MiB;
+    - a durable per-IP limiter (120/min) on public full playback.
+  - Gate: CI green on `5fe78c0` (one re-run for an `ArInboxView` timing flake outside the PR); preview checked; independent review not blocking.
+  - Accepted: a release listed `full` before this change needs a re-list to get its derivative. None exist on production (158 is not applied).
+  - Follow-ups (low):
+    - `clientIp` trusts the first `x-forwarded-for` entry, which is safe only on Vercel;
+    - the limiter caps volume, not scraping;
+    - the first-listen cut for external members has no negative cache and no `maxDuration`, and reads the whole master into memory;
+    - HEAD spends the limiter;
+    - a reversed range gets 416.

@@ -191,7 +191,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## E. Finance
 
 ### LABEL-61 — Finance schema and permissions
-**Priority:** P0 · **Risk:** High · **Deps:** 49, 54, 59 · **Migration:** 179 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** 49, 54, 59 · **Migration:** 179 · **Status:** In Progress (session_019AUhHecUE3Bs5jsSUugPNK)
 - Tables: `payees` (link to parties), `advances`, `finance_periods`, `earnings_imports`, `earnings_lines`, `statements`, `statement_lines`, `payments` (records only; **the app never moves money**). Money as integer minor units + currency; RLS on `finance.read` + artist scope (an artist reads their own statements only).
 - Acceptance: money arithmetic helpers in `lib/labelos/finance/money.ts` (integer, rounding rule documented, largest-remainder allocation) with property-style tests.
 
@@ -258,7 +258,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: a listing never serves until no artist has said no (state machine in `lib/labelos/store-consent.ts`); notification test; coverage and external-matrix updated.
 
 ### LABEL-72 — Playback rules
-**Priority:** P1 · **Risk:** Medium · **Deps:** 71 · **Status:** In Progress (session_019AUhHf7cB5hZ5AzMkogSjr, #162, no migration)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 71 · **Status:** Done (#162, `4592fdf`, no migration)
 - Default `preview`; `preview`-only listing allowed from delivery (teaser); `full` only from the release date, auto-fall back to `preview` if the date moves; `full` and listen-only external roles stream a **lossy full-length derivative, never the master**; durable per-IP limiter (`rateLimitDurable`); `Range` handling cannot return the whole file in one request for the derivative.
 - Acceptance: tests for the date rules and fallback; the master URL is unreachable from public routes; throttle test.
 
