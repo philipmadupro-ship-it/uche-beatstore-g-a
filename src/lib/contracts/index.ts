@@ -1993,6 +1993,8 @@ export const OrgContractSignBodySchema = z
   .object({
     party_id: z.string().uuid(),
     version: z.number().int().min(1),
+    /** The SHA-256 the signer's page showed (GET …/signing `documentSha256`): what they read is what is signed. */
+    document_sha256: z.string().regex(/^[0-9a-f]{64}$/),
     name: signatureName,
     drawing: signatureDrawing,
   })
@@ -2000,7 +2002,7 @@ export const OrgContractSignBodySchema = z
 
 /** POST /api/sign/[token] — an external signer signs through their link (the party is the link's). */
 export const PublicContractSignBodySchema = z
-  .object({ version: z.number().int().min(1), name: signatureName, drawing: signatureDrawing })
+  .object({ version: z.number().int().min(1), document_sha256: z.string().regex(/^[0-9a-f]{64}$/), name: signatureName, drawing: signatureDrawing })
   .strict();
 
 /** POST|DELETE …/signing/links — issue / rotate, or revoke, one party's signing link. */

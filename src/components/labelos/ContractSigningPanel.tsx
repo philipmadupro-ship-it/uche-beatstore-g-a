@@ -88,7 +88,7 @@ export function ContractSigningPanel({ orgId, contractId, onChanged }: { orgId: 
 
   const sign = async (partyId: string, input: { name: string; drawing?: string }) => {
     setBusy(`sign-${partyId}`);
-    const res = await signAsMember(orgId, contractId, { party_id: partyId, version: contract.version, name: input.name, ...(input.drawing ? { drawing: input.drawing } : {}) });
+    const res = await signAsMember(orgId, contractId, { party_id: partyId, version: contract.version, document_sha256: view.documentSha256, name: input.name, ...(input.drawing ? { drawing: input.drawing } : {}) });
     setBusy(null);
     if (!res.ok) return toast.error(res.error);
     toast.success(res.completed ? 'Signed — every party has signed' : 'Signed');

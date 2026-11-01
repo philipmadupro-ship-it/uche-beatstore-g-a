@@ -40,6 +40,7 @@ export function SignatureInput({ busy, label, confirmLabel, defaultName = '', on
     const ctx = c?.getContext('2d');
     if (!c || !ctx) return;
     ctx.clearRect(0, 0, W, H);
+    setInked(false);
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';

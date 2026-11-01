@@ -142,6 +142,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       identities,
       partyId: body.party_id,
       seenVersion: body.version,
+      seenSha: body.document_sha256,
       name,
       drawn,
       via: 'member',

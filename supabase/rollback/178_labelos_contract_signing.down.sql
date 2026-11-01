@@ -11,7 +11,7 @@
 -- The signing routes then answer "not set up yet" (GET) / 503 (writes).
 
 DROP FUNCTION IF EXISTS public.labelos_audit_contract_supersede(uuid, uuid, uuid, text, jsonb);
-DROP FUNCTION IF EXISTS public.labelos_audit_contract_sign(uuid, uuid, uuid, uuid, text, int, text, text, text, text, text, boolean, text, jsonb);
+DROP FUNCTION IF EXISTS public.labelos_audit_contract_sign(uuid, uuid, uuid, uuid, text, int, text, text, text, text, text, boolean, text, text, jsonb);
 DROP FUNCTION IF EXISTS public.labelos_audit_contract_link_revoke(uuid, uuid, uuid, uuid, jsonb);
 DROP FUNCTION IF EXISTS public.labelos_audit_contract_link_issue(uuid, uuid, uuid, uuid, text, timestamptz, jsonb);
 DROP FUNCTION IF EXISTS public.labelos_contract_check_payload(jsonb);

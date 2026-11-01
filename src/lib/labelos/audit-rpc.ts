@@ -214,6 +214,8 @@ export type AuditRpcArgs = {
     p_via: 'member' | 'link';
     p_countersign: boolean;
     p_ip_hash: string | null;
+    /** A link signer's token hash: the database re-checks it (live, unexpired) under the contract's row lock. */
+    p_link_hash: string | null;
     p_payload: EventPayload;
   };
   contractSupersede: { p_org: string; p_actor: string; p_contract: string; p_reason: string | null; p_payload: EventPayload };

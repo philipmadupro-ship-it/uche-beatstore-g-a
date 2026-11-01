@@ -138,6 +138,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       identities,
       partyId: ref.partyId,
       seenVersion: parsed.data.version,
+      seenSha: parsed.data.document_sha256,
+      linkHash: hashSignToken(token),
       name,
       drawn,
       via: 'link',

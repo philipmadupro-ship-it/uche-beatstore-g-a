@@ -225,7 +225,7 @@ describe('cleanProviderUrl', () => {
     expect(cleanProviderUrl('https://sign.example.com/doc/42')).toBe('https://sign.example.com/doc/42');
     expect(cleanProviderUrl('  ')).toBeNull();
     expect(cleanProviderUrl(null)).toBeNull();
-    for (const bad of ['http://sign.example.com', 'javascript:alert(1)', 'https://user:pw@sign.example.com', 'https://localhost', 'https://a b.example.com', 'ftp://x.example.com', 5]) {
+    for (const bad of ['http://sign.example.com', 'javascript:alert(1)', 'https://user:pw@sign.example.com', 'https://localhost', 'https://a b.example.com', 'ftp://x.example.com', 'https://sign.example.com/d?e=a@b.com', 5]) {
       expect(cleanProviderUrl(bad), String(bad)).toBe('invalid');
     }
     expect(cleanProviderUrl(`https://sign.example.com/${'a'.repeat(500)}`)).toBe('invalid');

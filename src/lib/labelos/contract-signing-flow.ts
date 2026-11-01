@@ -88,6 +88,10 @@ export type SignInput = {
   partyId: string;
   /** The version the signer read. */
   seenVersion: number;
+  /** The document hash the signer's page showed; a different one now means the text moved under them. */
+  seenSha: string;
+  /** For a link signer: the hash of the token they came with, re-checked by the database under its lock. */
+  linkHash?: string | null;
   name: string;
   /** A PNG, for a drawn signature. */
   drawn: Buffer | null;
@@ -120,6 +124,7 @@ const RPC_ERRORS: Readonly<Record<string, { status: 404 | 409; code: SignDenial 
   not_sent: { status: 409, code: 'not_sent' },
   changed: { status: 409, code: 'changed' },
   duplicate: { status: 409, code: 'duplicate' },
+  link_gone: { status: 404, code: 'not_a_party' },
 };
 
 export type PreparedSign = {
@@ -149,6 +154,7 @@ export async function prepareSign(input: SignInput): Promise<PreparedSign | Extr
     partyId: input.partyId,
   });
   if (!plan.ok) return { ok: false, status: DENIAL_STATUS[plan.code], error: SIGN_DENIAL_MESSAGE[plan.code], code: plan.code };
+  if (input.seenSha !== snap.sha) return { ok: false, status: 409, error: SIGN_DENIAL_MESSAGE.changed, code: 'changed' };
 
   const gate = await signingGate(admin, orgId, row, links);
   if (!gate.ok) return { ok: false, status: 409, error: gate.error, code: gate.code };
@@ -174,6 +180,7 @@ export async function prepareSign(input: SignInput): Promise<PreparedSign | Extr
       p_via: input.via,
       p_countersign: input.countersign,
       p_ip_hash: input.ipHash,
+      p_link_hash: input.linkHash ?? null,
       p_payload: { version: row.version, type: row.type },
     },
   };

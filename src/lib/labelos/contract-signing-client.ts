@@ -30,7 +30,7 @@ const base = (orgId: string, contractId: string) => `/api/org/${orgId}/contracts
 export type SigningPayload = SigningView | { schemaReady: false };
 export const loadSigning = (orgId: string, contractId: string) => call<SigningPayload>(`${base(orgId, contractId)}/signing`, 'GET');
 
-export const signAsMember = (orgId: string, contractId: string, body: { party_id: string; version: number; name: string; drawing?: string }) =>
+export const signAsMember = (orgId: string, contractId: string, body: { party_id: string; version: number; document_sha256: string; name: string; drawing?: string }) =>
   call<{ completed: boolean; status: 'sent' | 'signed' }>(`${base(orgId, contractId)}/signing`, 'POST', body);
 
 export const issueSignerLink = (orgId: string, contractId: string, partyId: string) =>
@@ -62,5 +62,5 @@ export type PublicSigningPayload = {
   statement: string;
 };
 export const loadPublicSigning = (token: string) => call<PublicSigningPayload>(`/api/sign/${encodeURIComponent(token)}`, 'GET');
-export const signWithLink = (token: string, body: { version: number; name: string; drawing?: string }) =>
+export const signWithLink = (token: string, body: { version: number; document_sha256: string; name: string; drawing?: string }) =>
   call<{ completed: boolean }>(`/api/sign/${encodeURIComponent(token)}`, 'POST', body);

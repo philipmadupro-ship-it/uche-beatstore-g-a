@@ -5,16 +5,14 @@
  * ROUTE authorises (a signed feed token for the .ics, a session for the
  * management route). Throws on a database error so a caller fails closed.
  */
-import { orgProjectIdsInScope, type OrgContext } from '@/lib/auth/org-access';
+import { orgHasModule, orgProjectIdsInScope, type OrgAccessOk, type OrgContext } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { FEED_EVENT_VERBS, feedStateFromLatest, type FeedState } from './feed-token';
 import type { CalendarContract, CalendarRelease } from './release-calendar';
-import { orgHasModule, type OrgAccessOk } from '@/lib/auth/org-access';
 import { mayReadContract } from './contracts/access';
-import { contractActor } from './contracts-route';
 import { ContractsNotReadyError, linksOf, listContractRows } from './contracts-store';
-import { readScopeFor } from './contracts-route';
+import { contractActor, readScopeFor } from './contracts-route';
 
 /**
  * One person's feed state in one org. The version is an EXACT COUNT and the

@@ -12,7 +12,7 @@
  * What never leaves: the token hash, the drawn image's reference, the address
  * hash. A view carries `hasImage` and `hasLink` booleans instead.
  */
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { nanoid } from 'nanoid';
 import type { NextRequest } from 'next/server';
 import type { AdminClient } from '@/lib/auth/ownership';
@@ -21,6 +21,7 @@ import { isUUID } from '@/lib/validate';
 import type { ContractPartyLink, ContractRow, PartyIdentity } from './contracts/context';
 import type { Rendered } from './contracts/render';
 import { documentHash, type SignatureFact } from './contract-signing';
+import { feedSecret } from './feed-token';
 import { orgEntitlements, type EntitlementRow } from './entitlements';
 import { documentInputOf, documentOf } from './contracts-route';
 import { orgAssetObjectKey } from './org-assets';
@@ -201,7 +202,8 @@ export async function removeSignatureImage(ref: string): Promise<void> {
 export function ipHashOf(req: NextRequest): string {
   const fwd = req.headers.get('x-forwarded-for') || '';
   const ip = fwd.split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown';
-  return createHash('sha256').update(`label-os.sign:${ip}:${process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'antigravity'}`).digest('hex').slice(0, 32);
+  // Keyed with a server-only secret: the address space is small enough that an unkeyed hash could be reversed by brute force.
+  return createHmac('sha256', feedSecret()).update(`label-os.sign\0${ip}`).digest('hex').slice(0, 32);
 }
 
 // ── The public entrance ──────────────────────────────────────────────────

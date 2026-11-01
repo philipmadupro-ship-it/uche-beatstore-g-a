@@ -27,6 +27,7 @@
 \set SHA1 '''1111111111111111111111111111111111111111111111111111111111111111'''
 \set SHA2 '''2222222222222222222222222222222222222222222222222222222222222222'''
 \set H1   '''aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'''
+\set LINKH '''dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'''
 \set H2   '''bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'''
 
 INSERT INTO auth.users (id, email) VALUES (:O, 'o178@local.test'), (:X, 'x178@local.test');
@@ -72,42 +73,48 @@ UPDATE public.contracts SET internal_note = 'chase', status = 'sent' WHERE id = 
 -- ── 3. Signing ───────────────────────────────────────────────────────────
 
 SELECT public.check_eq('a draft takes no signature',
-  (SELECT public.labelos_audit_contract_sign(:L, :O, (SELECT id FROM public.contracts WHERE title = 'nope'), :PA, 'label', 1, :SHA1, 'Label L', 'typed', NULL, 'member', true, NULL, '{}'::jsonb) ->> 'error'),
+  (SELECT public.labelos_audit_contract_sign(:L, :O, (SELECT id FROM public.contracts WHERE title = 'nope'), :PA, 'label', 1, :SHA1, 'Label L', 'typed', NULL, 'member', true, NULL, NULL, '{}'::jsonb) ->> 'error'),
   'not_found');
 SELECT public.check_eq('the wrong version is refused',
-  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PA, 'label', 2, :SHA1, 'Label L', 'typed', NULL, 'member', true, NULL, '{}'::jsonb) ->> 'error'), 'changed');
+  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PA, 'label', 2, :SHA1, 'Label L', 'typed', NULL, 'member', true, NULL, NULL, '{}'::jsonb) ->> 'error'), 'changed');
 SELECT public.check_eq('a party that is not on the contract is refused',
-  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :XP, 'artist', 1, :SHA1, 'Outsider', 'typed', NULL, 'member', false, NULL, '{}'::jsonb) ->> 'error'), 'not_party');
+  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :XP, 'artist', 1, :SHA1, 'Outsider', 'typed', NULL, 'member', false, NULL, NULL, '{}'::jsonb) ->> 'error'), 'not_party');
 SELECT public.check_eq('a party in another role is refused',
-  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PB, 'label', 1, :SHA1, 'Nova Example', 'typed', NULL, 'member', false, NULL, '{}'::jsonb) ->> 'error'), 'not_party');
+  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PB, 'label', 1, :SHA1, 'Nova Example', 'typed', NULL, 'member', false, NULL, NULL, '{}'::jsonb) ->> 'error'), 'not_party');
 SELECT public.check_eq('another org cannot sign it',
-  (SELECT public.labelos_audit_contract_sign(:L2, :X, :K1, :PA, 'label', 1, :SHA1, 'Mallory', 'typed', NULL, 'member', false, NULL, '{}'::jsonb) ->> 'error'), 'not_found');
+  (SELECT public.labelos_audit_contract_sign(:L2, :X, :K1, :PA, 'label', 1, :SHA1, 'Mallory', 'typed', NULL, 'member', false, NULL, NULL, '{}'::jsonb) ->> 'error'), 'not_found');
 
 SELECT public.check_raises('a secret-looking payload key is refused',
-  format($q$SELECT public.labelos_audit_contract_sign(%L, %L, %L, %L, 'label', 1, %L, 'Label L', 'typed', NULL, 'member', true, NULL, '{"token":"x"}'::jsonb)$q$, :L, :O, :K1, :PA, :SHA1), 'secret-looking');
+  format($q$SELECT public.labelos_audit_contract_sign(%L, %L, %L, %L, 'label', 1, %L, 'Label L', 'typed', NULL, 'member', true, NULL, NULL, '{"token":"x"}'::jsonb)$q$, :L, :O, :K1, :PA, :SHA1), 'secret-looking');
 
 SELECT public.check_eq('the label countersigns first: signed, not completed',
-  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PA, 'label', 1, :SHA1, 'Label L', 'typed', NULL, 'member', true, 'abcdef0123456789abcdef0123456789', '{"x":1}'::jsonb) ->> 'completed'), 'false');
+  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PA, 'label', 1, :SHA1, 'Label L', 'typed', NULL, 'member', true, 'abcdef0123456789abcdef0123456789', NULL, '{"x":1}'::jsonb) ->> 'completed'), 'false');
 SELECT public.check_eq('still sent', (SELECT status FROM public.contracts WHERE id = :K1), 'sent');
 SELECT public.check_eq('the same party twice on the same document is a duplicate',
-  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PA, 'label', 1, :SHA1, 'Label L', 'typed', NULL, 'member', true, NULL, '{}'::jsonb) ->> 'error'), 'duplicate');
+  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PA, 'label', 1, :SHA1, 'Label L', 'typed', NULL, 'member', true, NULL, NULL, '{}'::jsonb) ->> 'error'), 'duplicate');
 SELECT public.check_eq('an event was written for the signature',
   (SELECT count(*)::int FROM public.activity_events WHERE org_id = :L AND verb = 'contract.signature_added' AND audit), 1);
 
+SELECT public.check_eq('a link signer with no live link is refused (link_gone)',
+  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA2, 'Nova Example', 'typed', NULL, 'link', false, NULL, :LINKH, '{}'::jsonb) ->> 'error'), 'link_gone');
+SELECT public.labelos_audit_contract_link_issue(:L, :O, :K1, :PB, :LINKH, now() + interval '30 days', '{}'::jsonb);
+SELECT public.check_eq('… a different link hash is refused too',
+  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA2, 'Nova Example', 'typed', NULL, 'link', false, NULL, :H1, '{}'::jsonb) ->> 'error'), 'link_gone');
+
 -- Nova signs a DIFFERENT (older) document: it is recorded, but the contract is not complete on the current hash.
 SELECT public.check_eq('Nova signs another document hash: recorded, and it does not complete the contract on SHA1',
-  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA2, 'Nova Example', 'typed', NULL, 'link', false, NULL, '{}'::jsonb) ->> 'completed'), 'false');
+  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA2, 'Nova Example', 'typed', NULL, 'link', false, NULL, :LINKH, '{}'::jsonb) ->> 'completed'), 'false');
 SELECT public.check_eq('still sent after a signature on another hash', (SELECT status FROM public.contracts WHERE id = :K1), 'sent');
 
 -- Now Nova signs the current document (drawn): the last party, so the contract becomes signed with both events.
 SELECT public.check_eq('Nova signs SHA1 (drawn) and completes',
-  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA1, 'Nova Example', 'drawn', 'local://orgs/b1780000-0000-4000-8000-000000000001/assets/x/y.png', 'link', false, NULL, '{}'::jsonb) ->> 'completed'), 'true');
+  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA1, 'Nova Example', 'drawn', 'local://orgs/b1780000-0000-4000-8000-000000000001/assets/x/y.png', 'link', false, NULL, :LINKH, '{}'::jsonb) ->> 'completed'), 'true');
 SELECT public.check_eq('the contract is signed', (SELECT status FROM public.contracts WHERE id = :K1), 'signed');
 SELECT public.check_eq('contract.signed recorded once',
   (SELECT count(*)::int FROM public.activity_events WHERE org_id = :L AND verb = 'contract.signed' AND audit), 1);
 SELECT public.check_eq('the link signer’s event has no actor', (SELECT count(*)::int FROM public.activity_events WHERE verb = 'contract.signature_added' AND actor_id IS NULL), 2);
 SELECT public.check_eq('a signed contract takes no more signatures',
-  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PA, 'label', 1, :H1, 'Label L', 'typed', NULL, 'member', true, NULL, '{}'::jsonb) ->> 'error'), 'already_signed');
+  (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PA, 'label', 1, :H1, 'Label L', 'typed', NULL, 'member', true, NULL, NULL, '{}'::jsonb) ->> 'error'), 'already_signed');
 SELECT public.check_eq('three signature rows (one stale by hash, derived on read)', (SELECT count(*)::int FROM public.contract_signatures WHERE contract_id = :K1), 3);
 
 -- ── 1. Append-only ───────────────────────────────────────────────────────
@@ -131,7 +138,7 @@ SELECT public.check_raises('authenticated cannot insert a signature', format($q$
 SELECT public.check_raises('authenticated cannot update', $$UPDATE public.contract_signatures SET signer_name = 'x'$$, 'permission denied');
 SELECT public.check_raises('authenticated cannot delete', $$DELETE FROM public.contract_signatures$$, 'permission denied');
 SELECT public.check_raises('authenticated cannot read the provider url column', $$SELECT esign_provider_url FROM public.contracts$$, 'permission denied');
-SELECT public.check_raises('… nor call the sign function', format($q$SELECT public.labelos_audit_contract_sign(%L, %L, %L, %L, 'label', 1, %L, 'Mallory', 'typed', NULL, 'member', false, NULL, '{}'::jsonb)$q$, :L, :O, :K1, :PA, :H2), 'permission denied');
+SELECT public.check_raises('… nor call the sign function', format($q$SELECT public.labelos_audit_contract_sign(%L, %L, %L, %L, 'label', 1, %L, 'Mallory', 'typed', NULL, 'member', false, NULL, NULL, '{}'::jsonb)$q$, :L, :O, :K1, :PA, :H2), 'permission denied');
 RESET ROLE;
 SET ROLE anon;
 SELECT public.check_raises('anon reads no signature', $$SELECT count(*) FROM public.contract_signatures$$, 'permission denied');

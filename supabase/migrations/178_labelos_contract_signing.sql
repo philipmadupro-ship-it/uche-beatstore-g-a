@@ -321,7 +321,7 @@ GRANT EXECUTE ON FUNCTION public.labelos_audit_contract_link_revoke(uuid, uuid, 
 -- `contract.signature_added`. p_sha is the hash of the document as it is now; the route computed it
 -- from the same rendering the signer read.
 -- Answers { signed: true, signature_id, completed } or
---   { error: 'not_found' | 'void' | 'already_signed' | 'not_sent' | 'changed' | 'not_party' | 'duplicate' }.
+--   { error: 'not_found' | 'void' | 'already_signed' | 'not_sent' | 'changed' | 'not_party' | 'duplicate' | 'link_gone' }.
 CREATE OR REPLACE FUNCTION public.labelos_audit_contract_sign(
   p_org uuid,
   p_actor uuid,
@@ -336,6 +336,7 @@ CREATE OR REPLACE FUNCTION public.labelos_audit_contract_sign(
   p_via text,
   p_countersign boolean,
   p_ip_hash text,
+  p_link_hash text,
   p_payload jsonb
 ) RETURNS jsonb
 LANGUAGE plpgsql
@@ -356,6 +357,12 @@ BEGIN
   IF v_row.status = 'signed' THEN RETURN jsonb_build_object('error', 'already_signed'); END IF;
   IF v_row.status <> 'sent' THEN RETURN jsonb_build_object('error', 'not_sent'); END IF;
   IF v_row.version <> p_version THEN RETURN jsonb_build_object('error', 'changed'); END IF;
+  -- A link signer: the link must still be the party's live one, under this lock (a revoke or a rotate in flight wins).
+  IF p_via = 'link' AND NOT EXISTS (
+    SELECT 1 FROM public.contract_signers s
+    WHERE s.contract_id = p_contract AND s.party_id = p_party AND s.token_hash IS NOT NULL AND s.token_hash = p_link_hash
+      AND (s.link_expires_at IS NULL OR s.link_expires_at > now())
+  ) THEN RETURN jsonb_build_object('error', 'link_gone'); END IF;
   IF NOT EXISTS (SELECT 1 FROM public.contract_parties cp WHERE cp.contract_id = p_contract AND cp.party_id = p_party AND cp.role = p_role) THEN
     RETURN jsonb_build_object('error', 'not_party');
   END IF;
@@ -391,9 +398,9 @@ BEGIN
   RETURN jsonb_build_object('signed', true, 'signature_id', v_id, 'completed', v_done);
 END;
 $fn$;
-ALTER FUNCTION public.labelos_audit_contract_sign(uuid, uuid, uuid, uuid, text, int, text, text, text, text, text, boolean, text, jsonb) OWNER TO postgres;
-REVOKE ALL ON FUNCTION public.labelos_audit_contract_sign(uuid, uuid, uuid, uuid, text, int, text, text, text, text, text, boolean, text, jsonb) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.labelos_audit_contract_sign(uuid, uuid, uuid, uuid, text, int, text, text, text, text, text, boolean, text, jsonb) TO service_role;
+ALTER FUNCTION public.labelos_audit_contract_sign(uuid, uuid, uuid, uuid, text, int, text, text, text, text, text, boolean, text, text, jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_audit_contract_sign(uuid, uuid, uuid, uuid, text, int, text, text, text, text, text, boolean, text, text, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_audit_contract_sign(uuid, uuid, uuid, uuid, text, int, text, text, text, text, text, boolean, text, text, jsonb) TO service_role;
 
 -- Supersede: the replacement is a new DRAFT copy of a sent or signed contract (clauses, fields, links,
 -- parties; never the internal note), and the old one is voided and points at it. Its signatures stay on

@@ -93,7 +93,8 @@ async function call(method: 'GET' | 'POST', token: string, body?: unknown) {
   const init = method === 'GET' ? { method } : { method, headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.9' }, body: JSON.stringify(body ?? {}) };
   return mod[method](new NextRequest(`https://app.test/api/sign/${token}`, init), { params: Promise.resolve({ token }) });
 }
-const sign = (token: string, extra: Record<string, unknown> = {}) => call('POST', token, { version: 1, name: 'Nova Okafor', ...extra });
+const shaOf = async (token: string) => (await (await call('GET', token)).json()).documentSha256 as string;
+const sign = async (token: string, extra: Record<string, unknown> = {}) => call('POST', token, { version: 1, document_sha256: await shaOf(token), name: 'Nova Okafor', ...extra });
 
 describe('every failure to identify the caller is one 404', () => {
   async function notFound(res: Response) {
@@ -105,7 +106,7 @@ describe('every failure to identify the caller is one 404', () => {
     await notFound(await call('GET', 'short'));
     await notFound(await call('GET', '../../etc/passwd'));
     await notFound(await call('GET', newSignToken()));
-    await notFound(await call('POST', newSignToken(), { version: 1, name: 'Nova Okafor' }));
+    await notFound(await call('POST', newSignToken(), { version: 1, document_sha256: 'a'.repeat(64), name: 'Nova Okafor' }));
   });
 
   it('revoked, expired, void, draft, deleted-org and unlicensed-module links look the same too', async () => {
@@ -196,12 +197,12 @@ describe('POST — signing through the link', () => {
   });
 
   it('refuses a version the signer did not read, a short name and a bad drawing — and stores nothing', async () => {
-    const stale = await call('POST', TOKEN_PN, { version: 3, name: 'Nova Okafor' });
+    const stale = await call('POST', TOKEN_PN, { version: 3, document_sha256: await shaOf(TOKEN_PN), name: 'Nova Okafor' });
     expect(stale.status).toBe(409);
     expect((await stale.json()).code).toBe('changed');
     expect((await sign(TOKEN_PN, { name: 'x' })).status).toBe(400);
     expect((await sign(TOKEN_PN, { drawing: 'data:image/svg+xml;base64,PHN2Zy8+' })).status).toBe(400);
-    expect((await call('POST', TOKEN_PN, { version: 1, name: 'Nova Okafor', party_id: PL })).status).toBe(400); // the party is the link's, never the body's
+    expect((await call('POST', TOKEN_PN, { version: 1, document_sha256: await shaOf(TOKEN_PN), name: 'Nova Okafor', party_id: PL })).status).toBe(400); // the party is the link's, never the body's
     expect(db.tables.contract_signatures).toHaveLength(0);
     expect(stored).toHaveLength(0);
   });
@@ -215,6 +216,14 @@ describe('POST — signing through the link', () => {
     await sign(TOKEN_PL, { name: 'Label L Ltd' });
     expect(db.tables.contracts[0].status).toBe('sent');
     expect((await (await sign(TOKEN_PN)).json()).completed).toBe(true);
+  });
+
+  it('a link revoked or rotated while the signer was mid-request records nothing (the database re-checks it under its lock)', async () => {
+    const sha = await shaOf(TOKEN_PN);
+    db.tables.contract_signers[0].token_hash = hashSignToken(newSignToken()); // rotated after the route resolved the old one
+    const res = await call('POST', TOKEN_PN, { version: 1, document_sha256: sha, name: 'Nova Okafor' });
+    expect(res.status).toBe(404);
+    expect(db.tables.contract_signatures).toHaveLength(0);
   });
 
   it('is limited per address: 429, and nothing is stored', async () => {

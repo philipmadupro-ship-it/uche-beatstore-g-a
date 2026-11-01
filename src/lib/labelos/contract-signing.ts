@@ -243,11 +243,13 @@ export function cleanProviderUrl(raw: unknown): string | null | 'invalid' {
   if (typeof raw !== 'string') return 'invalid';
   const text = raw.trim();
   if (text === '') return null;
-  if (text.length > 500 || /[\u0000- \u007f]/.test(text)) return 'invalid';
+  if (text.length > 500 || /[\u0000- \u007f@]/.test(text)) return 'invalid';
   try {
     const u = new URL(text);
     if (u.protocol !== 'https:' || u.username || u.password || !u.hostname.includes('.')) return 'invalid';
-    return u.toString();
+    // The database CHECK measures what is stored: the normalized form, which can be longer than what was typed.
+    const normal = u.toString();
+    return normal.length <= 500 ? normal : 'invalid';
   } catch {
     return 'invalid';
   }

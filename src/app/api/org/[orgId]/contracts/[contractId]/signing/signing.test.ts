@@ -127,8 +127,9 @@ async function call(method: string, as: string | null, part: 'signing' | 'links'
   return mod[method](new NextRequest(`https://app.test/api/org/${org}/${path}`, init), { params: Promise.resolve(params) });
 }
 
-const sign = (as: string, party: string, extra: Record<string, unknown> = {}) =>
-  call('POST', as, 'signing', { party_id: party, version: 1, name: 'Test Signer', ...extra });
+const currentSha = async () => (await (await call('GET', LEG, 'signing')).json()).documentSha256 as string;
+const sign = async (as: string, party: string, extra: Record<string, unknown> = {}) =>
+  call('POST', as, 'signing', { party_id: party, version: 1, document_sha256: await currentSha(), name: 'Test Signer', ...extra });
 const view = async (as: string) => (await call('GET', as, 'signing')).json();
 const verbs = () => db.tables.activity_events.map((e) => e.verb);
 
@@ -201,11 +202,11 @@ describe('POST …/signing — signing as a member', () => {
   it('a party that is not on the contract is 404; a stranger and another org are refused', async () => {
     expect((await sign(LEG, '60000000-0000-4000-8000-0000000000ff')).status).toBe(404);
     expect((await sign(STRANGER, PN)).status).toBe(403);
-    expect((await call('POST', X, 'signing', { party_id: PN, version: 1, name: 'Mallory' })).status).toBe(403);
+    expect((await call('POST', X, 'signing', { party_id: PN, version: 1, document_sha256: 'a'.repeat(64), name: 'Mallory' })).status).toBe(403);
   });
 
   it('refuses a version the signer did not read (409, code changed) and a contract that is not out for signature', async () => {
-    const stale = await call('POST', ART, 'signing', { party_id: PN, version: 7, name: 'Nova Okafor' });
+    const stale = await call('POST', ART, 'signing', { party_id: PN, version: 7, document_sha256: await currentSha(), name: 'Nova Okafor' });
     expect(stale.status).toBe(409);
     expect((await stale.json()).code).toBe('changed');
     db.tables.contracts[0].status = 'draft';
@@ -230,7 +231,7 @@ describe('POST …/signing — signing as a member', () => {
     const big = `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(260 * 1024, 1)]).toString('base64')}`;
     expect((await sign(ART, PN, { drawing: big })).status).toBe(400);
     expect(stored).toHaveLength(0);
-    expect((await call('POST', ART, 'signing', { party_id: PN, version: 1, name: 'Nova Okafor', extra: 1 })).status).toBe(400);
+    expect((await call('POST', ART, 'signing', { party_id: PN, version: 1, document_sha256: await currentSha(), name: 'Nova Okafor', extra: 1 })).status).toBe(400);
   });
 
   it('a drawn signature goes to the private bucket under the org, the row keeps only the reference, and a failed write removes it again', async () => {
@@ -262,6 +263,17 @@ describe('POST …/signing — signing as a member', () => {
     expect(ok.headers.get('content-type')).toBe('image/png');
     expect((await call('GET', MKT, 'image', undefined, { signature: id })).status).toBe(404);
     expect((await call('GET', LEG, 'image', undefined, { signature: '70000000-0000-4000-8000-0000000000aa' })).status).toBe(404);
+  });
+});
+
+describe('the text the signer read', () => {
+  it('a signature on a hash the signer did not see is a 409 even when the version is the same (a party name edited meanwhile)', async () => {
+    const seen = await currentSha();
+    db.tables.parties[1].legal_name = 'Nova Okafor-Smith';
+    const res = await call('POST', ART, 'signing', { party_id: PN, version: 1, document_sha256: seen, name: 'Nova Okafor' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('changed');
+    expect(db.tables.contract_signatures).toHaveLength(0);
   });
 });
 

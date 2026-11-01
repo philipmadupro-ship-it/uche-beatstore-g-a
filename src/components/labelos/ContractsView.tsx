@@ -248,7 +248,7 @@ export function ContractsView({ orgId }: { orgId: string }) {
     () => [{ value: 'all', label: 'Any status' }, ...(['draft', 'sent', 'signed', 'void'] as const).map((st) => ({ value: st, label: CONTRACT_STATUS_LABELS[st] }))],
     [],
   );
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; }, []);
   const shown = useMemo(
     () => filterStore(data?.contracts ?? [], { q, status: statusFilter, type: typeFilter, expiring }, today),
     [data?.contracts, q, statusFilter, typeFilter, expiring, today],

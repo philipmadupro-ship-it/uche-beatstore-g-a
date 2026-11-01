@@ -69,7 +69,7 @@ export function SignWithLink({ token }: { token: string }) {
   const sign = async (input: { name: string; drawing?: string }) => {
     setBusy(true);
     setError(null);
-    const res = await signWithLink(token, { version: data.contract.version, name: input.name, ...(input.drawing ? { drawing: input.drawing } : {}) });
+    const res = await signWithLink(token, { version: data.contract.version, document_sha256: data.documentSha256, name: input.name, ...(input.drawing ? { drawing: input.drawing } : {}) });
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
