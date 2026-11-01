@@ -7,7 +7,7 @@
  * `finance.write` reader: the column grants already hide it from every API
  * role, and this is the route-side half of that rule.
  */
-import { isCurrency, minorFromDb } from './money';
+import { minorFromDb } from './money';
 
 export type PayeeRow = {
   id: string;
@@ -52,7 +52,7 @@ export function payeeView(row: PayeeRow, opts: { reference: boolean }) {
     id: row.id,
     partyId: row.party_id,
     artistContactId: row.artist_contact_id,
-    currency: isCurrency(row.currency) ? row.currency : row.currency,
+    currency: row.currency,
     status: row.status,
     createdAt: row.created_at,
     ...(opts.reference ? { paymentReference: row.payment_reference ?? null } : {}),

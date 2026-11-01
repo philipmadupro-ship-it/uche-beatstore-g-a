@@ -46,7 +46,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
     } else {
       const payeeIds = await ownPayeeIds(access.admin, access.orgId, access.userId);
       // Nothing of one's own is an empty list, not an error; someone who is neither staff nor anybody's payee is refused.
-      if (payeeIds.length === 0) return json(403, { error: 'Not allowed' });
+      if (payeeIds.length === 0) {
+        if (access.role === 'artist') return json(200, { schemaReady: true, own: true, statements: [] });
+        return json(403, { error: 'Not allowed' });
+      }
       own = true;
       loaded = await listStatements(access.admin, access.orgId, { kind: 'own', payeeIds });
     }

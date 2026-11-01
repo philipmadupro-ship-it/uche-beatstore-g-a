@@ -76,6 +76,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
     const result = await insertPayee(access.admin, access.orgId, access.userId, body, party.contact_id);
     if ('duplicate' in result) return json(409, { error: 'That party is already a payee' });
+    if ('invalid' in result) return json(400, { error: 'The payee details were refused (no account numbers; keep the reference short).' });
 
     await recordEvent(
       access.admin,

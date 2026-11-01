@@ -139,7 +139,7 @@ export async function insertPayee(
   body: { party_id: string; currency: string; payment_reference?: string },
   /** The party's roster contact. The database trigger sets the same value itself and ignores what is sent; sending it keeps the row honest in a test double. */
   partyContactId: string | null,
-): Promise<{ payee: PayeeRow } | { duplicate: true }> {
+): Promise<{ payee: PayeeRow } | { duplicate: true } | { invalid: true }> {
   await assertFinanceSchema(admin);
   const res = await admin
     .from('payees')
@@ -148,6 +148,7 @@ export async function insertPayee(
     .single();
   if (res.error) {
     if (res.error.code === '23505') return { duplicate: true };
+    if (res.error.code === '23514') return { invalid: true };
     check('payee insert', res.error);
   }
   return { payee: res.data as PayeeRow };

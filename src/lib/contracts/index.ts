@@ -14,8 +14,8 @@
  * Convention: every export pair is `XSchema` (Zod) + `X` (the inferred TS
  * type). e.g. `RateBodySchema` and `RateBody = z.infer<typeof RateBodySchema>`.
  */
-import { isCurrency as isFinanceCurrency } from '@/lib/labelos/finance/money';
 import { z } from 'zod';
+import { isCurrency as isFinanceCurrency } from '@/lib/labelos/finance/currency';
 import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
 import { DECISIONS } from '@/lib/contacts/decisions';
 import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
