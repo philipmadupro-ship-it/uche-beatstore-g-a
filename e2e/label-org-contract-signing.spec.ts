@@ -66,6 +66,18 @@ async function as(browser: Browser, baseURL: string, id: string, email: string):
   return ctx;
 }
 
+const RESEND = 'http://127.0.0.1:54400/emails';
+const KILO_EMAIL = `kilo-${run}@local.test`;
+
+/** The signing link is only ever EMAILED to the party (review M1): read it from the fake Resend. */
+async function emailedLink(request: APIRequestContext, baseURL: string): Promise<string> {
+  const mails = (await (await request.get(RESEND)).json()) as { body: { to: string | string[]; text: string } }[];
+  const mail = [...mails].reverse().find((m) => [m.body.to].flat().includes(KILO_EMAIL));
+  expect(mail, 'the signing email was sent to the party').toBeTruthy();
+  const path = /\/sign\/[A-Za-z0-9_-]{43}/.exec(mail!.body.text)![0];
+  return `${baseURL}${path}`;
+}
+
 const owner = { id: PRODUCER_ID, email: 'producer@local.test' };
 const artist = { id: ARTIST_A_ID, email: 'artist-a@local.test' };
 type Row = Record<string, unknown>;
@@ -102,7 +114,7 @@ test.beforeAll(async ({ request }) => {
   const party = (id: string, kind: string, name: string, extra: Record<string, unknown>) => ({ id, org_id: ORG, kind, display_name: name, legal_name: null, ipi: null, contact_id: null, user_id: null, details_confirmed_by: null, details_confirmed_at: null, ...extra });
   await rest(request, 'POST', 'parties', [
     party(P_LABEL, 'company', `CSign Records ${run}`, { legal_name: `CSign Records Ltd ${run}`, address: '1 Label Way, London', user_id: PRODUCER_ID, details_confirmed_by: PRODUCER_ID, details_confirmed_at: new Date().toISOString() }),
-    party(P_KILO, 'person', `Kilo ${run}`, { legal_name: `Kilo Mensah ${run}`, address: '9 Feature Street, Accra' }),
+    party(P_KILO, 'person', `Kilo ${run}`, { legal_name: `Kilo Mensah ${run}`, address: '9 Feature Street, Accra', email: KILO_EMAIL }),
   ]);
 });
 
@@ -168,15 +180,17 @@ test('2 · the owner signs for the label, typed and drawn: 1 of 2', async ({ bro
   await ctx.close();
 });
 
-test('3 · Kilo’s signing link is shown once, only its hash is stored; an http provider address is refused', async ({ browser, baseURL }) => {
+test('3 · Kilo’s signing link is emailed to Kilo (never shown to the issuer), only its hash is stored; an http provider address is refused', async ({ browser, baseURL }) => {
   const ctx = await as(browser, baseURL!, owner.id, owner.email);
   const page = await ctx.newPage();
   await page.goto(`/o/${SLUG}/rights/contracts/${contractId}`);
   await expect(page.getByTestId('signing-panel')).toBeVisible({ timeout: 60_000 });
+  await ctx.request.delete(RESEND);
   await page.getByTestId(`link-issue-${P_KILO}`).click();
-  const url = page.getByTestId('link-issued-url');
-  await expect(url).toBeVisible({ timeout: 20_000 });
-  kiloLink = await url.inputValue();
+  await expect(page.getByTestId('link-issued')).toContainText('Sent to', { timeout: 20_000 });
+  // The member who issued it is shown no link at all.
+  await expect(page.getByTestId('link-issued-url')).toHaveCount(0);
+  kiloLink = await emailedLink(ctx.request, baseURL!);
   expect(kiloLink).toMatch(/\/sign\/[A-Za-z0-9_-]{43}$/);
   const token = kiloLink.split('/sign/')[1];
   // The database holds the hash, never the token; the event names no token.
@@ -411,8 +425,10 @@ test('10 · 390 px: no sideways scroll anywhere; the producer dashboard and /sto
   await page.getByTestId(`sign-${P_LABEL}-draw-toggle`).check();
   await noSideways(page, 'signing panel');
   await page.screenshot({ path: `${D}/panel-390.png`, fullPage: true });
+  await ctx.request.delete(RESEND);
   await page.getByTestId(`link-issue-${P_KILO}`).click();
-  const link = (await page.getByTestId('link-issued-url').inputValue()).replace(/^https?:\/\/[^/]+/, baseURL!);
+  await expect(page.getByTestId('link-issued')).toContainText('Sent to', { timeout: 20_000 });
+  const link = await emailedLink(ctx.request, baseURL!);
 
   const anon = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const sign = await anon.newPage();
@@ -437,5 +453,26 @@ test('10 · 390 px: no sideways scroll anywhere; the producer dashboard and /sto
   expect(lib!.status()).toBeLessThan(400);
   const store = await page.goto('/store');
   expect(store!.status()).toBe(200);
+  await ctx.close();
+});
+
+test('H1 · a member who links their OWN account to a party cannot confirm it or sign as it (real database)', async ({ browser, baseURL }) => {
+  const ctx = await as(browser, baseURL!, owner.id, owner.email);
+  const patched = await ctx.request.patch(`/api/org/${ORG}/parties/${P_KILO}`, { data: { user_id: PRODUCER_ID } });
+  expect(patched.status(), await patched.text()).toBe(200);
+  // The route stamped who made the link; the database trigger keeps the stamp honest.
+  const [row] = (await rest(ctx.request, 'GET', `parties?select=user_id,user_linked_by,details_confirmed_by&id=eq.${P_KILO}`)) as Row[];
+  expect(row).toMatchObject({ user_id: PRODUCER_ID, user_linked_by: PRODUCER_ID, details_confirmed_by: null });
+
+  const confirm = await ctx.request.post(`/api/org/${ORG}/parties/${P_KILO}/confirm`, { data: {} });
+  expect(confirm.status()).toBe(403);
+  expect(((await confirm.json()) as { code: string }).code).toBe('self_linked');
+
+  // Even with a confirmation forced onto the row, a link the signer made themself signs nobody.
+  await rest(ctx.request, 'PATCH', `parties?id=eq.${P_KILO}`, { details_confirmed_by: PRODUCER_ID, details_confirmed_at: new Date().toISOString() });
+  const sha = ((await (await ctx.request.get(`/api/org/${ORG}/contracts/${contractId}/signing`)).json()) as { documentSha256: string }).documentSha256;
+  const sign = await ctx.request.post(`/api/org/${ORG}/contracts/${contractId}/signing`, { data: { party_id: P_KILO, version: 1, document_sha256: sha, name: 'Kilo Mensah' } });
+  expect(sign.status()).toBe(403);
+  expect(((await sign.json()) as { code: string }).code).toBe('not_your_party');
   await ctx.close();
 });

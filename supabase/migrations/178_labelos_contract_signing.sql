@@ -68,6 +68,31 @@ ALTER TABLE public.contracts ADD CONSTRAINT contracts_esign_url_check CHECK (
   esign_provider_url IS NULL OR (length(esign_provider_url) <= 500 AND esign_provider_url ~ '^https://[^[:space:]@]+$')
 );
 
+-- WHO linked a party to an account (review H1 on #166). Signing as a party needs the account itself to have confirmed
+-- the details (LABEL-54) AND the link to have been made by someone else: a rights writer who links their own account
+-- and then confirms it is not the party. NULL = unknown (a link made before 178, or by a writer that does not stamp),
+-- which signs nobody. The trigger below clears it whenever the account changes without a new stamp, so no writer
+-- can keep an old stamp against a new account.
+ALTER TABLE public.parties ADD COLUMN IF NOT EXISTS user_linked_by uuid;
+
+CREATE OR REPLACE FUNCTION public.parties_linked_by_reset()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $fn$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.user_id IS NULL THEN NEW.user_linked_by := NULL; END IF;
+  ELSIF NEW.user_id IS DISTINCT FROM OLD.user_id AND NEW.user_linked_by IS NOT DISTINCT FROM OLD.user_linked_by THEN
+    NEW.user_linked_by := NULL;
+  END IF;
+  RETURN NEW;
+END
+$fn$;
+ALTER FUNCTION public.parties_linked_by_reset() OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.parties_linked_by_reset() FROM PUBLIC;
+
+DROP TRIGGER IF EXISTS parties_linked_by_reset ON public.parties;
+CREATE TRIGGER parties_linked_by_reset BEFORE INSERT OR UPDATE ON public.parties
+  FOR EACH ROW EXECUTE FUNCTION public.parties_linked_by_reset();
+
 CREATE INDEX IF NOT EXISTS idx_contracts_supersedes ON public.contracts (supersedes_id) WHERE supersedes_id IS NOT NULL;
 
 -- The new columns are not in 176's column grant, so an API role cannot read them either.
@@ -544,5 +569,42 @@ $fn$;
 ALTER FUNCTION public.labelos_audit_contract_supersede(uuid, uuid, uuid, text, jsonb) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.labelos_audit_contract_supersede(uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.labelos_audit_contract_supersede(uuid, uuid, uuid, text, jsonb) TO service_role;
+
+-- ── Review fixes (#166): void revokes the links; a contract out for signature is never deleted ──
+
+-- L1. A contract that becomes void (by whichever path) takes every signer link with it, in the same statement.
+CREATE OR REPLACE FUNCTION public.contracts_void_revokes_links()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $fn$
+BEGIN
+  UPDATE public.contract_signers SET token_hash = NULL, link_revoked_at = now()
+    WHERE contract_id = NEW.id AND token_hash IS NOT NULL;
+  RETURN NEW;
+END
+$fn$;
+ALTER FUNCTION public.contracts_void_revokes_links() OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.contracts_void_revokes_links() FROM PUBLIC;
+
+DROP TRIGGER IF EXISTS contracts_void_revokes_links ON public.contracts;
+CREATE TRIGGER contracts_void_revokes_links AFTER UPDATE OF status ON public.contracts
+  FOR EACH ROW WHEN (NEW.status = 'void' AND OLD.status IS DISTINCT FROM 'void')
+  EXECUTE FUNCTION public.contracts_void_revokes_links();
+
+-- L4. Only a draft is deleted directly. A DELETE statement is depth 1; the organization's own cascade is deeper
+-- (as for contract_signatures), so a signature can never vanish by deleting its contract.
+CREATE OR REPLACE FUNCTION public.contracts_no_delete_after_draft()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $fn$
+BEGIN
+  IF OLD.status <> 'draft' AND pg_trigger_depth() = 1 THEN
+    RAISE EXCEPTION 'contracts: only a draft is deleted (this one is %)', OLD.status USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN OLD;
+END
+$fn$;
+ALTER FUNCTION public.contracts_no_delete_after_draft() OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.contracts_no_delete_after_draft() FROM PUBLIC;
+
+DROP TRIGGER IF EXISTS contracts_no_delete_after_draft ON public.contracts;
+CREATE TRIGGER contracts_no_delete_after_draft BEFORE DELETE ON public.contracts
+  FOR EACH ROW EXECUTE FUNCTION public.contracts_no_delete_after_draft();
 
 NOTIFY pgrst, 'reload schema';

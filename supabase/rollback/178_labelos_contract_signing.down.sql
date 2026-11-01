@@ -87,6 +87,13 @@ $$;
 ALTER FUNCTION public.contracts_guard() OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.contracts_guard() FROM PUBLIC;
 
+DROP TRIGGER IF EXISTS contracts_no_delete_after_draft ON public.contracts;
+DROP FUNCTION IF EXISTS public.contracts_no_delete_after_draft();
+DROP TRIGGER IF EXISTS contracts_void_revokes_links ON public.contracts;
+DROP FUNCTION IF EXISTS public.contracts_void_revokes_links();
+DROP TRIGGER IF EXISTS parties_linked_by_reset ON public.parties;
+DROP FUNCTION IF EXISTS public.parties_linked_by_reset();
+ALTER TABLE public.parties DROP COLUMN IF EXISTS user_linked_by;
 DROP TRIGGER IF EXISTS contracts_guard ON public.contracts;
 CREATE TRIGGER contracts_guard BEFORE INSERT OR UPDATE ON public.contracts
   FOR EACH ROW EXECUTE FUNCTION public.contracts_guard();

@@ -31,6 +31,7 @@ import { readBody } from '@/lib/validate';
 import { OrgPartyCreateBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { stampPartyLinkedBy } from '@/lib/labelos/contract-signing-store';
 import { recordEvent } from '@/lib/labelos/activity';
 import { CREDITS_NOT_READY } from '@/lib/labelos/audit-rpc';
 import { mayReadPayee, mayReadPayments, orgActor, partyViewWithLink } from '@/lib/labelos/credits';
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const result = await insertParty(admin, org, access.userId, cols.columns, { payee: true });
     if ('duplicate' in result) return json(409, { error: 'That account already has a party in this organization' });
 
+    if (result.party.user_id) await stampPartyLinkedBy(admin, org, result.party.id, access.userId);
     await recordEvent(admin, { orgId: org, userId: access.userId }, 'party.created', { type: 'party', id: result.party.id }, { kind: result.party.kind });
     return json(201, { party: partyViewWithLink(result.party, orgActor(access.userId, access.capabilities, access.role)) });
   } catch (err) {

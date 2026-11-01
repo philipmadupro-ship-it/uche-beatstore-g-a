@@ -31,11 +31,24 @@ const K1 = '70000000-0000-4000-8000-000000000001';
 const PNG = `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40, 3)]).toString('base64')}`;
 
 let current: string | null = null;
+const emails: { to: string; text: string; subject: string }[] = [];
+let emailFails = false;
 let db: MemoryDb;
 const stored: string[] = [];
 const removed: string[] = [];
 
 vi.mock('server-only', () => ({}));
+vi.mock('resend', () => ({
+  Resend: class {
+    emails = {
+      send: async (m: { to: string; text: string; subject: string }) => {
+        if (emailFails) return { error: { message: 'boom' } };
+        emails.push({ to: m.to, text: m.text, subject: m.subject });
+        return { error: null };
+      },
+    };
+  },
+}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: current ? { id: current } : null } }) } }),
 }));
@@ -81,7 +94,7 @@ beforeEach(() => {
       tracks: [{ id: T1, org_id: L, user_id: null, type: 'song', title: 'Midnight', song_stage: 'inbox' }],
       parties: [
         { id: PL, org_id: L, display_name: 'Label L', legal_name: 'Label L Ltd', address: '1 Label Way', user_id: null },
-        { id: PN, org_id: L, display_name: 'Nova', legal_name: 'Nova Okafor', address: '2 Road', user_id: ART, details_confirmed_by: ART, details_confirmed_at: '2026-10-02T00:00:00Z' },
+        { id: PN, org_id: L, display_name: 'Nova', legal_name: 'Nova Okafor', address: '2 Road', user_id: ART, user_linked_by: OWN, email: 'nova@example.com', details_confirmed_by: ART, details_confirmed_at: '2026-10-02T00:00:00Z' },
       ],
       contracts: [contractRow()],
       contract_parties: [
@@ -328,6 +341,42 @@ describe('who may sign as a party (LABEL-71 H1)', () => {
     expect(db.tables.contract_signatures).toHaveLength(0);
   });
 
+  // The attack from the review: PATCH the party to point at yourself, confirm it as yourself, sign.
+  async function party(method: 'PATCH' | 'POST', as: string, part: '' | 'confirm', body: unknown) {
+    current = as;
+    const mod = (await (part ? import('../../../parties/[partyId]/confirm/route') : import('../../../parties/[partyId]/route'))) as unknown as Record<string, Handler>;
+    return mod[method](
+      new NextRequest(`https://app.test/api/org/${L}/parties/${PN}${part ? '/confirm' : ''}`, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+      { params: Promise.resolve({ orgId: L, partyId: PN }) },
+    );
+  }
+
+  it('H1: link yourself, confirm yourself, sign → the confirm is refused and the signature is 403', async () => {
+    Object.assign(db.tables.parties[1], { user_id: null, user_linked_by: null, details_confirmed_by: null, details_confirmed_at: null });
+    expect((await party('PATCH', LEG, '', { user_id: LEG })).status).toBe(200);
+    expect(db.tables.parties[1]).toMatchObject({ user_id: LEG, user_linked_by: LEG });
+    const confirm = await party('POST', LEG, 'confirm', {});
+    expect(confirm.status).toBe(403);
+    expect((await confirm.json()).code).toBe('self_linked');
+    expect(db.tables.parties[1].details_confirmed_by ?? null).toBeNull();
+    // Even if a confirmation got onto the row some other way, a link made by the signer themself signs nobody.
+    db.tables.parties[1].details_confirmed_by = LEG;
+    const res = await call('POST', LEG, 'signing', { party_id: PN, version: 1, document_sha256: await currentSha(), name: 'Nova Okafor' });
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('not_your_party');
+    expect(db.tables.contract_signatures).toHaveLength(0);
+  });
+
+  it('an account someone else linked, once it confirms the party itself, signs for it', async () => {
+    Object.assign(db.tables.parties[1], { user_id: null, user_linked_by: null, details_confirmed_by: null, details_confirmed_at: null });
+    expect((await party('PATCH', LEG, '', { user_id: ART })).status).toBe(200);
+    expect(db.tables.parties[1]).toMatchObject({ user_id: ART, user_linked_by: LEG });
+    expect((await sign(ART, PN)).status).toBe(403); // not confirmed yet
+    expect((await party('POST', ART, 'confirm', {})).status).toBe(200);
+    expect((await sign(ART, PN)).status).toBe(200);
+    expect(db.tables.contract_signatures[0]).toMatchObject({ party_id: PN, via: 'member', signed_by_user: ART });
+  });
+
   it('the label’s own side is signed by an owner, an admin or a contracts writer', async () => {
     expect((await sign(OWN, PL)).status).toBe(200);
     expect(db.tables.contract_signatures[0]).toMatchObject({ party_id: PL, countersign: true });
@@ -381,26 +430,65 @@ describe('the split-sheet conditions on signing', () => {
   });
 });
 
+const tokenIn = (mail: { text: string }) => /\/sign\/([A-Za-z0-9_-]{43})/.exec(mail.text)![1];
+
 describe('signing links', () => {
-  it('contracts.write issues one: the token is in that response only, the database holds its hash, and the event names no token', async () => {
+  beforeEach(() => {
+    emails.length = 0;
+    emailFails = false;
+  });
+
+  it('contracts.write issues one: the token goes to the PARTY by email and appears in no response (M1); the database holds its hash', async () => {
     const res = await call('POST', LEG, 'links', { party_id: PN });
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(body.path).toBe(`/sign/${body.token}`);
-    const row = db.tables.contract_signers[0];
-    expect(row.token_hash).toBe(hashSignToken(body.token));
-    expect(JSON.stringify(db.tables)).not.toContain(body.token);
+    const raw = await res.text();
+    expect(emails).toHaveLength(1);
+    expect(emails[0].to).toBe('nova@example.com');
+    const token = tokenIn(emails[0]);
+    expect(raw).not.toContain(token);
+    expect(JSON.parse(raw)).toEqual({ ok: true, sentTo: 'no***@example.com', expiresAt: expect.any(String) });
+    expect(db.tables.contract_signers[0].token_hash).toBe(hashSignToken(token));
+    expect(db.tables.contract_signers[0].link_issued_by).toBe(LEG);
+    expect(JSON.stringify(db.tables)).not.toContain(token);
     expect(verbs()).toEqual(['contract.signer_link_issued']);
     expect(JSON.stringify(db.tables.activity_events)).not.toMatch(/token/i);
+    // The issuer sees that a link is out, never the link.
+    expect(JSON.stringify(await view(LEG))).not.toContain(token);
+  });
+
+  it('M1: the certificate says which member issued the link a signature came through', async () => {
+    await call('POST', LEG, 'links', { party_id: PN });
+    const sha = await currentSha();
+    db.tables.contract_signatures.push({ id: 'sig-link', contract_id: K1, org_id: L, party_id: PN, role: 'artist', contract_version: 1, document_sha256: sha, signer_name: 'Nova Okafor', method: 'typed', via: 'link', countersign: false, signed_by_user: null, signature_image: null, ip_hash: null, signed_at: '2026-10-05T10:00:00Z' });
+    const nova = (await view(ART)).signers.find((x: { partyId: string }) => x.partyId === PN);
+    expect(nova.signature).toMatchObject({ via: 'link', linkIssuedBy: expect.any(String) });
+    expect(nova.signature.linkIssuedBy.length).toBeGreaterThan(0);
+  });
+
+  it('a party with no usable address is 409 and nothing is issued or sent', async () => {
+    db.tables.parties[1].email = null;
+    const res = await call('POST', LEG, 'links', { party_id: PN });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('no_party_email');
+    db.tables.parties[1].email = 'not an address';
+    expect((await call('POST', LEG, 'links', { party_id: PN })).status).toBe(409);
+    expect(db.tables.contract_signers).toHaveLength(0);
+    expect(emails).toHaveLength(0);
+  });
+
+  it('when the email cannot be sent the link is not left live (502, revoked)', async () => {
+    emailFails = true;
+    expect((await call('POST', LEG, 'links', { party_id: PN })).status).toBe(502);
+    expect(db.tables.contract_signers[0].token_hash).toBeNull();
   });
 
   it('a new link replaces the old one; revoking ends it', async () => {
-    const a = await (await call('POST', LEG, 'links', { party_id: PN })).json();
-    const b = await (await call('POST', LEG, 'links', { party_id: PN })).json();
-    expect(b.token).not.toBe(a.token);
+    await call('POST', LEG, 'links', { party_id: PN });
+    await call('POST', LEG, 'links', { party_id: PN });
+    const [a, b] = emails.map(tokenIn);
+    expect(b).not.toBe(a);
     expect(db.tables.contract_signers).toHaveLength(1);
-    expect(db.tables.contract_signers[0].token_hash).toBe(hashSignToken(b.token));
+    expect(db.tables.contract_signers[0].token_hash).toBe(hashSignToken(b));
     expect((await call('DELETE', LEG, 'links', { party_id: PN })).status).toBe(200);
     expect(db.tables.contract_signers[0].token_hash).toBeNull();
     expect((await call('DELETE', LEG, 'links', { party_id: PN })).status).toBe(409);

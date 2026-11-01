@@ -16,9 +16,9 @@ import { createHmac } from 'node:crypto';
 import { nanoid } from 'nanoid';
 import type { NextRequest } from 'next/server';
 import type { AdminClient } from '@/lib/auth/ownership';
-import { deleteProjectAssetObject, storeProjectAsset } from '@/lib/storage/project-assets';
+import { deleteProjectAssetObject, openProjectAsset, storeProjectAsset } from '@/lib/storage/project-assets';
 import { isUUID } from '@/lib/validate';
-import { parseSentSnapshot, type SentSnapshot, type SignatureFact } from './contract-signing';
+import { bytesSha256, parseSentSnapshot, type SentSnapshot, type SignatureFact } from './contract-signing';
 import { feedSecret } from './feed-token';
 import { orgEntitlements, type EntitlementRow } from './entitlements';
 import { orgAssetObjectKey } from './org-assets';
@@ -38,7 +38,7 @@ type DbError = { message: string; code?: string } | null | undefined;
 export function isMissingSigning(error: DbError): boolean {
   if (!error) return false;
   if (['PGRST205', '42P01'].includes(error.code ?? '')) return /contract_sign/.test(error.message) || !error.message;
-  if (error.code === '42703') return /esign_provider_url|supersed|sent_document|sent_snapshot/.test(error.message);
+  if (error.code === '42703') return /esign_provider_url|supersed|sent_document|sent_snapshot|user_linked_by/.test(error.message);
   if (['PGRST202', '42883'].includes(error.code ?? '')) return /labelos_audit_contract_(link|sign|supersede)/.test(error.message) || /could not find the function/i.test(error.message);
   return false;
 }
@@ -121,19 +121,20 @@ export async function readSignatures(admin: AdminClient, org: string, contractId
   }));
 }
 
-export type SignerLinkRow = { partyId: string; role: string; hasLink: boolean; issuedAt: string | null; expiresAt: string | null; revokedAt: string | null };
+export type SignerLinkRow = { partyId: string; role: string; /** The member who issued the party's link. */ issuedBy: string | null; hasLink: boolean; issuedAt: string | null; expiresAt: string | null; revokedAt: string | null };
 
 export async function readSigners(admin: AdminClient, org: string, contractId: string): Promise<SignerLinkRow[]> {
   const res = await admin
     .from('contract_signers')
-    .select('party_id, role, token_hash, link_issued_at, link_expires_at, link_revoked_at')
+    .select('party_id, role, token_hash, link_issued_at, link_issued_by, link_expires_at, link_revoked_at')
     .eq('org_id', org)
     .eq('contract_id', contractId)
     .limit(200);
   check('contract signers', res.error);
-  return ((res.data ?? []) as { party_id: string; role: string; token_hash: string | null; link_issued_at: string | null; link_expires_at: string | null; link_revoked_at: string | null }[]).map((r) => ({
+  return ((res.data ?? []) as { party_id: string; role: string; token_hash: string | null; link_issued_at: string | null; link_issued_by: string | null; link_expires_at: string | null; link_revoked_at: string | null }[]).map((r) => ({
     partyId: r.party_id,
     role: r.role,
+    issuedBy: r.link_issued_by,
     hasLink: r.token_hash !== null,
     issuedAt: r.link_issued_at,
     expiresAt: r.link_expires_at,
@@ -168,12 +169,38 @@ export async function signerByTokenHash(admin: AdminClient, tokenHash: string): 
   return r ? { orgId: r.org_id, contractId: r.contract_id, partyId: r.party_id, role: r.role, expiresAt: r.link_expires_at } : null;
 }
 
-/** The party's account link and who confirmed its details (LABEL-54): signing as a party needs both to be the signer. */
-export async function partyAccount(admin: AdminClient, org: string, partyId: string): Promise<{ userId: string | null; confirmedBy: string | null }> {
-  const res = await admin.from('parties').select('user_id, details_confirmed_by').eq('org_id', org).eq('id', partyId).maybeSingle();
+/**
+ * The party's account link, who made the link and who confirmed its details (LABEL-54): signing as a party needs the
+ * account to have confirmed it AND the link to have been made by someone else (review H1 on #166). `linkedBy` null =
+ * unknown, which signs nobody.
+ */
+export async function partyAccount(admin: AdminClient, org: string, partyId: string): Promise<{ userId: string | null; confirmedBy: string | null; linkedBy: string | null }> {
+  const res = await admin.from('parties').select('user_id, details_confirmed_by, user_linked_by').eq('org_id', org).eq('id', partyId).maybeSingle();
   check('party account', res.error);
-  const r = res.data as { user_id: string | null; details_confirmed_by: string | null } | null;
-  return { userId: r?.user_id ?? null, confirmedBy: r?.details_confirmed_by ?? null };
+  const r = res.data as { user_id: string | null; details_confirmed_by: string | null; user_linked_by: string | null } | null;
+  return { userId: r?.user_id ?? null, confirmedBy: r?.details_confirmed_by ?? null, linkedBy: r?.user_linked_by ?? null };
+}
+
+/**
+ * Who linked the party's account, or `undefined` where migration 178 is not there (the confirm route works without it).
+ */
+export async function partyLinkedBy(admin: AdminClient, org: string, partyId: string): Promise<string | null | undefined> {
+  const res = await admin.from('parties').select('user_linked_by').eq('org_id', org).eq('id', partyId).maybeSingle();
+  if (res.error) {
+    if (isMissingSigning(res.error) || res.error.code === '42703') return undefined;
+    throw new Error(`party linked by: ${res.error.message}`);
+  }
+  return (res.data as { user_linked_by: string | null } | null)?.user_linked_by ?? null;
+}
+
+/**
+ * Record who made the party's account link. Called by the routes that set `user_id` right after the write (the
+ * database clears the stamp whenever the account changes, so a failure here leaves "unknown", which signs nobody).
+ * A database without 178 has no column: nothing to record.
+ */
+export async function stampPartyLinkedBy(admin: AdminClient, org: string, partyId: string, userId: string): Promise<void> {
+  const res = await admin.from('parties').update({ user_linked_by: userId }).eq('org_id', org).eq('id', partyId).not('user_id', 'is', null);
+  if (res.error && !isMissingSigning(res.error) && res.error.code !== '42703') throw new Error(`party link stamp: ${res.error.message}`);
 }
 
 // ── The frozen sent copy ─────────────────────────────────────────────────
@@ -188,6 +215,28 @@ export async function readFrozen(admin: AdminClient, org: string, contractId: st
   const snapshot = parseSentSnapshot(r?.sent_snapshot);
   if (!r?.sent_document_sha256 || !r.sent_document_ref || !snapshot) return null;
   return { sha: r.sent_document_sha256, ref: r.sent_document_ref, snapshot };
+}
+
+/**
+ * The frozen sent copy's bytes, checked against the hash every signature is recorded against (review L5 on #166).
+ * `missing` = nothing stored under the reference; `mismatch` = the stored bytes are not the ones that were hashed.
+ */
+export async function readVerifiedFrozenBytes(frozen: FrozenCopy): Promise<{ ok: true; bytes: Buffer } | { ok: false; reason: 'missing' | 'mismatch' }> {
+  const body = await openProjectAsset(frozen.ref);
+  if (!body) return { ok: false, reason: 'missing' };
+  let bytes: Buffer;
+  if (body instanceof Uint8Array) bytes = Buffer.from(body);
+  else {
+    const chunks: Uint8Array[] = [];
+    const reader = body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value);
+    }
+    bytes = Buffer.concat(chunks);
+  }
+  return bytesSha256(bytes) === frozen.sha ? { ok: true, bytes } : { ok: false, reason: 'mismatch' };
 }
 
 /** The sent PDF's bytes go to the PRIVATE bucket under the org's prefix (purged and exported with the org). */

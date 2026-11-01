@@ -40,6 +40,8 @@ export type SignerView = {
     contractVersion: number;
     documentSha256: string;
     hasImage: boolean;
+    /** For a link signature: the member who issued the link ("link issued by …" on the certificate). */
+    linkIssuedBy: string | null;
   };
   /** `canManage` only. */
   link?: { active: boolean; expiresAt: string | null; issuedAt: string | null };
@@ -70,6 +72,8 @@ export function buildSigningView(input: {
   states: readonly SignerRow[];
   signatures: readonly SignatureRow[];
   signerLinks: readonly SignerLinkRow[];
+  /** partyId → name of the member who issued that party's link. */
+  linkIssuers?: ReadonlyMap<string, string>;
   progress: SigningView['progress'];
   youCanSignFor: readonly string[];
   canManage: boolean;
@@ -102,6 +106,7 @@ export function buildSigningView(input: {
             contractVersion: sig.contractVersion,
             documentSha256: sig.documentSha256,
             hasImage: sig.hasImage,
+            linkIssuedBy: sig.via === 'link' ? input.linkIssuers?.get(s.partyId) ?? null : null,
           }
         : null,
     };

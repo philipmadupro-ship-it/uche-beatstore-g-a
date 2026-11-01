@@ -144,16 +144,22 @@ describe('planSign', () => {
 });
 
 describe('maySignAs', () => {
-  const base = { partyRole: 'artist' as const, partyUserId: null, partyConfirmedBy: null, userId: 'u1', memberRole: 'member', canWriteContracts: false };
+  const base = { partyRole: 'artist' as const, partyUserId: null, partyConfirmedBy: null, partyLinkedBy: null, userId: 'u1', memberRole: 'member', canWriteContracts: false };
 
   it('a person signs for the party linked to their account only when that account itself confirmed it', () => {
-    expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: 'u1' })).toEqual({ ok: true, countersign: false });
+    expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: 'u1', partyLinkedBy: 'u9' })).toEqual({ ok: true, countersign: false });
   });
 
   it('a link nobody confirmed, or one a colleague confirmed, is not the party (LABEL-71 H1: self-linking is not consent)', () => {
     expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: null })).toEqual({ ok: false });
     expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: 'u2' })).toEqual({ ok: false });
     expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: null, memberRole: 'owner', canWriteContracts: true })).toEqual({ ok: false });
+  });
+
+  it('H1 (#166): linking your own account and confirming it yourself is not the party; an unknown linker signs nobody', () => {
+    expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: 'u1', partyLinkedBy: 'u1' })).toEqual({ ok: false });
+    expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: 'u1', partyLinkedBy: null })).toEqual({ ok: false });
+    expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: 'u1', partyLinkedBy: 'u1', memberRole: 'owner', canWriteContracts: true })).toEqual({ ok: false });
   });
 
   it('the label’s side (role label) is signed by an owner, an admin or a contracts writer', () => {

@@ -34,7 +34,7 @@ export const signAsMember = (orgId: string, contractId: string, body: { party_id
   call<{ completed: boolean; status: 'sent' | 'signed' }>(`${base(orgId, contractId)}/signing`, 'POST', body);
 
 export const issueSignerLink = (orgId: string, contractId: string, partyId: string) =>
-  call<{ token: string; path: string; expiresAt: string }>(`${base(orgId, contractId)}/signing/links`, 'POST', { party_id: partyId });
+  call<{ sentTo: string; expiresAt: string }>(`${base(orgId, contractId)}/signing/links`, 'POST', { party_id: partyId });
 export const revokeSignerLink = (orgId: string, contractId: string, partyId: string) =>
   call<Record<string, never>>(`${base(orgId, contractId)}/signing/links`, 'DELETE', { party_id: partyId });
 

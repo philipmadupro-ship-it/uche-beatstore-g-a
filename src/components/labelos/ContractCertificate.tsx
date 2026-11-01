@@ -78,7 +78,7 @@ export function ContractCertificate({ orgId, contractId }: { orgId: string; cont
                 <dl className="grid gap-x-4 gap-y-1 text-[11px] text-white/60 sm:grid-cols-[auto_1fr]">
                   <dt className="text-white/40">Signed as</dt><dd>{s.signature.signerName}</dd>
                   <dt className="text-white/40">When</dt><dd>{when(s.signature.signedAt)}</dd>
-                  <dt className="text-white/40">How</dt><dd>{s.signature.method === 'drawn' ? 'Typed name and drawn signature' : 'Typed name'}{s.signature.via === 'link' ? ', through a signing link' : s.signature.countersign ? ', countersigned for the label' : ', signed in the app'}</dd>
+                  <dt className="text-white/40">How</dt><dd>{s.signature.method === 'drawn' ? 'Typed name and drawn signature' : 'Typed name'}{s.signature.via === 'link' ? ', through a signing link' + (s.signature.linkIssuedBy ? ` issued by ${s.signature.linkIssuedBy}` : '') : s.signature.countersign ? ', countersigned for the label' : ', signed in the app'}</dd>
                   <dt className="text-white/40">Contract version</dt><dd>{s.signature.contractVersion}</dd>
                   <dt className="text-white/40">Text signed</dt>
                   <dd className="break-all font-mono text-[10px]">

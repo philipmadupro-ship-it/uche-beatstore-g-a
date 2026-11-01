@@ -37,6 +37,7 @@ import {
   readProviderUrl,
   readSigners,
 } from '@/lib/labelos/contract-signing-store';
+import { memberIdentities, memberLabel, type IdentityAdmin } from '@/lib/labelos/member-identity';
 import { buildSigningView } from '@/lib/labelos/contract-signing-view';
 import { loadContractFor } from '@/lib/labelos/contracts-route';
 import { ContractsNotReadyError, CONTRACTS_NOT_READY } from '@/lib/labelos/contracts-store';
@@ -71,11 +72,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
       for (const s of snap.states) {
         if (s.status === 'signed') continue;
         const acct = await partyAccount(admin, org, s.partyId);
-        const verdict = maySignAs({ partyRole: s.role, partyUserId: acct.userId, partyConfirmedBy: acct.confirmedBy, userId: access.userId, memberRole: access.role, canWriteContracts: access.capabilities.has('contracts.write') });
+        const verdict = maySignAs({ partyRole: s.role, partyUserId: acct.userId, partyConfirmedBy: acct.confirmedBy, partyLinkedBy: acct.linkedBy, userId: access.userId, memberRole: access.role, canWriteContracts: canManage });
         if (verdict.ok) youCanSignFor.push(s.partyId);
       }
     }
     const gate = row.status !== 'sent' ? { ok: true as const } : !snap.frozen ? { ok: false as const, code: 'no_frozen_copy', error: SIGN_DENIAL_MESSAGE.no_frozen_copy } : await signingGate(admin, org, row, links);
+    // "Link issued by <member>" on the certificate for the signatures made through a link.
+    const allSigners = await readSigners(admin, org, row.id);
+    const issuerIds = [...new Set(allSigners.filter((l) => l.issuedBy && snap.signatures.some((x) => x.partyId === l.partyId && x.via === 'link')).map((l) => l.issuedBy as string))];
+    const names = issuerIds.length ? await memberIdentities(admin as unknown as IdentityAdmin, org, issuerIds, { withEmail: false }) : new Map();
+    const linkIssuers = new Map(allSigners.filter((l) => l.issuedBy).map((l) => [l.partyId, memberLabel(names.get(l.issuedBy as string))] as const));
     const view = buildSigningView({
       row,
       links,
@@ -83,7 +89,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
       sha: snap.sha,
       states: snap.states,
       signatures: snap.signatures,
-      signerLinks: canManage ? await readSigners(admin, org, row.id) : [],
+      signerLinks: canManage ? allSigners : [],
+      linkIssuers,
       progress: snap.progress,
       youCanSignFor,
       canManage,
@@ -133,6 +140,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       partyRole: link.role,
       partyUserId: acct.userId,
       partyConfirmedBy: acct.confirmedBy,
+      partyLinkedBy: acct.linkedBy,
       userId: access.userId,
       memberRole: access.role,
       canWriteContracts: access.capabilities.has('contracts.write') && scopeAllowsContact(access.artistScope, row.artist_contact_id),

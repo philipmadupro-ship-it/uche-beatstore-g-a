@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, Copy, FileCheck2 } from 'lucide-react';
+import { Check, FileCheck2 } from 'lucide-react';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import type { SignerView, SigningView } from '@/lib/labelos/contract-signing-view';
@@ -49,7 +49,7 @@ export function ContractSigningPanel({ orgId, contractId, onChanged }: { orgId: 
   const [failed, setFailed] = useState<string | null>(null);
   const [signing, setSigning] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [issued, setIssued] = useState<{ partyId: string; url: string } | null>(null);
+  const [issued, setIssued] = useState<{ partyId: string; sentTo: string } | null>(null);
   const [provider, setProvider] = useState('');
 
   const reload = useCallback(async () => {
@@ -84,7 +84,6 @@ export function ContractSigningPanel({ orgId, contractId, onChanged }: { orgId: 
 
   const { contract } = view;
   const sent = contract.status === 'sent';
-  const absolute = (path: string) => `${window.location.origin}${path}`;
 
   const sign = async (partyId: string, input: { name: string; drawing?: string }) => {
     setBusy(`sign-${partyId}`);
@@ -102,7 +101,7 @@ export function ContractSigningPanel({ orgId, contractId, onChanged }: { orgId: 
     const res = await issueSignerLink(orgId, contractId, partyId);
     setBusy(null);
     if (!res.ok) return toast.error(res.error);
-    setIssued({ partyId, url: absolute(res.path) });
+    setIssued({ partyId, sentTo: res.sentTo });
     await reload();
   };
 
@@ -115,15 +114,6 @@ export function ContractSigningPanel({ orgId, contractId, onChanged }: { orgId: 
     if (!res.ok) return toast.error(res.error);
     if (issued?.partyId === partyId) setIssued(null);
     await reload();
-  };
-
-  const copy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success('Link copied');
-    } catch {
-      toast.error('Copy it from the box instead');
-    }
   };
 
   const saveProvider = async () => {
@@ -210,13 +200,7 @@ export function ContractSigningPanel({ orgId, contractId, onChanged }: { orgId: 
                   {s.link.active && s.link.expiresAt && <span className="text-[10px] text-white/40">Works until {when(s.link.expiresAt)}</span>}
                 </div>
                 {issued?.partyId === s.partyId && (
-                  <div className="space-y-1.5" data-testid="link-issued">
-                    <p className="text-[10px] text-white/50">Send this to {s.name}. It is shown once — make a new one if it is lost.</p>
-                    <div className="flex gap-2">
-                      <input readOnly className={FIELD} value={issued.url} onFocus={(e) => e.currentTarget.select()} aria-label="Signing link" data-testid="link-issued-url" />
-                      <button type="button" className={cn(BTN, 'inline-flex items-center gap-1.5')} onClick={() => void copy(issued.url)}><Copy size={11} aria-hidden="true" />Copy</button>
-                    </div>
-                  </div>
+                  <p className="text-[10px] text-white/50" data-testid="link-issued">Sent to {issued.sentTo}. The link goes to the party’s own address and is shown to nobody else — make a new one if it is lost.</p>
                 )}
               </div>
             )}

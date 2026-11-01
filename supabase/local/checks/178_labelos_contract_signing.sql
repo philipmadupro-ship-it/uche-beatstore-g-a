@@ -200,6 +200,27 @@ SELECT public.check_raises('http is refused', format($q$UPDATE public.contracts 
 SELECT public.check_raises('credentials in the url are refused', format($q$UPDATE public.contracts SET esign_provider_url = 'https://u@sign.example.com/doc/1' WHERE id = %L$q$, :K1), 'contracts_esign_url_check');
 SELECT public.check_raises('javascript: is refused', format($q$UPDATE public.contracts SET esign_provider_url = 'javascript:alert(1)' WHERE id = %L$q$, :K1), 'contracts_esign_url_check');
 
+-- ── 6b. Review fixes on #166 ─────────────────────────────────────────────
+
+-- L1: voiding by ANY path revokes the signer links in the same statement.
+UPDATE public.contracts SET status = 'sent' WHERE id = :K3;
+SELECT public.labelos_audit_contract_link_issue(:L, :O, :K3, :PB, :H1, now() + interval '30 days', '{}'::jsonb);
+SELECT public.check_eq('a live link before the void', (SELECT count(*)::int FROM public.contract_signers WHERE contract_id = :K3 AND token_hash IS NOT NULL), 1);
+UPDATE public.contracts SET status = 'void' WHERE id = :K3;
+SELECT public.check_eq('L1: void revokes the link', (SELECT token_hash IS NULL AND link_revoked_at IS NOT NULL FROM public.contract_signers WHERE contract_id = :K3 AND party_id = :PB), true);
+
+-- L4: only a draft is deleted by a statement; signatures cannot vanish through their contract.
+SELECT public.check_raises('L4: a void contract is not deleted', format($q$DELETE FROM public.contracts WHERE id = %L$q$, :K3), 'only a draft is deleted');
+SELECT public.check_raises('L4: a signed/superseded contract with signatures is not deleted', format($q$DELETE FROM public.contracts WHERE id = %L$q$, :K1), 'only a draft is deleted');
+SELECT public.check_eq('L4: its signatures are still there', (SELECT count(*)::int FROM public.contract_signatures WHERE contract_id = :K1), 2);
+
+-- H1: the stamp of who linked a party's account is cleared whenever the account changes without a new stamp.
+UPDATE public.parties SET user_id = :O, user_linked_by = :X WHERE id = :PB;
+SELECT public.check_eq('H1: a link and its stamp written together stay', (SELECT user_linked_by FROM public.parties WHERE id = :PB), :X::uuid);
+UPDATE public.parties SET user_id = :X WHERE id = :PB;
+SELECT public.check_eq('H1: re-linking without a stamp clears it (unknown signs nobody)', (SELECT user_linked_by IS NULL FROM public.parties WHERE id = :PB), true);
+UPDATE public.parties SET user_id = NULL WHERE id = :PB;
+
 -- ── 7. The org's own deletion cascades through the immutable table ───────
 -- (labelos_org_hard_delete.sql proves it for every table; here, the signature rows of THIS org.)
 

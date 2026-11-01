@@ -70,6 +70,7 @@ vi.mock('@/lib/storage/project-assets', () => ({
     return `r2://priv/${k}`;
   },
   deleteProjectAssetObject: async (r: string) => { storage.deleted.push(r); },
+  openProjectAsset: async (ref: string) => storage.files.get(ref) ?? null,
   streamProjectAsset: async (_req: unknown, ref: string) => new Response(new Uint8Array(storage.files.get(ref) ?? []), { headers: { 'content-type': 'application/pdf' } }),
 }));
 
@@ -504,6 +505,17 @@ describe('a sent contract is served as it was sent', () => {
     expect(text).not.toContain('Re-rendered');
     expect(storage.stored).toHaveLength(2);
     expect(stored).toBeGreaterThan(0);
+  });
+  it('L5 (#166): bytes that no longer match the recorded hash are not served', async () => {
+    const c = add();
+    await call('send', 'POST', LEG, c.id, { version: 1 });
+    const ref = db.tables.contracts.find((r) => r.id === c.id)!.sent_document_ref as string;
+    storage.files.set(ref, new Uint8Array([...storage.files.get(ref)!, 0x20]));
+    const res = await call('document', 'GET', LEG, c.id);
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('frozen_mismatch');
+    storage.files.delete(ref);
+    expect((await (await call('document', 'GET', LEG, c.id)).json()).code).toBe('frozen_missing');
   });
   it('with no stored copy a re-render says so on its first page', async () => {
     const c = add({ status: 'sent', track_id: S2 });

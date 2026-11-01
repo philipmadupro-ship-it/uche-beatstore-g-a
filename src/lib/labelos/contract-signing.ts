@@ -186,7 +186,8 @@ export function planSign(ctx: SignContext): { ok: true; role: PartyRole } | { ok
  *  1. THEIR OWN party: `parties.user_id` is their account AND the account itself confirmed the party's details
  *     (`details_confirmed_by` = the same account, LABEL-54's party confirmation, which a re-link or an edit of the
  *     details clears). A rights writer who merely sets `user_id` to their own account — or to a colleague's — is not
- *     the party and cannot sign as it (the LABEL-71 H1 hole).
+ *     the party and cannot sign as it (the LABEL-71 H1 hole). Nor can someone who linked their OWN account to the
+ *     party and then confirmed it (`user_linked_by` is the caller, or unknown): the link must be someone else's act.
  *  2. THE LABEL'S side: the party in role `label`, countersigned by an owner or admin, or a member who may write
  *     contracts.
  *
@@ -197,11 +198,13 @@ export function maySignAs(input: {
   partyUserId: string | null;
   /** The account that confirmed the party's details (`details_confirmed_by`), when it has. */
   partyConfirmedBy: string | null;
+  /** Who made the account link (`parties.user_linked_by`); null = unknown. */
+  partyLinkedBy: string | null;
   userId: string;
   memberRole: string;
   canWriteContracts: boolean;
 }): { ok: true; countersign: boolean } | { ok: false } {
-  if (input.partyUserId && input.partyUserId === input.userId && input.partyConfirmedBy === input.userId) return { ok: true, countersign: false };
+  if (input.partyUserId && input.partyUserId === input.userId && input.partyConfirmedBy === input.userId && input.partyLinkedBy && input.partyLinkedBy !== input.userId) return { ok: true, countersign: false };
   if (input.partyRole === 'label' && (input.memberRole === 'owner' || input.memberRole === 'admin' || input.canWriteContracts)) return { ok: true, countersign: true };
   return { ok: false };
 }

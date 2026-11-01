@@ -26,7 +26,7 @@ import { contractDocumentFileName, renderContractDocumentPdf } from '@/lib/label
 import { copyStatus, rerenderNotice, storeContractPdf } from '@/lib/labelos/contracts-document';
 import { orgProjectAssetKeyOf } from '@/lib/labelos/org-assets';
 import { projectAssetBuckets, streamProjectAsset } from '@/lib/storage/project-assets';
-import { readFrozen } from '@/lib/labelos/contract-signing-store';
+import { readFrozen, readVerifiedFrozenBytes } from '@/lib/labelos/contract-signing-store';
 import { documentInputOf, documentOf, loadContractFor } from '@/lib/labelos/contracts-route';
 import { CONTRACTS_NOT_READY, ContractsNotReadyError, contractProjectId, findContractCopy } from '@/lib/labelos/contracts-store';
 
@@ -64,7 +64,24 @@ export async function GET(req: NextRequest, { params }: Params) {
     if (row.status !== 'draft') {
       // LABEL-60: the frozen sent copy (the very bytes every signature is recorded against) wins where there is one.
       const frozen = await readFrozen(access.admin, access.orgId, row.id).catch(() => null);
-      if (frozen) return await streamProjectAsset(req, frozen.ref, { fileName: contractDocumentFileName(row.id, row.version, 'sent'), mime: 'application/pdf', inline: false });
+      if (frozen) {
+        // The bytes are checked against the hash the signatures were made against before any of them is sent.
+        const checked = await readVerifiedFrozenBytes(frozen);
+        if (!checked.ok) {
+          log.error('frozen sent copy failed verification', { orgId: access.orgId, contractId: row.id, reason: checked.reason });
+          return json(409, { error: checked.reason === 'mismatch' ? 'The stored copy of this contract does not match the version that was signed, so it is not served.' : 'The stored copy of this contract could not be found.', code: `frozen_${checked.reason}` });
+        }
+        return new NextResponse(new Uint8Array(checked.bytes), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="${contractDocumentFileName(row.id, row.version, 'sent')}"`,
+            'Content-Length': String(checked.bytes.length),
+            'X-Content-Type-Options': 'nosniff',
+            ...NO_STORE,
+          },
+        });
+      }
       const projectId = await contractProjectId(access.admin, access.orgId, row);
       const copy = projectId ? await findContractCopy(access.admin, access.orgId, projectId, contractDocumentFileName(row.id, row.version, 'sent')) : null;
       if (copy && orgProjectAssetKeyOf(copy.url, access.orgId, copy.project_id, projectAssetBuckets())) {
