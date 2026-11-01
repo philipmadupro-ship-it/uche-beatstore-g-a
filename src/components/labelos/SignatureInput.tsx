@@ -40,7 +40,6 @@ export function SignatureInput({ busy, label, confirmLabel, defaultName = '', on
     const ctx = c?.getContext('2d');
     if (!c || !ctx) return;
     ctx.clearRect(0, 0, W, H);
-    setInked(false);
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -111,7 +110,7 @@ export function SignatureInput({ busy, label, confirmLabel, defaultName = '', on
       </label>
       <div className="space-y-2">
         <label className="flex items-center gap-2 text-[11px] text-white/60">
-          <input type="checkbox" checked={draw} onChange={(e) => setDraw(e.target.checked)} data-testid={`${testId}-draw-toggle`} />
+          <input type="checkbox" checked={draw} onChange={(e) => { setDraw(e.target.checked); setInked(false); }} data-testid={`${testId}-draw-toggle`} />
           Also draw my signature
         </label>
         {draw && (
