@@ -68,7 +68,13 @@ SELECT public.labelos_contract_save(:L, :O, NULL,
   jsonb_build_array(jsonb_build_object('party_id', :PA, 'role', 'label', 'position', 0), jsonb_build_object('party_id', :PB, 'role', 'artist', 'position', 1)));
 SELECT id AS k1raw FROM public.contracts WHERE title = 'K1' \gset
 \set K1 :'k1raw'
-UPDATE public.contracts SET internal_note = 'chase', status = 'sent' WHERE id = :K1;
+UPDATE public.contracts SET internal_note = 'chase', status = 'sent', sent_document_sha256 = :SHA1, sent_document_ref = 'local://orgs/b1780000-0000-4000-8000-000000000001/assets/x/sent.pdf',
+  sent_snapshot = '{"title":"K1","typeLabel":"Recording","version":1,"parties":[],"clauses":[]}'::jsonb WHERE id = :K1;
+
+SELECT public.check_raises('the frozen sent copy is never changed (hash)', format($q$UPDATE public.contracts SET sent_document_sha256 = %L WHERE id = %L$q$, :SHA2, :K1), 'left draft');
+SELECT public.check_raises('… nor its stored bytes', format($q$UPDATE public.contracts SET sent_document_ref = 'local://x/other.pdf' WHERE id = %L$q$, :K1), 'left draft');
+SELECT public.check_raises('… nor its text', format($q$UPDATE public.contracts SET sent_snapshot = '{}'::jsonb WHERE id = %L$q$, :K1), 'left draft');
+SELECT public.check_raises('a hash without its stored copy is refused', $$INSERT INTO public.contracts (org_id, type, title, template_source, clauses, sent_document_sha256) VALUES ('b1780000-0000-4000-8000-000000000001', 'nda', 'x', 'p', '[{"a":1}]', repeat('a', 64))$$, 'contracts_sent_document_check');
 
 -- ── 3. Signing ───────────────────────────────────────────────────────────
 
@@ -96,26 +102,25 @@ SELECT public.check_eq('an event was written for the signature',
   (SELECT count(*)::int FROM public.activity_events WHERE org_id = :L AND verb = 'contract.signature_added' AND audit), 1);
 
 SELECT public.check_eq('a link signer with no live link is refused (link_gone)',
-  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA2, 'Nova Example', 'typed', NULL, 'link', false, NULL, :LINKH, '{}'::jsonb) ->> 'error'), 'link_gone');
+  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA1, 'Nova Example', 'typed', NULL, 'link', false, NULL, :LINKH, '{}'::jsonb) ->> 'error'), 'link_gone');
 SELECT public.labelos_audit_contract_link_issue(:L, :O, :K1, :PB, :LINKH, now() + interval '30 days', '{}'::jsonb);
 SELECT public.check_eq('… a different link hash is refused too',
-  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA2, 'Nova Example', 'typed', NULL, 'link', false, NULL, :H1, '{}'::jsonb) ->> 'error'), 'link_gone');
+  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA1, 'Nova Example', 'typed', NULL, 'link', false, NULL, :H1, '{}'::jsonb) ->> 'error'), 'link_gone');
 
--- Nova signs a DIFFERENT (older) document: it is recorded, but the contract is not complete on the current hash.
-SELECT public.check_eq('Nova signs another document hash: recorded, and it does not complete the contract on SHA1',
-  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA2, 'Nova Example', 'typed', NULL, 'link', false, NULL, :LINKH, '{}'::jsonb) ->> 'completed'), 'false');
-SELECT public.check_eq('still sent after a signature on another hash', (SELECT status FROM public.contracts WHERE id = :K1), 'sent');
-
+-- A signature on a hash that is not the frozen sent copy's is refused: the signer must have read THAT text.
+SELECT public.check_eq('Nova signs another hash: refused (changed), nothing recorded',
+  (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA2, 'Nova Example', 'typed', NULL, 'link', false, NULL, :LINKH, '{}'::jsonb) ->> 'error'), 'changed');
+SELECT public.check_eq('still sent', (SELECT status FROM public.contracts WHERE id = :K1), 'sent');
 -- Now Nova signs the current document (drawn): the last party, so the contract becomes signed with both events.
 SELECT public.check_eq('Nova signs SHA1 (drawn) and completes',
   (SELECT public.labelos_audit_contract_sign(:L, NULL, :K1, :PB, 'artist', 1, :SHA1, 'Nova Example', 'drawn', 'local://orgs/b1780000-0000-4000-8000-000000000001/assets/x/y.png', 'link', false, NULL, :LINKH, '{}'::jsonb) ->> 'completed'), 'true');
 SELECT public.check_eq('the contract is signed', (SELECT status FROM public.contracts WHERE id = :K1), 'signed');
 SELECT public.check_eq('contract.signed recorded once',
   (SELECT count(*)::int FROM public.activity_events WHERE org_id = :L AND verb = 'contract.signed' AND audit), 1);
-SELECT public.check_eq('the link signer’s event has no actor', (SELECT count(*)::int FROM public.activity_events WHERE verb = 'contract.signature_added' AND actor_id IS NULL), 2);
+SELECT public.check_eq('the link signer’s event has no actor', (SELECT count(*)::int FROM public.activity_events WHERE verb = 'contract.signature_added' AND actor_id IS NULL), 1);
 SELECT public.check_eq('a signed contract takes no more signatures',
   (SELECT public.labelos_audit_contract_sign(:L, :O, :K1, :PA, 'label', 1, :H1, 'Label L', 'typed', NULL, 'member', true, NULL, NULL, '{}'::jsonb) ->> 'error'), 'already_signed');
-SELECT public.check_eq('three signature rows (one stale by hash, derived on read)', (SELECT count(*)::int FROM public.contract_signatures WHERE contract_id = :K1), 3);
+SELECT public.check_eq('two signature rows, both on the frozen hash', (SELECT count(*)::int FROM public.contract_signatures WHERE contract_id = :K1 AND document_sha256 = :SHA1), 2);
 
 -- ── 1. Append-only ───────────────────────────────────────────────────────
 
@@ -185,7 +190,8 @@ SELECT public.check_eq('the old link is revoked with it', (SELECT count(*)::int 
 SELECT public.check_eq('contract.superseded recorded', (SELECT count(*)::int FROM public.activity_events WHERE verb = 'contract.superseded' AND subject_id = :K2 AND audit), 1);
 SELECT public.check_eq('a superseded contract cannot be superseded again', (SELECT public.labelos_audit_contract_supersede(:L, :O, :K2, 'x', '{}'::jsonb) ->> 'error'), 'not_sent');
 SELECT public.check_eq('a signed contract can be superseded', (SELECT public.labelos_audit_contract_supersede(:L, :O, :K1, NULL, '{}'::jsonb) ->> 'from'), 'signed');
-SELECT public.check_eq('… and its signatures remain as the record', (SELECT count(*)::int FROM public.contract_signatures WHERE contract_id = :K1), 3);
+SELECT public.check_eq('… and its signatures remain as the record', (SELECT count(*)::int FROM public.contract_signatures WHERE contract_id = :K1), 2);
+SELECT public.check_eq('… the replacement carries no frozen copy (it is sent anew)', (SELECT sent_document_sha256 IS NULL AND sent_snapshot IS NULL FROM public.contracts WHERE supersedes_id = :K1), true);
 
 -- ── 6. Provider url ──────────────────────────────────────────────────────
 

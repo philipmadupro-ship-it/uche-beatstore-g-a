@@ -18,12 +18,9 @@ import type { NextRequest } from 'next/server';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { deleteProjectAssetObject, storeProjectAsset } from '@/lib/storage/project-assets';
 import { isUUID } from '@/lib/validate';
-import type { ContractPartyLink, ContractRow, PartyIdentity } from './contracts/context';
-import type { Rendered } from './contracts/render';
-import { documentHash, type SignatureFact } from './contract-signing';
+import { parseSentSnapshot, type SentSnapshot, type SignatureFact } from './contract-signing';
 import { feedSecret } from './feed-token';
 import { orgEntitlements, type EntitlementRow } from './entitlements';
-import { documentInputOf, documentOf } from './contracts-route';
 import { orgAssetObjectKey } from './org-assets';
 import { ReadError, pageAll } from './paged-read';
 
@@ -41,7 +38,7 @@ type DbError = { message: string; code?: string } | null | undefined;
 export function isMissingSigning(error: DbError): boolean {
   if (!error) return false;
   if (['PGRST205', '42P01'].includes(error.code ?? '')) return /contract_sign/.test(error.message) || !error.message;
-  if (error.code === '42703') return /esign_provider_url|supersed/.test(error.message);
+  if (error.code === '42703') return /esign_provider_url|supersed|sent_document|sent_snapshot/.test(error.message);
   if (['PGRST202', '42883'].includes(error.code ?? '')) return /labelos_audit_contract_(link|sign|supersede)/.test(error.message) || /could not find the function/i.test(error.message);
   return false;
 }
@@ -50,6 +47,14 @@ function check(what: string, error: DbError): void {
   if (!error) return;
   if (isMissingSigning(error)) throw new SigningNotReadyError();
   throw new Error(`${what}: ${error.message}`);
+}
+
+/** Is migration 178 there? (The send route freezes a copy only where it is; older databases send as before.) */
+export async function signingReady(admin: AdminClient): Promise<boolean> {
+  const res = await admin.from('contracts').select('sent_document_sha256').limit(1);
+  if (!res.error) return true;
+  if (isMissingSigning(res.error) || res.error.code === '42703') return false;
+  throw new Error(`signing probe: ${res.error.message}`);
 }
 
 /** A read before any write. */
@@ -163,25 +168,31 @@ export async function signerByTokenHash(admin: AdminClient, tokenHash: string): 
   return r ? { orgId: r.org_id, contractId: r.contract_id, partyId: r.party_id, role: r.role, expiresAt: r.link_expires_at } : null;
 }
 
-/** The party's account, when it is linked to one (parties.user_id). */
-export async function partyUserId(admin: AdminClient, org: string, partyId: string): Promise<string | null> {
-  const res = await admin.from('parties').select('user_id').eq('org_id', org).eq('id', partyId).maybeSingle();
+/** The party's account link and who confirmed its details (LABEL-54): signing as a party needs both to be the signer. */
+export async function partyAccount(admin: AdminClient, org: string, partyId: string): Promise<{ userId: string | null; confirmedBy: string | null }> {
+  const res = await admin.from('parties').select('user_id, details_confirmed_by').eq('org_id', org).eq('id', partyId).maybeSingle();
   check('party account', res.error);
-  return (res.data as { user_id: string | null } | null)?.user_id ?? null;
+  const r = res.data as { user_id: string | null; details_confirmed_by: string | null } | null;
+  return { userId: r?.user_id ?? null, confirmedBy: r?.details_confirmed_by ?? null };
 }
 
-// ── The document ─────────────────────────────────────────────────────────
+// ── The frozen sent copy ─────────────────────────────────────────────────
 
-/** What the signer reads and the hash of it. The same input the PDF is made from, so the two cannot differ. */
-export async function currentDocument(
-  admin: AdminClient,
-  org: string,
-  row: ContractRow,
-  links: readonly ContractPartyLink[],
-  identities: ReadonlyMap<string, PartyIdentity>,
-): Promise<{ rendered: Rendered; sha: string }> {
-  const rendered = await documentOf(admin, org, row, links, identities);
-  return { rendered, sha: documentHash(documentInputOf(row, links, identities, rendered)) };
+export type FrozenCopy = { sha: string; ref: string; snapshot: SentSnapshot };
+
+/** What was frozen when the contract was sent; null for a contract sent before migration 178 (nothing to sign against). */
+export async function readFrozen(admin: AdminClient, org: string, contractId: string): Promise<FrozenCopy | null> {
+  const res = await admin.from('contracts').select('sent_document_sha256, sent_document_ref, sent_snapshot').eq('org_id', org).eq('id', contractId).maybeSingle();
+  check('frozen copy', res.error);
+  const r = res.data as { sent_document_sha256: string | null; sent_document_ref: string | null; sent_snapshot: unknown } | null;
+  const snapshot = parseSentSnapshot(r?.sent_snapshot);
+  if (!r?.sent_document_sha256 || !r.sent_document_ref || !snapshot) return null;
+  return { sha: r.sent_document_sha256, ref: r.sent_document_ref, snapshot };
+}
+
+/** The sent PDF's bytes go to the PRIVATE bucket under the org's prefix (purged and exported with the org). */
+export async function storeSentPdf(org: string, contractId: string, pdf: Buffer): Promise<string> {
+  return storeProjectAsset(pdf, orgAssetObjectKey(org, contractId, nanoid(16), 'pdf'), 'application/pdf');
 }
 
 // ── Drawn signature image ────────────────────────────────────────────────

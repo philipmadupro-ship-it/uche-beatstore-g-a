@@ -8,9 +8,10 @@
  *         who may read the contract may read this (the same `mayReadContract`
  *         rule as the contract itself). `internal_note` is not here.
  *   POST  a signed-in member signs for a party: `{ party_id, version, name,
- *         drawing? }`. You sign for the party linked to YOUR account, or — with
- *         `contracts.write` — countersign for the label's own side; nobody signs
- *         for someone else's party. The rest (planSign, the split-sheet gate,
+ *         drawing? }`. You sign for the party linked to YOUR account AND confirmed
+ *         by that account itself (LABEL-54), or, for the label's own side (role
+ *         `label`), as an owner / admin / `contracts.write` member. Anyone else
+ *         signs through the party's own link; nobody signs for another's party. The rest (planSign, the split-sheet gate,
  *         the signature and the move to `signed`) is lib/labelos/
  *         contract-signing-flow, shared with the external link.
  *
@@ -26,13 +27,13 @@ import { createLogger } from '@/lib/log';
 import { rateLimitDurable } from '@/lib/security/rate-limit';
 import { isUUID, readBody } from '@/lib/validate';
 import { scopeAllowsContact } from '@/lib/labelos/artist-scope';
-import { cleanSignerName, maySignAs, parseDrawnSignature } from '@/lib/labelos/contract-signing';
+import { SIGN_DENIAL_MESSAGE, cleanSignerName, maySignAs, parseDrawnSignature } from '@/lib/labelos/contract-signing';
 import { finishSign, prepareSign, signingGate, snapshotOf } from '@/lib/labelos/contract-signing-flow';
 import {
   SIGNING_NOT_READY,
   SigningNotReadyError,
   ipHashOf,
-  partyUserId,
+  partyAccount,
   readProviderUrl,
   readSigners,
 } from '@/lib/labelos/contract-signing-store';
@@ -69,11 +70,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
     if (row.status === 'sent') {
       for (const s of snap.states) {
         if (s.status === 'signed') continue;
-        const verdict = maySignAs({ partyRole: s.role, partyUserId: await partyUserId(admin, org, s.partyId), userId: access.userId, canWriteContracts: access.capabilities.has('contracts.write') });
+        const acct = await partyAccount(admin, org, s.partyId);
+        const verdict = maySignAs({ partyRole: s.role, partyUserId: acct.userId, partyConfirmedBy: acct.confirmedBy, userId: access.userId, memberRole: access.role, canWriteContracts: access.capabilities.has('contracts.write') });
         if (verdict.ok) youCanSignFor.push(s.partyId);
       }
     }
-    const gate = row.status === 'sent' ? await signingGate(admin, org, row, links) : { ok: true as const };
+    const gate = row.status !== 'sent' ? { ok: true as const } : !snap.frozen ? { ok: false as const, code: 'no_frozen_copy', error: SIGN_DENIAL_MESSAGE.no_frozen_copy } : await signingGate(admin, org, row, links);
     const view = buildSigningView({
       row,
       links,
@@ -126,13 +128,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     const link = links.find((l) => l.party_id === body.party_id);
     if (!link) return json(404, { error: 'That party is not on this contract.' });
 
+    const acct = await partyAccount(admin, org, body.party_id);
     const verdict = maySignAs({
       partyRole: link.role,
-      partyUserId: await partyUserId(admin, org, body.party_id),
+      partyUserId: acct.userId,
+      partyConfirmedBy: acct.confirmedBy,
       userId: access.userId,
+      memberRole: access.role,
       canWriteContracts: access.capabilities.has('contracts.write') && scopeAllowsContact(access.artistScope, row.artist_contact_id),
     });
-    if (!verdict.ok) return json(403, { error: 'You can only sign for yourself, or for the label if you may write contracts.', code: 'not_your_party' });
+    if (!verdict.ok) return json(403, { error: 'You sign as a party only through its own signing link, or from the account the party itself confirmed. The label’s own side is signed by an owner, an admin or a member who may write contracts.', code: 'not_your_party' });
 
     const prepared = await prepareSign({
       admin,

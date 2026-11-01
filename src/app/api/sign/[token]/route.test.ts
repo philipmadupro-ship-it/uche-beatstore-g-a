@@ -43,7 +43,10 @@ const contractRow = (over: Record<string, unknown> = {}) => ({
   clauses: [{ id: 'a', heading: 'Parties', body: 'Between {{party.disclosing}} and {{party.receiving}}.' }],
   artist_contact_id: null, track_id: null, release_id: null, effective_date: null, term_months: null, territories: null, fields: {},
   internal_note: 'SECRET-NOTE', version: 1, created_by: null, voided_at: null, void_reason: null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z',
-  esign_provider_url: 'https://sign.example.com/d/1', supersedes_id: null, superseded_by: null, ...over,
+  esign_provider_url: 'https://sign.example.com/d/1', supersedes_id: null, superseded_by: null,
+  sent_document_sha256: 'c'.repeat(64), sent_document_ref: 'local://orgs/x/assets/y/sent.pdf',
+  sent_snapshot: { title: 'Studio NDA', typeLabel: 'Non-disclosure (NDA)', version: 1, parties: [{ roleLabel: 'Disclosing party', name: 'Label L Ltd' }, { roleLabel: 'Receiving party', name: 'Nova Okafor' }], clauses: [{ id: 'a', heading: 'Parties', body: 'Between Label L Ltd and Nova Okafor.' }] },
+  ...over,
 });
 
 let TOKEN_PN: string;
@@ -148,9 +151,9 @@ describe('GET', () => {
     const body = JSON.parse(text);
     expect(body.contract).toMatchObject({ title: 'Studio NDA', version: 1, status: 'sent' });
     expect(body.you).toMatchObject({ name: 'Nova Okafor' });
-    expect(body.clauses[0].body).toBe('Between Label L Ltd and Nova Okafor.');
+    expect(body.clauses[0].body).toBe('Between Label L Ltd and Nova Okafor.'); // the text it was SENT with, not a live merge
     expect(body).toMatchObject({ state: 'pending', canSign: true, completed: false, providerUrl: 'https://sign.example.com/d/1' });
-    expect(body.documentSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(body.documentSha256).toBe('c'.repeat(64));
     expect(body.statement).toMatch(/not a qualified or advanced electronic signature/);
     for (const secret of ['SECRET-NOTE', 'OTHER-NOTE', 'A different contract', 'token_hash', TOKEN_PL, hashSignToken(TOKEN_PL), hashSignToken(TOKEN_PN), 'signer_link']) {
       expect(text, secret).not.toContain(secret);
@@ -207,15 +210,19 @@ describe('POST — signing through the link', () => {
     expect(stored).toHaveLength(0);
   });
 
-  it('a signature made on an earlier text no longer counts: the signer is asked to sign again and the contract does not complete on it', async () => {
+  it('renaming a party after the contract was sent changes nothing the signer sees or signed: the frozen text, the same hash, still valid', async () => {
     await sign(TOKEN_PN);
     db.tables.parties[1].legal_name = 'Nova Okafor-Smith';
     const page = await (await call('GET', TOKEN_PN)).json();
-    expect(page.state).toBe('stale');
-    expect(page.canSign).toBe(true);
-    await sign(TOKEN_PL, { name: 'Label L Ltd' });
-    expect(db.tables.contracts[0].status).toBe('sent');
-    expect((await (await sign(TOKEN_PN)).json()).completed).toBe(true);
+    expect(page.state).toBe('signed');
+    expect(page.clauses[0].body).toBe('Between Label L Ltd and Nova Okafor.');
+    expect(page.documentSha256).toBe('c'.repeat(64));
+    expect((await (await sign(TOKEN_PL, { name: 'Label L Ltd' })).json()).completed).toBe(true);
+  });
+
+  it('a contract sent before 178 (no frozen copy) is not offered for signing: one 404', async () => {
+    Object.assign(db.tables.contracts[0], { sent_document_sha256: null, sent_document_ref: null, sent_snapshot: null });
+    expect((await call('GET', TOKEN_PN)).status).toBe(404);
   });
 
   it('a link revoked or rotated while the signer was mid-request records nothing (the database re-checks it under its lock)', async () => {

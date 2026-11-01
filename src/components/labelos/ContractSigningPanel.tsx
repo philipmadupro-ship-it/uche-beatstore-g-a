@@ -171,7 +171,7 @@ export function ContractSigningPanel({ orgId, contractId, onChanged }: { orgId: 
       )}
       {view.signers.some((s) => s.status === 'stale') && contract.status !== 'void' && (
         <p role="status" className="rounded-lg border border-[#c8a47a]/30 bg-white/[0.04] px-3 py-2 text-[11px] text-[#c8a47a]" data-testid="signing-stale-note">
-          The text of this contract changed after some parties signed (a party’s name or address was edited). Those signatures were made on the earlier text and no longer count. The contract can be replaced with a new draft.
+          Some signatures were made against a different copy than the one this contract was sent with, so they no longer count. The contract can be replaced with a new draft.
         </p>
       )}
 

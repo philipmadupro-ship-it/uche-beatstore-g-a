@@ -60,7 +60,10 @@ const contractRow = (over: Record<string, unknown> = {}) => ({
   template_source: 'platform:recording@1', template_version: 1, clauses: [{ id: 'a', heading: 'Parties', body: 'This agreement is between {{party.label}} and {{party.artist}}.' }],
   artist_contact_id: C1, track_id: null, release_id: null, effective_date: '2027-01-01', term_months: 24, territories: null, fields: {},
   internal_note: 'SECRET-NOTE', version: 1, created_by: OWN, voided_at: null, void_reason: null, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z',
-  esign_provider_url: null, supersedes_id: null, superseded_by: null, ...over,
+  esign_provider_url: null, supersedes_id: null, superseded_by: null,
+  // The frozen sent copy (migration 178): signatures bind to this hash, whatever a party is called later.
+  sent_document_sha256: 'f'.repeat(64), sent_document_ref: 'local://orgs/x/assets/y/sent.pdf', sent_snapshot: { title: 'Nova recording agreement', typeLabel: 'Recording agreement', version: 1, parties: [{ roleLabel: 'Label', name: 'Label L Ltd' }, { roleLabel: 'Artist', name: 'Nova Okafor' }], clauses: [{ id: 'a', heading: 'Parties', body: 'Between Label L Ltd and Nova Okafor.' }] },
+  ...over,
 });
 
 beforeEach(() => {
@@ -78,7 +81,7 @@ beforeEach(() => {
       tracks: [{ id: T1, org_id: L, user_id: null, type: 'song', title: 'Midnight', song_stage: 'inbox' }],
       parties: [
         { id: PL, org_id: L, display_name: 'Label L', legal_name: 'Label L Ltd', address: '1 Label Way', user_id: null },
-        { id: PN, org_id: L, display_name: 'Nova', legal_name: 'Nova Okafor', address: '2 Road', user_id: ART },
+        { id: PN, org_id: L, display_name: 'Nova', legal_name: 'Nova Okafor', address: '2 Road', user_id: ART, details_confirmed_by: ART, details_confirmed_at: '2026-10-02T00:00:00Z' },
       ],
       contracts: [contractRow()],
       contract_parties: [
@@ -267,34 +270,73 @@ describe('POST …/signing — signing as a member', () => {
 });
 
 describe('the text the signer read', () => {
-  it('a signature on a hash the signer did not see is a 409 even when the version is the same (a party name edited meanwhile)', async () => {
-    const seen = await currentSha();
-    db.tables.parties[1].legal_name = 'Nova Okafor-Smith';
-    const res = await call('POST', ART, 'signing', { party_id: PN, version: 1, document_sha256: seen, name: 'Nova Okafor' });
+  it('a signature on a hash the signer did not see is a 409 even when the version is the same', async () => {
+    const res = await call('POST', ART, 'signing', { party_id: PN, version: 1, document_sha256: 'a'.repeat(64), name: 'Nova Okafor' });
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('changed');
     expect(db.tables.contract_signatures).toHaveLength(0);
   });
+
+  it('a contract sent before 178 has no frozen copy: nothing can be signed, and the page says why', async () => {
+    Object.assign(db.tables.contracts[0], { sent_document_sha256: null, sent_document_ref: null, sent_snapshot: null });
+    const res = await call('POST', LEG, 'signing', { party_id: PL, version: 1, document_sha256: 'f'.repeat(64), name: 'Test Signer' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('no_frozen_copy');
+    expect((await view(LEG)).blocked).toMatchObject({ code: 'no_frozen_copy' });
+  });
 });
 
-describe('a changed document invalidates earlier signatures — derived on read, nothing rewritten', () => {
-  it('editing a party’s legal name after Nova signed leaves her signature as a row that no longer counts, and the contract cannot complete on it', async () => {
+describe('the frozen sent copy: renaming a party or a song after sending changes nothing a signer signed', () => {
+  it('Nova’s signature stays valid when her legal name and the song’s title are edited afterwards; the contract completes', async () => {
     await sign(ART, PN);
-    const before = JSON.stringify(db.tables.contract_signatures);
+    const hashBefore = (await view(LEG)).documentSha256;
     db.tables.parties[1].legal_name = 'Nova Okafor-Smith';
+    db.tables.tracks[0].title = 'Renamed';
+    const v = await view(LEG);
+    expect(v.documentSha256).toBe(hashBefore);
+    expect(v.signers.find((s: { partyId: string }) => s.partyId === PN).status).toBe('signed');
+    expect(v.progress).toMatchObject({ signed: 1, stale: 0 });
+    expect((await (await sign(LEG, PL)).json()).completed).toBe(true);
+    expect(db.tables.contracts[0].status).toBe('signed');
+  });
+
+  it('a signature recorded against another hash does not count (derived on read, nothing rewritten)', async () => {
+    await sign(ART, PN);
+    db.tables.contract_signatures[0].document_sha256 = 'e'.repeat(64);
+    const before = JSON.stringify(db.tables.contract_signatures);
     const v = await view(LEG);
     expect(v.signers.find((s: { partyId: string }) => s.partyId === PN).status).toBe('stale');
-    expect(v.progress).toMatchObject({ signed: 0, stale: 1, pending: 1 });
     expect(JSON.stringify(db.tables.contract_signatures)).toBe(before);
+  });
+});
 
-    const label = await (await sign(LEG, PL)).json();
-    expect(label.completed).toBe(false);
-    expect(db.tables.contracts[0].status).toBe('sent');
+describe('who may sign as a party (LABEL-71 H1)', () => {
+  it('a rights writer who links a party to their OWN account cannot sign as it', async () => {
+    Object.assign(db.tables.parties[1], { user_id: LEG, details_confirmed_by: null, details_confirmed_at: null });
+    const res = await call('POST', LEG, 'signing', { party_id: PN, version: 1, document_sha256: await currentSha(), name: 'Nova Okafor' });
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('not_your_party');
+    expect((await view(LEG)).youCanSignFor).not.toContain(PN);
+    expect(db.tables.contract_signatures).toHaveLength(0);
+  });
 
-    // Nova reads the new text and signs it: a second row, and now the contract completes.
-    expect((await (await sign(ART, PN)).json()).completed).toBe(true);
-    expect(db.tables.contract_signatures).toHaveLength(3);
-    expect(db.tables.contracts[0].status).toBe('signed');
+  it('nor when a colleague confirmed the link, nor can the real account sign once its confirmation is gone', async () => {
+    Object.assign(db.tables.parties[1], { user_id: LEG, details_confirmed_by: OWN });
+    expect((await sign(LEG, PN)).status).toBe(403);
+    Object.assign(db.tables.parties[1], { user_id: ART, details_confirmed_by: null });
+    expect((await sign(ART, PN)).status).toBe(403);
+    expect(db.tables.contract_signatures).toHaveLength(0);
+  });
+
+  it('the label’s own side is signed by an owner, an admin or a contracts writer', async () => {
+    expect((await sign(OWN, PL)).status).toBe(200);
+    expect(db.tables.contract_signatures[0]).toMatchObject({ party_id: PL, countersign: true });
+  });
+
+  it('a party in another role is not the label’s side: no capability signs it, it signs through its link', async () => {
+    db.tables.contract_parties.find((p) => p.party_id === PL)!.role = 'disclosing';
+    expect((await sign(LEG, PL)).status).toBe(403);
+    expect((await sign(OWN, PL)).status).toBe(403);
   });
 });
 

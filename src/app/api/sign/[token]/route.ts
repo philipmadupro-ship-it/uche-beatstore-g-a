@@ -35,8 +35,7 @@ import { finishSign, prepareSign, snapshotOf } from '@/lib/labelos/contract-sign
 import { SigningNotReadyError, ipHashOf, orgAllowsSigning, readProviderUrl, signerByTokenHash } from '@/lib/labelos/contract-signing-store';
 import { CERTIFICATE_STATEMENT } from '@/lib/labelos/contract-signing-view';
 import { partyName } from '@/lib/labelos/contracts/context';
-import { PARTY_ROLE_LABELS, TEMPLATE_TYPE_LABELS } from '@/lib/labelos/contracts/types';
-import { documentOf } from '@/lib/labelos/contracts-route';
+import { PARTY_ROLE_LABELS } from '@/lib/labelos/contracts/types';
 import { ContractsNotReadyError, identitiesOf, linksOf, readContractRow } from '@/lib/labelos/contracts-store';
 
 export const runtime = 'nodejs';
@@ -91,15 +90,17 @@ export async function GET(req: NextRequest, { params }: Params) {
     if ('res' in r) return r.res;
     const { admin, ref, row, links, identities } = r;
     const snap = await snapshotOf(admin, ref.orgId, row, links, identities);
+    const frozen = snap.frozen;
+    if (!frozen) return notFound(); // sent before signing existed: nothing frozen to show or sign
     const mine = snap.states.find((s) => s.partyId === ref.partyId);
-    const document = await documentOf(admin, ref.orgId, row, links, identities);
-    const sorted = [...links].sort((a, b) => a.position - b.position);
+    // The text the contract was SENT with, frozen on it: never a live merge, so a party renamed since changes nothing here.
+    const text = frozen.snapshot;
     return json(200, {
-      contract: { title: row.title, typeLabel: TEMPLATE_TYPE_LABELS[row.type], version: row.version, status: row.status },
+      contract: { title: text.title, typeLabel: text.typeLabel, version: row.version, status: row.status },
       you: { role: mine?.role ?? 'artist', roleLabel: PARTY_ROLE_LABELS[mine?.role ?? 'artist'], name: partyName(identities.get(ref.partyId)!) },
-      parties: sorted.map((l) => ({ roleLabel: PARTY_ROLE_LABELS[l.role], name: identities.get(l.party_id) ? partyName(identities.get(l.party_id)!) : 'Unknown party' })),
-      clauses: document.clauses.map((c) => ({ id: c.id, heading: c.heading, body: c.body })),
-      documentSha256: snap.sha,
+      parties: text.parties,
+      clauses: text.clauses,
+      documentSha256: frozen.sha,
       state: mine?.status ?? 'pending',
       receipt: mine && mine.status !== 'pending' ? { signedAt: mine.signature.signedAt, signerName: snap.signatures.find((s) => s.id === mine.signature.id)?.signerName ?? null, documentSha256: mine.signature.documentSha256 } : null,
       canSign: row.status === 'sent' && mine?.status !== 'signed',

@@ -29,7 +29,7 @@ import { hasDrift } from './contract-splits';
 import { SIGN_DENIAL_MESSAGE, planSign, requiredSigners, signerStates, signingProgress, type SignDenial, type SignerRow } from './contract-signing';
 import {
   SigningNotReadyError,
-  currentDocument,
+  readFrozen,
   isMissingSigning,
   readSignatures,
   removeSignatureImage,
@@ -41,6 +41,7 @@ import { isUUID } from '@/lib/validate';
 
 export type SigningSnapshot = {
   sha: string;
+  frozen: Awaited<ReturnType<typeof readFrozen>>;
   signatures: SignatureRow[];
   states: SignerRow[];
   progress: ReturnType<typeof signingProgress>;
@@ -54,9 +55,11 @@ export async function snapshotOf(
   links: readonly ContractPartyLink[],
   identities: ReadonlyMap<string, PartyIdentity>,
 ): Promise<SigningSnapshot> {
-  const [{ sha }, signatures] = await Promise.all([currentDocument(admin, org, row, links, identities), readSignatures(admin, org, row.id)]);
+  const [frozen, signatures] = await Promise.all([readFrozen(admin, org, row.id), readSignatures(admin, org, row.id)]);
+  // No frozen copy (a contract sent before migration 178): nothing can be valid, and nothing can be signed.
+  const sha = frozen?.sha ?? '';
   const states = signerStates(requiredSigners(links), signatures, sha);
-  return { sha, signatures, states, progress: signingProgress(states) };
+  return { sha, frozen, signatures, states, progress: signingProgress(states) };
 }
 
 export type GateResult = { ok: true } | { ok: false; code: 'master_split_not_signed' | 'split_drift'; error: string };
@@ -114,6 +117,7 @@ const DENIAL_STATUS: Readonly<Record<SignDenial, 404 | 409>> = {
   already_signed_by: 409,
   not_your_party: 409,
   changed: 409,
+  no_frozen_copy: 409,
 };
 
 const RPC_ERRORS: Readonly<Record<string, { status: 404 | 409; code: SignDenial | 'duplicate' }>> = {
@@ -145,6 +149,7 @@ export type PreparedSign = {
 export async function prepareSign(input: SignInput): Promise<PreparedSign | Extract<SignResult, { ok: false }>> {
   const { admin, orgId, row, links, identities } = input;
   const snap = await snapshotOf(admin, orgId, row, links, identities);
+  if (!snap.frozen) return { ok: false, status: 409, error: SIGN_DENIAL_MESSAGE.no_frozen_copy, code: 'no_frozen_copy' };
   const plan = planSign({
     contractStatus: row.status,
     contractVersion: row.version,

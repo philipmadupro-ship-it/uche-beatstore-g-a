@@ -20,8 +20,8 @@
  *       the https provider address the owner saved; the drawn signature shows;
  *   6 · a signature row cannot be changed through the API, and the artist
  *       (not a party) reads nothing of the contract;
- *   7 · Kilo’s legal name is edited: his signature no longer counts (stale),
- *       the panel says so, nothing was rewritten;
+ *   7 · Kilo’s legal name is edited after sending: nothing anyone signed moves
+ *       (the sent copy is frozen, its hash is on the contract), both stay valid;
  *   8 · the contract store finds the contract by Kilo’s name and shows when it
  *       ends; the calendar feed has one "Contract ends:" event, titles only;
  *   9 · supersede: the contract is voided, a draft copy opens, and Kilo’s old
@@ -99,9 +99,9 @@ test.beforeAll(async ({ request }) => {
   ]);
   await rest(request, 'POST', 'contacts', { id: NOVA, org_id: ORG, user_id: null, name: `Nova ${run}`, category: 'artist' });
   await rest(request, 'POST', 'member_artist_scopes', { org_id: ORG, user_id: ARTIST_A_ID, contact_id: NOVA });
-  const party = (id: string, kind: string, name: string, extra: Record<string, unknown>) => ({ id, org_id: ORG, kind, display_name: name, legal_name: null, ipi: null, contact_id: null, user_id: null, ...extra });
+  const party = (id: string, kind: string, name: string, extra: Record<string, unknown>) => ({ id, org_id: ORG, kind, display_name: name, legal_name: null, ipi: null, contact_id: null, user_id: null, details_confirmed_by: null, details_confirmed_at: null, ...extra });
   await rest(request, 'POST', 'parties', [
-    party(P_LABEL, 'company', `CSign Records ${run}`, { legal_name: `CSign Records Ltd ${run}`, address: '1 Label Way, London', user_id: PRODUCER_ID }),
+    party(P_LABEL, 'company', `CSign Records ${run}`, { legal_name: `CSign Records Ltd ${run}`, address: '1 Label Way, London', user_id: PRODUCER_ID, details_confirmed_by: PRODUCER_ID, details_confirmed_at: new Date().toISOString() }),
     party(P_KILO, 'person', `Kilo ${run}`, { legal_name: `Kilo Mensah ${run}`, address: '9 Feature Street, Accra' }),
   ]);
 });
@@ -298,20 +298,28 @@ test('6 · a signature cannot be changed through the API; the artist (not a part
   await a.close();
 });
 
-test('7 · when the text changes after a signature, that signature no longer counts — nothing is rewritten', async ({ browser, baseURL, request }) => {
+test('7 · renaming a party after the contract was sent changes nothing anyone signed: both signatures stay valid', async ({ browser, baseURL, request }) => {
   const before = (await rest(request, 'GET', `contract_signatures?select=*&contract_id=eq.${contractId}&order=signed_at`)) as Row[];
+  const [frozenBefore] = (await rest(request, 'GET', `contracts?select=sent_document_sha256,sent_snapshot&id=eq.${contractId}`)) as Row[];
   await rest(request, 'PATCH', `parties?id=eq.${P_KILO}`, { legal_name: `Kilo Mensah-Boateng ${run}` });
   const ctx = await as(browser, baseURL!, owner.id, owner.email);
   const page = await ctx.newPage();
   await page.goto(`/o/${SLUG}/rights/contracts/${contractId}`);
   await expect(page.getByTestId('signing-panel')).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByTestId(`signer-${P_KILO}`).getByTestId('signer-state-stale')).toBeVisible();
-  await expect(page.getByTestId(`signer-${P_LABEL}`).getByTestId('signer-state-stale')).toBeVisible();
-  await expect(page.getByTestId('signing-stale-note')).toContainText('no longer count');
-  await expect(page.getByTestId('signing-progress')).toContainText('no longer count');
-  await page.screenshot({ path: `${D}/panel-stale-1440.png`, fullPage: true });
+  await expect(page.getByTestId(`signer-${P_KILO}`).getByTestId('signer-state-signed')).toBeVisible();
+  await expect(page.getByTestId(`signer-${P_LABEL}`).getByTestId('signer-state-signed')).toBeVisible();
+  await expect(page.getByTestId('signing-stale-note')).toHaveCount(0);
+  await expect(page.getByTestId('signing-progress')).toContainText('Every party has signed');
+  // The certificate still names the text that was signed, by the same hash.
+  const [frozenAfter] = (await rest(request, 'GET', `contracts?select=sent_document_sha256,sent_snapshot&id=eq.${contractId}`)) as Row[];
+  expect(frozenAfter).toEqual(frozenBefore);
+  expect(JSON.stringify(frozenAfter.sent_snapshot)).not.toContain('Boateng');
+  await page.goto(`/o/${SLUG}/rights/contracts/${contractId}/certificate`);
+  await expect(page.getByTestId('certificate-hash')).toHaveText(String(frozenBefore.sent_document_sha256));
+  await page.screenshot({ path: `${D}/certificate-after-rename-1440.png`, fullPage: true });
   const after = (await rest(request, 'GET', `contract_signatures?select=*&contract_id=eq.${contractId}&order=signed_at`)) as Row[];
   expect(after).toEqual(before);
+  expect(after.every((r) => r.document_sha256 === frozenBefore.sent_document_sha256)).toBe(true);
   await ctx.close();
 });
 

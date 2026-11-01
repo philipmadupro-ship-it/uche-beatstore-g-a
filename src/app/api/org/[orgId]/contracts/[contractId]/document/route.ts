@@ -26,6 +26,7 @@ import { contractDocumentFileName, renderContractDocumentPdf } from '@/lib/label
 import { copyStatus, rerenderNotice, storeContractPdf } from '@/lib/labelos/contracts-document';
 import { orgProjectAssetKeyOf } from '@/lib/labelos/org-assets';
 import { projectAssetBuckets, streamProjectAsset } from '@/lib/storage/project-assets';
+import { readFrozen } from '@/lib/labelos/contract-signing-store';
 import { documentInputOf, documentOf, loadContractFor } from '@/lib/labelos/contracts-route';
 import { CONTRACTS_NOT_READY, ContractsNotReadyError, contractProjectId, findContractCopy } from '@/lib/labelos/contracts-store';
 
@@ -61,6 +62,9 @@ export async function GET(req: NextRequest, { params }: Params) {
     // are merged live, so a fresh render after someone edits a party would differ from what was signed off. With no
     // stored copy (no project, or filing failed) a fresh render is made and says so on its first page.
     if (row.status !== 'draft') {
+      // LABEL-60: the frozen sent copy (the very bytes every signature is recorded against) wins where there is one.
+      const frozen = await readFrozen(access.admin, access.orgId, row.id).catch(() => null);
+      if (frozen) return await streamProjectAsset(req, frozen.ref, { fileName: contractDocumentFileName(row.id, row.version, 'sent'), mime: 'application/pdf', inline: false });
       const projectId = await contractProjectId(access.admin, access.orgId, row);
       const copy = projectId ? await findContractCopy(access.admin, access.orgId, projectId, contractDocumentFileName(row.id, row.version, 'sent')) : null;
       if (copy && orgProjectAssetKeyOf(copy.url, access.orgId, copy.project_id, projectAssetBuckets())) {

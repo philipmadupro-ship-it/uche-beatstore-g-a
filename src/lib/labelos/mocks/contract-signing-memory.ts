@@ -63,6 +63,8 @@ export function contractSigningMemory(): Record<string, Handler> {
       if (c.status === 'signed') return ok({ error: 'already_signed' });
       if (c.status !== 'sent') return ok({ error: 'not_sent' });
       if (c.version !== args.p_version) return ok({ error: 'changed' });
+      if (!c.sent_document_sha256) return ok({ error: 'no_frozen_copy' });
+      if (c.sent_document_sha256 !== args.p_sha) return ok({ error: 'changed' });
       if (args.p_via === 'link') {
         const s = (tables.contract_signers ?? []).find((x) => x.contract_id === c.id && x.party_id === args.p_party);
         if (!s || !s.token_hash || s.token_hash !== args.p_link_hash || (s.link_expires_at && new Date(String(s.link_expires_at)) <= new Date())) return ok({ error: 'link_gone' });

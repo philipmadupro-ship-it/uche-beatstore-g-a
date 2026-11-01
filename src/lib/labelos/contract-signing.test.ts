@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  canonicalDocument,
+  bytesSha256,
+  parseSentSnapshot,
+  sentSnapshotOf,
   cleanProviderUrl,
   cleanSignerName,
   contractEnd,
-  documentHash,
   expiryState,
   filterStore,
   hashSignToken,
@@ -42,31 +43,22 @@ const sig = (partyId: string, sha: string, at = '2026-11-01T10:00:00.000Z', id =
   signedAt: at,
 });
 
-describe('documentHash', () => {
-  it('is a 64-char SHA-256 and does not move for the same text', () => {
-    const a = documentHash(doc);
+describe('the frozen sent copy', () => {
+  it('bytesSha256 is the SHA-256 of the stored BYTES: one changed byte is a different hash', () => {
+    const a = bytesSha256(Buffer.from('%PDF-1.4 sent copy'));
     expect(a).toMatch(/^[0-9a-f]{64}$/);
-    expect(documentHash({ ...doc })).toBe(a);
+    expect(bytesSha256(Buffer.from('%PDF-1.4 sent copy'))).toBe(a);
+    expect(bytesSha256(Buffer.from('%PDF-1.4 sent copy!'))).not.toBe(a);
   });
 
-  it('changes when anything the signer reads changes: a clause, a party name, the version, the title', () => {
-    const base = documentHash(doc);
-    expect(documentHash({ ...doc, clauses: [{ id: 'c1', heading: 'Term', body: 'The term is 36 months.' }] })).not.toBe(base);
-    expect(documentHash({ ...doc, parties: [doc.parties[0], { roleLabel: 'Artist', name: 'Nova Sample' }] })).not.toBe(base);
-    expect(documentHash({ ...doc, version: 3 })).not.toBe(base);
-    expect(documentHash({ ...doc, title: 'Other' })).not.toBe(base);
+  it('the snapshot keeps only what the signer reads and round-trips through jsonb', () => {
+    const snap = sentSnapshotOf({ ...doc, generatedOn: '1 January 2026', statusLabel: 'Sent', missing: [] } as unknown as typeof doc & { clauses: typeof doc.clauses });
+    expect(Object.keys(snap).sort()).toEqual(['clauses', 'parties', 'title', 'typeLabel', 'version']);
+    expect(parseSentSnapshot(JSON.parse(JSON.stringify(snap)))).toEqual(snap);
   });
 
-  it('does not depend on the day the PDF was made or on the status label', () => {
-    const withDate = { ...doc, generatedOn: '1 January 2026', statusLabel: 'Sent' } as typeof doc;
-    expect(documentHash(withDate)).toBe(documentHash(doc));
-    expect(canonicalDocument(withDate)).not.toContain('generatedOn');
-  });
-
-  it('is not fooled by moving text between fields', () => {
-    const a = documentHash({ ...doc, clauses: [{ id: 'c1', heading: 'A', body: 'B' }] });
-    const b = documentHash({ ...doc, clauses: [{ id: 'c1', heading: 'AB', body: '' }] });
-    expect(a).not.toBe(b);
+  it('refuses anything that is not a snapshot', () => {
+    for (const bad of [null, 'x', 5, {}, { title: 'a' }, { title: 'a', typeLabel: 'b', version: 1, parties: 'no', clauses: [] }]) expect(parseSentSnapshot(bad)).toBeNull();
   });
 });
 
@@ -152,16 +144,27 @@ describe('planSign', () => {
 });
 
 describe('maySignAs', () => {
-  it('a person signs for the party linked to their own account', () => {
-    expect(maySignAs({ partyRole: 'artist', partyUserId: 'u1', userId: 'u1', canWriteContracts: false })).toEqual({ ok: true, countersign: false });
+  const base = { partyRole: 'artist' as const, partyUserId: null, partyConfirmedBy: null, userId: 'u1', memberRole: 'member', canWriteContracts: false };
+
+  it('a person signs for the party linked to their account only when that account itself confirmed it', () => {
+    expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: 'u1' })).toEqual({ ok: true, countersign: false });
   });
-  it('a contracts writer countersigns for the label side only', () => {
-    expect(maySignAs({ partyRole: 'label', partyUserId: null, userId: 'u2', canWriteContracts: true })).toEqual({ ok: true, countersign: true });
-    expect(maySignAs({ partyRole: 'artist', partyUserId: null, userId: 'u2', canWriteContracts: true })).toEqual({ ok: false });
+
+  it('a link nobody confirmed, or one a colleague confirmed, is not the party (LABEL-71 H1: self-linking is not consent)', () => {
+    expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: null })).toEqual({ ok: false });
+    expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: 'u2' })).toEqual({ ok: false });
+    expect(maySignAs({ ...base, partyUserId: 'u1', partyConfirmedBy: null, memberRole: 'owner', canWriteContracts: true })).toEqual({ ok: false });
   });
-  it('nobody signs for another person’s party, whatever they may write', () => {
-    expect(maySignAs({ partyRole: 'artist', partyUserId: 'u1', userId: 'u2', canWriteContracts: true })).toEqual({ ok: false });
-    expect(maySignAs({ partyRole: 'label', partyUserId: null, userId: 'u2', canWriteContracts: false })).toEqual({ ok: false });
+
+  it('the label’s side (role label) is signed by an owner, an admin or a contracts writer', () => {
+    for (const memberRole of ['owner', 'admin']) expect(maySignAs({ ...base, partyRole: 'label', memberRole })).toEqual({ ok: true, countersign: true });
+    expect(maySignAs({ ...base, partyRole: 'label', canWriteContracts: true })).toEqual({ ok: true, countersign: true });
+    expect(maySignAs({ ...base, partyRole: 'label' })).toEqual({ ok: false });
+  });
+
+  it('nobody signs for another role’s party by capability, whatever they may write', () => {
+    expect(maySignAs({ ...base, memberRole: 'owner', canWriteContracts: true })).toEqual({ ok: false });
+    expect(maySignAs({ ...base, partyRole: 'receiving', memberRole: 'admin', canWriteContracts: true })).toEqual({ ok: false });
   });
 });
 

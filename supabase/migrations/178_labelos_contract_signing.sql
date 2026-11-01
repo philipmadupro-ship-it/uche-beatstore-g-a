@@ -40,9 +40,25 @@
 --                                                 its replacement draft: contract.superseded
 --
 -- Idempotent: IF NOT EXISTS, CREATE OR REPLACE, DROP … IF EXISTS first.
+--
+-- Document identity (orchestrator decision on #166): a signature binds to the SHA-256 of the stored BYTES of the
+-- frozen sent copy. Renaming a party or a song afterwards changes nothing a signer signed; only a new send does.
 
 -- ── 1. contracts: provider address and the supersede chain ───────────────
 
+-- The FROZEN SENT COPY: the PDF made at the moment the contract left draft, its SHA-256 (of the stored BYTES), where
+-- it is kept (the private bucket, never a URL) and the text it was made from (so a signer reads exactly what was
+-- hashed, whatever a party's name becomes later). Set by the one UPDATE that moves draft → sent, never again.
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS sent_document_sha256 text;
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS sent_document_ref text;
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS sent_snapshot jsonb;
+ALTER TABLE public.contracts DROP CONSTRAINT IF EXISTS contracts_sent_document_check;
+ALTER TABLE public.contracts ADD CONSTRAINT contracts_sent_document_check CHECK (
+  (sent_document_sha256 IS NULL) = (sent_document_ref IS NULL)
+  AND (sent_document_sha256 IS NULL) = (sent_snapshot IS NULL)
+  AND (sent_document_sha256 IS NULL OR sent_document_sha256 ~ '^[0-9a-f]{64}$')
+  AND (sent_document_ref IS NULL OR sent_document_ref ~ '^(r2|local)://[^[:space:]]+$')
+);
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS esign_provider_url text;
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS supersedes_id uuid REFERENCES public.contracts(id) ON DELETE SET NULL;
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS superseded_by uuid REFERENCES public.contracts(id) ON DELETE SET NULL;
@@ -55,6 +71,81 @@ ALTER TABLE public.contracts ADD CONSTRAINT contracts_esign_url_check CHECK (
 CREATE INDEX IF NOT EXISTS idx_contracts_supersedes ON public.contracts (supersedes_id) WHERE supersedes_id IS NOT NULL;
 
 -- The new columns are not in 176's column grant, so an API role cannot read them either.
+
+-- The content-freeze trigger of 176, with the three new columns frozen too.
+CREATE OR REPLACE FUNCTION public.contracts_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  ok boolean;
+BEGIN
+  -- Everything linked belongs to the contract's own org.
+  IF NEW.artist_contact_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.contacts c WHERE c.id = NEW.artist_contact_id AND c.org_id = NEW.org_id) THEN
+    RAISE EXCEPTION 'contracts: the artist is not a contact of this organization' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.track_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.tracks t WHERE t.id = NEW.track_id AND t.org_id = NEW.org_id) THEN
+    RAISE EXCEPTION 'contracts: the song belongs to another organization' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.release_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.releases r WHERE r.id = NEW.release_id AND r.org_id = NEW.org_id) THEN
+    RAISE EXCEPTION 'contracts: the release belongs to another organization' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.template_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.contract_templates t WHERE t.id = NEW.template_id AND t.org_id = NEW.org_id) THEN
+    RAISE EXCEPTION 'contracts: the template belongs to another organization' USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.status <> 'draft' THEN
+      RAISE EXCEPTION 'contracts: a contract is created as a draft' USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  -- UPDATE
+  IF NEW.org_id <> OLD.org_id THEN
+    RAISE EXCEPTION 'contracts: a contract never changes organization' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.status <> OLD.status THEN
+    ok := (OLD.status = 'draft' AND NEW.status IN ('sent', 'void'))
+       OR (OLD.status = 'sent' AND NEW.status IN ('signed', 'void'))
+       OR (OLD.status = 'signed' AND NEW.status = 'void');
+    IF NOT ok THEN
+      RAISE EXCEPTION 'contracts: % cannot become %', OLD.status, NEW.status USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  IF OLD.status <> 'draft' AND (
+       NEW.type IS DISTINCT FROM OLD.type
+    OR NEW.title IS DISTINCT FROM OLD.title
+    OR NEW.clauses IS DISTINCT FROM OLD.clauses
+    OR NEW.template_id IS DISTINCT FROM OLD.template_id
+    OR NEW.template_source IS DISTINCT FROM OLD.template_source
+    OR NEW.template_version IS DISTINCT FROM OLD.template_version
+    OR NEW.artist_contact_id IS DISTINCT FROM OLD.artist_contact_id
+    OR NEW.track_id IS DISTINCT FROM OLD.track_id
+    OR NEW.release_id IS DISTINCT FROM OLD.release_id
+    OR NEW.effective_date IS DISTINCT FROM OLD.effective_date
+    OR NEW.term_months IS DISTINCT FROM OLD.term_months
+    OR NEW.territories IS DISTINCT FROM OLD.territories
+    OR NEW.fields IS DISTINCT FROM OLD.fields
+    -- 178: the frozen sent copy is set once, by the send that leaves draft, and never again.
+    OR NEW.sent_document_sha256 IS DISTINCT FROM OLD.sent_document_sha256
+    OR NEW.sent_document_ref IS DISTINCT FROM OLD.sent_document_ref
+    OR NEW.sent_snapshot IS DISTINCT FROM OLD.sent_snapshot
+  ) THEN
+    RAISE EXCEPTION 'contracts: a contract that has left draft is not edited' USING ERRCODE = 'check_violation';
+  END IF;
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+ALTER FUNCTION public.contracts_guard() OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.contracts_guard() FROM PUBLIC;
+
+DROP TRIGGER IF EXISTS contracts_guard ON public.contracts;
+CREATE TRIGGER contracts_guard BEFORE INSERT OR UPDATE ON public.contracts
+  FOR EACH ROW EXECUTE FUNCTION public.contracts_guard();
 
 -- ── 2. contract_signers ──────────────────────────────────────────────────
 
@@ -318,10 +409,10 @@ GRANT EXECUTE ON FUNCTION public.labelos_audit_contract_link_revoke(uuid, uuid, 
 --   · this party has no signature on this document yet (unique key).
 -- If the signature leaves every party with a valid signature on THIS document hash, the contract
 -- becomes `signed` in the same transaction and `contract.signed` is recorded after
--- `contract.signature_added`. p_sha is the hash of the document as it is now; the route computed it
--- from the same rendering the signer read.
+-- `contract.signature_added`. p_sha is the hash the signer READ; it must equal the contract's frozen sent copy
+-- (`sent_document_sha256`), which is what every signature is recorded against.
 -- Answers { signed: true, signature_id, completed } or
---   { error: 'not_found' | 'void' | 'already_signed' | 'not_sent' | 'changed' | 'not_party' | 'duplicate' | 'link_gone' }.
+--   { error: 'not_found' | 'void' | 'already_signed' | 'not_sent' | 'changed' | 'not_party' | 'duplicate' | 'link_gone' | 'no_frozen_copy' }.
 CREATE OR REPLACE FUNCTION public.labelos_audit_contract_sign(
   p_org uuid,
   p_actor uuid,
@@ -357,6 +448,9 @@ BEGIN
   IF v_row.status = 'signed' THEN RETURN jsonb_build_object('error', 'already_signed'); END IF;
   IF v_row.status <> 'sent' THEN RETURN jsonb_build_object('error', 'not_sent'); END IF;
   IF v_row.version <> p_version THEN RETURN jsonb_build_object('error', 'changed'); END IF;
+  -- A contract sent before 178 has no frozen copy: nothing to sign against.
+  IF v_row.sent_document_sha256 IS NULL THEN RETURN jsonb_build_object('error', 'no_frozen_copy'); END IF;
+  IF v_row.sent_document_sha256 <> p_sha THEN RETURN jsonb_build_object('error', 'changed'); END IF;
   -- A link signer: the link must still be the party's live one, under this lock (a revoke or a rotate in flight wins).
   IF p_via = 'link' AND NOT EXISTS (
     SELECT 1 FROM public.contract_signers s

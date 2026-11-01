@@ -11,12 +11,11 @@
  *
  * Four rules live here, none of them stored:
  *
- *   1. THE DOCUMENT IS ITS HASH. `documentHash` is the SHA-256 of a canonical
- *      rendering of what the signer reads: title, type, version, every party's
- *      role / name / address and the merged clauses. It is built from the same
- *      `ContractDocumentInput` the PDF is, minus the date it was made on, so
- *      the file and the hash cannot describe different texts, and so it does
- *      not move every day the way PDF bytes do.
+ *   1. THE DOCUMENT IS THE FROZEN SENT COPY. When a contract is sent, its PDF
+ *      is made once, stored, and the SHA-256 of those BYTES is written on the
+ *      contract (`sent_document_sha256`, migration 178) with the text it was
+ *      made from (`sent_snapshot`). That is what every signature is recorded
+ *      against; renaming a party or a song later changes none of it.
  *   2. A CHANGED HASH INVALIDATES. Signatures are append-only rows carrying the
  *      hash they were made against. Whether one still counts is DERIVED on
  *      every read (`signerStates`): the hash the document has NOW against the
@@ -39,24 +38,42 @@ import type { ContractStatus, PartyRole } from './contracts/types';
 
 // ── The document and its hash ────────────────────────────────────────────
 
-/** Bump if the canonical form ever changes: an old hash must not silently match a new form. */
-export const DOCUMENT_HASH_VERSION = 1;
+/**
+ * The text the contract was SENT with, frozen on the contract at the moment it left draft (migration 178,
+ * `sent_snapshot`): the same input the sent PDF was made from, minus its date. A signer reads this, never a live
+ * merge, so renaming a party or a song afterwards changes nothing they signed.
+ */
+export type SentSnapshot = {
+  title: string;
+  typeLabel: string;
+  version: number;
+  parties: { roleLabel: string; name: string }[];
+  clauses: { id: string; heading: string; body: string }[];
+};
 
-/** What the signer reads, in a form that does not depend on JS key order or on the day it was rendered. */
-export function canonicalDocument(input: Pick<ContractDocumentInput, 'title' | 'typeLabel' | 'version' | 'parties' | 'clauses'>): string {
-  return JSON.stringify({
-    v: DOCUMENT_HASH_VERSION,
+export function sentSnapshotOf(input: Pick<ContractDocumentInput, 'title' | 'typeLabel' | 'version' | 'parties' | 'clauses'>): SentSnapshot {
+  return {
     title: input.title,
-    type: input.typeLabel,
+    typeLabel: input.typeLabel,
     version: input.version,
-    parties: input.parties.map((p) => [p.roleLabel, p.name]),
-    clauses: input.clauses.map((c) => [c.id, c.heading, c.body]),
-  });
+    parties: input.parties.map((p) => ({ roleLabel: p.roleLabel, name: p.name })),
+    clauses: input.clauses.map((c) => ({ id: c.id, heading: c.heading, body: c.body })),
+  };
 }
 
-export function documentHash(input: Parameters<typeof canonicalDocument>[0]): string {
-  return createHash('sha256').update(canonicalDocument(input), 'utf8').digest('hex');
+/** A stored value read back as a snapshot, or null when it is not one (never trust jsonb shape). */
+export function parseSentSnapshot(raw: unknown): SentSnapshot | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const str = (v: unknown): v is string => typeof v === 'string';
+  if (!str(r.title) || !str(r.typeLabel) || typeof r.version !== 'number' || !Array.isArray(r.parties) || !Array.isArray(r.clauses)) return null;
+  const parties = r.parties.filter((p): p is { roleLabel: string; name: string } => !!p && str((p as Record<string, unknown>).roleLabel) && str((p as Record<string, unknown>).name));
+  const clauses = r.clauses.filter((c): c is { id: string; heading: string; body: string } => !!c && str((c as Record<string, unknown>).id) && str((c as Record<string, unknown>).heading) && str((c as Record<string, unknown>).body));
+  return { title: r.title, typeLabel: r.typeLabel, version: r.version, parties, clauses };
 }
+
+/** SHA-256 (hex) of the stored BYTES of the sent PDF. This is what a signature is recorded against. */
+export const bytesSha256 = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 
 export const isSha256 = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v);
 
@@ -127,7 +144,8 @@ export type SignDenial =
   | 'not_a_party' // the party is not on this contract
   | 'already_signed_by' // this party already has a valid signature on this document
   | 'not_your_party' // the caller is neither that party nor allowed to countersign for the label
-  | 'changed'; // the signer read another version
+  | 'changed' // the signer read another version
+  | 'no_frozen_copy'; // sent before signing existed: there is no frozen text to sign
 
 export const SIGN_DENIAL_MESSAGE: Readonly<Record<SignDenial, string>> = {
   not_sent: 'This contract has not been sent for signature.',
@@ -137,6 +155,7 @@ export const SIGN_DENIAL_MESSAGE: Readonly<Record<SignDenial, string>> = {
   already_signed_by: 'This party has already signed this version.',
   not_your_party: 'You can only sign for yourself, or for the label if you may write contracts.',
   changed: 'The contract changed after you opened it. Reload it and read the new version.',
+  no_frozen_copy: 'This contract was sent before signing was set up, so there is no frozen copy to sign. Replace it with a new draft and send that.',
 };
 
 export type SignContext = {
@@ -162,19 +181,28 @@ export function planSign(ctx: SignContext): { ok: true; role: PartyRole } | { ok
 }
 
 /**
- * Whether a signed-in member may sign for this party: it is linked to their own
- * account (`parties.user_id`), or it is the label's own side and they may write
- * contracts (the countersignature). Nobody signs for another person's party,
- * whatever their role or capabilities.
+ * Whether a signed-in member may sign for this party. Two ways, and only two:
+ *
+ *  1. THEIR OWN party: `parties.user_id` is their account AND the account itself confirmed the party's details
+ *     (`details_confirmed_by` = the same account, LABEL-54's party confirmation, which a re-link or an edit of the
+ *     details clears). A rights writer who merely sets `user_id` to their own account — or to a colleague's — is not
+ *     the party and cannot sign as it (the LABEL-71 H1 hole).
+ *  2. THE LABEL'S side: the party in role `label`, countersigned by an owner or admin, or a member who may write
+ *     contracts.
+ *
+ * Everyone else signs through the party's own signing link. Nobody ever signs for another person's party.
  */
 export function maySignAs(input: {
   partyRole: PartyRole;
   partyUserId: string | null;
+  /** The account that confirmed the party's details (`details_confirmed_by`), when it has. */
+  partyConfirmedBy: string | null;
   userId: string;
+  memberRole: string;
   canWriteContracts: boolean;
 }): { ok: true; countersign: boolean } | { ok: false } {
-  if (input.partyUserId && input.partyUserId === input.userId) return { ok: true, countersign: false };
-  if (input.partyRole === 'label' && input.canWriteContracts) return { ok: true, countersign: true };
+  if (input.partyUserId && input.partyUserId === input.userId && input.partyConfirmedBy === input.userId) return { ok: true, countersign: false };
+  if (input.partyRole === 'label' && (input.memberRole === 'owner' || input.memberRole === 'admin' || input.canWriteContracts)) return { ok: true, countersign: true };
   return { ok: false };
 }
 
