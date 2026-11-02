@@ -1,0 +1,194 @@
+{
+  "lines": [
+    {
+      "lineNo": 2,
+      "trackId": "rec-1",
+      "songId": "song-1",
+      "reviewReason": null
+    },
+    {
+      "lineNo": 3,
+      "trackId": "rec-1",
+      "songId": "song-1",
+      "reviewReason": null
+    },
+    {
+      "lineNo": 4,
+      "trackId": "rec-2",
+      "songId": "song-2-no-sheet",
+      "reviewReason": "no_sheet"
+    },
+    {
+      "lineNo": 5,
+      "trackId": null,
+      "songId": null,
+      "reviewReason": "no_match"
+    },
+    {
+      "lineNo": 6,
+      "trackId": "rec-1",
+      "songId": "song-1",
+      "reviewReason": null
+    },
+    {
+      "lineNo": 7,
+      "trackId": "rec-3",
+      "songId": "song-3-eur",
+      "reviewReason": "currency_mismatch"
+    },
+    {
+      "lineNo": 8,
+      "trackId": null,
+      "songId": null,
+      "reviewReason": "no_identifier"
+    }
+  ],
+  "allocations": [
+    {
+      "payeeId": "payee-party-ara",
+      "partyId": "party-ara",
+      "songId": "song-1",
+      "kind": "master",
+      "sheetId": "sheet-1",
+      "contractId": null,
+      "shareUnits": 500000,
+      "shareMinor": "5000",
+      "rateUnits": 1000000,
+      "payableMinor": "5000",
+      "retainedMinor": "0",
+      "lineNo": 2
+    },
+    {
+      "payeeId": "payee-party-pat",
+      "partyId": "party-pat",
+      "songId": "song-1",
+      "kind": "master",
+      "sheetId": "sheet-1",
+      "contractId": "contract-pat",
+      "shareUnits": 333333,
+      "shareMinor": "3334",
+      "rateUnits": 185000,
+      "payableMinor": "617",
+      "retainedMinor": "2717",
+      "lineNo": 2
+    },
+    {
+      "payeeId": "payee-party-bo",
+      "partyId": "party-bo",
+      "songId": "song-1",
+      "kind": "master",
+      "sheetId": "sheet-1",
+      "contractId": null,
+      "shareUnits": 166667,
+      "shareMinor": "1667",
+      "rateUnits": 1000000,
+      "payableMinor": "1667",
+      "retainedMinor": "0",
+      "lineNo": 2
+    },
+    {
+      "payeeId": "payee-party-ara",
+      "partyId": "party-ara",
+      "songId": "song-1",
+      "kind": "master",
+      "sheetId": "sheet-1",
+      "contractId": null,
+      "shareUnits": 500000,
+      "shareMinor": "50",
+      "rateUnits": 1000000,
+      "payableMinor": "50",
+      "retainedMinor": "0",
+      "lineNo": 3
+    },
+    {
+      "payeeId": "payee-party-pat",
+      "partyId": "party-pat",
+      "songId": "song-1",
+      "kind": "master",
+      "sheetId": "sheet-1",
+      "contractId": "contract-pat",
+      "shareUnits": 333333,
+      "shareMinor": "33",
+      "rateUnits": 185000,
+      "payableMinor": "6",
+      "retainedMinor": "27",
+      "lineNo": 3
+    },
+    {
+      "payeeId": "payee-party-bo",
+      "partyId": "party-bo",
+      "songId": "song-1",
+      "kind": "master",
+      "sheetId": "sheet-1",
+      "contractId": null,
+      "shareUnits": 166667,
+      "shareMinor": "17",
+      "rateUnits": 1000000,
+      "payableMinor": "17",
+      "retainedMinor": "0",
+      "lineNo": 3
+    },
+    {
+      "payeeId": "payee-party-ara",
+      "partyId": "party-ara",
+      "songId": "song-1",
+      "kind": "master",
+      "sheetId": "sheet-1",
+      "contractId": null,
+      "shareUnits": 500000,
+      "shareMinor": "-100",
+      "rateUnits": 1000000,
+      "payableMinor": "-100",
+      "retainedMinor": "0",
+      "lineNo": 6
+    },
+    {
+      "payeeId": "payee-party-pat",
+      "partyId": "party-pat",
+      "songId": "song-1",
+      "kind": "master",
+      "sheetId": "sheet-1",
+      "contractId": "contract-pat",
+      "shareUnits": 333333,
+      "shareMinor": "-67",
+      "rateUnits": 185000,
+      "payableMinor": "-12",
+      "retainedMinor": "-55",
+      "lineNo": 6
+    },
+    {
+      "payeeId": "payee-party-bo",
+      "partyId": "party-bo",
+      "songId": "song-1",
+      "kind": "master",
+      "sheetId": "sheet-1",
+      "contractId": null,
+      "shareUnits": 166667,
+      "shareMinor": "-33",
+      "rateUnits": 1000000,
+      "payableMinor": "-33",
+      "retainedMinor": "0",
+      "lineNo": 6
+    }
+  ],
+  "recoups": [
+    {
+      "lineNo": 2,
+      "payeeId": "payee-party-ara",
+      "advanceId": "adv-1",
+      "amountMinor": "5000"
+    },
+    {
+      "lineNo": 2,
+      "payeeId": "payee-party-bo",
+      "advanceId": "adv-bo",
+      "amountMinor": "10"
+    },
+    {
+      "lineNo": 3,
+      "payeeId": "payee-party-ara",
+      "advanceId": "adv-2",
+      "amountMinor": "50"
+    }
+  ]
+}
