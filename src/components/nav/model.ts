@@ -2,7 +2,7 @@ import {
   Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
   CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
   Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2, FileText,
-  SlidersHorizontal, ShieldCheck,
+  SlidersHorizontal, ShieldCheck, Coins,
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
@@ -186,6 +186,16 @@ function rightsGroup(slug: string, items: { parties: boolean; legal: boolean; co
 }
 
 /**
+ * The finance hub (LABEL-62): Earnings — the imported distributor files and the
+ * needs-review queue. For anyone who reads finance, in orgs licensed for the
+ * finance module (the page's own check). Statements and the dashboard grow
+ * here (LABEL-63 / 64).
+ */
+function financeGroup(slug: string): NavGroup {
+  return { key: 'finance', label: 'Finance', icon: Coins, items: [{ label: 'Earnings', href: `/o/${slug}/finance/earnings`, icon: Coins }] };
+}
+
+/**
  * The hubs for an org context (07-information-architecture.md §1). One model,
  * one function, so the top bar and the org shell cannot drift.
  *
@@ -217,5 +227,6 @@ export function navGroupsFor(
       ? rightsGroup(org.slug, { parties: canSeeParties(caps), legal: canSeeLegalQueue(caps) && licensed(org, 'contracts'), contracts: canSeeContracts(caps) && licensed(org, 'contracts') })
       : null;
   const rights = rightsHub ? [rightsHub] : [];
-  return [...producerHubs, ...roster, ...releases, ...rights, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];
+  const finance = orgKind !== 'producer' && caps?.has('finance.read') && licensed(org, 'finance') ? [financeGroup(org.slug)] : [];
+  return [...producerHubs, ...roster, ...releases, ...rights, ...finance, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];
 }

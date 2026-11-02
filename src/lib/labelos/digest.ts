@@ -453,6 +453,8 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'contract.esign_url_set': { one: 'set an external e-signature address on a contract', many: 'set external e-signature addresses on {n} contracts' },
   'contract_template.saved': { one: 'saved a contract template', many: 'saved {n} contract templates' },
   'payee.created': { one: 'added a payee', many: 'added {n} payees' },
+  'earnings.imported': { one: 'imported an earnings file', many: 'imported {n} earnings files' },
+  'earnings.recalculated': { one: 're-ran earnings that were waiting for review', many: 're-ran earnings waiting for review {n} times' },
   'approval.requested': { one: 'asked for an approval', many: 'asked for {n} approvals' },
   'approval.decided': { one: 'decided an approval', many: 'decided {n} approvals' },
   'release.created': { one: 'created a release', many: 'created {n} releases' },
