@@ -31,7 +31,9 @@
  *  - An amount is read digit by digit into integer minor units. More decimals
  *    than the currency has are refused unless the extra digits are zeros — or
  *    the person ticked "round fractional cents", which rounds each reported
- *    amount half to even and says how many lines it touched. Scientific
+ *    amount half to even and says how many lines it touched. That is an opt-in
+ *    rounding of the FILE's own amounts, separate from the rate rule in
+ *    earnings-calc.ts (a rate is applied half to even to what is in the file). Scientific
  *    notation and anything else that is not a plain number is refused.
  *  - ALL-OR-NOTHING: any bad row refuses the file, naming the first rows. A
  *    half-imported file would make the idempotent re-import impossible.
@@ -39,7 +41,7 @@
  *    the needs-review queue ("no identifier").
  */
 import { normalizeIsrc, normalizeUpc } from '../identifiers';
-import { CURRENCY_EXPONENT, divRoundHalfEven, isCurrency } from './money';
+import { CURRENCY_EXPONENT, divRoundHalfEven, INT64_MAX, INT64_MIN, isCurrency } from './money';
 import { MAX_ROWS } from './earnings-csv';
 
 export const PRESET_IDS = ['auto', 'distrokid', 'tunecore', 'cdbaby', 'generic'] as const;
@@ -114,6 +116,7 @@ export type ImportFailure =
   | { code: 'currency_required'; message: string }
   | { code: 'mixed_currency'; message: string }
   | { code: 'bad_rows'; message: string; issues: RowIssue[]; more: number }
+  | { code: 'amount_too_large'; message: string }
   | { code: 'no_rows'; message: string };
 
 export type ImportOk = {
@@ -370,6 +373,10 @@ export function buildLines(header: readonly string[], rows: readonly (readonly s
 
   if (issues.length > 0) {
     return { ok: false, failure: { code: 'bad_rows', message: `${issues.length + more} row${issues.length + more === 1 ? '' : 's'} could not be read. Nothing was imported.`, issues, more } };
+  }
+  // The database column is a signed 64-bit integer: a file whose total does not fit is refused, not overflowed.
+  if (total > INT64_MAX || total < INT64_MIN) {
+    return { ok: false, failure: { code: 'amount_too_large', message: 'The amounts in this file add up to more than the system can hold. Split the file by period and import the parts.' } };
   }
   if (lines.length === 0) return { ok: false, failure: { code: 'no_rows', message: 'The file has no earnings rows.' } };
   if (lines.length > MAX_ROWS) return { ok: false, failure: { code: 'no_rows', message: 'The file has too many rows.' } };

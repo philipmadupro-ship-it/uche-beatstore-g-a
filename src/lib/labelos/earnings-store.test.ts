@@ -8,7 +8,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { memoryAdmin, type MemoryDb } from '@/lib/labelos/mocks/memory-db';
 import type { AdminClient } from '@/lib/auth/ownership';
-import { loadAdvances, loadAllocFacts, loadMatchFacts, reprocessImport, visibleReviewLines, type ReviewLine } from './earnings-store';
+import { calculate, loadAdvances, loadAllocFacts, loadMatchFacts, reprocessImport, visibleReviewLines, type ReviewLine } from './earnings-store';
+import type { ParsedLine } from './finance/earnings-import';
 
 vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
 
@@ -77,10 +78,10 @@ describe('loadAllocFacts', () => {
       ],
       release_items: [{ release_id: 'rel-1', org_id: ORG, song_track_id: 'song-1' }],
       contracts: [
-        { id: 'ct-ok', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: '2026-01-01', term_months: 24, fields: { royalty_rate: '18.5' }, sent_document_sha256: 'h1' },
-        { id: 'ct-stale', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: null, term_months: null, fields: { royalty_rate: '50' }, sent_document_sha256: 'h2' },
-        { id: 'ct-norate', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: null, term_months: null, fields: {}, sent_document_sha256: 'h3' },
-        { id: 'ct-draft', org_id: ORG, status: 'draft', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: null, term_months: null, fields: { royalty_rate: '70' }, sent_document_sha256: null },
+        { id: 'ct-ok', type: 'recording', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: '2026-01-01', term_months: 24, fields: { royalty_rate: '18.5' }, sent_document_sha256: 'h1' },
+        { id: 'ct-stale', type: 'recording', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: null, term_months: null, fields: { royalty_rate: '50' }, sent_document_sha256: 'h2' },
+        { id: 'ct-norate', type: 'recording', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: null, term_months: null, fields: {}, sent_document_sha256: 'h3' },
+        { id: 'ct-draft', type: 'recording', org_id: ORG, status: 'draft', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: null, term_months: null, fields: { royalty_rate: '70' }, sent_document_sha256: null },
       ],
       contract_parties: [
         { contract_id: 'ct-ok', org_id: ORG, party_id: 'party-1', role: 'artist', position: 0 },
@@ -109,7 +110,7 @@ describe('loadAllocFacts', () => {
   it('counts only a signed contract whose signatures are valid for the frozen document and that carries a rate', async () => {
     const f = await loadAllocFacts(admin(base()), ORG, ['song-1']);
     expect(f.contracts.get('party-1')).toEqual([
-      { id: 'ct-ok', partyId: 'party-1', partyRole: 'artist', trackId: 'song-1', releaseId: null, artistContactId: null, rateUnits: 185000, effectiveDate: '2026-01-01', termMonths: 24 },
+      { id: 'ct-ok', partyId: 'party-1', partyRole: 'artist', trackId: 'song-1', releaseId: null, artistContactId: null, rateUnits: 185000, incomeClass: 'master', effectiveDate: '2026-01-01', termMonths: 24 },
     ]);
   });
 
@@ -118,6 +119,94 @@ describe('loadAllocFacts', () => {
     db.tables.contract_signatures = db.tables.contract_signatures.filter((s) => s.id !== 's2');
     const f = await loadAllocFacts(admin(db), ORG, ['song-1']);
     expect(f.contracts.get('party-1') ?? []).toEqual([]);
+  });
+});
+
+describe('contract kinds and who they pay (real facts, through calculate)', () => {
+  const sig = (contract: string, party: string, role: string, sha: string) => ({ id: `s-${contract}-${party}`, contract_id: contract, org_id: ORG, party_id: party, role, contract_version: 1, document_sha256: sha, signed_at: '2026-01-02' });
+  const line = (isrc: string, over: Partial<ParsedLine> = {}): ParsedLine => ({
+    lineNo: 2, isrc, upc: null, title: null, store: null, territory: null, units: null, grossMinor: BigInt(1000), periodStart: '2026-09-01', periodEnd: '2026-09-30', incomeClass: 'master', ...over,
+  });
+  const base = (): MemoryDb => ({
+    tables: {
+      tracks: [{ id: 'song-1', org_id: ORG, type: 'song', isrc: 'USABC2600001' }],
+      payees: [
+        { id: 'py-ara', org_id: ORG, party_id: 'p-ara', currency: 'USD', status: 'active', artist_contact_id: 'c-ara' },
+        { id: 'py-main', org_id: ORG, party_id: 'p-main', currency: 'USD', status: 'active', artist_contact_id: 'c-main' },
+      ],
+      split_sheets: [{ id: 'sh-1', org_id: ORG, track_id: 'song-1', kind: 'master', status: 'signed' }],
+      split_lines: [{ split_sheet_id: 'sh-1', org_id: ORG, party_id: 'p-ara', share: 100, position: 0, id: 'l1' }],
+      projects: [{ id: 'pr-1', org_id: ORG, inbox_for_contact_id: 'c-ara' }],
+      project_tracks: [{ project_id: 'pr-1', track_id: 'song-1' }],
+      project_contacts: [],
+      contracts: [{ id: 'ct-main', type: 'recording', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: null, term_months: null, fields: { royalty_rate: '40' }, sent_document_sha256: 'h' }],
+      contract_parties: [{ contract_id: 'ct-main', org_id: ORG, party_id: 'p-main', role: 'artist', position: 0 }],
+      contract_signatures: [sig('ct-main', 'p-main', 'artist', 'h')],
+      advances: [], earnings_recoupments: [], releases: [], release_items: [], track_links: [], parties: [],
+    },
+  });
+
+  it('M1: a signed contract for a party who is on NO sheet is loaded from the store — 100 % sheet + 40 % contract is the over-100 % review case', async () => {
+    const run = await calculate(admin(base()), ORG, 'USD', [line('USABC2600001')]);
+    expect(run.lines[0]).toMatchObject({ trackId: 'song-1', songId: 'song-1', reviewReason: 'terms_exceed_gross' });
+    expect(run.allocations).toEqual([]);
+  });
+
+  /** Ara 60 / Other 40 on the sheet; Ara's own 30 % song contract replaces her 60 %, leaving room for a contract-only payee. */
+  const roomy = (): MemoryDb => {
+    const db = base();
+    db.tables.split_lines = [{ split_sheet_id: 'sh-1', org_id: ORG, party_id: 'p-ara', share: 60, position: 0, id: 'l1' }, { split_sheet_id: 'sh-1', org_id: ORG, party_id: 'p-other', share: 40, position: 1, id: 'l2' }];
+    db.tables.payees.push({ id: 'py-other', org_id: ORG, party_id: 'p-other', currency: 'USD', status: 'active', artist_contact_id: null });
+    db.tables.contracts.push({ id: 'ct-ara', type: 'recording', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: null, term_months: null, fields: { royalty_rate: '30' }, sent_document_sha256: 'ha' });
+    db.tables.contract_parties.push({ contract_id: 'ct-ara', org_id: ORG, party_id: 'p-ara', role: 'artist', position: 0 });
+    db.tables.contract_signatures.push(sig('ct-ara', 'p-ara', 'artist', 'ha'));
+    db.tables.contracts[0].fields = { royalty_rate: '20' };
+    return db;
+  };
+
+  it('M1: when the sheet leaves room, the contract-only payee is paid by rate and the label keeps the rest', async () => {
+    const run = await calculate(admin(roomy()), ORG, 'USD', [line('USABC2600001')]);
+    expect(run.allocations.map((a) => [a.payeeId, a.basis, Number(a.payableMinor)])).toEqual([['py-ara', 'rate', 300], ['py-other', 'split', 400], ['py-main', 'rate', 200]]);
+  });
+
+  it('H1: a recording contract does not apply to publishing income, and a co-publishing contract does', async () => {
+    const db = base();
+    db.tables.split_sheets.push({ id: 'sh-c', org_id: ORG, track_id: 'song-1', kind: 'composition', status: 'signed' });
+    db.tables.split_lines.push({ split_sheet_id: 'sh-c', org_id: ORG, party_id: 'p-ara', share: 100, position: 0, id: 'lc' });
+    const publishing = await calculate(admin(db), ORG, 'USD', [line('USABC2600001', { incomeClass: 'publishing' })]);
+    // The recording contract of p-main is not for publishing income: only Ara's composition share.
+    expect(publishing.allocations.map((a) => [a.payeeId, a.basis, Number(a.payableMinor)])).toEqual([['py-ara', 'split', 1000]]);
+    // Re-typed as co-publishing it IS for publishing income: Ara 100 % + main 40 % is the over-100 % case.
+    db.tables.contracts[0].type = 'co_publishing';
+    const co = await calculate(admin(db), ORG, 'USD', [line('USABC2600001', { incomeClass: 'publishing' })]);
+    expect(co.lines[0].reviewReason).toBe('terms_exceed_gross');
+    // …and it no longer touches master income.
+    const master = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
+    expect(master.allocations.map((x) => x.payeeId)).toEqual(['py-ara']);
+  });
+
+  it('a contract type that carries no rate (a licence, management, an NDA) is never loaded', async () => {
+    const db = base();
+    db.tables.contracts[0].type = 'management';
+    db.tables.split_lines[0].share = 60;
+    db.tables.split_lines.push({ split_sheet_id: 'sh-1', org_id: ORG, party_id: 'p-ara', share: 40, position: 1, id: 'l2' });
+    const run = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
+    expect(run.allocations.map((a) => a.payeeId)).toEqual(['py-ara']);
+  });
+
+  it('M2: an artist-level deal pays its party on songs BY that artist (inbox or linked contact), not on another artist’s', async () => {
+    const db = roomy();
+    db.tables.contracts[0] = { ...db.tables.contracts[0], track_id: null, artist_contact_id: 'c-ara', fields: { royalty_rate: '10' } };
+    const byAra = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
+    expect(byAra.allocations.map((a) => [a.payeeId, a.basis, Number(a.payableMinor)])).toEqual([['py-ara', 'rate', 300], ['py-other', 'split', 400], ['py-main', 'rate', 100]]);
+    // The same song, now the work of someone else: the deal does not reach it.
+    db.tables.projects[0].inbox_for_contact_id = 'c-someone-else';
+    const elsewhere = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
+    expect(elsewhere.allocations.map((a) => a.payeeId)).toEqual(['py-ara', 'py-other']);
+    // A linked contact of the project counts as the song's artist too.
+    db.tables.project_contacts.push({ project_id: 'pr-1', contact_id: 'c-ara' });
+    const linked = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
+    expect(linked.allocations.map((a) => a.payeeId)).toEqual(['py-ara', 'py-other', 'py-main']);
   });
 });
 
@@ -172,7 +261,7 @@ describe('reprocessImport', () => {
         tracks: [{ id: 'song-1', org_id: ORG, type: 'song', isrc: 'USABC2600001' }],
         split_sheets: [{ id: 'sh-1', org_id: ORG, track_id: 'song-1', kind: 'master', status: 'circulated' }],
         split_lines: [{ split_sheet_id: 'sh-1', org_id: ORG, party_id: 'party-1', share: 100, position: 0, id: 'l1' }],
-        contracts: [{ id: 'ct-1', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: '2026-03-01', term_months: null, fields: { royalty_rate: '50' }, sent_document_sha256: 'h1' }],
+        contracts: [{ id: 'ct-1', type: 'recording', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: '2026-03-01', term_months: null, fields: { royalty_rate: '50' }, sent_document_sha256: 'h1' }],
         contract_parties: [{ contract_id: 'ct-1', org_id: ORG, party_id: 'party-1', role: 'artist', position: 0 }],
         contract_signatures: [{ id: 's1', contract_id: 'ct-1', org_id: ORG, party_id: 'party-1', role: 'artist', contract_version: 1, document_sha256: 'h1', signed_at: '2026-03-02' }],
         advances: [], earnings_recoupments: [], releases: [], release_items: [], track_links: [],

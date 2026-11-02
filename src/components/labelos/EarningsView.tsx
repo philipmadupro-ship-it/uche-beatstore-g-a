@@ -219,7 +219,7 @@ function ImportForm({ orgId, onDone }: { orgId: string; onDone: () => Promise<vo
       </label>
       <p className="text-[11px] leading-relaxed text-white/50">
         A file is one currency. Amounts are never converted: a line is allocated only to payees paid in the file’s currency, and the rest wait in the review queue below.
-        Importing the same file again changes nothing.
+        Importing the same file again changes nothing — not even with different options above; the first import stands.
       </p>
       <div className="flex items-center gap-3">
         <button type="submit" className={BTN} disabled={busy} data-testid="earnings-submit">
@@ -242,7 +242,7 @@ function ImportForm({ orgId, onDone }: { orgId: string; onDone: () => Promise<vo
         <p role="status" className="text-[11px] text-[#6DC6A4]" data-testid="earnings-result">
           {result.summary.created
             ? `Imported ${result.summary.lines} lines: ${result.summary.allocated_lines} allocated, ${result.summary.waiting_lines} waiting for review${result.summary.rounded_lines ? `, ${result.summary.rounded_lines} rounded to the cent` : ''}.`
-            : result.summary.message ?? 'This file was imported before. Nothing changed.'}
+            : result.summary.message ?? 'This file was imported before, so nothing changed.'}
         </p>
       )}
     </form>

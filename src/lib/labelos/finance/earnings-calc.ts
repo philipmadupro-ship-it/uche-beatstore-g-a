@@ -25,10 +25,18 @@
  *    rounded HALF TO EVEN (the one place a rate is applied). The split sheet is
  *    NOT applied to that payee. "Covers the song": the contract is for this song,
  *    or for a release that contains it (a payee need not be on the sheet), or it
- *    is an artist-level deal (no song, no release) for the payee's artist AND the
- *    payee is on the song's sheet. Most specific level wins (song > release >
- *    artist); two contracts at the best level with DIFFERENT rates →
- *    `contract_ambiguous` (never a guess); equal rates → the lowest contract id.
+ *    is an artist-level deal (no song, no release) and the contract's artist is
+ *    the SONG's artist (inbox or linked contact of a project the song sits in) —
+ *    a feature on someone else's song keeps their split share. Most specific
+ *    level wins (song > release > artist); two contracts at the best level with
+ *    DIFFERENT rates → `contract_ambiguous` (never a guess); equal rates → the
+ *    lowest contract id.
+ *    INCOME CLASS: a rate applies only to lines of the class its contract type
+ *    carries (`rateIncomeClass`): recording, feature, producer, beat licence,
+ *    distribution and 360 → `master` income; co-writing / co-publishing →
+ *    `publishing` income; every other type (licence, management, NDA, …) sets no
+ *    rate at all. A master rate never touches a publishing line, where that
+ *    payee keeps their composition share.
  *  - SPLIT: every other payee on the song's sheet in force gets gross × their
  *    share. The sheet is the song's CURRENT one (circulated / signed / disputed;
  *    `isLive`) of the line's income class (`master` income → MASTER sheet,
@@ -123,9 +131,21 @@ export type ContractFact = {
   releaseId: string | null;
   artistContactId: string | null;
   rateUnits: number;
+  /** The income the rate applies to, from the contract's type (`rateIncomeClass`); null = it applies to nothing. */
+  incomeClass: IncomeClass | null;
   effectiveDate: string | null;
   termMonths: number | null;
 };
+
+const MASTER_RATE_TYPES: ReadonlySet<string> = new Set(['recording', 'feature', 'producer', 'beat_licence', 'distribution', 'deal_360']);
+const PUBLISHING_RATE_TYPES: ReadonlySet<string> = new Set(['co_publishing']);
+
+/** Which income a contract type's royalty rate is for. Unknown / unrelated types: null (applies to nothing). */
+export function rateIncomeClass(contractType: string): IncomeClass | null {
+  if (MASTER_RATE_TYPES.has(contractType)) return 'master';
+  if (PUBLISHING_RATE_TYPES.has(contractType)) return 'publishing';
+  return null;
+}
 
 export type AllocFacts = {
   /** `${songId}:${kind}` → every sheet of that song and kind (only live ones are used). */
@@ -135,6 +155,8 @@ export type AllocFacts = {
   contracts: ReadonlyMap<string, readonly ContractFact[]>;
   /** song id → ids of the releases it is on. */
   releasesOfSong: ReadonlyMap<string, ReadonlySet<string>>;
+  /** song id → the roster contacts it is the work of (inbox / linked contacts of the projects it sits in). */
+  songArtists: ReadonlyMap<string, ReadonlySet<string>>;
 };
 
 export const sheetKey = (songId: string, kind: SheetKind) => `${songId}:${kind}`;
@@ -158,17 +180,18 @@ export type RateChoice = { kind: 'none' } | { kind: 'rate'; contractId: string; 
 
 export function chooseRate(
   candidates: readonly ContractFact[],
-  ctx: { songId: string; releaseIds: ReadonlySet<string>; payeeArtistId: string | null; onSheet: boolean; periodStart: string | null; periodEnd: string | null },
+  ctx: { songId: string; releaseIds: ReadonlySet<string>; songArtistIds: ReadonlySet<string>; incomeClass: IncomeClass; periodStart: string | null; periodEnd: string | null },
 ): RateChoice {
   const applicable: { c: ContractFact; rank: number }[] = [];
   for (const c of candidates) {
     if (c.partyRole === 'label') continue;
+    if (c.incomeClass !== ctx.incomeClass) continue;
     if (!inTerm(c, ctx.periodStart, ctx.periodEnd)) continue;
     if (c.trackId !== null) {
       if (c.trackId === ctx.songId) applicable.push({ c, rank: LEVEL_RANK.song });
     } else if (c.releaseId !== null) {
       if (ctx.releaseIds.has(c.releaseId)) applicable.push({ c, rank: LEVEL_RANK.release });
-    } else if (ctx.onSheet && c.artistContactId !== null && c.artistContactId === ctx.payeeArtistId) {
+    } else if (c.artistContactId !== null && ctx.songArtistIds.has(c.artistContactId)) {
       applicable.push({ c, rank: LEVEL_RANK.artist });
     }
   }
@@ -216,11 +239,12 @@ export function allocateLine(
   }
   const sheetParties = new Set(parties.map((p) => p.partyId));
   const releaseIds = facts.releasesOfSong.get(songId) ?? new Set<string>();
+  const songArtistIds = facts.songArtists.get(songId) ?? new Set<string>();
 
   const payeeOf = (partyId: string): PayeeFact | null => facts.payeeByParty.get(partyId) ?? null;
-  const rateFor = (partyId: string, payee: PayeeFact): RateChoice =>
+  const rateFor = (partyId: string): RateChoice =>
     chooseRate(facts.contracts.get(partyId) ?? [], {
-      songId, releaseIds, payeeArtistId: payee.artistContactId, onSheet: sheetParties.has(partyId), periodStart: line.periodStart, periodEnd: line.periodEnd,
+      songId, releaseIds, songArtistIds, incomeClass: line.incomeClass, periodStart: line.periodStart, periodEnd: line.periodEnd,
     });
 
   // Everyone who could be paid on this line: the sheet's parties, then parties whose signed contract names this song or one of its releases.
@@ -235,7 +259,7 @@ export function allocateLine(
       if (sheetParties.has(partyId)) return { ok: false, reason: 'no_payee' };
       continue;
     }
-    const choice = rateFor(partyId, payee);
+    const choice = rateFor(partyId);
     if (!sheetParties.has(partyId) && choice.kind !== 'rate') continue;
     if (!sheetParties.has(partyId) && choice.kind === 'rate' && payee.status !== 'active') return { ok: false, reason: 'payee_inactive' };
     payees.set(partyId, payee);

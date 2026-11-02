@@ -18,7 +18,7 @@ import type { PartyRole } from './contracts/types';
 import { inChunks, pageAll, ReadError } from './paged-read';
 import type { ArtistScope } from './artist-scope';
 import type { AdvanceFact, AllocFacts, ContractFact, MatchFacts, PayeeFact, ReviewReason, RunResult, SheetFact } from './finance/earnings-calc';
-import { computeEarnings } from './finance/earnings-calc';
+import { computeEarnings, rateIncomeClass } from './finance/earnings-calc';
 import type { ParsedLine } from './finance/earnings-import';
 import { minorFromDb } from './finance/money';
 
@@ -155,6 +155,7 @@ export async function loadMatchFacts(admin: AdminClient, orgId: string, isrcs: r
 
 type RawContract = {
   id: string;
+  type: string;
   track_id: string | null;
   release_id: string | null;
   artist_contact_id: string | null;
@@ -180,7 +181,7 @@ async function loadContractFacts(admin: AdminClient, orgId: string, partyIds: Re
         (from, to) =>
           admin
             .from('contracts')
-            .select('id, track_id, release_id, artist_contact_id, effective_date, term_months, fields, sent_document_sha256')
+            .select('id, type, track_id, release_id, artist_contact_id, effective_date, term_months, fields, sent_document_sha256')
             .eq('org_id', orgId)
             .eq('status', 'signed')
             .order('id')
@@ -193,7 +194,8 @@ async function loadContractFacts(admin: AdminClient, orgId: string, partyIds: Re
     if (err instanceof EarningsNotReadyError) return out;
     throw err;
   }
-  const rated = contracts.filter((c) => c.sent_document_sha256 && parseShare(typeof c.fields?.royalty_rate === 'string' ? (c.fields.royalty_rate as string) : null) !== null);
+  // A contract type that carries no income class sets no rate (rateIncomeClass → null): never loaded.
+  const rated = contracts.filter((c) => rateIncomeClass(c.type) !== null && c.sent_document_sha256 && parseShare(typeof c.fields?.royalty_rate === 'string' ? (c.fields.royalty_rate as string) : null) !== null);
   if (rated.length === 0) return out;
   const ids = rated.map((c) => c.id);
   const [links, sigs] = await Promise.all([
@@ -231,7 +233,7 @@ async function loadContractFacts(admin: AdminClient, orgId: string, partyIds: Re
         ...(out.get(l.party_id) ?? []),
         {
           id: c.id, partyId: l.party_id, partyRole: l.role, trackId: c.track_id, releaseId: c.release_id, artistContactId: c.artist_contact_id,
-          rateUnits, effectiveDate: c.effective_date, termMonths: c.term_months,
+          rateUnits, incomeClass: rateIncomeClass(c.type), effectiveDate: c.effective_date, termMonths: c.term_months,
         },
       ]);
     }
@@ -281,8 +283,8 @@ export async function loadAllocFacts(admin: AdminClient, orgId: string, songIds:
     sheets.set(key, [...(sheets.get(key) ?? []), { id: s.id, songId: s.track_id, kind: s.kind, status: s.status, lines }]);
   }
 
-  const partyIds = new Set(sheetRows.length ? lineRows.map((l) => l.party_id) : []);
-  const contracts = await loadContractFacts(admin, orgId, partyIds);
+  // Every payee can have a rated contract — including one who is on no sheet of this import (a contract-only payee).
+  const contracts = await loadContractFacts(admin, orgId, new Set(payeeByParty.keys()));
 
   const releaseItems = await guarded(() =>
     inChunks<{ release_id: string; song_track_id: string }>(
@@ -293,7 +295,56 @@ export async function loadAllocFacts(admin: AdminClient, orgId: string, songIds:
   );
   const releasesOfSong = new Map<string, Set<string>>();
   for (const it of releaseItems) releasesOfSong.set(it.song_track_id, new Set([...(releasesOfSong.get(it.song_track_id) ?? []), it.release_id]));
-  return { sheets, payeeByParty, contracts, releasesOfSong };
+  const songArtists = await loadSongArtists(admin, orgId, songIds);
+  return { sheets, payeeByParty, contracts, releasesOfSong, songArtists };
+}
+
+/**
+ * song id → the roster contacts the song is the work of: the inbox artist and the linked contacts of every
+ * project of this org the song sits in (the same reach `orgProjectIdsInScope` uses for a member's artist scope).
+ */
+export async function loadSongArtists(admin: AdminClient, orgId: string, songIds: readonly string[]): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>();
+  if (songIds.length === 0) return out;
+  const placements = await guarded(() =>
+    inChunks<{ project_id: string; track_id: string }>(
+      songIds,
+      (part, from, to) => admin.from('project_tracks').select('project_id, track_id').in('track_id', part).order('track_id').order('project_id').range(from, to),
+      'song placements',
+    ),
+  );
+  const projectIds = uniq(placements.map((p) => p.project_id));
+  const projects = await guarded(() =>
+    inChunks<{ id: string; inbox_for_contact_id: string | null }>(
+      projectIds,
+      (part, from, to) => admin.from('projects').select('id, inbox_for_contact_id').eq('org_id', orgId).in('id', part).order('id').range(from, to),
+      'song projects',
+    ),
+  );
+  const linked = await guarded(() =>
+    inChunks<{ project_id: string; contact_id: string | null }>(
+      projects.map((p) => p.id),
+      (part, from, to) => admin.from('project_contacts').select('project_id, contact_id').in('project_id', part).order('project_id').order('contact_id').range(from, to),
+      'song project contacts',
+    ),
+  );
+  const contactsOf = new Map<string, Set<string>>();
+  const add = (projectId: string, contact: string | null) => {
+    if (!contact) return;
+    const set = contactsOf.get(projectId) ?? new Set<string>();
+    set.add(contact);
+    contactsOf.set(projectId, set);
+  };
+  for (const p of projects) add(p.id, p.inbox_for_contact_id);
+  for (const l of linked) add(l.project_id, l.contact_id);
+  const inOrg = new Set(projects.map((p) => p.id));
+  for (const pl of placements) {
+    if (!inOrg.has(pl.project_id)) continue;
+    const set = out.get(pl.track_id) ?? new Set<string>();
+    for (const c of contactsOf.get(pl.project_id) ?? []) set.add(c);
+    out.set(pl.track_id, set);
+  }
+  return out;
 }
 
 /** Recoupable, live advances with what is still unrecouped. */

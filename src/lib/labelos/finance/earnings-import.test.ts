@@ -107,6 +107,14 @@ describe('buildLines', () => {
     expect(r).toMatchObject({ ok: false, failure: { code: 'bad_rows', issues: [{ lineNo: 2, message: expect.stringContaining('ambiguous') }] } });
   });
 
+  it('refuses a file whose total does not fit a 64-bit column instead of overflowing', () => {
+    const big = '9'.repeat(15);
+    const rows = Array.from({ length: 200 }, () => `USABC2600001,${big}.99`).join('\n');
+    const f = csv(`ISRC,Amount\n${rows}\n`);
+    const r = buildLines(f.header, f.rows, { preset: 'generic', currency: 'USD', mapping: { isrc: 'ISRC', amount: 'Amount' } });
+    expect(r).toMatchObject({ ok: false, failure: { code: 'amount_too_large' } });
+  });
+
   it('is all-or-nothing: a bad row refuses the file and names the line', () => {
     const f = csv('ISRC,Amount\nUSABC2600001,1.00\nUSABC2600002,oops\n');
     const r = buildLines(f.header, f.rows, { preset: 'generic', currency: 'USD', mapping: { isrc: 'ISRC', amount: 'Amount' } });

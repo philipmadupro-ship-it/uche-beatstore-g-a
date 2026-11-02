@@ -39,6 +39,10 @@ const log = createLogger('api.org.finance.earnings.imports');
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const json = (status: number, body: Record<string, unknown>) => NextResponse.json(body, { status, headers: NO_STORE });
 
+/** Said whenever the same bytes come in again: the options are NOT re-applied, which is the one thing a person might expect. */
+const SAME_FILE_MESSAGE =
+  'This file was imported before, so nothing changed. The original import stands with the options it was made with (service, currency, income class, rounding); a change to those options does not re-import it.';
+
 type Params = { params: Promise<{ orgId: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -92,7 +96,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const existing = await access.admin.from('earnings_imports').select('id').eq('org_id', access.orgId).eq('file_sha256', sha).maybeSingle();
     if (existing.error && !['PGRST205', '42P01'].includes(existing.error.code ?? '')) throw new Error(existing.error.message);
     if (existing.error) throw new EarningsNotReadyError();
-    if (existing.data) return json(200, { created: false, import_id: (existing.data as { id: string }).id, message: 'This file was imported before. Nothing changed.' });
+    if (existing.data) return json(200, { created: false, import_id: (existing.data as { id: string }).id, message: SAME_FILE_MESSAGE });
 
     const csv = parseCsv(new TextDecoder('utf-8').decode(bytes), bytes.byteLength);
     if (!csv.ok) return json(422, { error: CSV_FAILURE_MESSAGE[csv.code], code: csv.code, ...(csv.line ? { line: csv.line } : {}) });
@@ -133,7 +137,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       run,
     );
     if (!outcome.ok) return json(outcome.code === 'recoup_conflict' ? 409 : 422, { error: outcome.message, code: outcome.code });
-    if (!outcome.created) return json(200, { created: false, import_id: outcome.id, message: 'This file was imported before. Nothing changed.' });
+    if (!outcome.created) return json(200, { created: false, import_id: outcome.id, message: SAME_FILE_MESSAGE });
 
     const waiting = run.lines.filter((l) => l.reviewReason !== null).length;
     await recordEvent(access.admin, { orgId: access.orgId, userId: access.userId }, 'earnings.imported', { type: 'earnings_import', id: outcome.id }, {
