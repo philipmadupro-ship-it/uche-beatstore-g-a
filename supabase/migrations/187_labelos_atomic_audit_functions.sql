@@ -573,7 +573,7 @@ BEGIN
   SELECT * INTO v_last FROM public.approvals a
   WHERE a.org_id = p_org AND a.gate = p_gate
     AND CASE WHEN p_kind = 'song' THEN a.song_id = p_subject ELSE a.release_id = p_subject END
-  ORDER BY a.created_at DESC LIMIT 1;
+  ORDER BY a.created_at DESC, a.id DESC LIMIT 1;
   v_has := FOUND;
 
   IF v_has AND v_last.decision = 'requested' AND p_decision = 'approved'

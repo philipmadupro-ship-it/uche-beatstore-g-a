@@ -71,8 +71,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     fingerprint = await readFingerprint(access.admin, org, release.id);
   } catch (err) {
-    log.warn('fingerprint not read; delivering without the atomic check', { releaseId, error: errorMessage(err) });
+    // A failed read is a failure, not a downgrade to the weaker path.
+    log.error('fingerprint read failed', { releaseId, error: errorMessage(err) });
+    return json(500, { error: 'Could not deliver the release' });
   }
+  if (!fingerprint) return json(404, { error: 'Not found' });
 
   let readiness;
   try {
@@ -110,7 +113,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const visibility = plan.override ? ('internal' as const) : ('artist' as const);
 
   // 187: one function, one transaction.
-  if (fingerprint) {
+  {
     const { data, error } = await auditRpc(access.admin, 'releaseDeliver', {
       p_org: org,
       p_actor: access.userId,

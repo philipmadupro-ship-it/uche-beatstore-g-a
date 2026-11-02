@@ -182,7 +182,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const actor = { orgId: org, userId: access.userId };
 
   let release;
+  // Read BEFORE the facts the plan is made from (187): anything that changes after is caught under the lock.
+  let itemsKey: string;
   try {
+    itemsKey = await readItemsKey(admin, access.object.id);
     release = await loadListingRelease(admin, org, access.object.id);
   } catch (err) {
     log.error('read failed', { releaseId, error: errorMessage(err) });
@@ -214,7 +217,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         p_release: release.id,
         p_list: false,
         p_playback: null,
-        p_expect: storeExpectation(release, await readItemsKey(admin, release.id)),
+        p_expect: storeExpectation(release, itemsKey),
         p_ctx: { artist_id: release.contact_id, project_id: release.project_id },
         p_payload: { askedToDeletePreviews: plan.askToDeletePreviews, deletePreviews: plan.deletePreviews },
       });
@@ -283,10 +286,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   let current;
   let consents;
   let veto;
-  let itemsKey: string | null = null;
   try {
-    // Before the facts the plan is made from: anything that changes after this is caught under the lock (187).
-    itemsKey = await readItemsKey(admin, release.id).catch(() => null);
     [owner, items, current, consents, veto] = await Promise.all([
       loadStoreOwnerOrgs(admin),
       loadListingItems(admin, org, release.id),
@@ -390,7 +390,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   // 187: the claim, the consent re-check and `release.store_listed` in ONE transaction under the release's lock.
   // Derivatives were cut above, outside it. No claim exists to put back.
   let atomic = false;
-  if (itemsKey !== null) {
+  {
     const { data, error: rpcError } = await auditRpc(admin, 'releaseStore', {
       p_org: org,
       p_actor: access.userId,

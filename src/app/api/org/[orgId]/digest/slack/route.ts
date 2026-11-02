@@ -113,7 +113,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   // a secret the org saved must never become undeletable. Only setting one needs the module.
   const access = await requireOrgCapability(orgId, 'org.manage');
   if (!access.ok) return access.res;
-  {
+  try {
     const { error } = await auditRpc(access.admin, 'digestChannelRemove', { p_org: access.orgId, p_actor: access.userId, p_payload: {} });
     if (!error) return json(200, { configured: false });
     if (/org_digest_channels/.test(error.message) && (error.code === '42P01' || error.code === 'PGRST205')) return json(200, { configured: false });
@@ -121,6 +121,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       log.error('digest channel clear failed', { orgId, error: error.message });
       return json(500, { error: 'Could not remove the Slack webhook' });
     }
+  } catch (err) {
+    log.error('digest channel clear failed', { orgId, error: errorMessage(err) });
+    return json(500, { error: 'Could not remove the Slack webhook' });
   }
   let change: Awaited<ReturnType<typeof clearChannel>>;
   try {
