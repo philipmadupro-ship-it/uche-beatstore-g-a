@@ -120,7 +120,7 @@ describe('changes', () => {
     render(<PressKitPanel orgId={ORG} releaseId={REL} />);
     fireEvent.change(await screen.findByLabelText('Link label', { selector: 'input[placeholder^="Who"]' }), { target: { value: 'NME' } });
     fireEvent.click(screen.getByText('Make link'));
-    await waitFor(() => expect(useToastStore.getState().toasts.some((t) => /at most 25/.test(t.title ?? t.message ?? ''))).toBe(true));
+    await waitFor(() => expect(useToastStore.getState().toasts.some((t) => /at most 25/.test(t.title ?? ''))).toBe(true));
     expect(screen.queryByTestId('press-fresh-link')).toBeNull();
   });
 
