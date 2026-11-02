@@ -28,7 +28,7 @@ import {
   toOrgContactView,
   type OrgContactRow,
 } from '@/lib/labelos/org-contacts';
-import { artistOrgRosterError, isSecondArtistError, ONE_ARTIST, rosterCapError } from '@/lib/labelos/roster';
+import { artistOrgRosterError, ARTIST_CAP_REACHED, isArtistCapError, isSecondArtistError, ONE_ARTIST, rosterCapError } from '@/lib/labelos/roster';
 import { connectedRoster } from '@/lib/labelos/connections-store';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
@@ -97,6 +97,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
       .single();
     // 166: a second artist that raced past the check above.
     if (isSecondArtistError(insertErr)) return NextResponse.json({ error: ONE_ARTIST }, { status: 409 });
+    if (isArtistCapError(insertErr)) return NextResponse.json({ error: ARTIST_CAP_REACHED }, { status: 409 });
     if (isDuplicateEmail(insertErr)) return NextResponse.json({ error: DUPLICATE_EMAIL }, { status: 409 });
     if (insertErr || !inserted) throw new Error(insertErr?.message ?? 'insert returned nothing');
     const contact = toOrgContactView(inserted as unknown as OrgContactRow);

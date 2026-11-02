@@ -262,6 +262,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ or
     if (rpcErr) throw new Error(rpcErr.message);
     if (result?.error === 'not_found') return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (result?.error === 'changed') return NextResponse.json({ error: MEMBER_CHANGED }, { status: 409 });
+    // 187: decided under the entitlement row's lock (the check above can pass twice at cap-1).
+    if (result?.error === 'seat_limit') return NextResponse.json({ error: 'This organization has used all of its seats. Remove someone or ask for more seats.', code: 'seat_limit' }, { status: 409 });
     const after = (result?.member ?? null) as MemberRow | null;
     if (!after) throw new Error('member update returned no row');
     return NextResponse.json({ member: toView(after, access.userId) });
