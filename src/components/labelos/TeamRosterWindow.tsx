@@ -125,6 +125,8 @@ async function readJson(res: Response): Promise<Record<string, unknown>> {
   return (await res.json().catch(() => ({}))) as Record<string, unknown>;
 }
 
+const isPressContact = (c: OrgContactView): boolean => [c.category, c.secondary_category].some((x) => (x ?? '').trim().toLowerCase() === 'press');
+
 export function TeamRosterWindow() {
   const shell = useOrgShell();
   const [members, setMembers] = useState<Member[] | null>(null);
@@ -216,7 +218,11 @@ export function TeamRosterWindow() {
   const ownerCount = useMemo(() => (members ?? []).filter((m) => m.role === 'owner').length, [members]);
 
   const rosterContacts = useMemo(() => (Array.isArray(contacts) ? contacts.filter((c) => c.in_roster) : []), [contacts]);
-  const collaborators = useMemo(() => (Array.isArray(contacts) ? contacts.filter((c) => !c.in_roster) : []), [contacts]);
+  const [pressOnly, setPressOnly] = useState(false);
+  const directoryPeople = useMemo(() => (Array.isArray(contacts) ? contacts.filter((c) => !c.in_roster) : []), [contacts]);
+  // LABEL-66: press contacts (main or extra role `press`) are the people the release outreach tracker offers.
+  const pressCount = useMemo(() => directoryPeople.filter(isPressContact).length, [directoryPeople]);
+  const collaborators = useMemo(() => (pressOnly ? directoryPeople.filter(isPressContact) : directoryPeople), [directoryPeople, pressOnly]);
   const roster: Roster = contacts === null || contacts === 'failed' ? contacts : rosterContacts.map((c) => ({ id: c.id, name: c.name }));
 
   if (!shell) return null;
@@ -574,6 +580,18 @@ export function TeamRosterWindow() {
           onRemove={removeContact}
           invite={adds.member ? { label: 'Invite to sign in…', mode: 'login', open: setInviteTarget } : undefined}
         />
+      )}
+      {canReadCatalog && org.kind !== 'producer' && Array.isArray(contacts) && pressCount > 0 && (
+        <div className="mt-10 -mb-6 flex items-center gap-2" data-testid="press-contacts-filter">
+          <button
+            type="button"
+            aria-pressed={pressOnly}
+            onClick={() => setPressOnly((v) => !v)}
+            className={`inline-flex h-8 items-center rounded-lg border px-3 text-[11px] transition-colors ${pressOnly ? 'border-white/30 bg-white/[0.14] text-white' : 'border-white/10 bg-white/[0.06] text-white/70 hover:border-white/20 hover:bg-white/[0.10]'}`}
+          >
+            Press contacts · {pressCount}
+          </button>
+        </div>
       )}
       {canReadCatalog && org.kind !== 'producer' && Array.isArray(contacts) && (
         <ContactList

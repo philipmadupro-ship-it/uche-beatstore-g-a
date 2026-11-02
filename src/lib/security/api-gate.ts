@@ -160,6 +160,20 @@ export function isLabelOsSignPagePath(pathname: string): boolean {
 }
 
 /**
+ * The public press-kit page (LABEL-66): `/api/press/<token>` (+ `/assets/<photo id>`) and the page
+ * `/press/<token>`. Behind LABEL_OS_ENABLED like the rest of Label OS, open to anyone — signed in or
+ * not — because the share link is the credential and the route checks it (one 404 for every failure).
+ * Exactly the shapes below: nothing else under those names is opened.
+ */
+export function isLabelOsPressApiPath(pathname: string): boolean {
+  return /^\/api\/press\/[^/]+(\/assets\/[^/]+)?\/?$/.test(pathname);
+}
+
+export function isLabelOsPressPagePath(pathname: string): boolean {
+  return /^\/press\/[^/]+\/?$/.test(pathname);
+}
+
+/**
  * Which check the proxy runs on an /api request from this caller:
  *  - `none`     signed out, a public route, or not an /api path at all;
  *  - `member`   a Label OS path: the caller must belong to some org or (LABEL-21)
@@ -177,6 +191,7 @@ export type ApiGate = 'none' | 'session' | 'member' | 'producer';
 export function apiGateFor(pathname: string, signedIn: boolean): ApiGate {
   if (!signedIn || !pathname.startsWith('/api/')) return 'none';
   if (isLabelOsSignApiPath(pathname)) return 'none';
+  if (isLabelOsPressApiPath(pathname)) return 'none';
   if (isLabelOsJoinApiPath(pathname)) return 'session';
   if (isLabelOsSetupApiPath(pathname)) return 'session';
   if (isLabelOsRestoreApiPath(pathname)) return 'session';

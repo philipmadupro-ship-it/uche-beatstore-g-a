@@ -95,6 +95,12 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'marketing_platform_steps', source: { by: 'org' }, order: ['id'] },
   { name: 'marketing_budget_lines', source: { by: 'org' }, order: ['id'], omit: ['note'] },
   { name: 'marketing_asset_requests', source: { by: 'org' }, order: ['id'] },
+  // LABEL-66: the kit, its links and photo references, who it was shared with (label, expiry, views — NEVER the token hash) and the outreach tracker.
+  { name: 'press_kits', source: { by: 'org' }, order: ['id'] },
+  { name: 'press_kit_links', source: { by: 'org' }, order: ['id'] },
+  { name: 'press_kit_photos', source: { by: 'org' }, order: ['id'] },
+  { name: 'press_kit_shares', source: { by: 'org' }, order: ['id'], omit: ['token_hash'] },
+  { name: 'press_outreach', source: { by: 'org' }, order: ['id'] },
   { name: 'activity_events', source: { by: 'org' }, order: ['created_at', 'id'] },
 ];
 
