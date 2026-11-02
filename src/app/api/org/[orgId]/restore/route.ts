@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOrgOwner } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { recordEvent } from '@/lib/labelos/activity';
+import { auditRpc, isMissingAtomicRpc } from '@/lib/labelos/audit-rpc';
 import { canRestore, graceDaysLeft, purgeAfter } from '@/lib/labelos/org-lifecycle';
 import { restoreOrg, softDeleteOrg } from '@/lib/labelos/org-lifecycle-store';
 import { createLogger } from '@/lib/log';
@@ -51,6 +52,26 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ or
 
   if (!canRestore(deletedAt)) {
     return NextResponse.json({ error: 'The grace period is over; this organization can no longer be restored' }, { status: 410 });
+  }
+
+  // 187 (LABEL-73): compare-and-set on deleted_at, the grace period and `org.restored` in one transaction.
+  {
+    const { data, error } = await auditRpc(admin, 'orgRestore', {
+      p_org: org.id,
+      p_actor: owner.userId,
+      p_expect_deleted_at: deletedAt,
+      p_payload: { deletedAt },
+    });
+    if (!error) {
+      if (data?.error === 'expired') return NextResponse.json({ error: 'The grace period is over; this organization can no longer be restored' }, { status: 410 });
+      if (data?.error) return NextResponse.json({ error: 'Not found' }, { status: data.error === 'not_owner' ? 403 : 404 });
+      log.info('org restored', { orgId: org.id });
+      return NextResponse.json({ org: { id: org.id, name: org.name, slug: org.slug, kind: org.kind }, href: `/o/${org.slug}` });
+    }
+    if (!isMissingAtomicRpc(error)) {
+      log.error('restore org failed', { orgId: org.id, error: error.message });
+      return NextResponse.json({ error: 'Could not restore the organization' }, { status: 500 });
+    }
   }
 
   try {

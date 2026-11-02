@@ -31,6 +31,12 @@
  *   platformSetEntitlements  org.entitlements_changed in the licensee org (170, LABEL-47)
  *   orgSettings              org.settings_changed (172, LABEL-51; owner only, checked again in SQL)
  *   marketingPlanRequired    marketing_plan.requirement_changed (183, LABEL-65; owner only, checked again in SQL)
+ *   orgSettingsAtomic        the same, with the payload's `from` read under the lock (187, LABEL-73)
+ *   releaseDeliver           release.delivered (187; fingerprint compared under the release lock)
+ *   releaseStore             release.store_listed | release.store_unlisted (187; consent re-checked under the lock)
+ *   releaseImport            project.created + release.created + release.imported (187)
+ *   orgDelete | orgRestore | orgExport   org.deletion_scheduled | org.restored | org.exported (187)
+ *   digestChannelSet | digestChannelRemove   digest.channel_set | digest.channel_removed (187)
  *
  * Accepting an invitation (`member.joined`) is 138's
  * `labelos_accept_invitation` (lib/labelos/invitations.ts), which already
@@ -90,10 +96,21 @@ export const AUDIT_RPCS = {
   orgSettings: 'labelos_audit_org_settings',
   // Migration 183 (LABEL-65): whether the marketing gate asks for a plan, with `marketing_plan.requirement_changed`.
   marketingPlanRequired: 'labelos_audit_marketing_plan_required',
+  // Migration 187 (LABEL-73): the same write with `from` read under the row lock (a sibling, because 192 redefines the one above).
+  orgSettingsAtomic: 'labelos_audit_org_settings_atomic',
   // Migration 190 (doc 25): team accounts an org creates — membership + managed row + event, and reset / switch-off.
   teamAccountCreate: 'labelos_audit_team_account_create',
   teamAccountReset: 'labelos_audit_team_account_reset',
   teamAccountSetDisabled: 'labelos_audit_team_account_set_disabled',
+  // Migration 187 (LABEL-73): the audit-class writes that used to be "change, then event, put back on failure".
+  releaseDeliver: 'labelos_audit_release_deliver',
+  releaseStore: 'labelos_audit_release_store',
+  releaseImport: 'labelos_audit_release_import',
+  orgDelete: 'labelos_audit_org_delete',
+  orgRestore: 'labelos_audit_org_restore',
+  orgExport: 'labelos_audit_org_export',
+  digestChannelSet: 'labelos_audit_digest_channel_set',
+  digestChannelRemove: 'labelos_audit_digest_channel_remove',
 } as const;
 export type AuditRpcKey = keyof typeof AUDIT_RPCS;
 
@@ -296,6 +313,7 @@ export type AuditRpcArgs = {
   orgSettings: { p_org: string; p_actor: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
   /** Answers `{ required, changed }` or `{ error: 'not_found' | 'not_owner' }`; derives `from` itself, so there is no payload. */
   marketingPlanRequired: { p_org: string; p_actor: string; p_required: boolean };
+  orgSettingsAtomic: { p_org: string; p_actor: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
   teamAccountCreate: {
     p_org: string;
     p_actor: string;
@@ -305,6 +323,41 @@ export type AuditRpcArgs = {
     p_artist_ids: string[];
     p_payload: EventPayload;
   };
+  /** 187: p_expect is the fingerprint (lib/labelos/release-fingerprint `deliverExpectation`); answers { release } or { error: not_found | not_draft | changed }. */
+  releaseDeliver: {
+    p_org: string;
+    p_actor: string;
+    p_release: string;
+    p_distributor: string;
+    p_delivered_at: string;
+    p_expect: Record<string, unknown>;
+    p_ctx: { artist_id: string | null; project_id: string | null };
+    p_payload: EventPayload;
+    p_visibility: 'artist' | 'internal';
+  };
+  /** 187: list / unlist. Answers { release } or { error: not_found | changed | consent | not_released | not_listed }. */
+  releaseStore: {
+    p_org: string;
+    p_actor: string;
+    p_release: string;
+    p_list: boolean;
+    p_playback: 'preview' | 'full' | null;
+    p_expect: Record<string, unknown>;
+    p_ctx: { artist_id: string | null; project_id: string | null };
+    p_payload: EventPayload;
+  };
+  /** 187: answers { release, project_id, created_project } or { error: not_found }. */
+  releaseImport: { p_org: string; p_actor: string; p_row: Record<string, unknown>; p_payload: EventPayload };
+  /** 187: answers { deleted_at } or { error: not_found | not_owner | producer_org }. */
+  orgDelete: { p_org: string; p_actor: string; p_deleted_at: string; p_payload: EventPayload };
+  /** 187: answers { restored } or { error: not_found | not_owner | not_deleted | changed | expired }. */
+  orgRestore: { p_org: string; p_actor: string; p_expect_deleted_at: string; p_payload: EventPayload };
+  /** 187: answers { recorded } or { error: not_found | not_owner }. */
+  orgExport: { p_org: string; p_actor: string; p_payload: EventPayload };
+  /** 187: p_cipher is the AES-GCM ciphertext; answers { configured, replaced } or { error: not_found }. */
+  digestChannelSet: { p_org: string; p_actor: string; p_cipher: string; p_payload: EventPayload };
+  /** 187: answers { configured: false, changed }. */
+  digestChannelRemove: { p_org: string; p_actor: string; p_payload: EventPayload };
   teamAccountReset: { p_org: string; p_actor: string; p_user: string };
   teamAccountSetDisabled: { p_org: string; p_actor: string; p_user: string; p_disabled: boolean };
 };
@@ -335,6 +388,17 @@ export function isMissingAuditRpc(error: AuditRpcError | null): boolean {
   if (!error) return false;
   if (!/labelos_audit_/.test(error.message)) return false;
   return error.code === 'PGRST202' || error.code === '42883' || /could not find the function/i.test(error.message);
+}
+
+/**
+ * Migration 187 is not applied (or this function is not in it): the caller
+ * falls back to its previous path — change, then event, put back on failure.
+ * Never a 500, never a 503: production behaves as before until 187 is pasted.
+ */
+export function isMissingAtomicRpc(error: AuditRpcError | null): boolean {
+  if (isMissingAuditRpc(error)) return true;
+  // The settings sibling calls 192's validator; a database with 187 but not 192 has none.
+  return !!error && /labelos_validate_org_settings_patch/.test(error.message) && (error.code === 'PGRST202' || error.code === '42883');
 }
 
 export const AUDIT_RPC_NOT_READY = 'Auditing is not set up yet (migration 146 has not been applied).';
