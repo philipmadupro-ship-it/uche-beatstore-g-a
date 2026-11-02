@@ -252,16 +252,17 @@ SELECT public.check_eq('the service-only write trigger sits on every table the p
    WHERE t.tgname = 'labelos_org_rows_service_only' AND NOT t.tgisinternal),
   -- approvals: 157's org table (LABEL-30)
   -- artist_direction, artist_references: 152's org tables (LABEL-26); parties: 153's (LABEL-27)
-  'approvals,artist_direction,artist_messages,artist_portals,artist_references,contact_track_states,'
+  -- advances, earnings_*, finance_periods, payees, payments, statements, statement_lines: 179's org tables (LABEL-61)
+  'advances,approvals,artist_direction,artist_messages,artist_portals,artist_references,contact_track_states,'
   -- contract_parties, contract_templates, contracts: the org tables of 176 (LABEL-57); contract_signatures / contract_signers: 178's (LABEL-60); listing_consents: 186's (LABEL-71)
-  'contract_parties,contract_signatures,contract_signers,contract_templates,contracts,listing_consents,notifications,'
+  'contract_parties,contract_signatures,contract_signers,contract_templates,contracts,earnings_imports,earnings_lines,finance_periods,listing_consents,notifications,'
   -- org_saved_views: 161's org table (LABEL-37)
-  'org_saved_views,parties,project_assets,project_comments,project_contacts,'
+  'org_saved_views,parties,payees,payments,project_assets,project_comments,project_contacts,'
   'project_folder_items,project_shares,project_tags,project_tracks,projects,'
   -- release_items, releases: 144's own org tables (LABEL-16)
   'release_items,releases,song_beats,song_reviews,'
   -- split_lines, split_sheets: 155's org tables (LABEL-28)
-  'split_lines,split_sheets,'
+  'split_lines,split_sheets,statement_lines,statements,'
   -- store_listing_vetoes: 186's org table (LABEL-71)
   'store_listing_vetoes,'
   -- tasks: 151's org table (LABEL-23)

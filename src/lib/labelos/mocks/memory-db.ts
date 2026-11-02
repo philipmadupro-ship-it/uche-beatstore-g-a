@@ -31,6 +31,8 @@ export type MemoryDb = {
   maxInList?: number;
   /** column lists that must be unique per table, e.g. { contacts: [['org_id', 'email']] } */
   unique?: Record<string, string[][]>;
+  /** Tables of a migration that is not applied: any read or write on them answers PostgREST's "relation not found" (PGRST205). */
+  missingTables?: string[];
   /** Database functions for `.rpc(name, args)`: answer like PostgREST would. */
   rpc?: Record<string, (args: Record<string, unknown>, tables: Record<string, Row[]>) => { data: unknown; error: Err | null }>;
 };
@@ -184,6 +186,7 @@ export function memoryAdmin(db: MemoryDb) {
     }
 
     function run(): { data: unknown; error: Err | null; count?: number } {
+      if (db.missingTables?.includes(table)) return { data: null, error: { message: `Could not find the table 'public.${table}' in the schema cache`, code: 'PGRST205' } };
       if (tooLong) return { data: null, error: { message: 'Request-URI Too Long', code: '414' } };
       const matching = rowsOf().filter((r) => filters.every((f) => f(r)));
       if (mode === 'select') {
