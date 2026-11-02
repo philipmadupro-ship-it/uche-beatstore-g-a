@@ -9,7 +9,7 @@
  *      row lock and derives `from` itself. A request that changes nothing is 200
  *      and writes nothing. Migration 183 missing: 503 naming it.
  *
- * Why not PATCH …/settings: that function validates a closed key list and is
+ * 404 for an org without the `marketing` module, as the plan's own routes. Why not PATCH …/settings: that function validates a closed key list and is
  * being reworked (LABEL-73); a new key there would mean redefining it here.
  * The requirement only matters while `marketing_gate` is on; the settings
  * screen says so.
@@ -20,7 +20,7 @@ import { MarketingPlanRequiredBodySchema } from '@/lib/contracts';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
-import { NEEDS_183, planTablesReady } from '@/lib/labelos/marketing-plan-store';
+import { NEEDS_183, orgHasMarketing, planTablesReady } from '@/lib/labelos/marketing-plan-store';
 import { readReadinessSettings } from '@/lib/labelos/release-readiness-store';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
@@ -40,6 +40,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!access.ok) return access.res;
   if (access.org.kind === 'producer') return json(404, { error: 'Not found' });
   try {
+    // 404 without the marketing module (licence or the owner's own switch-off), like the plan's own routes.
+    if (!(await orgHasMarketing(access.admin, access.org.id))) return json(404, { error: 'Not found' });
     const ready = await planTablesReady(access.admin);
     const settings = await readReadinessSettings(access.admin, access.org.id);
     return json(200, { schemaReady: ready, required: ready && settings.marketing_plan_required });
@@ -58,6 +60,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const parsed = await readBody(req, MarketingPlanRequiredBodySchema);
   if (!parsed.ok) return parsed.res;
   try {
+    if (!(await orgHasMarketing(access.admin, access.org.id))) return json(404, { error: 'Not found' });
     if (!(await planTablesReady(access.admin))) return json(503, { error: NEEDS_183 });
     const { data, error } = await auditRpc(access.admin, 'marketingPlanRequired', { p_org: access.org.id, p_actor: access.userId, p_required: parsed.data.required });
     if (isMissingAuditRpc(error)) return json(503, { error: NEEDS_183 });

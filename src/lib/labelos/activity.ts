@@ -400,13 +400,13 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'digest.unsubscribed': 'internal',
   'digest.channel_set': 'internal',
   'digest.channel_removed': 'internal',
-  // The plan is the marketing side's business record; only the ask to the artist is theirs to read.
+  // The plan is the marketing side's business record, asks to the artist included (the artist is told by the bell, not the feed).
   'marketing_plan.created': 'internal',
   'marketing_plan.item_changed': 'internal',
   'marketing_plan.platform_changed': 'internal',
   'marketing_plan.budget_changed': 'internal',
-  'marketing_plan.asset_requested': 'artist',
-  'marketing_plan.asset_changed': 'artist',
+  'marketing_plan.asset_requested': 'internal',
+  'marketing_plan.asset_changed': 'internal',
   'marketing_plan.requirement_changed': 'internal',
 };
 

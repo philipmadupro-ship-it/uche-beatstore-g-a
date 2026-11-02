@@ -133,6 +133,27 @@ describe('what the panel sends', () => {
   });
 });
 
+describe('what the artist sees (L3)', () => {
+  const open = [{ id: 'a1', kind: 'photos', note: 'Press shots', status: 'open', createdAt: 'x', resolvedAt: null, notified: true }];
+  it('an artist with open asks and no write access is told how to deliver them', async () => {
+    state = base({ me: { canWrite: false, canWriteBudget: false, canSetRequired: false }, assets: open });
+    render(<MarketingPlanPanel orgId={ORG} releaseId={REL} />);
+    expect((await screen.findByTestId('marketing-asset-howto')).textContent).toMatch(/reply to your A&R contact.*upload the files to the project/);
+    expect(screen.queryByRole('button', { name: /^Ask$/ })).toBeNull();
+  });
+  it('nobody is told that when they can write, or when nothing is open', async () => {
+    state = base({ assets: open });
+    const { unmount } = render(<MarketingPlanPanel orgId={ORG} releaseId={REL} />);
+    await screen.findByTestId('marketing-assets');
+    expect(screen.queryByTestId('marketing-asset-howto')).toBeNull();
+    unmount();
+    state = base({ me: { canWrite: false, canWriteBudget: false, canSetRequired: false }, assets: [{ ...open[0], status: 'fulfilled' }] });
+    render(<MarketingPlanPanel orgId={ORG} releaseId={REL} />);
+    await screen.findByTestId('marketing-assets');
+    expect(screen.queryByTestId('marketing-asset-howto')).toBeNull();
+  });
+});
+
 describe('asking the artist', () => {
   it('says the artist has been told when an account was reached', async () => {
     render(<MarketingPlanPanel orgId={ORG} releaseId={REL} />);

@@ -310,6 +310,11 @@ function Assets({ orgId, releaseId, state, canWrite, busy, act }: { orgId: strin
           ))}
         </ul>
       )}
+      {!canWrite && requests.some((r) => r.status === 'open') && (
+        <p className="mt-3 text-[11px] leading-relaxed text-white/60" data-testid="marketing-asset-howto">
+          To send these, reply to your A&amp;R contact at the label, or upload the files to the project they shared with you. They mark each one received.
+        </p>
+      )}
       {after && <p className="mt-2 text-[11px] leading-relaxed text-white/60" role="status" data-testid="marketing-asset-delivery">{after}</p>}
       {canWrite && (
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-center gap-2">

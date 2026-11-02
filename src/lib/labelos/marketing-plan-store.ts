@@ -10,6 +10,8 @@
  */
 import type { AdminClient } from '@/lib/auth/ownership';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
+import { loadEntitlements } from './entitlements-store';
+import { effectiveModules, parseDepartmentsOff } from './org-settings';
 import { PLAN_LIMITS, type AssetKind, type AssetStatus, type BudgetStatus, type PlanPhase, type Platform, type PlatformStep, type PlanViewInput } from './marketing-plan';
 
 export const MIGRATION_183 = '183';
@@ -26,6 +28,20 @@ function check(what: string, error: DbError): void {
   if (!error) return;
   if (isMissingSchema(error)) throw new MarketingNotReadyError();
   throw new Error(`${what}: ${error.message}`);
+}
+
+/**
+ * Does the org have the `marketing` module right now: licensed AND not switched off by its owner (`departments_off`),
+ * the same rule `readMembership` applies. The plan requirement means nothing, and must block nothing, without it:
+ * the plan's routes and panel are 404 / hidden there, so a release could never satisfy it.
+ */
+export async function orgHasMarketing(admin: AdminClient, orgId: string): Promise<boolean> {
+  const res = await admin.from('organizations').select('id, kind, settings').eq('id', orgId).maybeSingle();
+  if (res.error) throw new Error(`org read: ${res.error.message}`);
+  const org = res.data as { id: string; kind: string; settings?: { departments_off?: unknown } | null } | null;
+  if (!org) return false;
+  const licence = await loadEntitlements(admin, { id: org.id, kind: org.kind });
+  return effectiveModules(licence.modules, parseDepartmentsOff(org.settings?.departments_off)).has('marketing');
 }
 
 /** Cheap read probe: is migration 183 there? */

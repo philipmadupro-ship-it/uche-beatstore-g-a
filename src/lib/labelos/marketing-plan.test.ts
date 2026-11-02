@@ -157,3 +157,15 @@ describe('planView', () => {
     expect(v.assets[0]).toMatchObject({ id: 'a', kind: 'photos', notified: true });
   });
 });
+
+import { pickRecipient } from './marketing-asset-notify';
+
+describe('pickRecipient (one account per ask)', () => {
+  it('prefers a role-artist member, then the earliest joined, then the lowest id', () => {
+    expect(pickRecipient([])).toBeNull();
+    expect(pickRecipient([{ userId: 'o1', role: 'owner', joinedAt: '2026-01-01' }, { userId: 'a2', role: 'artist', joinedAt: '2026-05-01' }])).toBe('a2');
+    expect(pickRecipient([{ userId: 'a2', role: 'artist', joinedAt: '2026-05-01' }, { userId: 'a1', role: 'artist', joinedAt: '2026-03-01' }])).toBe('a1');
+    expect(pickRecipient([{ userId: 'b', role: 'artist', joinedAt: '2026-03-01' }, { userId: 'a', role: 'artist', joinedAt: '2026-03-01' }])).toBe('a');
+    expect(pickRecipient([{ userId: 'b', role: 'owner', joinedAt: '2026-03-01' }, { userId: 'a', role: 'owner', joinedAt: '2026-04-01' }])).toBe('b');
+  });
+});

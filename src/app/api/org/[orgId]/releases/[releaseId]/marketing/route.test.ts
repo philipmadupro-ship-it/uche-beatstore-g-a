@@ -201,6 +201,35 @@ describe('review fixes', () => {
   });
 });
 
+describe('review round 2 (L2, L4)', () => {
+  it('two accounts stand for the artist: exactly ONE is asked, the earliest-joined role-artist, and that one is recorded', async () => {
+    const ART2 = u(20);
+    db.tables.org_members.find((m) => m.user_id === ART)!.joined_at = '2026-06-01T00:00:00Z';
+    db.tables.org_members.push({ ...member(ART2, 'artist', [], 'artists'), joined_at: '2026-02-01T00:00:00Z' });
+    db.tables.member_artist_scopes.push({ org_id: L, user_id: ART2, contact_id: C1 });
+    const b = await (await call(MKT, 'POST', 'assets/', {}, { kind: 'photos' })).json();
+    expect(b.delivery).toBe('notified');
+    expect(db.tables.notifications).toHaveLength(1);
+    expect(db.tables.notifications[0].user_id).toBe(ART2);
+    expect(db.tables.marketing_asset_requests[0].recipient_id).toBe(ART2);
+    // The same ask again reaches the same person.
+    await call(MKT, 'POST', 'assets/', {}, { kind: 'bio' });
+    expect(db.tables.notifications.map((n) => n.user_id)).toEqual([ART2, ART2]);
+  });
+  it('every marketing_plan.* event is internal, the asks included', async () => {
+    await addItem(MKT);
+    await call(MKT, 'POST', 'assets/', {}, { kind: 'photos' });
+    const rid = (await (await call(MKT, 'POST', 'assets/', {}, { kind: 'bio' })).json()).request.id as string;
+    await call(MKT, 'PATCH', 'assets/[requestId]/', { requestId: rid }, { status: 'fulfilled' });
+    const { defaultVisibility } = await import('@/lib/labelos/activity');
+    for (const v of ['marketing_plan.created', 'marketing_plan.item_changed', 'marketing_plan.platform_changed', 'marketing_plan.budget_changed', 'marketing_plan.asset_requested', 'marketing_plan.asset_changed', 'marketing_plan.requirement_changed'] as const) {
+      expect(defaultVisibility(v), v).toBe('internal');
+    }
+    const verbs = db.tables.activity_events.map((e) => e.verb);
+    expect(verbs).toContain('marketing_plan.asset_changed');
+  });
+});
+
 describe('who writes the timeline', () => {
   it('release.write and the marketing approval write; a reader or a producer or the artist does not', async () => {
     expect((await addItem(AR)).status).toBe(201);

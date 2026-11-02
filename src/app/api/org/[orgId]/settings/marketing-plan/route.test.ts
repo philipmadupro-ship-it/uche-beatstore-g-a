@@ -57,6 +57,7 @@ beforeEach(() => {
         { org_id: PROD, user_id: OWN, role: 'owner', functions: [], scope: 'org', cap_grants: [], cap_revokes: [] },
       ],
       marketing_plans: [],
+      org_entitlements: [],
       activity_events: [],
     },
   };
@@ -102,6 +103,17 @@ describe('the plan requirement switch', () => {
     expect((await call(OWN, 'PUT', { required: 'yes' })).status).toBe(400);
     expect((await call(OWN, 'PUT', { required: true, x: 1 })).status).toBe(400);
     expect((await call(OWN, 'PUT', { required: true }, PROD)).status).toBe(404);
+  });
+  it('is 404 without the marketing module: not licensed, or switched off by the owner', async () => {
+    db.tables.org_entitlements.push({ org_id: L, modules: ['contracts'], max_seats: null, max_artists: null, setup_done: true });
+    expect((await call(OWN, 'GET')).status).toBe(404);
+    expect((await call(OWN, 'PUT', { required: true })).status).toBe(404);
+    expect(db.tables.activity_events).toHaveLength(0);
+    db.tables.org_entitlements.length = 0;
+    db.tables.organizations[0].settings = { departments_off: ['marketing'] };
+    expect((await call(OWN, 'PUT', { required: true })).status).toBe(404);
+    db.tables.organizations[0].settings = {};
+    expect((await call(OWN, 'PUT', { required: true })).status).toBe(200);
   });
   it('answers 503 naming 183 when the tables are missing, and writes nothing', async () => {
     missing = true;
