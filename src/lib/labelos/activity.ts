@@ -140,6 +140,9 @@ export const VERBS = [
   'contract_template.saved',
   // Finance (LABEL-61; payloads name ids and fields, never amounts, names or references)
   'payee.created',
+  // LABEL-62: an earnings file imported / its waiting lines re-run. Payloads carry ids and counts, never amounts or names.
+  'earnings.imported',
+  'earnings.recalculated',
   // Releases
   'approval.requested',
   'approval.decided',
@@ -367,6 +370,8 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'contract_template.saved': 'internal',
   // Money is the business side: finance and the owners read it, the creative side does not.
   'payee.created': 'internal',
+  'earnings.imported': 'internal',
+  'earnings.recalculated': 'internal',
   'approval.requested': 'internal',
   'approval.decided': 'internal',
   'release.created': 'artist',
@@ -447,6 +452,7 @@ export const SUBJECT_TYPES = [
   'contract',
   'contract_template',
   'payee',
+  'earnings_import',
   'approval',
   'release',
   'connection',

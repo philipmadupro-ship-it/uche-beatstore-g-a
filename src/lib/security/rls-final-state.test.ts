@@ -136,6 +136,9 @@ function labelOsTables(): string[] {
     'statements',
     'statement_lines',
     'payments',
+    // 180_labelos_earnings.sql (LABEL-62): allocations and recoupments of imported earnings
+    'earnings_allocations',
+    'earnings_recoupments',
     // 178_labelos_contract_signing.sql (LABEL-60): service-role only behind a deny-all policy; signatures are append-only.
     'contract_signers',
     'contract_signatures',
@@ -685,6 +688,55 @@ describe('final RLS policy state', () => {
       const columns = [...body.matchAll(/^ {2}([a-z_]+)\s+(?:uuid|bigint|char|date|timestamptz|text)\b/gm)].map((m) => m[1]);
       expect(columns.length).toBeGreaterThan(8);
       for (const c of columns) expect(c, c).not.toMatch(/stripe|processor|account|iban|transfer|payout|bank|method/i);
+    });
+  });
+
+  describe('Label OS earnings (mig 180, LABEL-62)', () => {
+    const sql = () => readFileSync(join(DIR, '180_labelos_earnings.sql'), 'utf8').replace(/--[^\n]*/g, '');
+    const TABLES = ['earnings_allocations', 'earnings_recoupments'];
+
+    it('each new table has exactly one SELECT policy, no write policy, and a column-listed grant', () => {
+      for (const t of TABLES) {
+        const own = [...policies].filter(([k]) => k.startsWith(`${t}.`));
+        expect(own.map(([k]) => k), t).toEqual([`${t}.${t}_member_read`]);
+        expect(own[0][1], t).toMatch(/^\s*FOR SELECT\b/i);
+        expect(own[0][1], t).not.toMatch(/WITH CHECK/i);
+        expect(sql(), t).toMatch(new RegExp(`GRANT SELECT \\([^)]*\\)\\s+ON public\\.${t} TO authenticated;`));
+      }
+      expect(sql()).toMatch(/REVOKE ALL ON public\.earnings_allocations, public\.earnings_recoupments FROM anon, authenticated;/);
+    });
+
+    it('reads need finance.read, never role artist, and stay inside the member\'s artist scope; no artist path', () => {
+      for (const t of TABLES) {
+        const body = policies.get(`${t}.${t}_member_read`) ?? '';
+        expect(body, t).toMatch(/cm\.role <> 'artist' AND public\.has_org_cap\(cm\.org_id, 'finance\.read'\)/);
+        expect(body, t).toMatch(/member_artist_scopes/);
+        expect(body, t).not.toMatch(/labelos_my_payees/);
+      }
+    });
+
+    it('the write functions are service-role only: no PUBLIC, anon or authenticated execute', () => {
+      const body = sql();
+      for (const fn of ['labelos_earnings_write\\(uuid, uuid, jsonb, jsonb\\)', 'labelos_earnings_import\\(uuid, uuid, jsonb, jsonb, jsonb, jsonb\\)', 'labelos_earnings_resolve\\(uuid, uuid, jsonb, jsonb, jsonb\\)']) {
+        expect(body, fn).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.${fn} FROM PUBLIC, anon, authenticated;`));
+      }
+      expect(body).not.toMatch(/GRANT EXECUTE ON FUNCTION public\.labelos_earnings_write/);
+      expect(body).not.toMatch(/GRANT EXECUTE ON FUNCTION[^;]*TO (anon|authenticated|PUBLIC)/i);
+    });
+
+    it('rows are service-role-only and fixed once written', () => {
+      for (const t of TABLES) {
+        expect(sql(), t).toMatch(new RegExp(`CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE ON public\\.${t}\\b`));
+        expect(sql(), t).toMatch(new RegExp(`CREATE TRIGGER ${t}_frozen BEFORE UPDATE OR DELETE ON public\\.${t}[\\s\\S]*?labelos_finance_frozen\\(\\)`));
+      }
+    });
+
+    it('stores money as bigint minor units only', () => {
+      for (const t of TABLES) {
+        const body = sql().match(new RegExp(`CREATE TABLE IF NOT EXISTS public\\.${t} \\(([\\s\\S]*?)\\n\\);`))?.[1] ?? '';
+        for (const m of body.matchAll(/^ {2}([a-z_]*_minor)\s+(\w+)/gm)) expect(m[2], `${t}.${m[1]}`).toBe('bigint');
+        expect(body, t).not.toMatch(/numeric|float|double|real\b/i);
+      }
     });
   });
 
