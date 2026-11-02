@@ -30,6 +30,7 @@
  *   platformCreateLicensee   org.created + org.entitlements_changed in the new org (170, LABEL-47)
  *   platformSetEntitlements  org.entitlements_changed in the licensee org (170, LABEL-47)
  *   orgSettings              org.settings_changed (172, LABEL-51; owner only, checked again in SQL)
+ *   marketingPlanRequired    marketing_plan.requirement_changed (183, LABEL-65; owner only, checked again in SQL)
  *   orgSettingsAtomic        the same, with the payload's `from` read under the lock (187, LABEL-73)
  *   releaseDeliver           release.delivered (187; fingerprint compared under the release lock)
  *   releaseStore             release.store_listed | release.store_unlisted (187; consent re-checked under the lock)
@@ -93,6 +94,8 @@ export const AUDIT_RPCS = {
   platformSetEntitlements: 'labelos_platform_set_entitlements',
   // Migration 172 (LABEL-51): the owner's organization settings, with `org.settings_changed`.
   orgSettings: 'labelos_audit_org_settings',
+  // Migration 183 (LABEL-65): whether the marketing gate asks for a plan, with `marketing_plan.requirement_changed`.
+  marketingPlanRequired: 'labelos_audit_marketing_plan_required',
   // Migration 187 (LABEL-73): the same write with `from` read under the row lock (a sibling, because 192 redefines the one above).
   orgSettingsAtomic: 'labelos_audit_org_settings_atomic',
   // Migration 190 (doc 25): team accounts an org creates — membership + managed row + event, and reset / switch-off.
@@ -308,6 +311,8 @@ export type AuditRpcArgs = {
   };
   /** Merge `p_patch` (only the keys that change) into `organizations.settings`; answers `{ settings }` or `{ error: 'not_found' | 'not_owner' }`. */
   orgSettings: { p_org: string; p_actor: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
+  /** Answers `{ required, changed }` or `{ error: 'not_found' | 'not_owner' }`; derives `from` itself, so there is no payload. */
+  marketingPlanRequired: { p_org: string; p_actor: string; p_required: boolean };
   orgSettingsAtomic: { p_org: string; p_actor: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
   teamAccountCreate: {
     p_org: string;

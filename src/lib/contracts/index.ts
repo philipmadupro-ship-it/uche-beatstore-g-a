@@ -29,6 +29,8 @@ import { CURSOR_RE } from '@/lib/labelos/activity-feed';
 import { DECISIONS as APPROVAL_DECISIONS, GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
 import { SONG_STAGES } from '@/lib/labelos/song-stage';
 import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
+import { ASSET_KINDS as MARKETING_ASSET_KINDS, ASSET_STATUSES as MARKETING_ASSET_STATUSES, BUDGET_STATUSES as MARKETING_BUDGET_STATUSES, PLAN_LIMITS as MARKETING_LIMITS, PLAN_PHASES as MARKETING_PHASES, PLATFORMS as MARKETING_PLATFORMS, PLATFORM_STEPS as MARKETING_PLATFORM_STEPS } from '@/lib/labelos/marketing-plan';
+import { parseDay } from '@/lib/labelos/release-calendar';
 import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
 import { SPLIT_KINDS, SPLIT_ROLES } from '@/lib/labelos/splits';
 import { ACCOUNT_FACES } from '@/lib/labelos/account';
@@ -1034,6 +1036,8 @@ export const OrgReadinessSettingsSchema = z.object({
   legal_gate: z.enum(['on', 'off']).catch('on'),
   marketing_gate: z.enum(['on', 'off']).catch('on'),
   require_signed_master_split: z.boolean().catch(false),
+  /** LABEL-65: the marketing gate also needs a marketing plan with its required timeline items. Off unless exactly `true`. */
+  marketing_plan_required: z.boolean().catch(false),
   /** The shorter side of cover art, in pixels (09 §4: 3000 is the common DSP minimum). Whole numbers 600-10000; anything else reads as 3000. */
   artwork_min_px: z.number().int().min(600).max(10000).catch(3000),
 });
@@ -2132,3 +2136,53 @@ export const OrgMinorAmountSchema = z.union([
       return n <= BigInt('9223372036854775807') && n >= -BigInt('9223372036854775807') - BigInt(1);
     }, 'Amount is outside the range of a 64-bit integer'),
 ]);
+
+
+// ── Marketing plans (LABEL-65) ────────────────────────────────────────────
+
+const MARKETING_DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => parseDay(v) !== null, 'Not a real calendar day');
+const MARKETING_TITLE = z.string().trim().min(1).max(MARKETING_LIMITS.title);
+
+/** POST …/marketing/items: one timeline milestone. */
+export const MarketingItemCreateBodySchema = z.object({ phase: z.enum(MARKETING_PHASES), title: MARKETING_TITLE, due_on: MARKETING_DAY }).strict();
+/** PATCH …/marketing/items/[itemId]: any of title, day, phase, done. */
+export const MarketingItemPatchBodySchema = z
+  .object({ phase: z.enum(MARKETING_PHASES), title: MARKETING_TITLE, due_on: MARKETING_DAY, done: z.boolean() })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Name something to change');
+/** PUT …/marketing/platform: tick or untick one step of the fixed checklist. */
+export const MarketingStepBodySchema = z.object({ platform: z.enum(MARKETING_PLATFORMS), step: z.enum(MARKETING_PLATFORM_STEPS), done: z.boolean() }).strict();
+
+/** Money is whole minor units in a known ISO currency, as a digit string so a double never touches it. */
+const MARKETING_AMOUNT = z.string().regex(/^\d{1,15}$/, 'Whole minor units');
+const MARKETING_CURRENCY = z.string().refine((v) => isFinanceCurrency(v), 'Unknown currency');
+export const MarketingBudgetCreateBodySchema = z
+  .object({
+    label: z.string().trim().min(1).max(MARKETING_LIMITS.label),
+    amount_minor: MARKETING_AMOUNT,
+    currency: MARKETING_CURRENCY,
+    status: z.enum(MARKETING_BUDGET_STATUSES).optional(),
+    note: z.string().trim().min(1).max(MARKETING_LIMITS.budgetNote).nullable().optional(),
+  })
+  .strict();
+export const MarketingBudgetPatchBodySchema = z
+  .object({
+    label: z.string().trim().min(1).max(MARKETING_LIMITS.label),
+    amount_minor: MARKETING_AMOUNT,
+    currency: MARKETING_CURRENCY,
+    status: z.enum(MARKETING_BUDGET_STATUSES),
+    note: z.string().trim().min(1).max(MARKETING_LIMITS.budgetNote).nullable(),
+  })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Name something to change');
+
+/** POST …/marketing/assets: ask the artist for something. */
+export const MarketingAssetCreateBodySchema = z
+  .object({ kind: z.enum(MARKETING_ASSET_KINDS), note: z.string().trim().min(1).max(MARKETING_LIMITS.assetNote).nullable().optional() })
+  .strict();
+export const MarketingAssetPatchBodySchema = z.object({ status: z.enum(MARKETING_ASSET_STATUSES) }).strict();
+
+/** PUT …/settings/marketing-plan (owner only). */
+export const MarketingPlanRequiredBodySchema = z.object({ required: z.boolean() }).strict();

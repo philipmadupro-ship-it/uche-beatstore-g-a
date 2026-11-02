@@ -21,6 +21,7 @@ import { evaluateLegalReadiness, type LegalReadiness } from './legal-readiness';
 import { LegalReadinessNotReadyError, loadLegalFacts, readReadinessSong } from './legal-readiness-store';
 import { IMAGE_HEAD_BYTES, readImageInfo, type ImageInfo } from './image-size';
 import { ARTWORK_MIME, type MasterRelation, type ReadinessApproval, type ReadinessItem, type ReleaseReadinessFacts } from './release-readiness';
+import { orgHasMarketing, readPlanPhases } from './marketing-plan-store';
 import { RELEASE_ITEM_COLUMNS, type ReleaseItemRow } from './releases';
 
 export class ReleaseReadinessNotReadyError extends Error {
@@ -169,7 +170,14 @@ export async function loadReleaseReadinessFacts(admin: AdminClient, org: string,
     throw err;
   }
 
+  // LABEL-65: only worth a read when the org asks for a plan (a missing table is "not asked", never an error).
+  // Only while the org HAS the marketing module (licensed and not switched off): without it the plan cannot be made,
+  // so asking for one would block every draft with no way to satisfy it.
+  const marketingPlan =
+    settings.marketing_plan_required && settings.marketing_gate !== 'off' && (await orgHasMarketing(admin, org)) ? await readPlanPhases(admin, org, releaseId) : undefined;
+
   return {
+    marketingPlan,
     release: {
       state: String(rel.state),
       title: rel.title,

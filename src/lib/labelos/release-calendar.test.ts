@@ -192,3 +192,31 @@ describe('contract expiry events (LABEL-60)', () => {
     expect(body.indexOf('SUMMARY:Single')).toBeLessThan(body.indexOf('SUMMARY:Contract ends'));
   });
 });
+
+describe('marketing milestones (LABEL-65)', () => {
+  it('adds one all-day event per milestone: a summary and a day, nothing else', () => {
+    const ics = buildIcs({
+      name: 'Releases',
+      releases: [],
+      milestones: [
+        { id: 'm2', summary: 'Release: Drop day · Night Shift', dueOn: '2026-12-05' },
+        { id: 'm1', summary: 'Teaser: Snippet, part 1 · Night Shift', dueOn: '2026-11-20' },
+        { id: 'bad', summary: 'Nope', dueOn: '2026-02-31' },
+      ],
+      milestoneUidFor: (id) => `opaque-${id}`,
+    });
+    const events = ics.split('BEGIN:VEVENT').slice(1);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toContain('UID:opaque-m1');
+    expect(events[0]).toContain('DTSTART;VALUE=DATE:20261120');
+    expect(events[0]).toContain('DTEND;VALUE=DATE:20261121');
+    expect(events[0]).toContain('SUMMARY:Teaser: Snippet\\, part 1 · Night Shift');
+    expect(events[1]).toContain('DTSTART;VALUE=DATE:20261205');
+    expect(ics).not.toMatch(/DESCRIPTION|URL|ATTENDEE|ORGANIZER|budget/i);
+    expect(ics.endsWith('\r\n')).toBe(true);
+  });
+  it('is byte-identical without milestones', () => {
+    const a = buildIcs({ name: 'Releases', releases: [] });
+    expect(buildIcs({ name: 'Releases', releases: [], milestones: [] })).toBe(a);
+  });
+});

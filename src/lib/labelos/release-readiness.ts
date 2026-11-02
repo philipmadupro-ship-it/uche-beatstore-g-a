@@ -31,6 +31,7 @@ import type { Capability } from './capabilities';
 import { isReady, type LegalReadiness } from './legal-readiness';
 import { artworkSizeProblems, type ImageInfo } from './image-size';
 import { positionsContiguous } from './releases';
+import { planGateBlockers } from './marketing-plan';
 import type { OrgReadinessSettings } from '@/lib/contracts';
 
 export const RELEASE_GATES = ['tracklist', 'masters', 'credits_splits', 'legal', 'artwork', 'metadata', 'marketing'] as const;
@@ -104,6 +105,12 @@ export type ReleaseReadinessFacts = {
   legal: ReadonlyMap<string, LegalReadiness>;
   approvals: Readonly<Record<Gate, ReadinessApproval>>;
   settings: OrgReadinessSettings;
+  /**
+   * LABEL-65: the release's marketing plan, for the gate that may require one. null = no plan; the timeline
+   * phases it has otherwise. Absent (undefined) = plans cannot be read (migration 183 not applied): the
+   * requirement is not applied and the gate behaves exactly as it did before plans existed.
+   */
+  marketingPlan?: { phases: readonly string[] } | null;
 };
 
 // ── Result ──────────────────────────────────────────────────────────────
@@ -323,7 +330,16 @@ export function evaluateReleaseReadiness(facts: ReleaseReadinessFacts): ReleaseR
   const metadata = approvalGate('metadata', 'metadata', facts.approvals.metadata, mdb, []);
 
   // marketing
-  const marketing = settings.marketing_gate === 'off' ? gateState('not_required') : approvalGate('marketing', 'marketing', facts.approvals.marketing, [], []);
+  // LABEL-65: with `marketing_plan_required` on, a plan with its required timeline items is a precondition of the
+  // approval (derived on every read, never stored). Off by default: no blocker, the gate is exactly as it was.
+  const mkb: ReadinessBlocker[] = planGateBlockers({ required: settings.marketing_plan_required, plan: facts.marketingPlan }).map((b) => ({
+    code: b.code,
+    message: b.message,
+    gate: 'marketing' as const,
+    fixCapability: 'release.approve.marketing' as const,
+    sensitive: false,
+  }));
+  const marketing = settings.marketing_gate === 'off' ? gateState('not_required') : approvalGate('marketing', 'marketing', facts.approvals.marketing, mkb, []);
 
   const gates: Record<ReleaseGate, GateState> = { tracklist, masters, credits_splits, legal, artwork, metadata, marketing };
 

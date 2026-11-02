@@ -482,6 +482,13 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'digest.unsubscribed': { one: 'turned off the weekly digest', many: 'turned off the weekly digest {n} times' },
   'digest.channel_set': { one: 'set the digest Slack channel', many: 'set the digest Slack channel {n} times' },
   'digest.channel_removed': { one: 'removed the digest Slack channel', many: 'removed the digest Slack channel {n} times' },
+  'marketing_plan.created': { one: 'started a marketing plan', many: 'started {n} marketing plans' },
+  'marketing_plan.item_changed': { one: 'updated a marketing plan’s timeline', many: 'updated marketing plan timelines {n} times' },
+  'marketing_plan.platform_changed': { one: 'updated a marketing platform checklist', many: 'updated marketing platform checklists {n} times' },
+  'marketing_plan.budget_changed': { one: 'changed a marketing budget', many: 'changed marketing budgets {n} times' },
+  'marketing_plan.asset_requested': { one: 'asked for marketing material', many: 'asked for marketing material {n} times' },
+  'marketing_plan.asset_changed': { one: 'updated a request for marketing material', many: 'updated requests for marketing material {n} times' },
+  'marketing_plan.requirement_changed': { one: 'changed whether a marketing plan is required', many: 'changed whether a marketing plan is required {n} times' },
 };
 
 function quoted(title: string | null): string | null {

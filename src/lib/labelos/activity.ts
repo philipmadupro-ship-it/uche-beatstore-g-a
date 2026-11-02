@@ -178,6 +178,14 @@ export const VERBS = [
   'digest.unsubscribed',
   'digest.channel_set',
   'digest.channel_removed',
+  // Marketing plans (LABEL-65): ids and field names only, never a title, a note or an amount.
+  'marketing_plan.created',
+  'marketing_plan.item_changed',
+  'marketing_plan.platform_changed',
+  'marketing_plan.budget_changed',
+  'marketing_plan.asset_requested',
+  'marketing_plan.asset_changed',
+  'marketing_plan.requirement_changed',
 ] as const;
 export type Verb = (typeof VERBS)[number];
 
@@ -244,6 +252,8 @@ export const AUDIT_VERBS: readonly Verb[] = [
   // Where the org's digest goes is a security setting.
   'digest.channel_set',
   'digest.channel_removed',
+  // Whether the marketing gate asks for a plan is a release-gate setting.
+  'marketing_plan.requirement_changed',
 ];
 
 export type EventVisibility = 'internal' | 'artist';
@@ -395,6 +405,14 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'digest.unsubscribed': 'internal',
   'digest.channel_set': 'internal',
   'digest.channel_removed': 'internal',
+  // The plan is the marketing side's business record, asks to the artist included (the artist is told by the bell, not the feed).
+  'marketing_plan.created': 'internal',
+  'marketing_plan.item_changed': 'internal',
+  'marketing_plan.platform_changed': 'internal',
+  'marketing_plan.budget_changed': 'internal',
+  'marketing_plan.asset_requested': 'internal',
+  'marketing_plan.asset_changed': 'internal',
+  'marketing_plan.requirement_changed': 'internal',
 };
 
 export function defaultVisibility(verb: Verb): EventVisibility {

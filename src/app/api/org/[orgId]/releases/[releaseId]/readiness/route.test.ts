@@ -155,6 +155,9 @@ beforeEach(() => {
         { id: 'ri2', release_id: R2, org_id: L, position: 1, song_track_id: S2, master_track_id: S2, version_title: null, explicit: false },
         { id: 'riX', release_id: RX, org_id: L2, position: 1, song_track_id: XS1, master_track_id: XS1, version_title: null, explicit: false },
       ],
+      marketing_plans: [],
+      marketing_plan_items: [],
+      org_entitlements: [],
       activity_events: [],
     },
   };
@@ -171,6 +174,32 @@ async function read(as: string | null, org: string, id: string) {
   const req = new NextRequest(`https://app.test/api/org/${org}/releases/${id}/readiness`);
   return mod.GET(req, { params: Promise.resolve({ orgId: org, releaseId: id }) });
 }
+
+describe('the marketing plan requirement and the marketing module (LABEL-65, M1)', () => {
+  const marketingOf = async (release = R1) => (await (await read(OWN, L, release)).json()).readiness.gates.marketing as { status: string; blockers: { code: string }[] };
+
+  it('switch on + module present: a release with no plan is blocked, a planned one is not', async () => {
+    db.tables.organizations[0].settings = { marketing_plan_required: true };
+    expect((await marketingOf()).blockers.map((b) => b.code)).toEqual(['no_plan']);
+    db.tables.marketing_plans.push({ id: 'pl1', org_id: L, release_id: R1 });
+    db.tables.marketing_plan_items.push({ id: 'i1', org_id: L, plan_id: 'pl1', phase: 'teaser' }, { id: 'i2', org_id: L, plan_id: 'pl1', phase: 'release' });
+    expect((await marketingOf()).blockers).toEqual([]);
+  });
+
+  it('switch on + the module not licensed: the gate is exactly what it is with the switch off', async () => {
+    const off = await marketingOf();
+    db.tables.organizations[0].settings = { marketing_plan_required: true };
+    db.tables.org_entitlements.push({ org_id: L, modules: ['contracts', 'finance'], max_seats: null, max_artists: null, setup_done: true });
+    expect(await marketingOf()).toEqual(off);
+  });
+
+  it('switch on + the owner switched the department off: the gate is unchanged too', async () => {
+    const off = await marketingOf();
+    db.tables.organizations[0].settings = { marketing_plan_required: true, departments_off: ['marketing'] };
+    expect(await marketingOf()).toEqual(off);
+    expect((await marketingOf()).blockers).toEqual([]);
+  });
+});
 
 describe('the derived gates', () => {
   it('a half-finished release is blocked where it should be and not ready', async () => {

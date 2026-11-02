@@ -21,5 +21,10 @@ export function notificationHref(orgSlug: string, n: { kind: string; data?: unkn
   if (n.kind === 'party_confirmation') return `/o/${encodeURIComponent(orgSlug)}/rights/parties`;
   // LABEL-71: the artist answers on the store listings page (a credited artist may not reach the release itself).
   if (n.kind === 'listing_proposed') return `/o/${encodeURIComponent(orgSlug)}/releases/store`;
+  // LABEL-65: the artist answers on the release's Marketing section.
+  if (n.kind === 'asset_requested') {
+    const id = (n.data as { releaseId?: unknown } | null | undefined)?.releaseId;
+    if (typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)) return `/o/${encodeURIComponent(orgSlug)}/releases/${id}`;
+  }
   return `/o/${encodeURIComponent(orgSlug)}`;
 }

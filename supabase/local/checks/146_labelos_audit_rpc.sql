@@ -78,6 +78,8 @@ SELECT public.check_eq('all five functions exist',
      AND proname <> 'labelos_audit_contract_void'
      -- 178 (LABEL-60) adds signer links, signing and supersede; checked in 178's own file.
      AND proname NOT LIKE 'labelos\_audit\_contract\_%'
+     -- 183 (LABEL-65) adds the marketing plan requirement; checked in 183's own file.
+     AND proname <> 'labelos_audit_marketing_plan_required'
      -- 187 (LABEL-73) adds deliver, store listing, import, org delete / restore / export and the digest channel; checked in 187's own file.
      AND proname NOT LIKE 'labelos\_audit\_release\_%' AND proname NOT LIKE 'labelos\_audit\_org\_%'
      AND proname NOT LIKE 'labelos\_audit\_digest\_%'), 5);

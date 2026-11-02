@@ -9,8 +9,9 @@
 import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ReleaseDetailView } from '@/components/labelos/ReleaseDetailView';
+import { MarketingPlanPanel } from '@/components/labelos/MarketingPlanPanel';
 import { ReleaseStoreCard } from '@/components/labelos/ReleaseStoreCard';
-import { orgShellFor, requireObjectAccess } from '@/lib/auth/org-access';
+import { orgHasModule, orgShellFor, requireObjectAccess } from '@/lib/auth/org-access';
 import { loadReleaseDetail } from '@/lib/labelos/release-detail-store';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,12 @@ export default async function ReleasePage({ params }: { params: Promise<{ orgSlu
   return (
     <PageContainer>
       <ReleaseDetailView orgId={shell.org.id} orgSlug={shell.org.slug} detail={detail} />
+      {/* LABEL-65: the marketing plan; its routes answer 404 for an org not licensed for marketing, so the section is not drawn there. */}
+      {orgHasModule(access, 'marketing') && (
+        <div className="mt-6">
+          <MarketingPlanPanel orgId={shell.org.id} releaseId={detail.release.id} />
+        </div>
+      )}
       {/* LABEL-42: released music on the public store; draws nothing where it can never apply. */}
       {detail.release.state === 'delivered' && (
         <div className="mt-6">
