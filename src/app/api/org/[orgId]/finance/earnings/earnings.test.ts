@@ -111,7 +111,10 @@ async function importsPost(as: string | null, csv = CSV, fields: Record<string, 
   form.set('preset', 'generic');
   form.set('currency', 'USD');
   form.set('mapping', JSON.stringify({ isrc: 'ISRC', amount: 'Amount' }));
-  for (const [k, v] of Object.entries(fields)) (v === '' ? form.delete(k) : form.set(k, v));
+  for (const [k, v] of Object.entries(fields)) {
+    if (v === '') form.delete(k);
+    else form.set(k, v);
+  }
   const mod = (await import('./imports/route')) as unknown as Record<string, Handler>;
   return mod.POST(new NextRequest(`${base(org)}/imports`, { method: 'POST', body: form }), { params: Promise.resolve({ orgId: org }) });
 }

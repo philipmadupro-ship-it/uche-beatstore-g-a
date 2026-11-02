@@ -225,7 +225,6 @@ export function parsePeriod(raw: string): { start: string | null; end: string | 
 
 /** Control characters out, trimmed, capped. Never interpreted. */
 function text(raw: string | undefined, max: number): string | null {
-  // eslint-disable-next-line no-control-regex
   const t = (raw ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
   return t === '' ? null : t.slice(0, max);
 }
