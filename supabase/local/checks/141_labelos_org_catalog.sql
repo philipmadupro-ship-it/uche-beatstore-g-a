@@ -259,7 +259,8 @@ SELECT public.check_eq('the service-only write trigger sits on every table the p
   -- marketing_*: 183's org tables (LABEL-65)
   'marketing_asset_requests,marketing_budget_lines,marketing_plan_items,marketing_plans,marketing_platform_steps,notifications,'
   -- org_saved_views: 161's org table (LABEL-37)
-  'org_saved_views,parties,payees,payments,project_assets,project_comments,project_contacts,'
+  -- press_*: 184's org tables (LABEL-66)
+  'org_saved_views,parties,payees,payments,press_kit_links,press_kit_photos,press_kit_shares,press_kits,press_outreach,project_assets,project_comments,project_contacts,'
   'project_folder_items,project_shares,project_tags,project_tracks,projects,'
   -- release_items, releases: 144's own org tables (LABEL-16)
   'release_items,releases,song_beats,song_reviews,'
