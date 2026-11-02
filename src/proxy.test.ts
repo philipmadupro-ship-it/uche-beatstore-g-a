@@ -131,8 +131,8 @@ describe('proxy login redirect', () => {
 const API_DIR = path.join(process.cwd(), 'src', 'app', 'api');
 const EXISTING_API_FOLDERS = fs
   .readdirSync(API_DIR, { withFileTypes: true })
-  // `org` and `platform` (LABEL-47) are the Label OS namespaces, tested on their own below; so is `sign` (LABEL-60).
-  .filter((d) => d.isDirectory() && d.name !== 'org' && d.name !== 'platform' && d.name !== 'sign')
+  // `org` and `platform` (LABEL-47) are the Label OS namespaces, tested on their own below; so are `sign` (LABEL-60) and `press` (LABEL-66).
+  .filter((d) => d.isDirectory() && d.name !== 'org' && d.name !== 'platform' && d.name !== 'sign' && d.name !== 'press')
   .map((d) => d.name)
   .sort();
 

@@ -186,6 +186,14 @@ export const VERBS = [
   'marketing_plan.asset_requested',
   'marketing_plan.asset_changed',
   'marketing_plan.requirement_changed',
+  // PR and press (LABEL-66): ids and field names only, never a bio, a note, a URL or a contact's name.
+  'press_kit.created',
+  'press_kit.updated',
+  'press_kit.shared',
+  'press_kit.share_revoked',
+  'press_outreach.added',
+  'press_outreach.updated',
+  'press_outreach.removed',
 ] as const;
 export type Verb = (typeof VERBS)[number];
 
@@ -413,6 +421,14 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'marketing_plan.asset_requested': 'internal',
   'marketing_plan.asset_changed': 'internal',
   'marketing_plan.requirement_changed': 'internal',
+  // Press is the label's business side: a press contact, an outreach status and who holds a link are not the artist's feed.
+  'press_kit.created': 'internal',
+  'press_kit.updated': 'internal',
+  'press_kit.shared': 'internal',
+  'press_kit.share_revoked': 'internal',
+  'press_outreach.added': 'internal',
+  'press_outreach.updated': 'internal',
+  'press_outreach.removed': 'internal',
 };
 
 export function defaultVisibility(verb: Verb): EventVisibility {

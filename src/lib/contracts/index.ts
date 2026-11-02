@@ -31,6 +31,7 @@ import { SONG_STAGES } from '@/lib/labelos/song-stage';
 import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
 import { ASSET_KINDS as MARKETING_ASSET_KINDS, ASSET_STATUSES as MARKETING_ASSET_STATUSES, BUDGET_STATUSES as MARKETING_BUDGET_STATUSES, PLAN_LIMITS as MARKETING_LIMITS, PLAN_PHASES as MARKETING_PHASES, PLATFORMS as MARKETING_PLATFORMS, PLATFORM_STEPS as MARKETING_PLATFORM_STEPS } from '@/lib/labelos/marketing-plan';
 import { parseDay } from '@/lib/labelos/release-calendar';
+import { PRESS_LIMITS, cleanHttpsUrl } from '@/lib/labelos/press';
 import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
 import { SPLIT_KINDS, SPLIT_ROLES } from '@/lib/labelos/splits';
 import { ACCOUNT_FACES } from '@/lib/labelos/account';
@@ -2186,3 +2187,40 @@ export const MarketingAssetPatchBodySchema = z.object({ status: z.enum(MARKETING
 
 /** PUT …/settings/marketing-plan (owner only). */
 export const MarketingPlanRequiredBodySchema = z.object({ required: z.boolean() }).strict();
+
+
+// ── PR and press (LABEL-66) ───────────────────────────────────────────────
+
+const PRESS_OPT_TEXT = (max: number) => z.string().trim().min(1).max(max).nullable();
+const PRESS_HTTPS = z.string().trim().min(1).max(500).refine((v) => cleanHttpsUrl(v) !== null, 'Use a full https:// address');
+
+/** PUT …/press: any of the kit's own fields; null clears one. The embargo is an ISO moment. */
+export const PressKitPutBodySchema = z
+  .object({
+    headline: PRESS_OPT_TEXT(PRESS_LIMITS.headline),
+    bio: PRESS_OPT_TEXT(PRESS_LIMITS.bio),
+    pre_embargo_note: PRESS_OPT_TEXT(PRESS_LIMITS.note),
+    embargo_at: z.string().datetime({ offset: true }).nullable(),
+  })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Name something to change');
+export const PressLinkCreateBodySchema = z.object({ label: z.string().trim().min(1).max(PRESS_LIMITS.label), url: PRESS_HTTPS }).strict();
+export const PressPhotoCreateBodySchema = z
+  .object({ asset_id: z.string().uuid(), caption: PRESS_OPT_TEXT(PRESS_LIMITS.caption).optional(), pre_embargo: z.boolean().optional() })
+  .strict();
+export const PressPhotoPatchBodySchema = z
+  .object({ caption: PRESS_OPT_TEXT(PRESS_LIMITS.caption), pre_embargo: z.boolean() })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Name something to change');
+/** POST …/press/shares: a labelled link, optionally expiring. */
+export const PressShareCreateBodySchema = z
+  .object({ label: z.string().trim().min(1).max(PRESS_LIMITS.label), expires_at: z.string().datetime({ offset: true }).nullable().optional() })
+  .strict();
+export const PressOutreachCreateBodySchema = z.object({ contact_id: z.string().uuid(), sent: z.boolean().optional() }).strict();
+export const PressOutreachPatchBodySchema = z
+  .object({ sent: z.boolean(), opened: z.boolean(), replied: z.boolean(), coverage_url: PRESS_HTTPS.nullable() })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Name something to change');

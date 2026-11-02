@@ -489,6 +489,13 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'marketing_plan.asset_requested': { one: 'asked for marketing material', many: 'asked for marketing material {n} times' },
   'marketing_plan.asset_changed': { one: 'updated a request for marketing material', many: 'updated requests for marketing material {n} times' },
   'marketing_plan.requirement_changed': { one: 'changed whether a marketing plan is required', many: 'changed whether a marketing plan is required {n} times' },
+  'press_kit.created': { one: 'started a press kit', many: 'started {n} press kits' },
+  'press_kit.updated': { one: 'updated a press kit', many: 'updated press kits {n} times' },
+  'press_kit.shared': { one: 'shared a press kit', many: 'shared press kits {n} times' },
+  'press_kit.share_revoked': { one: 'revoked a press kit link', many: 'revoked {n} press kit links' },
+  'press_outreach.added': { one: 'added a press contact to a release', many: 'added press contacts to releases {n} times' },
+  'press_outreach.updated': { one: 'updated press outreach', many: 'updated press outreach {n} times' },
+  'press_outreach.removed': { one: 'removed a press contact from a release', many: 'removed press contacts from releases {n} times' },
 };
 
 function quoted(title: string | null): string | null {

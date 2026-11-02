@@ -10,8 +10,10 @@ import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ReleaseDetailView } from '@/components/labelos/ReleaseDetailView';
 import { MarketingPlanPanel } from '@/components/labelos/MarketingPlanPanel';
+import { PressKitPanel } from '@/components/labelos/PressKitPanel';
 import { ReleaseStoreCard } from '@/components/labelos/ReleaseStoreCard';
 import { orgHasModule, orgShellFor, requireObjectAccess } from '@/lib/auth/org-access';
+import { mayReadPress } from '@/lib/labelos/press';
 import { loadReleaseDetail } from '@/lib/labelos/release-detail-store';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +33,12 @@ export default async function ReleasePage({ params }: { params: Promise<{ orgSlu
       {orgHasModule(access, 'marketing') && (
         <div className="mt-6">
           <MarketingPlanPanel orgId={shell.org.id} releaseId={detail.release.id} />
+        </div>
+      )}
+      {/* LABEL-66: the press kit and outreach; its routes answer 404 for an org not licensed for pr (or a role without pr.read), so the section is not drawn there. */}
+      {orgHasModule(access, 'pr') && mayReadPress(access.capabilities, access.role) && (
+        <div className="mt-6">
+          <PressKitPanel orgId={shell.org.id} releaseId={detail.release.id} />
         </div>
       )}
       {/* LABEL-42: released music on the public store; draws nothing where it can never apply. */}
