@@ -13,7 +13,8 @@ import type { AdminClient } from '@/lib/auth/ownership';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from './activity';
 import { COLLABORATOR_ROLE_DEFS, parseCollaboratorIntent, planAcceptCredit } from './collaborators';
-import { creditEventSubject, ensureOwnParty, insertCredit } from './credits-store';
+import { creditEventSubject, insertCredit, isUniqueViolation, ownDisplayName, ownPartyRow } from './credits-store';
+import { PARTY_COLUMNS, ownPartyName } from './parties';
 import { resolveCreditScope } from './credit-roles';
 
 const log = createLogger('labelos.collaborator-accept');
@@ -27,13 +28,13 @@ export async function proposeCollaboratorCredit(
   try {
     const inv = await admin
       .from('org_invitations')
-      .select('functions, invited_by')
+      .select('functions, invited_by, email')
       .eq('token_hash', a.tokenHash)
       .eq('org_id', a.orgId)
       .eq('project_id', a.projectId)
       .maybeSingle();
     if (inv.error) throw new Error(inv.error.message);
-    const row = inv.data as { functions: string[] | null; invited_by: string | null } | null;
+    const row = inv.data as { functions: string[] | null; invited_by: string | null; email: string | null } | null;
     const intent = parseCollaboratorIntent(row?.functions);
     if (!row || !intent) return { proposed: false, reason: 'no_intent' };
 
@@ -55,7 +56,22 @@ export async function proposeCollaboratorCredit(
 
     const scope = resolveCreditScope(plan.creditRole);
     if (!scope.ok) return { proposed: false, reason: 'bad_role' };
-    const party = await ensureOwnParty(admin, a.orgId, a.userId);
+    // The invitee's own party, linked to their account. An outside collaborator has no org profile, so the name
+    // falls back to the address they were invited at (the invitation's, which they proved they own by accepting).
+    let party = await ownPartyRow(admin, a.orgId, a.userId);
+    if (!party) {
+      const known = await ownDisplayName(admin, a.orgId, a.userId);
+      const name = known && known !== 'Member' ? known : ownPartyName({ name: null, email: row.email });
+      const made = await admin
+        .from('parties')
+        .insert({ org_id: a.orgId, kind: 'person', display_name: name, user_id: a.userId, created_by: a.userId })
+        .select(PARTY_COLUMNS)
+        .single();
+      if (isUniqueViolation(made.error)) party = await ownPartyRow(admin, a.orgId, a.userId);
+      else if (made.error) throw new Error(made.error.message);
+      else party = made.data as unknown as NonNullable<typeof party>;
+    }
+    if (!party) throw new Error('own party missing');
     const inserted = await insertCredit(admin, {
       org: a.orgId,
       trackId: intent.songId,

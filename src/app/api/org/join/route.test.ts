@@ -39,6 +39,13 @@ vi.mock('@/lib/auth/org-access', () => ({
   },
   liveProjectMembership: async () => (projectMember ? { projectId: PROJECT, role: 'contributor', allowDownloads: false } : null),
 }));
+const proposals: Record<string, unknown>[] = [];
+vi.mock('@/lib/labelos/collaborator-accept-store', () => ({
+  proposeCollaboratorCredit: async (_a: unknown, args: Record<string, unknown>) => {
+    proposals.push(args);
+    return { proposed: true, creditId: 'c1' };
+  },
+}));
 vi.mock('@/lib/auth/ownership', () => ({ createServiceClient: () => admin.client }));
 vi.mock('@/lib/security/rate-limit', () => ({ rateLimitDurable: async () => allowed, clientIp: () => '1.2.3.4' }));
 vi.mock('@/lib/log', () => ({
@@ -353,6 +360,18 @@ describe('a project invitation (LABEL-21)', () => {
     expect(JSON.stringify(r.json)).not.toContain('night-shift');
     // Same function, same arguments: the hash and the session user.
     expect(admin.rpcs).toEqual([{ name: 'labelos_accept_invitation', args: { p_token_hash: hashInvitationToken(token), p_user: USER } }]);
+  });
+
+  it('accept: a first acceptance asks for the collaborator credit; a repeat does not (LABEL-69)', async () => {
+    proposals.length = 0;
+    session = { userId: USER, email: 'guest@local.test' };
+    rpcAnswer = { data: { status: 'joined', org_id: ORG, project_id: PROJECT }, error: null };
+    await post({ token, action: 'accept' });
+    expect(proposals).toEqual([{ tokenHash: hashInvitationToken(token), orgId: ORG, projectId: PROJECT, userId: USER }]);
+    proposals.length = 0;
+    rpcAnswer = { data: { status: 'already_member', org_id: ORG, project_id: PROJECT }, error: null };
+    await post({ token, action: 'accept' });
+    expect(proposals).toEqual([]);
   });
 
   it('accept twice is idempotent', async () => {
