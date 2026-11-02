@@ -86,6 +86,12 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   // LABEL-71: every credited artist's answer on listing a release, and the store owner's own vetoes.
   { name: 'listing_consents', source: { by: 'org' }, order: ['id'] },
   { name: 'store_listing_vetoes', source: { by: 'org' }, order: ['release_id'] },
+  // Marketing plans (LABEL-65). A budget line's free-text note stays out, like finance's free text (179); its amount and label go.
+  { name: 'marketing_plans', source: { by: 'org' }, order: ['id'] },
+  { name: 'marketing_plan_items', source: { by: 'org' }, order: ['id'] },
+  { name: 'marketing_platform_steps', source: { by: 'org' }, order: ['id'] },
+  { name: 'marketing_budget_lines', source: { by: 'org' }, order: ['id'], omit: ['note'] },
+  { name: 'marketing_asset_requests', source: { by: 'org' }, order: ['id'] },
   { name: 'activity_events', source: { by: 'org' }, order: ['created_at', 'id'] },
 ];
 

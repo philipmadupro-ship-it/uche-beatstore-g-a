@@ -130,6 +130,9 @@ export function buildIcs(opts: {
   /** Contracts the member may read, in a licensed contracts module (LABEL-60). */
   contracts?: readonly CalendarContract[];
   contractUidFor?: (contractId: string) => string;
+  /** Marketing plan milestones the member may read (LABEL-65): a summary and a day each. */
+  milestones?: readonly { id: string; summary: string; dueOn: string }[];
+  milestoneUidFor?: (milestoneId: string) => string;
 }): string {
   const uidFor = opts.uidFor ?? ((id: string) => `release-${id}@label-os`);
   const lines: string[] = [
@@ -173,6 +176,26 @@ export function buildIcs(opts: {
       'STATUS:CONFIRMED',
       'TRANSP:TRANSPARENT',
       ...CONTRACT_REMINDERS.flatMap((trigger) => ['BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Contract term ending', `TRIGGER:${trigger}`, 'END:VALARM']),
+      'END:VEVENT',
+    );
+  }
+  // LABEL-65: one all-day event per marketing milestone. Title and day only: the summary is the milestone's own
+  // words plus the release title, and nothing about the plan, its budget or its people.
+  const milestoneUid = opts.milestoneUidFor ?? ((id: string) => `marketing-${id}@label-os`);
+  const marks = (opts.milestones ?? [])
+    .map((m) => ({ m, day: parseDay(m.dueOn) }))
+    .filter((e): e is { m: { id: string; summary: string; dueOn: string }; day: { y: number; m: number; d: number } } => e.day !== null)
+    .sort((a, b) => icsDate(a.day).localeCompare(icsDate(b.day)) || a.m.id.localeCompare(b.m.id));
+  for (const { m, day } of marks) {
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${milestoneUid(m.id)}`,
+      `DTSTAMP:${icsStamp(`${m.dueOn}T00:00:00Z`)}`,
+      `DTSTART;VALUE=DATE:${icsDate(day)}`,
+      `DTEND;VALUE=DATE:${icsDate(nextDay(day))}`,
+      `SUMMARY:${escapeText(m.summary)}`,
+      'STATUS:CONFIRMED',
+      'TRANSP:TRANSPARENT',
       'END:VEVENT',
     );
   }

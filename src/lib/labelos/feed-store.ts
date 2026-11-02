@@ -13,6 +13,8 @@ import type { CalendarContract, CalendarRelease } from './release-calendar';
 import { mayReadContract } from './contracts/access';
 import { ContractsNotReadyError, linksOf, listContractRows } from './contracts-store';
 import { contractActor, readScopeFor } from './contracts-route';
+import { milestoneCalendarEvents } from './marketing-plan';
+import { feedMilestones } from './marketing-plan-store';
 
 /**
  * One person's feed state in one org. The version is an EXACT COUNT and the
@@ -91,4 +93,21 @@ export async function feedContracts(access: OrgAccessOk): Promise<CalendarContra
     if (err instanceof ContractsNotReadyError) return [];
     throw err;
   }
+}
+
+/**
+ * Marketing plan milestones (LABEL-65) for the releases the member's feed already lists, in an org licensed for
+ * marketing: a summary and a day each, nothing else. A cancelled or withdrawn release has no calendar presence, so
+ * neither do its milestones. Without migration 183 there are none.
+ */
+export async function feedMarketing(access: OrgAccessOk, releases: readonly CalendarRelease[]): Promise<{ id: string; summary: string; dueOn: string }[]> {
+  if (!orgHasModule(access, 'marketing') || !access.capabilities.has('catalog.read')) return [];
+  const live = releases.filter((r) => r.state !== 'cancelled' && r.state !== 'withdrawn');
+  const rows = await feedMilestones(access.admin, access.orgId, live.map((r) => ({ id: r.id, title: r.title })));
+  return live.flatMap((r) =>
+    milestoneCalendarEvents(
+      rows.filter((m) => m.releaseId === r.id),
+      { id: r.id, title: r.title },
+    ).map((e) => ({ id: e.id, summary: e.summary, dueOn: e.dueOn })),
+  );
 }

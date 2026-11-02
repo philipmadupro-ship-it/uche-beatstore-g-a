@@ -494,6 +494,21 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
     // Migration 157 (LABEL-30): approvals. Mimic the SQL: the same refusals in the same order, append-only rows.
     labelos_audit_approval_request: (args, tables) => approval(args, tables, 'request'),
     labelos_audit_approval_decide: (args, tables) => approval(args, tables, 'decide'),
+    // Migration 183 (LABEL-65): the marketing plan requirement, owner only, `from` derived from the stored value.
+    labelos_audit_marketing_plan_required: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const org = (tables.organizations ?? []).find((o) => o.id === args.p_org && !o.deleted_at);
+      if (!org) return ok({ error: 'not_found' });
+      const owner = (tables.org_members ?? []).find((m) => m.org_id === args.p_org && m.user_id === args.p_actor && m.role === 'owner');
+      if (!owner) return ok({ error: 'not_owner' });
+      const settings = (org.settings ?? {}) as Row;
+      const before = settings.marketing_plan_required === true;
+      const required = args.p_required === true;
+      if (before === required) return ok({ required, changed: false });
+      org.settings = { ...settings, marketing_plan_required: required };
+      event(tables, args, 'marketing_plan.requirement_changed', 'org', args.p_org, { from: before, to: required });
+      return ok({ required, changed: true });
+    },
     labelos_audit_invitation_revoke: (args, tables) => {
       if (opts.failAudit?.()) return failed();
       const inv = (tables.org_invitations ?? []).find((i) => i.org_id === args.p_org && i.id === args.p_id && !i.accepted_at && !i.revoked_at);

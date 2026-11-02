@@ -21,7 +21,7 @@ const ask = (over: Partial<DirectAsk> = {}): DirectAsk => ({ kind: 'task_assigne
 
 describe('the closed union', () => {
   it('is exactly the direct asks of 08 §B6, plus the two later single-recipient asks (rights details LABEL-54, store listing LABEL-71)', () => {
-    expect([...DIRECT_ASK_KINDS]).toEqual(['task_assigned', 'approval_requested', 'mention', 'credit_named_you', 'invitation', 'party_confirmation', 'listing_proposed']);
+    expect([...DIRECT_ASK_KINDS]).toEqual(['task_assigned', 'approval_requested', 'mention', 'credit_named_you', 'invitation', 'party_confirmation', 'listing_proposed', 'asset_requested']);
   });
 
   it('forbids broadcast kinds: nothing about uploads, stages, reviews, members or "everyone"', () => {
@@ -178,6 +178,7 @@ describe('nothing else writes org notifications', () => {
       'app/api/org/[orgId]/parties/[partyId]/invite/route.ts',
       'app/api/org/[orgId]/tasks/[taskId]/route.ts',
       'app/api/org/[orgId]/tasks/route.ts',
+      'lib/labelos/marketing-asset-notify.ts',
       'lib/labelos/store-consent-notify.ts',
     ]);
     for (const c of callers) expect(c).not.toMatch(/upload|song|stage|review|release/i);
@@ -190,5 +191,14 @@ describe('nothing else writes org notifications', () => {
       .filter((f) => !/store-consent-notify(\.test)?\.ts$/.test(f))
       .sort();
     expect([...new Set(importers)]).toEqual(['app/api/org/[orgId]/releases/[releaseId]/store/route.ts']);
+  });
+
+  it('the asset_requested ask is sent from exactly one route: the marketing plan asset-request POST', () => {
+    const importers = files(SRC)
+      .filter((f) => /marketing-asset-notify/.test(strip(readFileSync(f, 'utf8'))))
+      .map((f) => relative(SRC, f).split(sep).join('/'))
+      .filter((f) => !/marketing-asset-notify(\.test)?\.ts$/.test(f))
+      .sort();
+    expect([...new Set(importers)]).toEqual(['app/api/org/[orgId]/releases/[releaseId]/marketing/assets/route.ts']);
   });
 });
