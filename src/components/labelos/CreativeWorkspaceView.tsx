@@ -47,7 +47,7 @@ function ArtistTile({ a, orgSlug, canReview, canWrite }: { a: ArtistCard; orgSlu
     <li className={CARD} data-testid={`creative-artist-${a.id}`}>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
-          <h3 className="truncate text-[15px] text-white">{a.name}</h3>
+          <h3 className="truncate text-[16px] text-white">{a.name}</h3>
           <p className={`${LABEL} mt-1`}>
             Direction {a.brief.filled} of {a.brief.total}
           </p>
@@ -59,9 +59,9 @@ function ArtistTile({ a, orgSlug, canReview, canWrite }: { a: ArtistCard; orgSlu
       </div>
 
       {a.brief.filled === 0 ? (
-        <p className="mt-3 text-[12px] text-white/50" data-testid={`creative-nodirection-${a.id}`}>No direction written yet.</p>
+        <p className="mt-3 text-[11px] text-white/50" data-testid={`creative-nodirection-${a.id}`}>No direction written yet.</p>
       ) : (
-        <dl className="mt-3 space-y-2 text-[12px]">
+        <dl className="mt-3 space-y-2 text-[11px]">
           {a.brief.sound && (
             <div>
               <dt className={LABEL}>Sound</dt>
