@@ -677,7 +677,7 @@ describe('LABEL-68 — the optional creative gate', () => {
     const decided = await decide(OWN, release(), 'creative', 'approved', undefined, 'k');
     expect(decided.status).toBe(409);
     expect(db.tables.approvals).toHaveLength(0);
-    expect(db.tables.activity_events.filter((e) => e.verb.startsWith('approval.'))).toHaveLength(0);
+    expect(db.tables.activity_events.filter((e) => String(e.verb).startsWith('approval.'))).toHaveLength(0);
   });
 
   it('a misspelt or malformed setting reads as off', async () => {
