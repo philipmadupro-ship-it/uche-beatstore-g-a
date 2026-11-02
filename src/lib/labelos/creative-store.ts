@@ -20,5 +20,5 @@ export async function orgHasArtistic(admin: AdminClient, orgId: string): Promise
   return effectiveModules(licence.modules, parseDepartmentsOff(org.settings?.departments_off)).has('artistic');
 }
 
-/** The message a write gives while migration 185 is missing. */
-export const NEEDS_185 = 'Creative approval needs migration 185, which has not been applied yet.';
+/** The message a write gives while migration 194 is missing. */
+export const NEEDS_194 = 'Creative approval needs migration 194, which has not been applied yet.';

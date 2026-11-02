@@ -1,6 +1,6 @@
 /**
  * PUT/GET /api/org/[orgId]/settings/creative-gate (LABEL-68): owner only, one audited function, a repeat writes nothing,
- * migration 185 missing is 503, and the switch exists only where the artistic department does.
+ * migration 194 missing is 503, and the switch exists only where the artistic department does.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -118,11 +118,11 @@ describe('the creative approval switch', () => {
     expect((await call(OWN, 'PUT', { enabled: true })).status).toBe(200);
   });
 
-  it('answers 503 naming 185 when the function is missing, and writes nothing', async () => {
+  it('answers 503 naming 194 when the function is missing, and writes nothing', async () => {
     missingFunction = true;
     const res = await call(OWN, 'PUT', { enabled: true });
     expect(res.status).toBe(503);
-    expect((await res.json()).error).toMatch(/185/);
+    expect((await res.json()).error).toMatch(/194/);
     expect(db.tables.activity_events).toHaveLength(0);
     expect(db.tables.organizations[0].settings).toEqual({ legal_gate: 'off' });
   });

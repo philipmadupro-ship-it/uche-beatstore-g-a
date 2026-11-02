@@ -1,6 +1,6 @@
 /**
  * The artistic direction workspace and the optional creative approval gate (LABEL-68) end to end against a REAL database
- * (scripts/local-db: Postgres + PostgREST + RLS, LABEL_OS_ENABLED=true). What mocks cannot prove: migration 185's check
+ * (scripts/local-db: Postgres + PostgREST + RLS, LABEL_OS_ENABLED=true). What mocks cannot prove: migration 194's check
  * and functions accept a creative approval, the owner's switch is audited in the database, the workspace reads what the
  * earlier tasks stored, and delivery really waits for the creative approval once it is on.
  *

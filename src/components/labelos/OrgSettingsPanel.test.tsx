@@ -152,10 +152,10 @@ describe('the creative approval switch (LABEL-68)', () => {
 
   it('says why when the server refuses, and leaves the switch where it was', async () => {
     gateReply = { status: 200, body: { enabled: false, available: true } };
-    gatePutReply = { status: 503, body: { error: 'Creative approval needs migration 185, which has not been applied yet.' } };
+    gatePutReply = { status: 503, body: { error: 'Creative approval needs migration 194, which has not been applied yet.' } };
     render(<OrgSettingsPanel orgId="o1" />);
     fireEvent.click(await screen.findByLabelText(/require creative approval/i));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Creative approval needs migration 185, which has not been applied yet.'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Creative approval needs migration 194, which has not been applied yet.'));
     expect((screen.getByLabelText(/require creative approval/i) as HTMLInputElement).checked).toBe(false);
   });
 });

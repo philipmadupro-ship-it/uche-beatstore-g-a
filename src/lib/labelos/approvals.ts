@@ -41,7 +41,7 @@ export type CoreGate = (typeof GATES)[number];
  */
 export const CREATIVE_GATE = 'creative' as const;
 export type Gate = CoreGate | typeof CREATIVE_GATE;
-/** Every gate the database accepts on a release (migration 185's `approvals_gate_check`). */
+/** Every gate the database accepts on a release (migration 194's `approvals_gate_check`). */
 export const ALL_GATES = ['master', 'artwork', 'legal', 'marketing', 'metadata', 'creative'] as const satisfies readonly Gate[];
 
 /** The decisions a person records. Frame.io vocabulary (09 §6). */

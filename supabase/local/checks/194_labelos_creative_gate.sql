@@ -1,4 +1,4 @@
--- Behaviour checks for 185_labelos_creative_gate.sql (LABEL-68), run by scripts/local-db/check.sh
+-- Behaviour checks for 194_labelos_creative_gate.sql (LABEL-68), run by scripts/local-db/check.sh
 -- (npm run db:local:check). Every check RAISEs on failure.
 --
 -- Proven, as the roles PostgREST uses:

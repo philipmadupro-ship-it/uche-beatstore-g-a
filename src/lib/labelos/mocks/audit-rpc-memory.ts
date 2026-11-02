@@ -509,7 +509,7 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       event(tables, args, 'marketing_plan.requirement_changed', 'org', args.p_org, { from: before, to: required });
       return ok({ required, changed: true });
     },
-    // Migration 185 (LABEL-68): the creative approval gate switch, owner only, `from` derived from the stored value.
+    // Migration 194 (LABEL-68): the creative approval gate switch, owner only, `from` derived from the stored value.
     labelos_audit_creative_gate: (args, tables) => {
       if (opts.failAudit?.()) return failed();
       const org = (tables.organizations ?? []).find((o) => o.id === args.p_org && !o.deleted_at);

@@ -31,7 +31,7 @@
  *   platformSetEntitlements  org.entitlements_changed in the licensee org (170, LABEL-47)
  *   orgSettings              org.settings_changed (172, LABEL-51; owner only, checked again in SQL)
  *   marketingPlanRequired    marketing_plan.requirement_changed (183, LABEL-65; owner only, checked again in SQL)
- *   creativeGate            creative_gate.changed (185, LABEL-68; owner only, checked again in SQL)
+ *   creativeGate            creative_gate.changed (194, LABEL-68; owner only, checked again in SQL)
  *   orgSettingsAtomic        the same, with the payload's `from` read under the lock (187, LABEL-73)
  *   releaseDeliver           release.delivered (187; fingerprint compared under the release lock)
  *   releaseStore             release.store_listed | release.store_unlisted (187; consent re-checked under the lock)
@@ -97,7 +97,7 @@ export const AUDIT_RPCS = {
   orgSettings: 'labelos_audit_org_settings',
   // Migration 183 (LABEL-65): whether the marketing gate asks for a plan, with `marketing_plan.requirement_changed`.
   marketingPlanRequired: 'labelos_audit_marketing_plan_required',
-  // Migration 185 (LABEL-68): whether releases need a creative approval, with `creative_gate.changed`.
+  // Migration 194 (LABEL-68): whether releases need a creative approval, with `creative_gate.changed`.
   creativeGate: 'labelos_audit_creative_gate',
   // Migration 187 (LABEL-73): the same write with `from` read under the row lock (a sibling, because 192 redefines the one above).
   orgSettingsAtomic: 'labelos_audit_org_settings_atomic',

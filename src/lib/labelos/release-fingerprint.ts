@@ -42,7 +42,7 @@ export function latestApprovalIds(rows: readonly ApprovalRef[]): Record<Fingerpr
   return out;
 }
 
-/** `creative` (LABEL-68) is present only for an org that switched the creative gate on: migration 185's function is what accepts the key. */
+/** `creative` (LABEL-68) is present only for an org that switched the creative gate on: migration 194's function is what accepts the key. */
 /** The latest approval row id of ONE gate ('' = none); same ordering as `latestApprovalIds` and as the SQL. Any gate, including LABEL-68's `creative`. */
 export function latestGateId(rows: readonly ApprovalRef[], gate: string): string {
   let best: ApprovalRef | undefined;

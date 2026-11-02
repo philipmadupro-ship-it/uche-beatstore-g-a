@@ -5,8 +5,8 @@
  *      gate on an approval nobody could give), so the settings screen offers the switch only where it can work.
  *  PUT `{ enabled: boolean }` — switch it on or off. 403 for anyone whose role is not `owner` (a role, like the rest of
  *      the settings screen). The change and its `creative_gate.changed` audit event are ONE database function
- *      (migration 185): it merges the one key under the row lock and derives `from` itself. A request that changes
- *      nothing is 200 and writes nothing. Migration 185 missing: 503 naming it.
+ *      (migration 194): it merges the one key under the row lock and derives `from` itself. A request that changes
+ *      nothing is 200 and writes nothing. Migration 194 missing: 503 naming it.
  *
  * Off by default: a missing or malformed stored value reads as off (`parseReadinessSettings`), and only the exact string
  * `on` turns the gate on. Why not PATCH …/settings: that function validates a closed key list and is being reworked
@@ -20,7 +20,7 @@ import { CreativeGateBodySchema } from '@/lib/contracts';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
-import { NEEDS_185, orgHasArtistic } from '@/lib/labelos/creative-store';
+import { NEEDS_194, orgHasArtistic } from '@/lib/labelos/creative-store';
 import { readReadinessSettings } from '@/lib/labelos/release-readiness-store';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
@@ -60,7 +60,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   try {
     if (!(await orgHasArtistic(access.admin, access.org.id))) return json(404, { error: 'Not found' });
     const { data, error } = await auditRpc(access.admin, 'creativeGate', { p_org: access.org.id, p_actor: access.userId, p_enabled: parsed.data.enabled });
-    if (isMissingAuditRpc(error)) return json(503, { error: NEEDS_185 });
+    if (isMissingAuditRpc(error)) return json(503, { error: NEEDS_194 });
     if (error) throw new Error(error.message);
     if (data?.error === 'not_owner') return json(403, { error: 'Forbidden' });
     if (data?.error === 'not_found') return json(404, { error: 'Not found' });
