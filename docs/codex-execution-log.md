@@ -9505,3 +9505,34 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
     - the first-listen cut for external members has no negative cache and no `maxDuration`, and reads the whole master into memory;
     - HEAD spends the limiter;
     - a reversed range gets 416.
+- 2026-11-01 — **LABEL-60 Done**: #166 squash `17e770e`, migration 178 (not applied; second paste).
+  - What it adds:
+    - in-app signatures bound to the SHA-256 of the frozen sent copy's stored bytes;
+    - append-only `contract_signatures`;
+    - countersign by owner, admin or a `contracts.write` member;
+    - external signing links, emailed to the party and never returned to the issuer;
+    - a certificate page, supersede, and contract expiry on the calendar feed.
+  - Gate: CI green on `a6315c3`; preview checked (`/sign` is 404 with the flag off). The independent review was BLOCKING:
+    - H1: a `rights.write` member could link a party to their own account, self-confirm and sign as the artist. Fixed: `parties.user_linked_by` is recorded; signing needs a link made by someone else plus the party's own confirmation; the confirm route refuses the self-linker.
+    - M1: the issuer received the raw link token. Fixed: the link is emailed, no token is in any response, and the certificate names the issuer.
+    - Also fixed: L1 (void revokes links), L3 (scope in the GET view), L4 (no DELETE of a non-draft contract), L5 (the sent copy is re-hashed before it is served).
+    - L2 kept: the drift gate stays in Node; documented.
+  - Accepted residual: a member can link a second account they control, because there is no invitation-accept flow for party links yet. Existing party links have no recorded linker and must be re-linked before anyone can sign through them.
+- 2026-11-02 — **LABEL-61 Done**: #165 squash `b474c1f`, migration 179 (not applied; second paste).
+  - What it adds:
+    - eight finance tables with bigint minor units and a currency on every amount;
+    - RLS: `finance.read` plus artist scope for staff; role artist reads only their own ISSUED statements;
+    - integer money helpers (half-to-even rounding, largest-remainder allocation).
+  - Gate: CI green on `cd6f80e` (after merging LABEL-60); preview checked; independent review found no security blocker. Fixed before merge:
+    - M1: a user who wrote finance rows could not be deleted; the user columns may now only go to NULL.
+    - L1: contact delete has a finance message.
+    - L2: payee POST requires `artist_contact_id`, closing a re-point race.
+    - L3: int64 bounds on the money helpers.
+    - L4: documented that statement visibility follows `member_artist_scopes`.
+- 2026-11-01 — LABEL-73 started (session_019AUhHchpteAUmRDWbmX5fx, migration 187).
+- 2026-11-02 — LABEL-62 started (session_019AUhHc8KkPccemFofVqZfr, migration 180). Next reserved: 181 (LABEL-63).
+- Follow-ups:
+  - an invitation-accept flow for party↔account links;
+  - `contact-roles` real-DB e2e #3 failing locally (unconfirmed on base);
+  - `label-org-departments` e2e flake;
+  - LABEL-72 lows (XFF trust, derivative negative cache and `maxDuration`, HEAD spends the limiter).
