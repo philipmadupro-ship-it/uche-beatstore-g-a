@@ -162,6 +162,8 @@ describe('statementActions', () => {
     expect(statementActions('approved', caps('finance.approve'), B(0))).toMatchObject({ issue: true, approve: false, void: true });
     expect(statementActions('issued', caps('finance.write'), B(10))).toMatchObject({ recordPayment: true, void: false });
     expect(statementActions('issued', caps('finance.write'), B(0)).recordPayment).toBe(false);
+    expect(statementActions('issued', caps('finance.approve'), B(40), B(60)).void).toBe(false);
+    expect(statementActions('issued', caps('finance.approve'), B(100), B(0)).void).toBe(true);
     expect(statementActions('void', caps('finance.write', 'finance.approve'), B(10))).toEqual({ regenerate: false, approve: false, issue: false, void: false, recordPayment: false, voidPayment: false });
   });
 });

@@ -69,7 +69,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     }
     rows.sort((a, b) => a.currency.localeCompare(b.currency) || a.payeeName.localeCompare(b.payeeName) || a.statementId.localeCompare(b.statementId));
 
-    await recordEvent(access.admin, { orgId: access.orgId, userId: access.userId }, 'statement.exported', { type: 'statement', id: rows[0]?.statementId ?? orgId }, { format: 'payout', statements: rows.length });
+    await recordEvent(access.admin, { orgId: access.orgId, userId: access.userId }, 'statement.exported', { type: 'org', id: access.orgId }, { format: 'payout', statements: rows.length });
 
     return new NextResponse(payoutCsv(rows), {
       status: 200,

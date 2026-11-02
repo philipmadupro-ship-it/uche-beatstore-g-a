@@ -221,14 +221,15 @@ export type StatementStatus = 'draft' | 'approved' | 'issued' | 'void';
 export type StatementActions = { regenerate: boolean; approve: boolean; issue: boolean; void: boolean; recordPayment: boolean; voidPayment: boolean };
 
 /** The buttons a statement offers a viewer; the routes enforce the same rules. */
-export function statementActions(status: string, caps: ReadonlySet<string>, outstandingMinor: bigint): StatementActions {
+export function statementActions(status: string, caps: ReadonlySet<string>, outstandingMinor: bigint, paidMinor: bigint = ZERO): StatementActions {
   const write = caps.has('finance.write');
   const approve = caps.has('finance.approve');
   return {
     regenerate: status === 'draft' && write,
     approve: status === 'draft' && approve,
     issue: status === 'approved' && approve,
-    void: (status === 'draft' || status === 'approved' || status === 'issued') && approve,
+    // A statement with a live payment is not voided (the database says so): void the payments first.
+    void: (status === 'draft' || status === 'approved' || (status === 'issued' && paidMinor === ZERO)) && approve,
     recordPayment: status === 'issued' && write && outstandingMinor > ZERO,
     voidPayment: status === 'issued' && write,
   };

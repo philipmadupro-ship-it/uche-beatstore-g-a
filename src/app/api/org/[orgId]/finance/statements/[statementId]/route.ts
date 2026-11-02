@@ -43,7 +43,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     ]);
     let actions: Record<string, boolean> | undefined;
     if (!own) {
-      const base = statementActions(row.status, access.capabilities, positionOf(row.net_minor, payments).outstandingMinor);
+      const pos = positionOf(row.net_minor, payments);
+      const base = statementActions(row.status, access.capabilities, pos.outstandingMinor, pos.paidMinor);
       // The generator cannot approve their own draft unless an owner: show the button only to someone who can use it.
       let approve = base.approve;
       if (approve) approve = planApproval({ generatedBy: row.created_by, actor: access.userId, actorIsOwner: await isOrgOwner(access.admin, access.orgId, access.userId) }).ok;

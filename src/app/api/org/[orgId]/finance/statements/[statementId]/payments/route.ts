@@ -6,7 +6,7 @@
  * Against an ISSUED statement only; partial payments are allowed; the live payments never add up to
  * more than the statement's net (409 `exceeds_net`, naming what is left; the database re-checks it
  * under the statement's row lock). The reference is free text ("wire 2026-10-05"), never an
- * account number — one that looks like one is refused. The date is not in the future.
+ * account number — one that looks like one is refused. The date is at most a day ahead (time zones).
  */
 import { NextRequest } from 'next/server';
 import { OrgPaymentCreateBodySchema } from '@/lib/contracts';
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { access, row } = found.ctx;
     const today = new Date().toISOString().slice(0, 10);
     const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-    if (body.data.paid_on > tomorrow) return json(400, { error: `A payment cannot be dated in the future (today is ${today}).` });
+    if (body.data.paid_on > tomorrow) return json(400, { error: `A payment cannot be dated after tomorrow (today is ${today}); record it when it is made.` });
     if (body.data.reference && looksLikeBankNumber(body.data.reference)) {
       return json(400, { error: 'That looks like an account number. Record a reference (for example “wire 2026-10-05”), never the account itself.' });
     }

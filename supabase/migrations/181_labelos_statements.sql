@@ -347,6 +347,11 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
   IF v_period.status <> 'open' THEN RETURN jsonb_build_object('error', 'period_closed'); END IF;
 
+  SELECT count(*) INTO v_alloc
+  FROM public.earnings_allocations a JOIN public.earnings_imports i ON i.id = a.import_id
+  WHERE a.org_id = p_org AND a.payee_id = p_payee AND i.period_id = p_period AND i.status = 'imported';
+  IF v_alloc = 0 THEN RETURN jsonb_build_object('error', 'nothing_to_include'); END IF;
+
   SELECT * INTO v_old FROM public.statements WHERE payee_id = p_payee AND period_id = p_period AND status <> 'void' FOR UPDATE;
   IF FOUND THEN
     IF v_old.status <> 'draft' THEN
@@ -354,11 +359,6 @@ BEGIN
     END IF;
     DELETE FROM public.statements WHERE id = v_old.id; -- only a draft is replaced; its lines go with it
   END IF;
-
-  SELECT count(*) INTO v_alloc
-  FROM public.earnings_allocations a JOIN public.earnings_imports i ON i.id = a.import_id
-  WHERE a.org_id = p_org AND a.payee_id = p_payee AND i.period_id = p_period AND i.status = 'imported';
-  IF v_alloc = 0 THEN RETURN jsonb_build_object('error', 'nothing_to_include'); END IF;
 
   INSERT INTO public.statements (org_id, payee_id, period_id, currency, created_by)
   VALUES (p_org, p_payee, p_period, v_payee.currency, p_actor)
