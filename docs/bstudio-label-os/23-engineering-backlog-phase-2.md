@@ -196,12 +196,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: money arithmetic helpers in `lib/labelos/finance/money.ts` (integer, rounding rule documented, largest-remainder allocation) with property-style tests.
 
 ### LABEL-62 — Earnings import and royalty calculation
-**Priority:** P0 · **Risk:** High · **Deps:** 61 · **Migration:** 180 · **Status:** In Progress (session_019AUhHc8KkPccemFofVqZfr, #169)
+**Priority:** P0 · **Risk:** High · **Deps:** 61 · **Migration:** 180 · **Status:** Done (#169, `8302d8a`)
 - CSV import (generic mapper + presets for common distributor reports), idempotent by file hash; match lines to recordings by ISRC/UPC; allocate by the song's current splits (master/publishing) and contract terms; **recoupment** of advances per payee; unmatched lines queue.
 - Acceptance: golden-file tests for allocation and recoupment; re-importing a file changes nothing; unmatched queue is scoped.
 
 ### LABEL-63 — Statements and payment tracking
-**Priority:** P1 · **Risk:** Medium · **Deps:** 62 · **Migration:** 181 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 62 · **Migration:** 181 · **Status:** In Progress (session_019AUhHfmYhmCPwuv3PbWtUU)
 - Generate a statement per payee per period (PDF/CSV), approve (`finance.approve`), mark paid with a reference, export a payout CSV. Payee statements visible to the artist/collaborator in their own view.
 - Acceptance: statement totals equal the sum of allocations (test); approval is append-only; artist sees only theirs.
 
@@ -214,12 +214,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## F. Marketing and PR
 
 ### LABEL-65 — Marketing plans
-**Priority:** P1 · **Risk:** Medium · **Deps:** 49, 55 · **Migration:** 183 · **Status:** In Progress (session_019AUhHcHjoHFXHDBFjd9rTJ, #170)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 49, 55 · **Migration:** 183 · **Status:** Done (#170, `44bb802`)
 - Per-release marketing plan: timeline (pre-save, teaser, release, post), tasks with owners (reusing LABEL-23 tasks), budget lines, asset requests to the artist (a closed notification kind), platform checklist; calendar integration; marketing gate can require a plan.
 - Acceptance: scoped to the release's artist; marketing role without audio access cannot hear working demos.
 
 ### LABEL-66 — PR and press
-**Priority:** P1 · **Risk:** Medium · **Deps:** 65 · **Migration:** 184 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 65 · **Migration:** 184 · **Status:** In Progress (session_019AUhHdgtc1yjaLzBLRhKxP)
 - Press kit builder (bio, photos, links, one-sheet from release data), press contacts (org contacts with role `press`), outreach tracker per release (sent/opened/replied/coverage URL), embargo date. Press-kit page shareable by token with the same grant discipline as artist portals.
 - Acceptance: embargo respected on shared pages; no private audio exposed (previews of unreleased music stay private, D8).
 
