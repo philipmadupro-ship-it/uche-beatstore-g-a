@@ -124,7 +124,7 @@ describe('loadAllocFacts', () => {
 describe('visibleReviewLines', () => {
   const line = (id: string, track: string | null, song: string | null): ReviewLine => ({
     id, import_id: 'i', line_no: 2, isrc: null, upc: null, title: null, store: null, territory: null, gross_minor: 1, currency: 'USD',
-    track_id: track, song_track_id: song, income_class: 'master', review_reason: 'no_sheet', period_start: null,
+    track_id: track, song_track_id: song, income_class: 'master', review_reason: 'no_sheet', period_start: null, period_end: null,
   });
   const lines = [line('unmatched', null, null), line('mine', 'rec-a', 'song-a'), line('theirs', 'rec-b', 'song-b'), line('rec-only', 'song-a', null)];
 
@@ -158,10 +158,35 @@ describe('reprocessImport', () => {
       },
     };
     const waiting: ReviewLine[] = [
-      { id: 'line-a', import_id: 'imp-1', line_no: 2, isrc: 'USABC2600001', upc: null, title: null, store: null, territory: null, gross_minor: 1000, currency: 'USD', track_id: null, song_track_id: null, income_class: 'master', review_reason: 'no_sheet', period_start: null },
-      { id: 'line-b', import_id: 'imp-1', line_no: 3, isrc: 'USZZZ0000000', upc: null, title: null, store: null, territory: null, gross_minor: 5, currency: 'USD', track_id: null, song_track_id: null, income_class: 'master', review_reason: 'no_match', period_start: null },
+      { id: 'line-a', import_id: 'imp-1', line_no: 2, isrc: 'USABC2600001', upc: null, title: null, store: null, territory: null, gross_minor: 1000, currency: 'USD', track_id: null, song_track_id: null, income_class: 'master', review_reason: 'no_sheet', period_start: null, period_end: null },
+      { id: 'line-b', import_id: 'imp-1', line_no: 3, isrc: 'USZZZ0000000', upc: null, title: null, store: null, territory: null, gross_minor: 5, currency: 'USD', track_id: null, song_track_id: null, income_class: 'master', review_reason: 'no_match', period_start: null, period_end: null },
     ];
     expect(await reprocessImport(admin(db), ORG, 'imp-1', waiting)).toEqual({ ok: true, resolved: 1, stillWaiting: 1 });
+  });
+
+  it('keeps the line’s period end on a re-run, so a contract that starts later still does not apply', async () => {
+    const db: MemoryDb = {
+      tables: {
+        payees: [{ id: 'py-1', org_id: ORG, party_id: 'party-1', currency: 'USD', status: 'active', artist_contact_id: null }],
+        earnings_imports: [{ id: 'imp-1', org_id: ORG, currency: 'USD' }], earnings_lines: [], earnings_allocations: [],
+        tracks: [{ id: 'song-1', org_id: ORG, type: 'song', isrc: 'USABC2600001' }],
+        split_sheets: [{ id: 'sh-1', org_id: ORG, track_id: 'song-1', kind: 'master', status: 'circulated' }],
+        split_lines: [{ split_sheet_id: 'sh-1', org_id: ORG, party_id: 'party-1', share: 100, position: 0, id: 'l1' }],
+        contracts: [{ id: 'ct-1', org_id: ORG, status: 'signed', track_id: 'song-1', release_id: null, artist_contact_id: null, effective_date: '2026-03-01', term_months: null, fields: { royalty_rate: '50' }, sent_document_sha256: 'h1' }],
+        contract_parties: [{ contract_id: 'ct-1', org_id: ORG, party_id: 'party-1', role: 'artist', position: 0 }],
+        contract_signatures: [{ id: 's1', contract_id: 'ct-1', org_id: ORG, party_id: 'party-1', role: 'artist', contract_version: 1, document_sha256: 'h1', signed_at: '2026-03-02' }],
+        advances: [], earnings_recoupments: [], releases: [], release_items: [], track_links: [],
+      },
+      rpc: {
+        labelos_earnings_resolve: (args) => {
+          // January earnings, contract effective in March: the split sheet alone decides (100 %), not the 50 % rate.
+          expect(args.p_allocs).toMatchObject([{ payable_minor: '1000', retained_minor: '0', rate_units: 1000000, contract_id: null }]);
+          return { data: null, error: null };
+        },
+      },
+    };
+    const waiting: ReviewLine[] = [{ id: 'line-a', import_id: 'imp-1', line_no: 2, isrc: 'USABC2600001', upc: null, title: null, store: null, territory: null, gross_minor: 1000, currency: 'USD', track_id: null, song_track_id: null, income_class: 'master', review_reason: 'no_sheet', period_start: '2026-01-01', period_end: '2026-01-31' }];
+    expect(await reprocessImport(admin(db), ORG, 'imp-1', waiting)).toEqual({ ok: true, resolved: 1, stillWaiting: 0 });
   });
 
   it('turns a database serialization failure into a retryable conflict, never a 500', async () => {
@@ -172,7 +197,7 @@ describe('reprocessImport', () => {
       },
       rpc: { labelos_earnings_resolve: () => ({ data: null, error: { message: 'earnings: line_not_waiting', code: '40001' } }) },
     };
-    const waiting: ReviewLine[] = [{ id: 'line-a', import_id: 'imp-1', line_no: 2, isrc: null, upc: null, title: null, store: null, territory: null, gross_minor: 1, currency: 'USD', track_id: null, song_track_id: null, income_class: 'master', review_reason: 'no_identifier', period_start: null }];
+    const waiting: ReviewLine[] = [{ id: 'line-a', import_id: 'imp-1', line_no: 2, isrc: null, upc: null, title: null, store: null, territory: null, gross_minor: 1, currency: 'USD', track_id: null, song_track_id: null, income_class: 'master', review_reason: 'no_identifier', period_start: null, period_end: null }];
     expect(await reprocessImport(admin(db), ORG, 'imp-1', waiting)).toMatchObject({ ok: false, code: 'recoup_conflict' });
   });
 });

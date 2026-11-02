@@ -18,7 +18,7 @@ import type { PartyRole } from './contracts/types';
 import { inChunks, pageAll, ReadError } from './paged-read';
 import type { ArtistScope } from './artist-scope';
 import type { AdvanceFact, AllocFacts, ContractFact, MatchFacts, PayeeFact, ReviewReason, RunResult, SheetFact } from './finance/earnings-calc';
-import { computeEarnings, isReviewReason } from './finance/earnings-calc';
+import { computeEarnings } from './finance/earnings-calc';
 import type { ParsedLine } from './finance/earnings-import';
 import { minorFromDb } from './finance/money';
 
@@ -49,6 +49,19 @@ async function guarded<T>(read: () => Promise<T>): Promise<T> {
     return await read();
   } catch (err) {
     if (err instanceof ReadError) check(err.message, err.raw as DbError);
+    throw err;
+  }
+}
+
+/**
+ * A read that names columns migration 180 adds to a 179 table: 179 applied without 180 answers 42703
+ * (undefined column), which for THESE columns means "not set up yet", not a bug.
+ */
+async function guardedColumns<T>(read: () => Promise<T>): Promise<T> {
+  try {
+    return await guarded(read);
+  } catch (err) {
+    if (err instanceof Error && /column .* does not exist|undefined_column|42703/i.test(err.message)) throw new EarningsNotReadyError();
     throw err;
   }
 }
@@ -200,11 +213,15 @@ async function loadContractFacts(admin: AdminClient, orgId: string, partyIds: Re
       ),
     ),
   ]);
+  const linksOf = new Map<string, typeof links>();
+  for (const l of links) linksOf.set(l.contract_id, [...(linksOf.get(l.contract_id) ?? []), l]);
+  const sigsOf = new Map<string, SignatureFact[]>();
+  for (const s of sigs) {
+    sigsOf.set(s.contract_id, [...(sigsOf.get(s.contract_id) ?? []), { id: s.id, partyId: s.party_id, role: s.role, documentSha256: s.document_sha256, contractVersion: s.contract_version, signedAt: s.signed_at }]);
+  }
   for (const c of rated) {
-    const mine = links.filter((l) => l.contract_id === c.id);
-    const facts: SignatureFact[] = sigs
-      .filter((s) => s.contract_id === c.id)
-      .map((s) => ({ id: s.id, partyId: s.party_id, role: s.role, documentSha256: s.document_sha256, contractVersion: s.contract_version, signedAt: s.signed_at }));
+    const mine = linksOf.get(c.id) ?? [];
+    const facts = sigsOf.get(c.id) ?? [];
     const progress = signingProgress(signerStates(requiredSigners(mine), facts, c.sent_document_sha256 as string));
     if (!progress.complete) continue;
     const rateUnits = parseShare(c.fields?.royalty_rate as string) as number;
@@ -249,12 +266,17 @@ export async function loadAllocFacts(admin: AdminClient, orgId: string, songIds:
       'split lines',
     ),
   );
+  const linesOfSheet = new Map<string, { partyId: string; units: number; position: number }[]>();
+  for (const l of lineRows) {
+    // A share that does not parse (it cannot: numeric(7,4)) makes the sheet read as not adding up — never a guess.
+    const units = parseShare(typeof l.share === 'number' ? l.share : String(l.share)) ?? -1;
+    const list = linesOfSheet.get(l.split_sheet_id) ?? [];
+    list.push({ partyId: l.party_id, units, position: l.position });
+    linesOfSheet.set(l.split_sheet_id, list);
+  }
   const sheets = new Map<string, SheetFact[]>();
   for (const s of sheetRows) {
-    const lines = lineRows
-      .filter((l) => l.split_sheet_id === s.id)
-      // A share that does not parse (it cannot: numeric(7,4)) makes the sheet read as not adding up — never a guess.
-      .map((l) => ({ partyId: l.party_id, units: parseShare(typeof l.share === 'number' ? l.share : String(l.share)) ?? -1, position: l.position }));
+    const lines = linesOfSheet.get(s.id) ?? [];
     const key = `${s.track_id}:${s.kind}`;
     sheets.set(key, [...(sheets.get(key) ?? []), { id: s.id, songId: s.track_id, kind: s.kind, status: s.status, lines }]);
   }
@@ -372,11 +394,11 @@ export type ImportRow = {
 };
 export type ReviewLine = {
   id: string; import_id: string; line_no: number; isrc: string | null; upc: string | null; title: string | null; store: string | null; territory: string | null;
-  gross_minor: unknown; currency: string; track_id: string | null; song_track_id: string | null; income_class: string; review_reason: ReviewReason | null; period_start: string | null;
+  gross_minor: unknown; currency: string; track_id: string | null; song_track_id: string | null; income_class: string; review_reason: ReviewReason | null; period_start: string | null; period_end: string | null;
 };
 
 const IMPORT_COLUMNS = 'id, period_id, source, file_name, currency, row_count, total_minor, status, created_at';
-const LINE_COLUMNS = 'id, import_id, line_no, isrc, upc, title, store, territory, gross_minor, currency, track_id, song_track_id, income_class, review_reason, period_start';
+const LINE_COLUMNS = 'id, import_id, line_no, isrc, upc, title, store, territory, gross_minor, currency, track_id, song_track_id, income_class, review_reason, period_start, period_end';
 
 export async function listImports(admin: AdminClient, orgId: string): Promise<ImportRow[]> {
   return guarded(() =>
@@ -392,7 +414,7 @@ export async function readImport(admin: AdminClient, orgId: string, importId: st
 
 /** Every line of an import still waiting for review (paged). */
 export async function reviewLines(admin: AdminClient, orgId: string, importId: string | null): Promise<ReviewLine[]> {
-  return guarded(() =>
+  return guardedColumns(() =>
     pageAll<ReviewLine>((from, to) => {
       let q = admin.from('earnings_lines').select(LINE_COLUMNS).eq('org_id', orgId).not('review_reason', 'is', null);
       if (importId) q = q.eq('import_id', importId);
@@ -443,7 +465,7 @@ export async function reprocessImport(admin: AdminClient, orgId: string, importI
   if (!imp) return { ok: false, code: 'refused', message: 'Import not found.' };
   const parsed: ParsedLine[] = waiting.map((l) => ({
     lineNo: l.line_no, isrc: l.isrc, upc: l.upc, title: l.title, store: l.store, territory: l.territory, units: null,
-    grossMinor: minorFromDb(l.gross_minor), periodStart: l.period_start, periodEnd: null, incomeClass: l.income_class === 'publishing' ? 'publishing' : 'master',
+    grossMinor: minorFromDb(l.gross_minor), periodStart: l.period_start, periodEnd: l.period_end, incomeClass: l.income_class === 'publishing' ? 'publishing' : 'master',
   }));
   const run = await calculate(admin, orgId, imp.currency.trim(), parsed);
   const idOf = new Map(waiting.map((l) => [l.line_no, l.id]));
@@ -499,4 +521,3 @@ export async function importTotals(admin: AdminClient, orgId: string, importId: 
   return [...totals.values()].sort((a, b) => a.payee_id.localeCompare(b.payee_id));
 }
 
-export const isReason = isReviewReason;

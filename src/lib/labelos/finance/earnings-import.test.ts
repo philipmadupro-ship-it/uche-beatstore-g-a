@@ -15,7 +15,10 @@ describe('parseAmount', () => {
     expect(amt('1,234.5')?.minor).toBe(BigInt(123450));
     expect(amt('1.234,56')?.minor).toBe(BigInt(123456));
     expect(amt('12,50')?.minor).toBe(BigInt(1250));
-    expect(amt('1,234')?.minor).toBe(BigInt(123400));
+    expect(amt('1,234')).toBeNull(); // 1234 or 1.234? never guessed
+    expect(amt('2,500')).toBeNull();
+    expect(amt('0,500')?.minor).toBe(BigInt(50));
+    expect(amt('12,5')?.minor).toBe(BigInt(1250));
     expect(amt('1,234,567')?.minor).toBe(BigInt(123456700));
     expect(amt('0,0000', 2)?.minor).toBe(BigInt(0));
     expect(amt('0,0030', 2)).toBeNull();
@@ -38,7 +41,7 @@ describe('parseAmount', () => {
   });
 
   it('refuses everything that is not a plain number', () => {
-    for (const bad of ['', 'abc', '1e-5', '1.2.3', '=1+1', '12 USD', '--1', '1,2,3x', '9'.repeat(16)]) expect(amt(bad), bad).toBeNull();
+    for (const bad of ['', 'abc', '1e-5', '1.2.3', '=1+1', '12 USD', '--1', '1,2,3x', '1,23,456', '9'.repeat(16)]) expect(amt(bad), bad).toBeNull();
   });
 });
 
@@ -96,6 +99,12 @@ describe('buildLines', () => {
     expect(buildLines(f.header, f.rows, { preset: 'generic', currency: 'USD', mapping: { isrc: 'Nope', amount: 'Net' } })).toMatchObject({ ok: false, failure: { code: 'bad_mapping' } });
     expect(buildLines(f.header, f.rows, { preset: 'generic', currency: 'USD', mapping: { amount: 'Net' } })).toMatchObject({ ok: false, failure: { code: 'bad_mapping' } });
     expect(buildLines(f.header, f.rows, { preset: 'auto', currency: 'USD' })).toMatchObject({ ok: false, failure: { code: 'no_preset' } });
+  });
+
+  it('names an ambiguous thousands separator instead of guessing', () => {
+    const f = csv('ISRC,Amount\nUSABC2600001,"2,500"\n');
+    const r = buildLines(f.header, f.rows, { preset: 'generic', currency: 'USD', mapping: { isrc: 'ISRC', amount: 'Amount' } });
+    expect(r).toMatchObject({ ok: false, failure: { code: 'bad_rows', issues: [{ lineNo: 2, message: expect.stringContaining('ambiguous') }] } });
   });
 
   it('is all-or-nothing: a bad row refuses the file and names the line', () => {

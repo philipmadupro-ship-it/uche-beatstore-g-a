@@ -159,9 +159,12 @@ export function parseAmount(raw: string, exponent: number, round: boolean): { mi
     whole = t.slice(0, decimalAt).split(group).join('');
     frac = t.slice(decimalAt + 1);
   } else if (lastComma >= 0) {
-    // One kind of separator. "1,234" and "1,234,567" are grouping; "12,50" and "0,0031" are a decimal comma.
+    // One kind of separator. "1,234,567" is grouping (more than one comma); "12,50" and "0,0031" are a decimal comma.
+    // A lone comma before exactly three digits ("2,500") is AMBIGUOUS — 2 500 or 2.500 — and is refused, never guessed.
     const parts = t.split(',');
-    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parts[0].length >= 1 && parts[0] !== '0')) {
+    if (parts.length === 2 && parts[1].length === 3 && parts[0] !== '' && parts[0] !== '0') return null;
+    if (parts.length > 2) {
+      if (!parts.slice(1).every((g) => g.length === 3)) return null;
       whole = parts.join('');
     } else {
       whole = parts[0];
@@ -325,7 +328,15 @@ export function buildLines(header: readonly string[], rows: readonly (readonly s
     const amountText = cell(r, columns.amount);
     const amount = parseAmount(amountText, exponent, options.roundFractional === true);
     if (amount === null) {
-      bad(lineNo, amountText.trim() === '' ? 'the amount is empty' : `“${amountText.trim().slice(0, 30)}” is not an amount${/\d[.,]\d{3,}/.test(amountText) ? ' with at most ' + exponent + ' decimals (tick “round fractional cents” to round it)' : ''}`);
+      const shown = amountText.trim().slice(0, 30);
+      bad(
+        lineNo,
+        amountText.trim() === ''
+          ? 'the amount is empty'
+          : /^\s*[$€£¥]?\s*\d{1,3},\d{3}\s*$/.test(amountText)
+            ? `“${shown}” is ambiguous (2,500 could mean 2500 or 2.5): write it without a thousands separator`
+            : `“${shown}” is not an amount${/\d[.,]\d{3,}/.test(amountText) ? ' with at most ' + exponent + ' decimals (tick “round fractional cents” to round it)' : ''}`,
+      );
       return;
     }
     let units: number | null = null;

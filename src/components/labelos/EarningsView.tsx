@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw, Upload } from 'lucide-react';
+import { Dropdown } from '@/components/ui/Dropdown';
 import {
   fetchImports, fetchQueue, recalculate, showMoney, uploadEarnings,
   type EarningsImport, type ImportAttempt, type ReviewLine,
@@ -37,30 +38,29 @@ export function EarningsView({ orgId }: { orgId: string }) {
   const [state, setState] = useState<{ schemaReady: boolean; canWrite: boolean; scoped: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const [i, q] = await Promise.all([fetchImports(orgId), fetchQueue(orgId)]);
+  // One loader for the first load and every refresh; `live` stops a late answer from landing after unmount.
+  const show = useCallback((i: Awaited<ReturnType<typeof fetchImports>>, q: Awaited<ReturnType<typeof fetchQueue>>) => {
     if (!i.ok) return setError(i.error);
     if (!q.ok) return setError(q.error);
     setError(null);
     setImports(i.imports);
     setQueue(q.lines);
     setState({ schemaReady: i.schemaReady && q.schemaReady, canWrite: i.canWrite, scoped: i.scoped });
-  }, [orgId]);
+  }, []);
+  const load = useCallback(async () => {
+    const [i, q] = await Promise.all([fetchImports(orgId), fetchQueue(orgId)]);
+    show(i, q);
+  }, [orgId, show]);
 
   useEffect(() => {
     let live = true;
     void Promise.all([fetchImports(orgId), fetchQueue(orgId)]).then(([i, q]) => {
-      if (!live) return;
-      if (!i.ok) return setError(i.error);
-      if (!q.ok) return setError(q.error);
-      setImports(i.imports);
-      setQueue(q.lines);
-      setState({ schemaReady: i.schemaReady && q.schemaReady, canWrite: i.canWrite, scoped: i.scoped });
+      if (live) show(i, q);
     });
     return () => {
       live = false;
     };
-  }, [orgId]);
+  }, [orgId, show]);
 
   if (error) {
     return (
@@ -193,23 +193,18 @@ function ImportForm({ orgId, onDone }: { orgId: string; onDone: () => Promise<vo
           <span className="text-[11px] text-white/60">CSV file (up to 4 MB)</span>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className={FIELD} data-testid="earnings-file" />
         </label>
-        <label className="block space-y-1">
+        <div className="block space-y-1">
           <span className="text-[11px] text-white/60">Service</span>
-          <select value={preset} onChange={(e) => setPreset(e.target.value)} className={FIELD} data-testid="earnings-preset">
-            {PRESET_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </label>
+          <Dropdown<string> value={preset} onChange={setPreset} options={PRESET_OPTIONS.map((o) => ({ value: o.value, label: o.label }))} className="w-full" aria-label="Service" />
+        </div>
         <label className="block space-y-1">
           <span className="text-[11px] text-white/60">Currency (when the file does not say)</span>
           <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))} placeholder="USD" className={FIELD} data-testid="earnings-currency" />
         </label>
-        <label className="block space-y-1">
+        <div className="block space-y-1">
           <span className="text-[11px] text-white/60">Income is</span>
-          <select value={incomeClass} onChange={(e) => setIncomeClass(e.target.value as 'master' | 'publishing')} className={FIELD} data-testid="earnings-class">
-            <option value="master">Master (recording) income</option>
-            <option value="publishing">Publishing income</option>
-          </select>
-        </label>
+          <Dropdown<'master' | 'publishing'> value={incomeClass} onChange={setIncomeClass} options={[{ value: 'master', label: 'Master (recording) income' }, { value: 'publishing', label: 'Publishing income' }]} className="w-full" aria-label="Income is" />
+        </div>
       </div>
       {preset === 'generic' && (
         <div className="grid gap-3 sm:grid-cols-3" data-testid="earnings-mapping">

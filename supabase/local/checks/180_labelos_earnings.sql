@@ -81,6 +81,8 @@ INSERT INTO public.split_sheets (id, org_id, track_id, kind, version) VALUES (:S
 INSERT INTO public.split_lines (split_sheet_id, party_id, role, share, position) VALUES
   (:SH1, :P1, 'master_owner', 60, 0), (:SH1, :P2, 'master_owner', 40, 1), (:SH2, :P2, 'master_owner', 100, 0);
 UPDATE public.split_sheets SET status = 'circulated', circulated_at = now() WHERE id IN (:SH1, :SH2);
+INSERT INTO public.finance_periods (id, org_id, label, starts_on, ends_on) VALUES ('e4800000-0000-4000-8000-000000000001', :L, 'Closed', '2025-01-01', '2025-03-31');
+UPDATE public.finance_periods SET status = 'closed', closed_at = now() WHERE id = 'e4800000-0000-4000-8000-000000000001';
 INSERT INTO public.advances (id, org_id, payee_id, kind, amount_minor, currency) VALUES
   (:ADV1, :L, :PY1, 'recoupable', 500, 'USD'),
   (:ADVNR, :L, :PY1, 'non_recoupable', 900, 'USD');
@@ -204,6 +206,15 @@ SELECT public.check_raises('a line that waits for review cannot also be allocate
 SELECT public.check_raises('the header must match the lines',
   format($$SELECT public.labelos_earnings_import(%L, %L, jsonb_set(p.imp, '{total_minor}', '"1601"'), p.lines, '[]'::jsonb, '[]'::jsonb) FROM public.chk_payload(repeat('5', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
   'do not add up to the import header');
+SELECT public.check_raises('an allocation that names no line of the import is refused, not dropped',
+  format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, p.allocs || jsonb_build_array(jsonb_build_object('line_no', 99, 'payee_id', 'e2800000-0000-4000-8000-000000000002', 'party_id', 'd1800000-0000-4000-8000-000000000002', 'song_track_id', 'e1800000-0000-4000-8000-000000000001', 'kind', 'master', 'sheet_id', 'e3800000-0000-4000-8000-000000000001', 'share_units', 1, 'share_minor', '0', 'rate_units', 1000000, 'payable_minor', '0', 'retained_minor', '0')), '[]'::jsonb) FROM public.chk_payload(repeat('7', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
+  'names a line that is not in this import');
+SELECT public.check_raises('a line with no review reason and no allocation is refused',
+  format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, '[]'::jsonb, '[]'::jsonb) FROM public.chk_payload(repeat('8', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
+  'no review reason has no allocation');
+SELECT public.check_raises('a closed period takes no import',
+  format($$SELECT public.labelos_earnings_import(%L, %L, jsonb_set(p.imp, '{period_id}', to_jsonb(%L::text)), p.lines, p.allocs, '[]'::jsonb) FROM public.chk_payload(repeat('9', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002', 'e4800000-0000-4000-8000-000000000001'),
+  'period_closed');
 SELECT public.check_raises('an import into another organization''s party is refused',
   format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, jsonb_set(p.allocs, '{0,party_id}', '"d1800000-0000-4000-8000-000000000004"'), '[]'::jsonb) FROM public.chk_payload(repeat('6', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
   'not that party|another organization');
