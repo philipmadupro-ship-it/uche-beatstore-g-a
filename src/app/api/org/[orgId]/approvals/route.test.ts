@@ -29,6 +29,7 @@ const LG = u(3);
 const MKT = u(4);
 const SC = u(5);
 const PRD = u(6);
+const AD = u(21);
 const EDITOR = u(11);
 const X = u(16);
 const C1 = '30000000-0000-4000-8000-0000000000c1';
@@ -79,6 +80,7 @@ beforeEach(() => {
         member(MKT, 'member', ['marketing']),
         member(SC, 'member', ['a_and_r'], 'artists'),
         member(PRD, 'member', ['producer']),
+        member(AD, 'member', ['artistic_director']),
         member(X, 'owner', [], 'org', L2),
       ],
       member_artist_scopes: [{ org_id: L, user_id: SC, contact_id: C2 }],
@@ -657,5 +659,104 @@ describe('append-only', () => {
     expect(db.tables.approvals.map((a) => a.decision)).toEqual(['requested', 'changes_requested', 'requested', 'approved']);
     // The route layer wrote no update and no delete to the table, ever (the writes are RPC inserts).
     expect(mem.writes.filter((w) => w.table === 'approvals' && ['update', 'delete', 'upsert'].includes(w.op))).toEqual([]);
+  });
+});
+
+describe('LABEL-68 — the optional creative gate', () => {
+  const on = () => {
+    (db.tables.organizations[0] as Record<string, unknown>).settings = { creative_gate: 'on' };
+  };
+  const creativeOf = (b: { gates: { gate: string }[] }) => b.gates.find((g) => g.gate === 'creative') as GateJson | undefined;
+
+  it('OFF (the default): a release lists exactly the five gates, and asking for or deciding creative is a 409 that stores nothing', async () => {
+    const body = await state(OWN, `?release=${R1}`);
+    expect(body.gates.map((g: { gate: string }) => g.gate)).toEqual(['master', 'artwork', 'legal', 'marketing', 'metadata']);
+    const asked = await request(OWN, release(), 'creative', AD);
+    expect(asked.status).toBe(409);
+    expect((await asked.json()).code).toBe('gate_off');
+    const decided = await decide(OWN, release(), 'creative', 'approved', undefined, 'k');
+    expect(decided.status).toBe(409);
+    expect(db.tables.approvals).toHaveLength(0);
+    expect(db.tables.activity_events.filter((e) => e.verb.startsWith('approval.'))).toHaveLength(0);
+  });
+
+  it('a misspelt or malformed setting reads as off', async () => {
+    for (const v of ['ON', true, 'yes', 1]) {
+      (db.tables.organizations[0] as Record<string, unknown>).settings = { creative_gate: v };
+      expect((await request(OWN, release(), 'creative', AD)).status, String(v)).toBe(409);
+    }
+  });
+
+  it('ON: a release lists the creative gate last; the approvers are the holders of creative.approve who can open the release', async () => {
+    on();
+    const body = await state(OWN, `?release=${R1}`);
+    expect(body.gates.map((g: { gate: string }) => g.gate)).toEqual(['master', 'artwork', 'legal', 'marketing', 'metadata', 'creative']);
+    // OWN (every ability) and AD (creative.approve); not AR / LG / MKT / PRD.
+    expect(creativeOf(body)!.approvers.map((a) => a.userId).sort()).toEqual([OWN, AD].sort());
+  });
+
+  it('ON: a song never takes it; the artistic director reads approvals even without a release ability', async () => {
+    on();
+    expect((await request(OWN, song(), 'creative', AD)).status).toBe(400);
+    expect((await call('GET', AD, { query: `?release=${R1}` })).status).toBe(200);
+    expect(creativeOf(await state(AD, `?release=${R1}`))).toMatchObject({ canDecide: true, canRequest: true });
+  });
+
+  it('ON: ask → the person asked approves on the current artwork and running order; the event names the gate; the rows are two', async () => {
+    on();
+    const asked = await request(OWN, release(), 'creative', AD, 'Is this the look?');
+    expect(asked.status).toBe(201);
+    expect(db.tables.approvals[0]).toMatchObject({ gate: 'creative', decision: 'requested', approver_id: AD, release_id: R1 });
+    expect(db.tables.approvals[0].subject_snapshot).toMatchObject({ gate: 'creative', parts: { artwork: ART1, items: [{ songId: S1, masterId: S1 }] } });
+    expect(db.tables.notifications.filter((n) => n.user_id === AD)).toHaveLength(1);
+    expect(creativeOf(await state(AD, `?release=${R1}`))).toMatchObject({ status: 'requested', canDecide: true });
+
+    expect((await decide(AD, release(), 'creative', 'approved')).status).toBe(201);
+    expect(db.tables.approvals).toHaveLength(2);
+    expect(creativeOf(await state(OWN, `?release=${R1}`))).toMatchObject({ status: 'approved', stale: false, chip: { label: 'Approved' } });
+    const ev = db.tables.activity_events.filter((e) => e.verb === 'approval.decided');
+    expect(ev).toHaveLength(1);
+    expect(ev[0].payload).toMatchObject({ gate: 'creative', decision: 'approved' });
+    expect(JSON.stringify(ev[0].payload)).not.toContain('Is this the look');
+  });
+
+  it('ON: nobody else decides it — not A&R, legal, marketing or the producer function; asking someone who cannot decide it is refused', async () => {
+    on();
+    expect((await request(OWN, release(), 'creative', MKT)).status).toBe(422);
+    expect((await request(OWN, release(), 'creative', AD)).status).toBe(201);
+    for (const who of [AR, LG, MKT, PRD]) expect((await decide(who, release(), 'creative', 'approved', undefined, 'k')).status, who).toBe(403);
+    expect(db.tables.approvals).toHaveLength(1);
+  });
+
+  it('ON: changes requested needs a note; swapping the artwork or the running order afterwards stales an approval', async () => {
+    on();
+    await request(OWN, release(), 'creative', AD);
+    expect((await decide(AD, release(), 'creative', 'changes_requested')).status).toBe(400);
+    expect((await decide(AD, release(), 'creative', 'changes_requested', 'Darker cover')).status).toBe(201);
+    expect(creativeOf(await state(OWN, `?release=${R1}`))).toMatchObject({ status: 'changes_requested' });
+
+    await request(OWN, release(), 'creative', AD);
+    expect((await decide(AD, release(), 'creative', 'approved')).status).toBe(201);
+    expect(creativeOf(await state(OWN, `?release=${R1}`))).toMatchObject({ status: 'approved', stale: false });
+    db.tables.releases[0].artwork_asset_id = ART2;
+    expect(creativeOf(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['artwork'] });
+    db.tables.releases[0].artwork_asset_id = ART1;
+    db.tables.release_items.push({ id: t(91), release_id: R1, org_id: L, position: 2, song_track_id: S2, master_track_id: S2 });
+    expect(creativeOf(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['items'] });
+  });
+
+  it('turning the gate OFF again hides the rows without touching them (they are kept)', async () => {
+    on();
+    await request(OWN, release(), 'creative', AD);
+    (db.tables.organizations[0] as Record<string, unknown>).settings = { creative_gate: 'off' };
+    expect(creativeOf(await state(OWN, `?release=${R1}`))).toBeUndefined();
+    expect(db.tables.approvals).toHaveLength(1);
+  });
+
+  it('another org’s creative approval changes nothing here', async () => {
+    on();
+    db.tables.approvals.push({ id: '70000000-0000-4000-8000-0000000000ff', org_id: L2, song_id: null, release_id: R1, gate: 'creative', decision: 'approved', note: null, actor_id: X, approver_id: null, request_id: null, subject_snapshot: {}, created_at: '2026-10-05T00:00:00Z' });
+    // The read is filtered by org: it lists nothing of L2.
+    expect(creativeOf(await state(OWN, `?release=${R1}`))).toMatchObject({ status: 'none' });
   });
 });

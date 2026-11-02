@@ -92,14 +92,18 @@ export type ArtistCardInput = {
   creativeOpen: number;
 };
 
-export type ArtistCard = ArtistCardInput & { brief: DirectionBrief };
+/** What the browser gets: the brief, never the stored direction document itself. */
+export type ArtistCard = Omit<ArtistCardInput, 'direction'> & { brief: DirectionBrief };
 
 /**
  * One card per roster artist. Order: artists with creative work waiting first (creative approvals open, then songs
  * waiting for review), then the ones with no direction written yet (a gap the team should close), then by name.
  */
 export function buildArtistCards(inputs: readonly ArtistCardInput[]): ArtistCard[] {
-  const cards = inputs.map((i): ArtistCard => ({ ...i, brief: directionBrief(i.direction) }));
+  const cards = inputs.map((i): ArtistCard => {
+    const { direction, ...rest } = i;
+    return { ...rest, brief: directionBrief(direction) };
+  });
   return cards.sort(
     (a, b) =>
       b.creativeOpen - a.creativeOpen ||

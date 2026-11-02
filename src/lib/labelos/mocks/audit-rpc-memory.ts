@@ -39,7 +39,7 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
     const kind = String(args.p_kind);
     const gate = String(args.p_gate);
     if (kind !== 'song' && kind !== 'release') throw new Error(`unknown approval subject ${kind}`);
-    if (!['master', 'artwork', 'legal', 'marketing', 'metadata'].includes(gate) || (kind === 'song' && gate !== 'legal')) return ok({ error: 'bad_gate' });
+    if (!['master', 'artwork', 'legal', 'marketing', 'metadata', 'creative'].includes(gate) || (kind === 'song' && gate !== 'legal')) return ok({ error: 'bad_gate' });
     const decision = op === 'request' ? 'requested' : String(args.p_decision);
     const note = String(args.p_note ?? '').trim() || null;
     if (op === 'decide') {
