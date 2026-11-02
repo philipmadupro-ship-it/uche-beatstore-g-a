@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   const photoId = rawPhotoId.toLowerCase();
   if (!isWellFormedPressToken(token) || !isUUID(photoId)) return notFound();
   if (!isSupabaseConfigured()) return notFound();
-  if (!(await rateLimitDurable(`press-ip:${clientIp(req)}`, 600, 60 * 60 * 1000))) {
+  if (!(await rateLimitDurable(`press-ip-asset:${clientIp(req)}`, 600, 60 * 60 * 1000))) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429, headers: PRIVATE });
   }
   try {

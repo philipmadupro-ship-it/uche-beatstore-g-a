@@ -216,6 +216,14 @@ describe('the live page', () => {
   });
 });
 
+describe('photo listing', () => {
+  it('does not list (or caption) a photo whose file was restricted or turned into a non-image since', async () => {
+    db.tables.project_assets[0].sensitivity = 'restricted';
+    db.tables.project_assets[1].mime = 'application/pdf';
+    expect((await (await page()).json()).press.photos).toEqual([]);
+  });
+});
+
 describe('audio', () => {
   it('a released release the store plays: the store’s own stream URLs, nothing else', async () => {
     storeRelease = storeHit();

@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   const { token } = await params;
   if (!isWellFormedPressToken(token)) return notFound();
   if (!isSupabaseConfigured()) return notFound();
-  if (!(await rateLimitDurable(`press-ip:${clientIp(req)}`, 300, 60 * 60 * 1000))) return tooMany();
+  if (!(await rateLimitDurable(`press-ip-page:${clientIp(req)}`, 300, 60 * 60 * 1000))) return tooMany();
   try {
     const admin = createServiceClient();
     const now = new Date();

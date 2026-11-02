@@ -109,13 +109,17 @@ export async function updateKit(
 
 // ── Links ────────────────────────────────────────────────────────────────
 
+/** One past the highest position in use, so a delete never makes the next add tie with a survivor. */
+const nextPosition = (rows: readonly { position: number }[]): number => rows.reduce((m, r) => Math.max(m, r.position + 1), 0);
+
 export type LinkRow = { id: string; label: string; url: string; position: number };
 
 export async function addLink(admin: AdminClient, org: string, kitId: string, body: { label: string; url: string }): Promise<LinkRow | 'full'> {
-  const count = await admin.from('press_kit_links').select('id', { count: 'exact', head: true }).eq('org_id', org).eq('kit_id', kitId);
-  check('links count', count.error);
-  if ((count.count ?? 0) >= PRESS_LIMITS.links) return 'full';
-  const res = await admin.from('press_kit_links').insert({ org_id: org, kit_id: kitId, label: body.label, url: body.url, position: count.count ?? 0 }).select('id, label, url, position').single();
+  const existing = await admin.from('press_kit_links').select('position').eq('org_id', org).eq('kit_id', kitId).limit(PRESS_LIMITS.links + 1);
+  check('links count', existing.error);
+  const taken = (existing.data ?? []) as { position: number }[];
+  if (taken.length >= PRESS_LIMITS.links) return 'full';
+  const res = await admin.from('press_kit_links').insert({ org_id: org, kit_id: kitId, label: body.label, url: body.url, position: nextPosition(taken) }).select('id, label, url, position').single();
   check('link create', res.error);
   return res.data as LinkRow;
 }
@@ -158,12 +162,13 @@ export async function addPhoto(
 ): Promise<AddPhotoResult> {
   const allowed = await photoChoices(admin, org, projectId, caps);
   if (!allowed.some((a) => a.id === body.asset_id)) return 'not_allowed';
-  const count = await admin.from('press_kit_photos').select('id', { count: 'exact', head: true }).eq('org_id', org).eq('kit_id', kitId);
-  check('photos count', count.error);
-  if ((count.count ?? 0) >= PRESS_LIMITS.photos) return 'full';
+  const existing = await admin.from('press_kit_photos').select('position').eq('org_id', org).eq('kit_id', kitId).limit(PRESS_LIMITS.photos + 1);
+  check('photos count', existing.error);
+  const taken = (existing.data ?? []) as { position: number }[];
+  if (taken.length >= PRESS_LIMITS.photos) return 'full';
   const res = await admin
     .from('press_kit_photos')
-    .insert({ org_id: org, kit_id: kitId, asset_id: body.asset_id, caption: body.caption ?? null, pre_embargo: body.pre_embargo === true, position: count.count ?? 0 })
+    .insert({ org_id: org, kit_id: kitId, asset_id: body.asset_id, caption: body.caption ?? null, pre_embargo: body.pre_embargo === true, position: nextPosition(taken) })
     .select('id, asset_id, caption, pre_embargo, position')
     .single();
   if (res.error?.code === '23505') return 'duplicate';
@@ -225,17 +230,16 @@ export type OutreachRow = { id: string; contact_id: string; sent_at: string | nu
 const OUTREACH_COLUMNS = 'id, contact_id, sent_at, opened_at, replied_at, coverage_url';
 export type PressContact = { id: string; name: string; outlet: string | null };
 
-/** Org contacts whose main or extra role is `press`. Whole-org callers only (the route checks). */
+const isPressRole = (c: { category: string | null; secondary_category: string | null }) =>
+  [c.category, c.secondary_category].some((x) => (x ?? '').trim().toLowerCase() === 'press');
+
+/** Org contacts whose main or extra role is `press` (any letter case, like the trigger). Whole-org callers only (the route checks). */
 export async function pressContacts(admin: AdminClient, org: string): Promise<PressContact[]> {
-  const res = await admin
-    .from('contacts')
-    .select('id, name, label')
-    .eq('org_id', org)
-    .or('category.eq.press,secondary_category.eq.press')
-    .order('name', { ascending: true })
-    .limit(500);
+  const res = await admin.from('contacts').select('id, name, label, category, secondary_category').eq('org_id', org).order('name', { ascending: true }).limit(2000);
   if (res.error) throw new Error(`press contacts: ${res.error.message}`);
-  return ((res.data ?? []) as { id: string; name: string; label: string | null }[]).map((c) => ({ id: c.id, name: c.name, outlet: c.label }));
+  return ((res.data ?? []) as { id: string; name: string; label: string | null; category: string | null; secondary_category: string | null }[])
+    .filter(isPressRole)
+    .map((c) => ({ id: c.id, name: c.name, outlet: c.label }));
 }
 
 export async function listOutreach(admin: AdminClient, org: string, releaseId: string): Promise<OutreachRow[]> {
@@ -247,8 +251,10 @@ export async function listOutreach(admin: AdminClient, org: string, releaseId: s
 export type AddOutreachResult = OutreachRow | 'not_press_contact' | 'duplicate';
 
 export async function addOutreach(admin: AdminClient, org: string, releaseId: string, userId: string, body: { contact_id: string; sent?: boolean }, now: Date): Promise<AddOutreachResult> {
-  const contacts = await pressContacts(admin, org);
-  if (!contacts.some((c) => c.id === body.contact_id)) return 'not_press_contact';
+  const one = await admin.from('contacts').select('id, category, secondary_category').eq('org_id', org).eq('id', body.contact_id).maybeSingle();
+  if (one.error) throw new Error(`press contact: ${one.error.message}`);
+  const found = one.data as { category: string | null; secondary_category: string | null } | null;
+  if (!found || !isPressRole(found)) return 'not_press_contact';
   const res = await admin
     .from('press_outreach')
     .insert({ org_id: org, release_id: releaseId, contact_id: body.contact_id, created_by: userId, sent_at: body.sent ? now.toISOString() : null })
@@ -260,7 +266,7 @@ export async function addOutreach(admin: AdminClient, org: string, releaseId: st
 }
 
 export async function patchOutreach(
-  admin: AdminClient, org: string, releaseId: string, id: string, change: OutreachChange, now: Date,
+  admin: AdminClient, org: string, releaseId: string, id: string, change: OutreachChange, now: Date, retry = true,
 ): Promise<{ row: OutreachRow; fields: string[] } | null> {
   const cur = await admin.from('press_outreach').select(OUTREACH_COLUMNS).eq('org_id', org).eq('release_id', releaseId).eq('id', id).maybeSingle();
   check('outreach read', cur.error);
@@ -268,10 +274,15 @@ export async function patchOutreach(
   if (!current) return null;
   const patch = applyOutreachChange(current, change, now);
   if (Object.keys(patch).length === 0) return { row: current, fields: [] };
-  const res = await admin.from('press_outreach').update({ ...patch, updated_at: now.toISOString() }).eq('org_id', org).eq('release_id', releaseId).eq('id', id).select(OUTREACH_COLUMNS);
+  // Compare-and-set on the stamps that were read, so two members acting at once cannot leave a row that says
+  // "replied" without "sent". A lost race re-reads and plans again, once.
+  let q = admin.from('press_outreach').update({ ...patch, updated_at: now.toISOString() }).eq('org_id', org).eq('release_id', releaseId).eq('id', id);
+  for (const col of ['sent_at', 'opened_at', 'replied_at'] as const) q = current[col] === null ? q.is(col, null) : q.eq(col, current[col]);
+  const res = await q.select(OUTREACH_COLUMNS);
   check('outreach update', res.error);
   const row = ((res.data ?? []) as OutreachRow[])[0];
-  return row ? { row, fields: Object.keys(patch) } : null;
+  if (row) return { row, fields: Object.keys(patch) };
+  return retry ? patchOutreach(admin, org, releaseId, id, change, now, false) : null;
 }
 
 export async function removeOutreach(admin: AdminClient, org: string, releaseId: string, id: string): Promise<boolean> {
@@ -396,13 +407,26 @@ export async function noteShareView(admin: AdminClient, org: string, shareId: st
 export async function buildPublicPress(admin: AdminClient, ctx: PublicPressContext, token: string, now: Date): Promise<PublicPressView> {
   const { org, kit, release } = ctx;
   const [photos, links, items, artist] = await Promise.all([
-    admin.from('press_kit_photos').select('id, caption, pre_embargo, position').eq('org_id', org).eq('kit_id', kit.id).order('position', { ascending: true }).limit(PRESS_LIMITS.photos),
+    admin.from('press_kit_photos').select('id, asset_id, caption, pre_embargo, position').eq('org_id', org).eq('kit_id', kit.id).order('position', { ascending: true }).limit(PRESS_LIMITS.photos),
     admin.from('press_kit_links').select('label, url, position').eq('org_id', org).eq('kit_id', kit.id).order('position', { ascending: true }).limit(PRESS_LIMITS.links),
     admin.from('release_items').select('position, song_track_id, version_title, explicit').eq('org_id', org).eq('release_id', release.id).order('position', { ascending: true }).limit(200),
     admin.from('contacts').select('name').eq('org_id', org).eq('id', release.contact_id).maybeSingle(),
   ]);
   check('photos read', photos.error);
   check('links read', links.error);
+  // Only photos whose file is STILL an unrestricted artwork/photo raster image of the release's own project: a photo
+  // whose file was restricted or moved since is not listed (its caption included), exactly as its route would refuse it.
+  const photoRows = (photos.data ?? []) as { id: string; asset_id: string; caption: string | null; pre_embargo: boolean; position: number }[];
+  let validAssets = new Set<string>();
+  if (photoRows.length > 0) {
+    const a = await admin.from('project_assets').select('id, kind, sensitivity, mime, project_id').eq('org_id', org).in('id', photoRows.map((p) => p.asset_id));
+    if (a.error) throw new Error(`photo assets read: ${a.error.message}`);
+    validAssets = new Set(
+      ((a.data ?? []) as { id: string; kind: string; sensitivity: string | null; mime: string | null; project_id: string }[])
+        .filter((x) => x.project_id === release.project_id && ['artwork', 'photo'].includes(x.kind) && x.sensitivity !== 'restricted' && !!x.mime && PRESS_IMAGE_MIME.test(x.mime))
+        .map((x) => x.id),
+    );
+  }
   if (items.error) throw new Error(`items read: ${items.error.message}`);
   if (artist.error) throw new Error(`artist read: ${artist.error.message}`);
   const itemRows = (items.data ?? []) as { position: number; song_track_id: string; version_title: string | null; explicit: boolean }[];
@@ -426,7 +450,7 @@ export async function buildPublicPress(admin: AdminClient, ctx: PublicPressConte
     kit,
     release,
     artist: (artist.data as { name: string | null } | null)?.name ?? null,
-    photos: (photos.data ?? []) as { id: string; caption: string | null; pre_embargo: boolean; position: number }[],
+    photos: photoRows.filter((p) => validAssets.has(p.asset_id)),
     links: (links.data ?? []) as { label: string; url: string; position: number }[],
     tracks: itemRows.map((i) => ({ position: i.position, title: titles.get(i.song_track_id) || 'Untitled', version_title: i.version_title, explicit: i.explicit })),
     listen,
