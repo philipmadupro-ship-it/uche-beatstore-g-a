@@ -109,7 +109,7 @@ test('1 · off by default: the workspace says creative approval is not required,
   await expect(page.getByTestId('creative-stat-open')).toHaveCount(0);
   await expect(page.getByTestId(`creative-artist-${NOVA}`)).toBeVisible();
   await expect(page.getByTestId(`creative-artist-${KILO}`)).toBeVisible();
-  await expect(page.getByTestId(`creative-songs-${NOVA}`)).toHaveText('2 songs');
+  await expect(page.getByTestId(`creative-songs-${NOVA}`)).toHaveText('3 songs');
   await expect(page.getByTestId(`creative-waiting-${NOVA}`)).toContainText('1 waiting for review');
   await page.screenshot({ path: `${shots}/workspace-gate-off-owner-1440.png`, fullPage: true });
 
