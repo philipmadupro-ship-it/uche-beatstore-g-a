@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  applyOutreachChange, cleanHttpsUrl, embargoState, hashPressToken, isStoreStreamUrl, isWellFormedPressToken, mayReadPress, mayUseOutreach,
-  mayWritePress, newPressToken, oneSheetText, outreachStage, photoVisible, publicPressView, releasePublishable, shareUsable,
+  applyOutreachChange, cleanHttpsUrl, embargoState, isStoreStreamUrl, mayReadPress, mayUseOutreach,
+  mayWritePress, oneSheetText, outreachStage, photoVisible, publicPressView, releasePublishable, shareUsable,
   type PressKitFacts, type PressReleaseFacts,
 } from './press';
+import { hashPressToken, isWellFormedPressToken, newPressToken } from './press-token';
 
 const NOW = new Date('2026-11-02T12:00:00Z');
 const TOKEN = newPressToken();
@@ -34,8 +35,8 @@ describe('permissions', () => {
   });
   it('the tracker needs the whole-org view', () => {
     expect(mayUseOutreach(null)).toBe(true);
-    expect(mayUseOutreach([])).toBe(false);
-    expect(mayUseOutreach(['c1'])).toBe(false);
+    expect(mayUseOutreach(new Set())).toBe(false);
+    expect(mayUseOutreach(new Set(['c1']))).toBe(false);
   });
 });
 

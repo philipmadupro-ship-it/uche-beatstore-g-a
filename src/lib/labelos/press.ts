@@ -27,7 +27,6 @@
  *  - `opened` in the tracker is set by hand: this module sends no mail, so
  *    there is no signal to read it from. The page counts its own views per link.
  */
-import { createHash, randomBytes } from 'node:crypto';
 import type { Capability } from './capabilities';
 import { isReleasedForStore } from './store-listing';
 
@@ -38,7 +37,7 @@ export const PRESS_LIMITS = { headline: 140, bio: 3000, note: 200, label: 60, ca
 export const mayReadPress = (caps: ReadonlySet<Capability | string>, role: string): boolean => role !== 'artist' && caps.has('pr.read');
 export const mayWritePress = (caps: ReadonlySet<Capability | string>, role: string): boolean => role !== 'artist' && caps.has('pr.write');
 /** Press contacts are directory people; a member limited to some artists does not read the directory's other people. */
-export const mayUseOutreach = (artistScope: readonly string[] | null | undefined): boolean => artistScope === null || artistScope === undefined;
+export const mayUseOutreach = (artistScope: ReadonlySet<string> | null | undefined): boolean => artistScope === null || artistScope === undefined;
 
 // ── Links ─────────────────────────────────────────────────────────────────
 
@@ -69,11 +68,7 @@ export function embargoState(embargoAt: string | null | undefined, now: Date): E
   return now.getTime() < t ? 'active' : 'lifted';
 }
 
-// ── Share token ───────────────────────────────────────────────────────────
-
-export const newPressToken = (): string => randomBytes(32).toString('base64url');
-export const isWellFormedPressToken = (t: unknown): t is string => typeof t === 'string' && /^[A-Za-z0-9_-]{43}$/.test(t);
-export const hashPressToken = (token: string): string => createHash('sha256').update(`label-os.press-kit.v1\0${token}`).digest('hex');
+// ── Share token (the crypto half is in press-token.ts: this file is imported by client code) ──
 
 /** A grant answers only while it is neither revoked nor expired. */
 export function shareUsable(share: { revoked_at: string | null; expires_at: string | null }, now: Date): boolean {

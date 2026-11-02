@@ -150,6 +150,12 @@ function labelOsTables(): string[] {
     'marketing_platform_steps',
     'marketing_budget_lines',
     'marketing_asset_requests',
+    // 184_labelos_press.sql (LABEL-66): service-role only behind a deny-all policy; shares hold a token hash.
+    'press_kits',
+    'press_kit_links',
+    'press_kit_photos',
+    'press_kit_shares',
+    'press_outreach',
   ];
 }
 

@@ -9,6 +9,8 @@ import {
   isLabelOsRestorePagePath,
   isLabelOsSetupApiPath,
   isLabelOsSetupPagePath,
+  isLabelOsPressApiPath,
+  isLabelOsPressPagePath,
   isLabelOsSignApiPath,
   isLabelOsSignPagePath,
   isPublicApiPath,
@@ -105,6 +107,18 @@ describe('the join exception (LABEL-08)', () => {
     for (const p of ['/sign', '/sign/', '/sign/abc/def', '/signer/abc', '/o/x/sign/abc', '/store/sign/abc', '/api/sign/abc']) {
       expect(isLabelOsSignPagePath(p), p).toBe(false);
     }
+  });
+
+  it('the public press kit is exactly /api/press/<token>[/assets/<id>] and /press/<token> (LABEL-66)', () => {
+    for (const p of ['/api/press/abc', '/api/press/abc/', '/api/press/abc/assets/p1']) expect(isLabelOsPressApiPath(p), p).toBe(true);
+    for (const p of ['/api/press', '/api/press/', '/api/press/abc/def', '/api/press/abc/assets', '/api/press/abc/assets/p1/x', '/api/pressx/abc', '/api/org/press/abc', '/api/store/press/abc']) {
+      expect(isLabelOsPressApiPath(p), p).toBe(false);
+    }
+    for (const p of ['/press/abc', '/press/abc/']) expect(isLabelOsPressPagePath(p), p).toBe(true);
+    for (const p of ['/press', '/press/', '/press/abc/def', '/presskit/abc', '/o/x/press/abc', '/api/press/abc']) expect(isLabelOsPressPagePath(p), p).toBe(false);
+    expect(apiGateFor('/api/press/abc', true)).toBe('none');
+    expect(apiGateFor('/api/press/abc/assets/p1', true)).toBe('none');
+    expect(apiGateFor('/api/press/abc/def', true)).toBe('producer');
   });
 
   it('any caller — signed in or out, member or buyer — reaches /api/sign/<token> without a producer or membership check; the route authorises with the link', () => {
