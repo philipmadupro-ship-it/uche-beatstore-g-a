@@ -9536,3 +9536,19 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - `contact-roles` real-DB e2e #3 failing locally (unconfirmed on base);
   - `label-org-departments` e2e flake;
   - LABEL-72 lows (XFF trust, derivative negative cache and `maxDuration`, HEAD spends the limiter).
+- 2026-11-02 — **LABEL-73 Done**: #168 squash `2ccf06d`, migration 187 (not applied; second paste).
+  - What it adds:
+    - one atomic SQL function family (change + audit event in one transaction) for: deliver (G7 + G10, raw `updated_at` fingerprint), import, store list/unlist (LABEL-71 consent re-checked under the lock; LABEL-72 derivatives still cut before the claim), org delete/restore/export and the digest channel;
+    - `approval_decide` checks addressee, live release, seen and the latest row;
+    - `has_org_cap` subtracts `departments_off`;
+    - seat and artist caps enforced under the `org_entitlements` lock, including the 154 connection accept;
+    - routes fall back to the previous path only on a missing function (PGRST202 / 42883 naming `labelos_audit_*`);
+    - the members route's six-argument fallback is kept (it is only reachable without 167).
+  - Gate: CI green on `3c3071d`; preview checked; independent review not blocking. `db:local:check` passed, including the dblink race checks, and the rollback is byte-identical to the previous definitions.
+  - Follow-ups (low):
+    - the approval "seen" key is computed before the lock;
+    - no TS↔SQL parity test for `departments_off`;
+    - a store list answering `not_found` does not drop promoted previews;
+    - `contacts_artist_cap` 23514 becomes a raw 500 for future writers;
+    - the approval tie-break uses id where the plan uses array order.
+- 2026-11-02 — LABEL-62 #169: orchestrator decision on royalties. A signed contract's royalty rate REPLACES the split share for that payee (never split × rate); lines whose shares exceed 100% go to review (`terms_exceed_gross`); the remainder is retained by the label. LABEL-65 #170 is in review.

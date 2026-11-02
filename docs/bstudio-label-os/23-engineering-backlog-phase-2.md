@@ -196,7 +196,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: money arithmetic helpers in `lib/labelos/finance/money.ts` (integer, rounding rule documented, largest-remainder allocation) with property-style tests.
 
 ### LABEL-62 — Earnings import and royalty calculation
-**Priority:** P0 · **Risk:** High · **Deps:** 61 · **Migration:** 180 · **Status:** In Progress (session_019AUhHc8KkPccemFofVqZfr)
+**Priority:** P0 · **Risk:** High · **Deps:** 61 · **Migration:** 180 · **Status:** In Progress (session_019AUhHc8KkPccemFofVqZfr, #169)
 - CSV import (generic mapper + presets for common distributor reports), idempotent by file hash; match lines to recordings by ISRC/UPC; allocate by the song's current splits (master/publishing) and contract terms; **recoupment** of advances per payee; unmatched lines queue.
 - Acceptance: golden-file tests for allocation and recoupment; re-importing a file changes nothing; unmatched queue is scoped.
 
@@ -214,7 +214,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## F. Marketing and PR
 
 ### LABEL-65 — Marketing plans
-**Priority:** P1 · **Risk:** Medium · **Deps:** 49, 55 · **Migration:** 183 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 49, 55 · **Migration:** 183 · **Status:** In Progress (session_019AUhHcHjoHFXHDBFjd9rTJ, #170)
 - Per-release marketing plan: timeline (pre-save, teaser, release, post), tasks with owners (reusing LABEL-23 tasks), budget lines, asset requests to the artist (a closed notification kind), platform checklist; calendar integration; marketing gate can require a plan.
 - Acceptance: scoped to the release's artist; marketing role without audio access cannot hear working demos.
 
@@ -267,7 +267,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## J. Reliability and polish
 
 ### LABEL-73 — Atomic audit functions
-**Priority:** P1 · **Risk:** High · **Deps:** 44, 55 · **Migration:** 187 · **Status:** In Progress (session_019AUhHchpteAUmRDWbmX5fx)
+**Priority:** P1 · **Risk:** High · **Deps:** 44, 55 · **Migration:** 187 · **Status:** Done (#168, `2ccf06d`)
 - **Also (from LABEL-52):** the addressee rule (approve only an open request addressed to you), the song-on-a-live-release refusal and `seen` are enforced in the route only. `labelos_audit_approval_decide` re-checks only self-approval and does not verify that the latest row is the one the plan read; move all three into the function.
 - **Also (from LABEL-51):** `settings.departments_off` is enforced in SQL only for restricted project files (172's `labelos_org_asset_allowed`); `has_org_cap` ignores it, so the first RLS policy that uses a `finance.*` / `pr.*` / `exec.read` / `creative.*` capability must subtract `departments_off` there too (parity tests). The settings audit payload's `from` values are read before the lock (two simultaneous owner saves can log a stale `from`); build the payload inside the function.
 - **Also (from LABEL-47):** the caps are check-then-write: an artist→staff role change (seat cap) and contact create/edit (artist cap) can both pass at cap−1 under concurrency (only the invitation accept is enforced under a lock); 154's connection accept inserts a roster artist into the label without checking `max_artists`. Enforce both caps atomically in SQL.
