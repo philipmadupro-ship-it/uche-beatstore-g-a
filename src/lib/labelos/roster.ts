@@ -107,3 +107,14 @@ export function rosterSummary(c: { id: string; name: string; avatar_url: string 
     portalFiles: [],
   });
 }
+
+/**
+ * Migration 187's trigger on `contacts` refuses an artist past the licence's cap
+ * under the entitlement row's lock (the check-then-write above can pass twice at
+ * cap-1). The error carries `artist_limit`.
+ */
+export const ARTIST_CAP_REACHED = 'This organization has reached the number of artists its licence includes.';
+
+export function isArtistCapError(error: { code?: string; message?: string } | null | undefined): boolean {
+  return !!error && /artist_limit/.test(error.message ?? '');
+}

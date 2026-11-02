@@ -30,6 +30,12 @@
  *   platformCreateLicensee   org.created + org.entitlements_changed in the new org (170, LABEL-47)
  *   platformSetEntitlements  org.entitlements_changed in the licensee org (170, LABEL-47)
  *   orgSettings              org.settings_changed (172, LABEL-51; owner only, checked again in SQL)
+ *   orgSettingsAtomic        the same, with the payload's `from` read under the lock (187, LABEL-73)
+ *   releaseDeliver           release.delivered (187; fingerprint compared under the release lock)
+ *   releaseStore             release.store_listed | release.store_unlisted (187; consent re-checked under the lock)
+ *   releaseImport            project.created + release.created + release.imported (187)
+ *   orgDelete | orgRestore | orgExport   org.deletion_scheduled | org.restored | org.exported (187)
+ *   digestChannelSet | digestChannelRemove   digest.channel_set | digest.channel_removed (187)
  *
  * Accepting an invitation (`member.joined`) is 138's
  * `labelos_accept_invitation` (lib/labelos/invitations.ts), which already

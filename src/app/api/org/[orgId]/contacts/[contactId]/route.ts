@@ -27,7 +27,7 @@ import {
   toOrgContactView,
   type OrgContactRow,
 } from '@/lib/labelos/org-contacts';
-import { artistOrgRemovalError, artistOrgRosterError, isSecondArtistError, ONE_ARTIST, rosterCapError } from '@/lib/labelos/roster';
+import { artistOrgRemovalError, artistOrgRosterError, ARTIST_CAP_REACHED, isArtistCapError, isSecondArtistError, ONE_ARTIST, rosterCapError } from '@/lib/labelos/roster';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
 
@@ -96,6 +96,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .select(ORG_CONTACT_COLUMNS);
     // 166: a second artist that raced past the check above.
     if (isSecondArtistError(updateErr)) return NextResponse.json({ error: ONE_ARTIST }, { status: 409 });
+    if (isArtistCapError(updateErr)) return NextResponse.json({ error: ARTIST_CAP_REACHED }, { status: 409 });
     if (isDuplicateEmail(updateErr)) return NextResponse.json({ error: DUPLICATE_EMAIL }, { status: 409 });
     if (updateErr) throw new Error(updateErr.message);
     const row = (Array.isArray(updated) ? updated[0] : null) as unknown as OrgContactRow | null;
