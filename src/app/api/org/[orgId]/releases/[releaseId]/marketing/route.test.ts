@@ -293,7 +293,8 @@ describe('the budget is business data', () => {
     expect((await addLine(MKT)).status).toBe(201);
     expect((await addLine(PM, { ...line, label: 'Ads', amount_minor: '123456789012345', status: 'committed' })).status).toBe(201);
     const b = await (await get(MKT)).json();
-    expect(b.budget.lines.map((l: { amountMinor: string }) => l.amountMinor)).toEqual(['150000', '123456789012345']);
+    // The two lines are written back to back and can share a timestamp; the store then orders them by id, which is random here.
+    expect(b.budget.lines.map((l: { amountMinor: string }) => l.amountMinor).sort()).toEqual(['123456789012345', '150000']);
     expect(b.budget.totals).toEqual([{ currency: 'USD', planned: '150000', committed: '123456789012345', spent: '0', total: '123456789162345' }]);
   });
   it('is refused to a reader who is not a business reader, to the artist, and to a business reader who cannot write the plan', async () => {
