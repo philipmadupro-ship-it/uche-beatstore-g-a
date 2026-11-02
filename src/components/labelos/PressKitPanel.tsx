@@ -110,9 +110,9 @@ export function PressKitPanel({ orgId, releaseId }: { orgId: string; releaseId: 
           <div>
             <p className={`${LABEL} mb-1`}>Bio</p>
             {canWrite ? (
-              <InlineText label="Bio" multiline rows={6} value={kit?.bio ?? ''} maxLength={PRESS_LIMITS.bio} placeholder="Artist and release bio" emptyLabel="Add a bio" className="whitespace-pre-line text-[12px] leading-relaxed text-white/70" onSave={(v) => act(() => saveKit(orgId, releaseId, { bio: v }))} />
+              <InlineText label="Bio" multiline rows={6} value={kit?.bio ?? ''} maxLength={PRESS_LIMITS.bio} placeholder="Artist and release bio" emptyLabel="Add a bio" className="whitespace-pre-line text-[11px] leading-relaxed text-white/70" onSave={(v) => act(() => saveKit(orgId, releaseId, { bio: v }))} />
             ) : (
-              <p className="whitespace-pre-line text-[12px] leading-relaxed text-white/70">{kit?.bio ?? '—'}</p>
+              <p className="whitespace-pre-line text-[11px] leading-relaxed text-white/70">{kit?.bio ?? '—'}</p>
             )}
           </div>
         </div>
@@ -148,9 +148,9 @@ export function PressKitPanel({ orgId, releaseId }: { orgId: string; releaseId: 
         <div className="mt-3">
           <p className={`${LABEL} mb-1`}>Line shown before it lifts</p>
           {canWrite ? (
-            <InlineText label="Line before embargo" value={kit?.preEmbargoNote ?? ''} maxLength={PRESS_LIMITS.note} placeholder="e.g. New single, coming soon" emptyLabel="Add a line" className="text-[12px] text-white/70" onSave={(v) => act(() => saveKit(orgId, releaseId, { pre_embargo_note: v }))} />
+            <InlineText label="Line before embargo" value={kit?.preEmbargoNote ?? ''} maxLength={PRESS_LIMITS.note} placeholder="e.g. New single, coming soon" emptyLabel="Add a line" className="text-[11px] text-white/70" onSave={(v) => act(() => saveKit(orgId, releaseId, { pre_embargo_note: v }))} />
           ) : (
-            <p className="text-[12px] text-white/70">{kit?.preEmbargoNote ?? '—'}</p>
+            <p className="text-[11px] text-white/70">{kit?.preEmbargoNote ?? '—'}</p>
           )}
         </div>
       </div>
@@ -163,7 +163,7 @@ export function PressKitPanel({ orgId, releaseId }: { orgId: string; releaseId: 
           <ul className="divide-y divide-white/10">
             {s.photos.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-3 py-2" data-testid="press-photo">
-                <span className="min-w-0 flex-1 truncate text-[12px] text-white/80">{p.label}</span>
+                <span className="min-w-0 flex-1 truncate text-[11px] text-white/80">{p.label}</span>
                 {canWrite ? (
                   <>
                     <InlineText label={`Caption for ${p.label}`} value={p.caption ?? ''} maxLength={PRESS_LIMITS.caption} placeholder="Caption" emptyLabel="Add caption" className="text-[11px] text-white/60" onSave={(v) => act(() => patchKitPhoto(orgId, releaseId, p.id, { caption: v }))} />
@@ -212,7 +212,7 @@ function LinksCard({ s, canWrite, busy, act, orgId, releaseId }: CardProps) {
       <ul className="divide-y divide-white/10">
         {s.links.map((l) => (
           <li key={l.id} className="flex items-center gap-3 py-2">
-            <span className="w-28 shrink-0 truncate text-[12px] text-white/80">{l.label}</span>
+            <span className="w-28 shrink-0 truncate text-[11px] text-white/80">{l.label}</span>
             <span className="min-w-0 flex-1 truncate text-[11px] text-white/50">{l.url}</span>
             {canWrite && <button type="button" aria-label={`Remove ${l.label}`} disabled={busy} onClick={() => void act(() => removeKitLink(orgId, releaseId, l.id), 'Link removed.')} className={ICON_BTN}><X size={14} aria-hidden /></button>}
           </li>
@@ -269,7 +269,7 @@ function SharesCard({ s, canWrite, busy, act, orgId, releaseId, fresh, setFresh,
       <ul className="divide-y divide-white/10">
         {s.shares.map((sh) => (
           <li key={sh.id} className="flex flex-wrap items-center gap-3 py-2" data-testid="press-share" data-state={sh.state}>
-            <span className="min-w-0 flex-1 truncate text-[12px] text-white/80">{sh.label}</span>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-white/80">{sh.label}</span>
             <span className="text-[10px] text-white/40">
               {sh.state === 'live' ? (sh.expiresAt ? `Expires ${when(sh.expiresAt)}` : 'No expiry') : sh.state === 'revoked' ? 'Revoked' : 'Expired'}
               {' · '}{sh.views} {sh.views === 1 ? 'view' : 'views'}
@@ -321,7 +321,7 @@ function OutreachCard({ s, canWrite, busy, act, orgId, releaseId }: CardProps) {
       <ul className="divide-y divide-white/10">
         {o.rows.map((r) => (
           <li key={r.id} className="flex flex-wrap items-center gap-3 py-2" data-testid="press-outreach-row" data-stage={r.stage}>
-            <span className="min-w-0 flex-1 truncate text-[12px] text-white/80">{r.name}{r.outlet ? <span className="text-white/40"> · {r.outlet}</span> : null}</span>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-white/80">{r.name}{r.outlet ? <span className="text-white/40"> · {r.outlet}</span> : null}</span>
             <span className="text-[10px] uppercase tracking-wide text-white/50" data-testid="press-outreach-stage">{STAGE_LABEL[r.stage]}</span>
             {canWrite && (
               <>

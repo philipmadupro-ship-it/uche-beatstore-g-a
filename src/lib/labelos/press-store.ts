@@ -315,7 +315,7 @@ export async function loadOwnerView(
     const names = await assetLabels(admin, org, photoRows.map((p) => p.asset_id));
     out.photos = photoRows.map((p) => ({ id: p.id, label: names.get(p.asset_id) ?? 'Photo', caption: p.caption, preEmbargo: p.pre_embargo }));
     out.shares = ((shares.data ?? []) as ShareRow[]).map((s) => ({
-      id: s.id, label: s.label, expiresAt: s.expires_at, revokedAt: s.revoked_at, views: s.view_count, lastViewedAt: s.last_viewed_at, createdAt: s.created_at,
+      id: s.id, label: s.label, expiresAt: s.expires_at, revokedAt: s.revoked_at, views: s.view_count ?? 0, lastViewedAt: s.last_viewed_at, createdAt: s.created_at,
       state: s.revoked_at ? 'revoked' : shareUsable(s, opts.now) ? 'live' : 'expired',
     }));
   }

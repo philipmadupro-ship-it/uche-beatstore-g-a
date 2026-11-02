@@ -86,7 +86,7 @@ export function PressKitPage({ token }: { token: string }) {
         <p className={`mt-3 ${LABEL}`}>
           {[v.type, v.label, v.genre, v.releaseDate ? (v.released ? `Out ${v.releaseDate}` : `Out ${v.releaseDate}`) : null].filter(Boolean).join(' · ')}
         </p>
-        {v.headline && <p className="mt-4 text-[15px] leading-relaxed text-white/80">{v.headline}</p>}
+        {v.headline && <p className="mt-4 text-[13px] leading-relaxed text-white/80">{v.headline}</p>}
         <div className="mt-4 flex flex-wrap gap-2 print:hidden">
           <button type="button" onClick={copyOneSheet} className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10]">
             {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />} {copied ? 'Copied' : 'Copy one-sheet'}
@@ -110,7 +110,7 @@ export function PressKitPage({ token }: { token: string }) {
           <ul className="space-y-2">
             {v.listen.tracks.map((t) => (
               <li key={t.id} className="rounded-xl border border-white/10 bg-[#0D0D0A] p-3">
-                <p className="mb-2 text-[12px] text-white/80">{t.title}</p>
+                <p className="mb-2 text-[11px] text-white/80">{t.title}</p>
                 <audio controls preload="none" src={t.audioUrl} className="w-full" />
               </li>
             ))}
@@ -123,7 +123,7 @@ export function PressKitPage({ token }: { token: string }) {
           <h2 className={`mb-2 ${LABEL}`}>Tracklist</h2>
           <ol className="divide-y divide-white/10 rounded-xl border border-white/10 bg-[#0D0D0A]">
             {v.tracklist.map((t) => (
-              <li key={t.position} className="flex items-baseline gap-3 px-3 py-2 text-[12px] text-white/80">
+              <li key={t.position} className="flex items-baseline gap-3 px-3 py-2 text-[11px] text-white/80">
                 <span className="w-5 font-mono text-[10px] text-white/40">{t.position}</span>
                 <span className="min-w-0 flex-1 truncate">{t.title}</span>
                 {t.explicit && <span className={LABEL}>Explicit</span>}
@@ -141,7 +141,7 @@ export function PressKitPage({ token }: { token: string }) {
           <ul className="space-y-1">
             {v.links.map((l) => (
               <li key={l.url}>
-                <a href={l.url} target="_blank" rel="noopener noreferrer nofollow" className="text-[12px] text-white/80 underline decoration-white/20 underline-offset-4 hover:decoration-white/60">
+                <a href={l.url} target="_blank" rel="noopener noreferrer nofollow" className="text-[11px] text-white/80 underline decoration-white/20 underline-offset-4 hover:decoration-white/60">
                   {l.label}
                 </a>
               </li>
