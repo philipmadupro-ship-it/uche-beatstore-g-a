@@ -9,7 +9,7 @@ import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
-import { MarketingNotReadyError, patchItem, removeItem } from '@/lib/labelos/marketing-plan-store';
+import { MarketingNotReadyError, patchItem, removeItem, touchPlan, type PlanRow } from '@/lib/labelos/marketing-plan-store';
 import { readBody } from '@/lib/validate';
 import { badId, json, planWriteContext } from '../../access';
 
@@ -30,9 +30,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const parsed = await readBody(req, MarketingItemPatchBodySchema);
   if (!parsed.ok) return parsed.res;
   try {
-    const out = await patchItem(ctx.admin, ctx.orgId, ctx.plan.id, itemId.toLowerCase(), parsed.data);
+    const plan = (await ctx.ensure()) as PlanRow;
+    const out = await patchItem(ctx.admin, ctx.orgId, plan.id, itemId.toLowerCase(), parsed.data);
     if (!out) return json(404, { error: 'Not found' });
-    await ctx.touch();
+    await touchPlan(ctx.admin, ctx.orgId, plan.id);
     await recordEvent(ctx.admin, ctx.actor, 'marketing_plan.item_changed', ctx.subject, { op: 'updated', itemId: out.row.id, fields: out.fields });
     const r = out.row;
     return json(200, { item: { id: r.id, phase: r.phase, title: r.title, dueOn: r.due_on, doneAt: r.done_at } });
@@ -52,8 +53,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (badId(itemId)) return json(404, { error: 'Not found' });
   const { ctx } = made;
   try {
-    if (!(await removeItem(ctx.admin, ctx.orgId, ctx.plan.id, itemId.toLowerCase()))) return json(404, { error: 'Not found' });
-    await ctx.touch();
+    const plan = (await ctx.ensure()) as PlanRow;
+    if (!(await removeItem(ctx.admin, ctx.orgId, plan.id, itemId.toLowerCase()))) return json(404, { error: 'Not found' });
+    await touchPlan(ctx.admin, ctx.orgId, plan.id);
     await recordEvent(ctx.admin, ctx.actor, 'marketing_plan.item_changed', ctx.subject, { op: 'removed', itemId: itemId.toLowerCase() });
     return json(200, { ok: true });
   } catch (err) {

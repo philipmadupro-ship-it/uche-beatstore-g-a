@@ -20,7 +20,7 @@ import { orgHasModule, type ObjectAccessResult } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { recordEvent } from '@/lib/labelos/activity';
 import { mayReadBudget, mayWriteBudget, mayWritePlan } from '@/lib/labelos/marketing-plan';
-import { NEEDS_183, ensurePlan, findPlan, planTablesReady, touchPlan } from '@/lib/labelos/marketing-plan-store';
+import { NEEDS_183, ensurePlan, findPlan, planTablesReady, type PlanRow } from '@/lib/labelos/marketing-plan-store';
 import { isUUID } from '@/lib/validate';
 
 export const NO_STORE = { 'Cache-Control': 'no-store' };
@@ -34,11 +34,11 @@ export type PlanContext = {
   admin: AdminClient;
   orgId: string;
   release: ReleaseInfo;
-  plan: { id: string; release_id: string; created_at: string; updated_at: string };
+  /** The release's plan; made now when the route may create one (call it only once the body is valid). */
+  ensure: () => Promise<PlanRow | null>;
   /** Who acts and what the event is about: handlers call `recordEvent(ctx.admin, ctx.actor, verb, ctx.subject, …)` themselves (coverage.test reads the handler's own text). Ids and field names only. */
   actor: { orgId: string; userId: string };
   subject: { type: 'release'; id: string; releaseId: string; artistId: string | null; projectId: string | null };
-  touch: () => Promise<void>;
 };
 
 async function readRelease(admin: AdminClient, org: string, id: string): Promise<ReleaseInfo | null> {
@@ -72,20 +72,24 @@ export async function planWriteContext(authorised: Access, opts: { create: boole
   if (!release) return { ok: false, res: json(404, { error: 'Not found' }) };
   if (release.state === 'cancelled') return { ok: false, res: json(409, { error: 'A cancelled release has no marketing plan to change.' }) };
 
-  let plan;
-  let created = false;
-  if (opts.create) {
-    const made = await ensurePlan(access.admin, access.orgId, release.id, access.userId);
-    plan = made.plan;
-    created = made.created;
-  } else {
-    plan = await findPlan(access.admin, access.orgId, release.id);
-    if (!plan) return { ok: false, res: json(404, { error: 'Not found' }) };
-  }
   const subject = { type: 'release' as const, id: release.id, releaseId: release.id, artistId: release.contactId, projectId: release.projectId };
   const actor = { orgId: access.orgId, userId: access.userId };
-  if (created) await recordEvent(access.admin, actor, 'marketing_plan.created', subject, {});
-  return { ok: true, ctx: { access, admin: access.admin, orgId: access.orgId, release, plan, actor, subject, touch: () => touchPlan(access.admin, access.orgId, plan.id) } };
+  // The plan is made at the first write that SUCCEEDS the body's validation, never before it: a refused request must not leave a
+  // plan (and a "started a plan" event) behind. A PATCH or DELETE never makes one.
+  let cached: PlanRow | null = null;
+  const ensure = async (): Promise<PlanRow | null> => {
+    if (cached) return cached;
+    if (opts.create) {
+      const made = await ensurePlan(access.admin, access.orgId, release.id, access.userId);
+      cached = made.plan;
+      if (made.created) await recordEvent(access.admin, actor, 'marketing_plan.created', subject, {});
+    } else {
+      cached = await findPlan(access.admin, access.orgId, release.id);
+    }
+    return cached;
+  };
+  if (!opts.create && !(await ensure())) return { ok: false, res: json(404, { error: 'Not found' }) };
+  return { ok: true, ctx: { access, admin: access.admin, orgId: access.orgId, release, ensure, actor, subject } };
 }
 
 /** A path id that is not a uuid is the same 404 as a missing row. */

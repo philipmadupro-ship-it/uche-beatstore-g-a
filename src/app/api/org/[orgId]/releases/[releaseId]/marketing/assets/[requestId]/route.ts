@@ -9,7 +9,7 @@ import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
-import { MarketingNotReadyError, setAssetStatus } from '@/lib/labelos/marketing-plan-store';
+import { MarketingNotReadyError, setAssetStatus, touchPlan, type PlanRow } from '@/lib/labelos/marketing-plan-store';
 import { readBody } from '@/lib/validate';
 import { badId, json, planWriteContext } from '../../access';
 
@@ -30,9 +30,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const parsed = await readBody(req, MarketingAssetPatchBodySchema);
   if (!parsed.ok) return parsed.res;
   try {
-    const row = await setAssetStatus(ctx.admin, ctx.orgId, ctx.plan.id, requestId.toLowerCase(), parsed.data.status);
+    const plan = (await ctx.ensure()) as PlanRow;
+    const row = await setAssetStatus(ctx.admin, ctx.orgId, plan.id, requestId.toLowerCase(), parsed.data.status);
     if (!row) return json(404, { error: 'Not found' });
-    await ctx.touch();
+    await touchPlan(ctx.admin, ctx.orgId, plan.id);
     await recordEvent(ctx.admin, ctx.actor, 'marketing_plan.asset_changed', ctx.subject, { requestId: row.id, status: row.status });
     return json(200, { request: { id: row.id, kind: row.kind, note: row.note, status: row.status, createdAt: row.created_at, resolvedAt: row.resolved_at, notified: row.recipient_id !== null } });
   } catch (err) {

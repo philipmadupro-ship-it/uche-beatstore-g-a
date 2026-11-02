@@ -11,7 +11,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { PLAN_LIMITS } from '@/lib/labelos/marketing-plan';
-import { MarketingNotReadyError, addItem } from '@/lib/labelos/marketing-plan-store';
+import { MarketingNotReadyError, addItem, touchPlan, type PlanRow } from '@/lib/labelos/marketing-plan-store';
 import { readBody } from '@/lib/validate';
 import { json, planWriteContext } from '../access';
 
@@ -31,9 +31,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const parsed = await readBody(req, MarketingItemCreateBodySchema);
   if (!parsed.ok) return parsed.res;
   try {
-    const row = await addItem(ctx.admin, ctx.orgId, ctx.plan.id, ctx.access.userId, parsed.data);
+    const plan = (await ctx.ensure()) as PlanRow;
+    const row = await addItem(ctx.admin, ctx.orgId, plan.id, ctx.access.userId, parsed.data);
     if (row === 'full') return json(409, { error: `A plan holds at most ${PLAN_LIMITS.items} milestones.` });
-    await ctx.touch();
+    await touchPlan(ctx.admin, ctx.orgId, plan.id);
     await recordEvent(ctx.admin, ctx.actor, 'marketing_plan.item_changed', ctx.subject, { op: 'added', itemId: row.id, phase: row.phase });
     return json(201, { item: { id: row.id, phase: row.phase, title: row.title, dueOn: row.due_on, doneAt: row.done_at } });
   } catch (err) {

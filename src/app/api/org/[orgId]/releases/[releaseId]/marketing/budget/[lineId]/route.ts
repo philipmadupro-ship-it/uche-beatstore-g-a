@@ -9,7 +9,7 @@ import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
-import { MarketingNotReadyError, patchBudget, removeBudget } from '@/lib/labelos/marketing-plan-store';
+import { MarketingNotReadyError, patchBudget, removeBudget, touchPlan, type PlanRow } from '@/lib/labelos/marketing-plan-store';
 import { readBody } from '@/lib/validate';
 import { badId, json, planWriteContext } from '../../access';
 import { budgetLineOut, moneyProblem } from '@/lib/labelos/marketing-budget';
@@ -37,9 +37,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (bad) return json(400, { error: bad });
   }
   try {
-    const out = await patchBudget(ctx.admin, ctx.orgId, ctx.plan.id, lineId.toLowerCase(), parsed.data);
+    const plan = (await ctx.ensure()) as PlanRow;
+    const out = await patchBudget(ctx.admin, ctx.orgId, plan.id, lineId.toLowerCase(), parsed.data);
     if (!out) return json(404, { error: 'Not found' });
-    await ctx.touch();
+    await touchPlan(ctx.admin, ctx.orgId, plan.id);
     await recordEvent(ctx.admin, ctx.actor, 'marketing_plan.budget_changed', ctx.subject, { op: 'updated', lineId: out.row.id, fields: out.fields });
     return json(200, { line: budgetLineOut(out.row) });
   } catch (err) {
@@ -58,8 +59,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (badId(lineId)) return json(404, { error: 'Not found' });
   const { ctx } = made;
   try {
-    if (!(await removeBudget(ctx.admin, ctx.orgId, ctx.plan.id, lineId.toLowerCase()))) return json(404, { error: 'Not found' });
-    await ctx.touch();
+    const plan = (await ctx.ensure()) as PlanRow;
+    if (!(await removeBudget(ctx.admin, ctx.orgId, plan.id, lineId.toLowerCase()))) return json(404, { error: 'Not found' });
+    await touchPlan(ctx.admin, ctx.orgId, plan.id);
     await recordEvent(ctx.admin, ctx.actor, 'marketing_plan.budget_changed', ctx.subject, { op: 'removed', lineId: lineId.toLowerCase() });
     return json(200, { ok: true });
   } catch (err) {

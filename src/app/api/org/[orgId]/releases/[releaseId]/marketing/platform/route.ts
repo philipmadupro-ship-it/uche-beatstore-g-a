@@ -9,7 +9,7 @@ import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
-import { MarketingNotReadyError, setStep } from '@/lib/labelos/marketing-plan-store';
+import { MarketingNotReadyError, setStep, touchPlan, type PlanRow } from '@/lib/labelos/marketing-plan-store';
 import { readBody } from '@/lib/validate';
 import { json, planWriteContext } from '../access';
 
@@ -29,8 +29,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const parsed = await readBody(req, MarketingStepBodySchema);
   if (!parsed.ok) return parsed.res;
   try {
-    await setStep(ctx.admin, ctx.orgId, ctx.plan.id, ctx.access.userId, parsed.data);
-    await ctx.touch();
+    const plan = (await ctx.ensure()) as PlanRow;
+    await setStep(ctx.admin, ctx.orgId, plan.id, ctx.access.userId, parsed.data);
+    await touchPlan(ctx.admin, ctx.orgId, plan.id);
     await recordEvent(ctx.admin, ctx.actor, 'marketing_plan.platform_changed', ctx.subject, { platform: parsed.data.platform, step: parsed.data.step, done: parsed.data.done });
     return json(200, { ok: true });
   } catch (err) {

@@ -13,7 +13,7 @@ import { NextRequest } from 'next/server';
 import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { mayReadBudget, mayWriteBudget, mayWritePlan, missingPhases, planView, REQUIRED_PHASES } from '@/lib/labelos/marketing-plan';
+import { checklistView, mayReadBudget, mayWriteBudget, mayWritePlan, missingPhases, planView, REQUIRED_PHASES } from '@/lib/labelos/marketing-plan';
 import { MarketingNotReadyError, findPlan, loadPlanRows } from '@/lib/labelos/marketing-plan-store';
 import { readReadinessSettings } from '@/lib/labelos/release-readiness-store';
 import { json, planReadAccess } from './access';
@@ -40,20 +40,25 @@ export async function GET(_req: NextRequest, { params }: Params) {
       canReadBudget: mayReadBudget(access.capabilities, access.role),
     };
     const settings = await readReadinessSettings(access.admin, access.orgId);
-    const required = settings.marketing_plan_required && settings.marketing_gate !== 'off';
+    // The stored switch, and whether the marketing gate is skipped (then the switch has no effect, and the screen says so).
+    const required = settings.marketing_plan_required;
+    const gateSkipped = settings.marketing_gate === 'off';
     const plan = await findPlan(access.admin, access.orgId, access.object.id);
     if (!plan) {
       return json(200, {
         schemaReady: true,
         plan: null,
         required,
+        gateSkipped,
+        checklist: checklistView([]),
+        ...(viewer.canReadBudget ? { budget: { lines: [], totals: [] } } : {}),
         me: { canWrite: viewer.canWrite, canWriteBudget: viewer.canWriteBudget, canSetRequired: access.role === 'owner' },
         gate: { requiredPhases: [...REQUIRED_PHASES], missing: missingPhases([]) },
       });
     }
     const rows = await loadPlanRows(access.admin, access.orgId, plan, viewer.canReadBudget);
     const view = planView(rows, viewer);
-    return json(200, { schemaReady: true, required, ...view, me: { ...view.me, canSetRequired: access.role === 'owner' } });
+    return json(200, { schemaReady: true, required, gateSkipped, ...view, me: { ...view.me, canSetRequired: access.role === 'owner' } });
   } catch (err) {
     if (err instanceof MarketingNotReadyError) return json(200, { schemaReady: false });
     log.error('marketing plan read failed', { orgId: access.orgId, releaseId, error: errorMessage(err) });

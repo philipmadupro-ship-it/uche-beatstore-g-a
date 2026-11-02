@@ -164,6 +164,43 @@ describe('who reads a plan', () => {
   });
 });
 
+describe('review fixes', () => {
+  it('a refused body leaves no plan and no created event behind', async () => {
+    expect((await addItem(MKT, { phase: 'launch', title: 'x', due_on: '2026-12-05' })).status).toBe(400);
+    expect((await call(MKT, 'POST', 'budget/', {}, { label: 'x', amount_minor: '1.5', currency: 'USD' })).status).toBe(400);
+    expect(db.tables.marketing_plans).toHaveLength(0);
+    expect(db.tables.activity_events).toHaveLength(0);
+  });
+  it('an empty plan still offers the checklist, and the budget to a business reader only', async () => {
+    const m = await (await get(MKT)).json();
+    expect(m.plan).toBeNull();
+    expect(m.checklist).toHaveLength(5);
+    expect(m.budget).toEqual({ lines: [], totals: [] });
+    expect('budget' in (await (await get(ART)).json())).toBe(false);
+  });
+  it('a full asset list tells nobody and records nothing', async () => {
+    await call(MKT, 'POST', 'assets/', {}, { kind: 'bio' });
+    const plan = db.tables.marketing_plans[0];
+    db.tables.marketing_asset_requests = Array.from({ length: 40 }, (_, i) => ({ id: `a${i}`, org_id: L, plan_id: plan.id, kind: 'bio', status: 'open', created_at: 'x' }));
+    const before = db.tables.notifications.length;
+    expect((await call(MKT, 'POST', 'assets/', {}, { kind: 'photos' })).status).toBe(409);
+    expect(db.tables.notifications).toHaveLength(before);
+  });
+  it('ticking a done milestone again keeps its first completion time', async () => {
+    const id = (await (await addItem(MKT)).json()).item.id as string;
+    await call(MKT, 'PATCH', 'items/[itemId]/', { itemId: id }, { done: true });
+    const first = db.tables.marketing_plan_items[0].done_at;
+    expect(first).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 5));
+    await call(MKT, 'PATCH', 'items/[itemId]/', { itemId: id }, { done: true });
+    expect(db.tables.marketing_plan_items[0].done_at).toBe(first);
+  });
+  it('reports the stored requirement and whether the gate is skipped', async () => {
+    db.tables.organizations[0].settings = { marketing_plan_required: true, marketing_gate: 'off' };
+    expect(await get(OWN).then((r) => r.json())).toMatchObject({ required: true, gateSkipped: true });
+  });
+});
+
 describe('who writes the timeline', () => {
   it('release.write and the marketing approval write; a reader or a producer or the artist does not', async () => {
     expect((await addItem(AR)).status).toBe(201);

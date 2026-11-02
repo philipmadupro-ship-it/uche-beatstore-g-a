@@ -17,7 +17,7 @@ import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { askArtistForAsset } from '@/lib/labelos/marketing-asset-notify';
 import { PLAN_LIMITS } from '@/lib/labelos/marketing-plan';
-import { MarketingNotReadyError, addAssetRequest } from '@/lib/labelos/marketing-plan-store';
+import { MarketingNotReadyError, addAssetRequest, setAssetRecipient, touchPlan, type PlanRow } from '@/lib/labelos/marketing-plan-store';
 import { askerName } from '@/lib/labelos/tasks-store';
 import { readBody } from '@/lib/validate';
 import { json, planWriteContext } from '../access';
@@ -38,7 +38,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const parsed = await readBody(req, MarketingAssetCreateBodySchema);
   if (!parsed.ok) return parsed.res;
   try {
-    // Who is asked is worked out before the row, so the row records whether anyone could be reached.
+    const plan = (await ctx.ensure()) as PlanRow;
+    // The row first (a refused or failed insert must not have told anybody), then the ask, then who it reached.
+    const row = await addAssetRequest(ctx.admin, ctx.orgId, plan.id, ctx.access.userId, { kind: parsed.data.kind, note: parsed.data.note ?? null, recipientId: null });
+    if (row === 'full') return json(409, { error: `A plan holds at most ${PLAN_LIMITS.assetRequests} requests.` });
     let recipientId: string | null = null;
     let failed = false;
     if (ctx.release.contactId) {
@@ -53,10 +56,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       });
       recipientId = asked.recipientId;
       failed = asked.failed;
+      if (recipientId) await setAssetRecipient(ctx.admin, ctx.orgId, plan.id, row.id, recipientId);
     }
-    const row = await addAssetRequest(ctx.admin, ctx.orgId, ctx.plan.id, ctx.access.userId, { kind: parsed.data.kind, note: parsed.data.note ?? null, recipientId });
-    if (row === 'full') return json(409, { error: `A plan holds at most ${PLAN_LIMITS.assetRequests} requests.` });
-    await ctx.touch();
+    await touchPlan(ctx.admin, ctx.orgId, plan.id);
     await recordEvent(ctx.admin, ctx.actor, 'marketing_plan.asset_requested', ctx.subject, { requestId: row.id, kind: row.kind, notified: recipientId !== null });
     return json(201, { request: { id: row.id, kind: row.kind, note: row.note, status: row.status, createdAt: row.created_at, resolvedAt: row.resolved_at, notified: recipientId !== null }, delivery: failed ? 'failed' : recipientId ? 'notified' : 'nobody_reachable' });
   } catch (err) {

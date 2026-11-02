@@ -52,7 +52,7 @@ export async function readPlanPhases(admin: AdminClient, org: string, releaseId:
   return { phases: ((items.data ?? []) as { phase: string }[]).map((i) => i.phase) };
 }
 
-type PlanRow = { id: string; release_id: string; created_at: string; updated_at: string };
+export type PlanRow = { id: string; release_id: string; created_at: string; updated_at: string };
 const PLAN_COLUMNS = 'id, release_id, created_at, updated_at';
 
 export async function findPlan(admin: AdminClient, org: string, releaseId: string): Promise<PlanRow | null> {
@@ -106,7 +106,8 @@ async function count(admin: AdminClient, table: string, org: string, planId: str
 }
 
 export const touchPlan = async (admin: AdminClient, org: string, planId: string) => {
-  await admin.from('marketing_plans').update({ updated_at: new Date().toISOString() }).eq('org_id', org).eq('id', planId);
+  const res = await admin.from('marketing_plans').update({ updated_at: new Date().toISOString() }).eq('org_id', org).eq('id', planId);
+  check('plan touch', res.error);
 };
 
 // ── Timeline ─────────────────────────────────────────────────────────────
@@ -125,7 +126,14 @@ export async function patchItem(admin: AdminClient, org: string, plan: string, i
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   const fields: string[] = [];
   for (const k of ['phase', 'title', 'due_on'] as const) if (body[k] !== undefined) { patch[k] = body[k]; fields.push(k); }
-  if (body.done !== undefined) { patch.done_at = body.done ? new Date().toISOString() : null; fields.push('done'); }
+  if (body.done !== undefined) {
+    // Ticking an already-done milestone keeps its first completion time.
+    const cur = body.done ? await admin.from('marketing_plan_items').select('done_at').eq('org_id', org).eq('plan_id', plan).eq('id', id).maybeSingle() : null;
+    if (cur) check('item read', cur.error);
+    const already = (cur?.data as { done_at: string | null } | null)?.done_at ?? null;
+    if (!(body.done && already)) patch.done_at = body.done ? new Date().toISOString() : null;
+    fields.push('done');
+  }
   const res = await admin.from('marketing_plan_items').update(patch).eq('org_id', org).eq('plan_id', plan).eq('id', id).select(ITEM_COLUMNS).maybeSingle();
   check('item update', res.error);
   return res.data ? { row: res.data as ItemRowOut, fields } : null;
@@ -188,6 +196,12 @@ export async function addAssetRequest(admin: AdminClient, org: string, plan: str
   return res.data as AssetRowOut;
 }
 
+/** Who the ask reached, written after it was sent (the row exists first). */
+export async function setAssetRecipient(admin: AdminClient, org: string, plan: string, id: string, recipientId: string): Promise<void> {
+  const res = await admin.from('marketing_asset_requests').update({ recipient_id: recipientId }).eq('org_id', org).eq('plan_id', plan).eq('id', id);
+  check('asset request recipient', res.error);
+}
+
 export async function setAssetStatus(admin: AdminClient, org: string, plan: string, id: string, status: AssetStatus): Promise<AssetRowOut | null> {
   const res = await admin
     .from('marketing_asset_requests')
@@ -206,7 +220,7 @@ export async function setAssetStatus(admin: AdminClient, org: string, plan: stri
 /** The milestones for the calendar feed: titles and days of the plans on the given releases. Chunked, so a big catalogue never overruns a request line. */
 export async function feedMilestones(admin: AdminClient, org: string, releases: readonly { id: string; title: string }[]): Promise<{ id: string; releaseId: string; phase: string; title: string; dueOn: string; doneAt: string | null }[]> {
   const out: { id: string; releaseId: string; phase: string; title: string; dueOn: string; doneAt: string | null }[] = [];
-  const CHUNK = 100;
+  const CHUNK = 15; // plans per read: at most 15 × PLAN_LIMITS.items rows, under PostgREST's 1000-row cut
   for (let i = 0; i < releases.length; i += CHUNK) {
     const plans = await admin.from('marketing_plans').select('id, release_id').eq('org_id', org).in('release_id', releases.slice(i, i + CHUNK).map((r) => r.id));
     if (plans.error) {

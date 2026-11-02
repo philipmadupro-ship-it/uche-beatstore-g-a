@@ -9,7 +9,7 @@ export type MarketingResult<T> = ({ ok: true } & T) | { ok: false; error: string
 
 export type MarketingState =
   | { schemaReady: false }
-  | { schemaReady: true; required: boolean; plan: PlanView['plan'] | null; me: PlanView['me'] & { canSetRequired?: boolean }; gate: PlanView['gate']; items?: PlanView['items']; checklist?: PlanView['checklist']; assets?: PlanView['assets']; budget?: PlanView['budget'] };
+  | { schemaReady: true; required: boolean; gateSkipped?: boolean; plan: PlanView['plan'] | null; me: PlanView['me'] & { canSetRequired?: boolean }; gate: PlanView['gate']; items?: PlanView['items']; checklist?: PlanView['checklist']; assets?: PlanView['assets']; budget?: PlanView['budget'] };
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 const base = (orgId: string, releaseId: string) => `/api/org/${orgId}/releases/${releaseId}/marketing`;

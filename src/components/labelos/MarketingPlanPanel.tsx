@@ -134,7 +134,12 @@ export function MarketingPlanPanel({ orgId, releaseId }: { orgId: string; releas
         )}
       </div>
 
-      {s.required && (
+      {s.required && s.gateSkipped && (
+        <p className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-[11px] leading-relaxed text-white/60" role="note" data-testid="marketing-plan-gate-skipped">
+          A plan is required, but this organization has switched the marketing approval off, so the gate does not ask for one.
+        </p>
+      )}
+      {s.required && !s.gateSkipped && (
         <p className="rounded-xl border border-white/20 bg-white/[0.06] px-4 py-3 text-[11px] leading-relaxed text-white/80" role="note" data-testid="marketing-plan-gate-note">
           {s.gate.missing.length === 0 && s.plan
             ? 'This organization asks for a plan before the marketing gate can pass, and this one has what it needs.'
@@ -263,11 +268,14 @@ function Assets({ orgId, releaseId, state, canWrite, busy, act }: { orgId: strin
   const [kind, setKind] = useState<AssetKind>('photos');
   const [note, setNote] = useState('');
   const [after, setAfter] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const requests = state.assets ?? [];
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await requestAsset(orgId, releaseId, { kind, note: note.trim() || null });
+    if (sending) return;
+    setSending(true);
+    const res = await requestAsset(orgId, releaseId, { kind, note: note.trim() || null }).finally(() => setSending(false));
     if (!res.ok) return void toast.error(res.error);
     setNote('');
     setAfter(
@@ -307,7 +315,7 @@ function Assets({ orgId, releaseId, state, canWrite, busy, act }: { orgId: strin
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-center gap-2">
           <Dropdown<AssetKind> value={kind} aria-label="What to ask for" options={ASSET_KINDS.map((k) => ({ value: k, label: ASSET_KIND_LABEL[k] }))} onChange={setKind} />
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" aria-label="Note" maxLength={PLAN_LIMITS.assetNote} className={cn(FIELD, 'min-w-[10rem] flex-1')} />
-          <button type="submit" disabled={busy} className={BTN}>Ask</button>
+          <button type="submit" disabled={busy || sending} className={BTN}>Ask</button>
         </form>
       )}
     </div>

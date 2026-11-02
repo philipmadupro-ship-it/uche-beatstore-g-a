@@ -13,7 +13,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { PLAN_LIMITS } from '@/lib/labelos/marketing-plan';
-import { MarketingNotReadyError, addBudget } from '@/lib/labelos/marketing-plan-store';
+import { MarketingNotReadyError, addBudget, touchPlan, type PlanRow } from '@/lib/labelos/marketing-plan-store';
 import { readBody } from '@/lib/validate';
 import { json, planWriteContext } from '../access';
 import { budgetLineOut, moneyProblem } from '@/lib/labelos/marketing-budget';
@@ -36,9 +36,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const bad = moneyProblem(parsed.data.amount_minor, parsed.data.currency);
   if (bad) return json(400, { error: bad });
   try {
-    const row = await addBudget(ctx.admin, ctx.orgId, ctx.plan.id, ctx.access.userId, parsed.data);
+    const plan = (await ctx.ensure()) as PlanRow;
+    const row = await addBudget(ctx.admin, ctx.orgId, plan.id, ctx.access.userId, parsed.data);
     if (row === 'full') return json(409, { error: `A plan holds at most ${PLAN_LIMITS.budgetLines} budget lines.` });
-    await ctx.touch();
+    await touchPlan(ctx.admin, ctx.orgId, plan.id);
     await recordEvent(ctx.admin, ctx.actor, 'marketing_plan.budget_changed', ctx.subject, { op: 'added', lineId: row.id });
     return json(201, { line: budgetLineOut(row) });
   } catch (err) {
