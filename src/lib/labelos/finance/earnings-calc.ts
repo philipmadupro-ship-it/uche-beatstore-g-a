@@ -13,30 +13,38 @@
  * the splits live on the song. Nothing is ever guessed: no identifier,
  * no match, no song → the line waits in the needs-review queue with a reason.
  *
- * ── ALLOCATION ────────────────────────────────────────────────────────────
- * The song's CURRENT split sheet in force (circulated / signed / disputed —
- * `isLive`) of the line's income class: `master` income uses the MASTER sheet,
- * `publishing` income the COMPOSITION sheet. Exactly one such sheet must
- * exist and its shares must add to 100 % (units: 100 % = 1 000 000).
- * The line's gross is split among the sheet's PARTIES (a party on two rows is
- * one party) with the largest-remainder method in sheet order (`allocate`):
- * the parts sum to the gross EXACTLY, the extra unit going to the larger
- * fractional remainder, ties to the earlier row. A line is allocated whole or
- * not at all: if any party has no payee, an inactive payee, or is paid in
- * another currency than the file, the WHOLE line waits for review.
+ * ── ALLOCATION AND CONTRACT TERMS ─────────────────────────────────────────
+ * ORCHESTRATOR DECISION (2026-11-02), OWNER MAY CHANGE. A line's gross is paid
+ * out per payee on ONE of two bases, never both (an artist with 50 % of the
+ * master and a 20 % royalty must not get 10 %):
  *
- * ── CONTRACT TERMS ────────────────────────────────────────────────────────
- * A payee's party may have a SIGNED contract (status `signed`; the database
- * only gets there with every signature valid for the frozen document) with a
- * `royalty_rate`. It applies when the party is on the contract in a non-label
- * role and the contract is for THIS song, or for a release containing it, or
- * (no song, no release) for the payee's artist; it must be in term for the
- * line's period. The most specific level wins (song > release > artist). Two
- * contracts at the best level with DIFFERENT rates → `contract_ambiguous`
- * (never a guess); equal rates → the lowest contract id. The payee is owed
- * share × rate, rounded HALF TO EVEN (the one place a rate is applied); the
- * rest is `retained` by the label. No applicable contract = 100 % (the split
- * sheet alone decides). payable + retained = share, always.
+ *  - RATE: the payee has a SIGNED contract (status `signed`; the database only
+ *    gets there with every signature valid for the frozen document, and the
+ *    store re-checks it) that covers the payee AND the song and states a
+ *    `royalty_rate`, in term for the line's period. payable = gross × rate,
+ *    rounded HALF TO EVEN (the one place a rate is applied). The split sheet is
+ *    NOT applied to that payee. "Covers the song": the contract is for this song,
+ *    or for a release that contains it (a payee need not be on the sheet), or it
+ *    is an artist-level deal (no song, no release) for the payee's artist AND the
+ *    payee is on the song's sheet. Most specific level wins (song > release >
+ *    artist); two contracts at the best level with DIFFERENT rates →
+ *    `contract_ambiguous` (never a guess); equal rates → the lowest contract id.
+ *  - SPLIT: every other payee on the song's sheet in force gets gross × their
+ *    share. The sheet is the song's CURRENT one (circulated / signed / disputed;
+ *    `isLive`) of the line's income class (`master` income → MASTER sheet,
+ *    `publishing` → COMPOSITION sheet): exactly one must exist and add to
+ *    100 % (units: 100 % = 1 000 000). A party on two rows is one party. The
+ *    split amounts use largest-remainder over the whole sheet (`allocate`, ties
+ *    to the earlier row), so they sum to the gross exactly when nobody is on a
+ *    rate.
+ *
+ * If the RATE payees plus the SPLIT payees come to more than 100 % of the line
+ * (units, exactly; and in minor units as a guard), NOTHING is paid for the line:
+ * it waits in the review queue as `terms_exceed_gross` — never pay more than was
+ * received. Whatever is left is RETAINED by the label (gross − Σ payable;
+ * derived, never paid). A line is allocated whole or not at all: any payee with
+ * no payee record, an inactive one, or one paid in another currency than the
+ * file (no conversion) sends the WHOLE line to review.
  *
  * ── RECOUPMENT ────────────────────────────────────────────────────────────
  * Per payee, in a documented order: allocations by (line number, sheet row);
@@ -53,7 +61,7 @@ import type { IncomeClass, ParsedLine } from './earnings-import';
 
 export const REVIEW_REASONS = [
   'no_identifier', 'no_match', 'ambiguous_match', 'no_song', 'no_sheet', 'bad_split',
-  'no_payee', 'payee_inactive', 'currency_mismatch', 'contract_ambiguous',
+  'no_payee', 'payee_inactive', 'currency_mismatch', 'contract_ambiguous', 'terms_exceed_gross',
 ] as const;
 export type ReviewReason = (typeof REVIEW_REASONS)[number];
 
@@ -68,6 +76,7 @@ export const REVIEW_REASON_LABEL: Readonly<Record<ReviewReason, string>> = {
   payee_inactive: 'A payee on the split is inactive',
   currency_mismatch: 'A payee is paid in another currency than this file (no conversion)',
   contract_ambiguous: 'Two signed contracts give different rates',
+  terms_exceed_gross: 'The contract rates and splits add up to more than the line',
 };
 
 export const isReviewReason = (v: unknown): v is ReviewReason => typeof v === 'string' && (REVIEW_REASONS as readonly string[]).includes(v);
@@ -149,7 +158,7 @@ export type RateChoice = { kind: 'none' } | { kind: 'rate'; contractId: string; 
 
 export function chooseRate(
   candidates: readonly ContractFact[],
-  ctx: { songId: string; releaseIds: ReadonlySet<string>; payeeArtistId: string | null; periodStart: string | null; periodEnd: string | null },
+  ctx: { songId: string; releaseIds: ReadonlySet<string>; payeeArtistId: string | null; onSheet: boolean; periodStart: string | null; periodEnd: string | null },
 ): RateChoice {
   const applicable: { c: ContractFact; rank: number }[] = [];
   for (const c of candidates) {
@@ -159,7 +168,7 @@ export function chooseRate(
       if (c.trackId === ctx.songId) applicable.push({ c, rank: LEVEL_RANK.song });
     } else if (c.releaseId !== null) {
       if (ctx.releaseIds.has(c.releaseId)) applicable.push({ c, rank: LEVEL_RANK.release });
-    } else if (c.artistContactId !== null && c.artistContactId === ctx.payeeArtistId) {
+    } else if (ctx.onSheet && c.artistContactId !== null && c.artistContactId === ctx.payeeArtistId) {
       applicable.push({ c, rank: LEVEL_RANK.artist });
     }
   }
@@ -170,6 +179,7 @@ export function chooseRate(
   return { kind: 'rate', contractId: top[0].id, rateUnits: top[0].rateUnits };
 }
 
+export type AllocationBasis = 'split' | 'rate';
 export type AllocationDraft = {
   payeeId: string;
   partyId: string;
@@ -177,14 +187,13 @@ export type AllocationDraft = {
   kind: SheetKind;
   sheetId: string;
   contractId: string | null;
-  shareUnits: number;
-  shareMinor: bigint;
-  rateUnits: number;
+  basis: AllocationBasis;
+  /** The split share (basis `split`) or the royalty rate (basis `rate`); 100 % = 1 000 000. */
+  units: number;
   payableMinor: bigint;
-  retainedMinor: bigint;
 };
 
-export type Allocation = { ok: true; rows: AllocationDraft[] } | { ok: false; reason: ReviewReason };
+export type Allocation = { ok: true; rows: AllocationDraft[]; retainedMinor: bigint } | { ok: false; reason: ReviewReason };
 
 export function allocateLine(
   line: Pick<ParsedLine, 'grossMinor' | 'incomeClass' | 'periodStart' | 'periodEnd'>,
@@ -205,38 +214,62 @@ export function allocateLine(
     if (existing) existing.units += l.units;
     else parties.push({ partyId: l.partyId, units: l.units });
   }
-  const payees = parties.map((p) => facts.payeeByParty.get(p.partyId));
-  if (payees.some((p) => !p)) return { ok: false, reason: 'no_payee' };
-  const found = payees as PayeeFact[];
-  if (found.some((p) => p.status !== 'active')) return { ok: false, reason: 'payee_inactive' };
-  if (found.some((p) => p.currency !== currency)) return { ok: false, reason: 'currency_mismatch' };
-
-  const shares = allocate(money(line.grossMinor, currency), parties.map((p) => p.units));
+  const sheetParties = new Set(parties.map((p) => p.partyId));
   const releaseIds = facts.releasesOfSong.get(songId) ?? new Set<string>();
-  const rows: AllocationDraft[] = [];
-  for (let i = 0; i < parties.length; i++) {
-    const choice = chooseRate(facts.contracts.get(parties[i].partyId) ?? [], {
-      songId, releaseIds, payeeArtistId: found[i].artistContactId, periodStart: line.periodStart, periodEnd: line.periodEnd,
+
+  const payeeOf = (partyId: string): PayeeFact | null => facts.payeeByParty.get(partyId) ?? null;
+  const rateFor = (partyId: string, payee: PayeeFact): RateChoice =>
+    chooseRate(facts.contracts.get(partyId) ?? [], {
+      songId, releaseIds, payeeArtistId: payee.artistContactId, onSheet: sheetParties.has(partyId), periodStart: line.periodStart, periodEnd: line.periodEnd,
     });
-    if (choice.kind === 'ambiguous') return { ok: false, reason: 'contract_ambiguous' };
-    const rateUnits = choice.kind === 'rate' ? choice.rateUnits : FULL_SHARE;
-    const share: Money = shares[i];
-    const payable = choice.kind === 'rate' ? applyShare(share, rateUnits) : share;
-    rows.push({
-      payeeId: found[i].id,
-      partyId: parties[i].partyId,
-      songId,
-      kind,
-      sheetId: sheet.id,
-      contractId: choice.kind === 'rate' ? choice.contractId : null,
-      shareUnits: parties[i].units,
-      shareMinor: share.minor,
-      rateUnits,
-      payableMinor: payable.minor,
-      retainedMinor: share.minor - payable.minor,
-    });
+
+  // Everyone who could be paid on this line: the sheet's parties, then parties whose signed contract names this song or one of its releases.
+  const extra = [...facts.contracts.keys()].filter((id) => !sheetParties.has(id)).sort();
+  const candidates = [...parties.map((p) => p.partyId), ...extra];
+  const choices = new Map<string, RateChoice>();
+  const payees = new Map<string, PayeeFact>();
+  for (const partyId of candidates) {
+    const payee = payeeOf(partyId);
+    if (!payee) {
+      // A sheet party with no payee blocks the line; a contract-only party with no payee is simply not a candidate here.
+      if (sheetParties.has(partyId)) return { ok: false, reason: 'no_payee' };
+      continue;
+    }
+    const choice = rateFor(partyId, payee);
+    if (!sheetParties.has(partyId) && choice.kind !== 'rate') continue;
+    if (!sheetParties.has(partyId) && choice.kind === 'rate' && payee.status !== 'active') return { ok: false, reason: 'payee_inactive' };
+    payees.set(partyId, payee);
+    choices.set(partyId, choice);
   }
-  return { ok: true, rows };
+  for (const choice of choices.values()) if (choice.kind === 'ambiguous') return { ok: false, reason: 'contract_ambiguous' };
+  const chosen = [...payees.values()];
+  if (chosen.some((p) => p.status !== 'active')) return { ok: false, reason: 'payee_inactive' };
+  if (chosen.some((p) => p.currency !== currency)) return { ok: false, reason: 'currency_mismatch' };
+
+  const gross = money(line.grossMinor, currency);
+  const splitShares = allocate(gross, parties.map((p) => p.units));
+  const rows: AllocationDraft[] = [];
+  let units = 0;
+  let paid = BigInt(0);
+  const push = (partyId: string, basis: AllocationBasis, u: number, payable: Money, contractId: string | null) => {
+    const payee = payees.get(partyId) as PayeeFact;
+    rows.push({ payeeId: payee.id, partyId, songId, kind, sheetId: sheet.id, contractId, basis, units: u, payableMinor: payable.minor });
+    units += u;
+    paid += payable.minor;
+  };
+  parties.forEach((p, i) => {
+    const choice = choices.get(p.partyId) as RateChoice;
+    if (choice.kind === 'rate') push(p.partyId, 'rate', choice.rateUnits, applyShare(gross, choice.rateUnits), choice.contractId);
+    else push(p.partyId, 'split', p.units, splitShares[i], null);
+  });
+  for (const partyId of extra) {
+    const choice = choices.get(partyId);
+    if (choice && choice.kind === 'rate') push(partyId, 'rate', choice.rateUnits, applyShare(gross, choice.rateUnits), choice.contractId);
+  }
+  // Never pay more than was received: units exactly, and the minor-unit sum as a guard against rounding.
+  const abs = (n: bigint) => (n < BigInt(0) ? -n : n);
+  if (units > FULL_SHARE || abs(paid) > abs(gross.minor)) return { ok: false, reason: 'terms_exceed_gross' };
+  return { ok: true, rows, retainedMinor: gross.minor - paid };
 }
 
 // ── Recoupment ───────────────────────────────────────────────────────────

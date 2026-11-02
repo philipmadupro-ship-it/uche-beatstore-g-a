@@ -180,7 +180,7 @@ describe('reprocessImport', () => {
       rpc: {
         labelos_earnings_resolve: (args) => {
           // January earnings, contract effective in March: the split sheet alone decides (100 %), not the 50 % rate.
-          expect(args.p_allocs).toMatchObject([{ payable_minor: '1000', retained_minor: '0', rate_units: 1000000, contract_id: null }]);
+          expect(args.p_allocs).toMatchObject([{ payable_minor: '1000', basis: 'split', units: 1000000, contract_id: null }]);
           return { data: null, error: null };
         },
       },

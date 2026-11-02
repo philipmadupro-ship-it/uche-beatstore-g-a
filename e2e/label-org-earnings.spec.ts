@@ -189,14 +189,14 @@ test('3 · the stored rows add up, the advance is recouped first, nothing goes n
   expect(lines.map((l) => [l.line_no, l.gross_minor, l.review_reason])).toEqual([
     [2, 10001, null], [3, 100, null], [4, 200, 'no_sheet'], [5, 300, 'no_match'], [6, 400, 'no_sheet'],
   ]);
-  const allocs = (await rest(request, 'GET', `earnings_allocations?select=line_id,payee_id,party_id,share_minor,payable_minor,retained_minor&import_id=eq.${importId}`)) as Row[];
+  const allocs = (await rest(request, 'GET', `earnings_allocations?select=line_id,payee_id,party_id,payable_minor,basis&import_id=eq.${importId}`)) as Row[];
   for (const l of lines.filter((x) => x.review_reason === null)) {
-    expect(allocs.filter((a) => a.line_id === l.id).reduce((s, a) => s + Number(a.share_minor), 0)).toBe(l.gross_minor);
+    expect(allocs.filter((a) => a.line_id === l.id).reduce((s, a) => s + Number(a.payable_minor), 0)).toBe(l.gross_minor);
   }
   const byParty = (party: string, lineNo: number) => allocs.find((a) => a.party_id === party && a.line_id === lines.find((l) => l.line_no === lineNo)!.id)!;
   // 10001 × 70/30: largest remainder gives the extra cent to Nova (7001 / 3000); 100 splits 70 / 30.
-  expect([Number(byParty(P_NOVA, 2).share_minor), Number(byParty(P_PAT, 2).share_minor)]).toEqual([7001, 3000]);
-  expect([Number(byParty(P_NOVA, 3).share_minor), Number(byParty(P_PAT, 3).share_minor)]).toEqual([70, 30]);
+  expect([Number(byParty(P_NOVA, 2).payable_minor), Number(byParty(P_PAT, 2).payable_minor)]).toEqual([7001, 3000]);
+  expect([Number(byParty(P_NOVA, 3).payable_minor), Number(byParty(P_PAT, 3).payable_minor)]).toEqual([70, 30]);
   const rec = (await rest(request, 'GET', `earnings_recoupments?select=amount_minor&import_id=eq.${importId}`)) as Row[];
   // The $50.00 advance is taken from Nova's first allocation only: 5000 of 7001.
   expect(rec.map((r) => Number(r.amount_minor))).toEqual([5000]);
@@ -260,8 +260,8 @@ test('6 · circulating the missing sheet and pressing Re-run allocates that line
   await ctx.close();
   const lines = (await rest(request, 'GET', `earnings_lines?select=line_no,review_reason&import_id=eq.${importId}&order=line_no`)) as Row[];
   expect(lines.map((l) => l.review_reason)).toEqual([null, null, 'no_sheet', 'no_match', null]);
-  const allocs = (await rest(request, 'GET', `earnings_allocations?select=share_minor,line_id&import_id=eq.${importId}`)) as Row[];
-  expect(allocs.reduce((s, a) => s + Number(a.share_minor), 0)).toBe(10001 + 100 + 400);
+  const allocs = (await rest(request, 'GET', `earnings_allocations?select=payable_minor,line_id&import_id=eq.${importId}`)) as Row[];
+  expect(allocs.reduce((s, a) => s + Number(a.payable_minor), 0)).toBe(10001 + 100 + 400);
   // Nova's advance is spent: the re-run recoups nothing more, and nothing negative exists.
   expect(((await rest(request, 'GET', `earnings_recoupments?select=id&import_id=eq.${importId}`)) as Row[]).length).toBe(1);
   expect(((await rest(request, 'GET', `activity_events?select=payload&org_id=eq.${ORG}&verb=eq.earnings.recalculated`)) as Row[])[0]).toMatchObject({ payload: { tried: 3, resolved: 1, waiting: 2 } });

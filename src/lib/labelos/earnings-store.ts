@@ -366,7 +366,7 @@ export async function importEarnings(
   });
   const allocs = run.allocations.map((a) => ({
     line_no: a.lineNo, payee_id: a.payeeId, party_id: a.partyId, song_track_id: a.songId, kind: a.kind, sheet_id: a.sheetId, contract_id: a.contractId,
-    share_units: a.shareUnits, share_minor: s(a.shareMinor), rate_units: a.rateUnits, payable_minor: s(a.payableMinor), retained_minor: s(a.retainedMinor),
+    basis: a.basis, units: a.units, payable_minor: s(a.payableMinor),
   }));
   const recoups = run.recoups.map((r) => ({ line_no: r.lineNo, payee_id: r.payeeId, advance_id: r.advanceId, amount_minor: s(r.amountMinor) }));
   const res = await admin.rpc('labelos_earnings_import', {
@@ -472,7 +472,7 @@ export async function reprocessImport(admin: AdminClient, orgId: string, importI
   const lineUpdates = run.lines.map((r) => ({ line_id: idOf.get(r.lineNo), track_id: r.trackId, song_track_id: r.songId, review_reason: r.reviewReason }));
   const allocs = run.allocations.map((a) => ({
     line_id: idOf.get(a.lineNo), payee_id: a.payeeId, party_id: a.partyId, song_track_id: a.songId, kind: a.kind, sheet_id: a.sheetId, contract_id: a.contractId,
-    share_units: a.shareUnits, share_minor: s(a.shareMinor), rate_units: a.rateUnits, payable_minor: s(a.payableMinor), retained_minor: s(a.retainedMinor),
+    basis: a.basis, units: a.units, payable_minor: s(a.payableMinor),
   }));
   const recoups = run.recoups.map((r) => ({ line_id: idOf.get(r.lineNo), payee_id: r.payeeId, advance_id: r.advanceId, amount_minor: s(r.amountMinor) }));
   const res = await admin.rpc('labelos_earnings_resolve', { p_org: orgId, p_import: importId, p_lines: lineUpdates, p_allocs: allocs, p_recoups: recoups });
@@ -487,14 +487,22 @@ export async function reprocessImport(admin: AdminClient, orgId: string, importI
 
 // ── Totals ───────────────────────────────────────────────────────────────
 
-export type PayeeTotal = { payee_id: string; artist_contact_id: string | null; currency: string; share_minor: bigint; payable_minor: bigint; retained_minor: bigint; recouped_minor: bigint; net_minor: bigint };
+export type PayeeTotal = { payee_id: string; artist_contact_id: string | null; currency: string; payable_minor: bigint; recouped_minor: bigint; net_minor: bigint };
 
-/** Per-payee totals of an import, for the payees the viewer may read (`payeeIds` null = all). */
-export async function importTotals(admin: AdminClient, orgId: string, importId: string, payeeIds: ReadonlySet<string> | null): Promise<PayeeTotal[]> {
+/**
+ * Per-payee totals of an import (owed, recouped, net) for the payees the viewer may read (`payeeIds` null = all),
+ * and — for a whole-org reader only — what the label RETAINS: the allocated lines' gross less everything paid out.
+ */
+export async function importTotals(
+  admin: AdminClient,
+  orgId: string,
+  importId: string,
+  payeeIds: ReadonlySet<string> | null,
+): Promise<{ totals: PayeeTotal[]; retainedMinor: bigint | null }> {
   const allocs = await guarded(() =>
-    pageAll<{ payee_id: string; artist_contact_id: string | null; currency: string; share_minor: unknown; payable_minor: unknown; retained_minor: unknown }>(
+    pageAll<{ line_id: string; payee_id: string; artist_contact_id: string | null; currency: string; payable_minor: unknown }>(
       (from, to) =>
-        admin.from('earnings_allocations').select('payee_id, artist_contact_id, currency, share_minor, payable_minor, retained_minor').eq('org_id', orgId).eq('import_id', importId).order('id').range(from, to),
+        admin.from('earnings_allocations').select('line_id, payee_id, artist_contact_id, currency, payable_minor').eq('org_id', orgId).eq('import_id', importId).order('id').range(from, to),
       'allocations',
     ),
   );
@@ -505,12 +513,12 @@ export async function importTotals(admin: AdminClient, orgId: string, importId: 
     ),
   );
   const totals = new Map<string, PayeeTotal>();
+  let paid = BigInt(0);
   for (const a of allocs) {
+    paid += minorFromDb(a.payable_minor);
     if (payeeIds && !payeeIds.has(a.payee_id)) continue;
-    const t = totals.get(a.payee_id) ?? { payee_id: a.payee_id, artist_contact_id: a.artist_contact_id, currency: a.currency.trim(), share_minor: BigInt(0), payable_minor: BigInt(0), retained_minor: BigInt(0), recouped_minor: BigInt(0), net_minor: BigInt(0) };
-    t.share_minor += minorFromDb(a.share_minor);
+    const t = totals.get(a.payee_id) ?? { payee_id: a.payee_id, artist_contact_id: a.artist_contact_id, currency: a.currency.trim(), payable_minor: BigInt(0), recouped_minor: BigInt(0), net_minor: BigInt(0) };
     t.payable_minor += minorFromDb(a.payable_minor);
-    t.retained_minor += minorFromDb(a.retained_minor);
     totals.set(a.payee_id, t);
   }
   for (const r of recs) {
@@ -518,6 +526,18 @@ export async function importTotals(admin: AdminClient, orgId: string, importId: 
     if (t) t.recouped_minor += minorFromDb(r.amount_minor);
   }
   for (const t of totals.values()) t.net_minor = t.payable_minor - t.recouped_minor;
-  return [...totals.values()].sort((a, b) => a.payee_id.localeCompare(b.payee_id));
+  let retainedMinor: bigint | null = null;
+  if (payeeIds === null) {
+    const lineIds = new Set(allocs.map((a) => a.line_id));
+    const lines = await guarded(() =>
+      pageAll<{ id: string; gross_minor: unknown }>(
+        (from, to) => admin.from('earnings_lines').select('id, gross_minor').eq('org_id', orgId).eq('import_id', importId).is('review_reason', null).order('id').range(from, to),
+        'allocated lines',
+      ),
+    );
+    let gross = BigInt(0);
+    for (const l of lines) if (lineIds.has(l.id)) gross += minorFromDb(l.gross_minor);
+    retainedMinor = gross - paid;
+  }
+  return { totals: [...totals.values()].sort((a, b) => a.payee_id.localeCompare(b.payee_id)), retainedMinor };
 }
-

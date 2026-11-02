@@ -2,7 +2,7 @@
  * /api/org/[orgId]/finance/earnings/imports/[importId] (LABEL-62).
  *
  *   GET  one import: its header, the lines still waiting (counts), and the
- *        per-payee totals (earned, owed, kept, recouped, net) for the payees
+ *        per-payee totals (owed, recouped, net) and what the label retains for the payees
  *        the caller may read. `finance.read`, never a roster artist. A member
  *        limited to some artists sees the totals of their artists' payees
  *        only, and a file's header is whole-org, so they get 404 for the file.
@@ -35,8 +35,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const imp = await readImport(access.admin, access.orgId, importId);
     if (!imp) return json(404, { error: 'Import not found' });
-    const [totals, waiting] = await Promise.all([importTotals(access.admin, access.orgId, importId, null), reviewLines(access.admin, access.orgId, importId)]);
-    return json(200, { schemaReady: true, import: importView(imp), waiting_lines: waiting.length, totals: totals.map(totalView) });
+    const [{ totals, retainedMinor }, waiting] = await Promise.all([importTotals(access.admin, access.orgId, importId, null), reviewLines(access.admin, access.orgId, importId)]);
+    return json(200, {
+      schemaReady: true,
+      import: importView(imp),
+      waiting_lines: waiting.length,
+      totals: totals.map(totalView),
+      // What the label keeps: allocated lines' gross less everything owed to payees.
+      retained_minor: retainedMinor === null ? null : retainedMinor.toString(),
+    });
   } catch (err) {
     if (err instanceof EarningsNotReadyError) return json(200, { schemaReady: false });
     log.error('import read failed', { orgId: access.orgId, error: errorMessage(err) });

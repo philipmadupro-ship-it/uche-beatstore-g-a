@@ -179,7 +179,7 @@ describe('POST /imports', () => {
     // Line 2 is Ara's song with a 100 % sheet → allocated to her payee; line 3 matches Bo's song, which has no sheet → waits.
     expect(args.p_lines.map((l) => [l.line_no, l.gross_minor, l.review_reason])).toEqual([[2, '1000', null], [3, '550', 'no_sheet']]);
     expect(args.p_allocs).toHaveLength(1);
-    expect(args.p_allocs[0]).toMatchObject({ line_no: 2, payee_id: PAYEE, share_minor: '1000', payable_minor: '1000', retained_minor: '0' });
+    expect(args.p_allocs[0]).toMatchObject({ line_no: 2, payee_id: PAYEE, basis: 'split', units: 1000000, payable_minor: '1000', contract_id: null });
     const ev = db.tables.activity_events.filter((e) => e.verb === 'earnings.imported');
     expect(ev).toHaveLength(1);
     expect(JSON.stringify(ev[0].payload)).not.toMatch(/1000|1550|550|Spotify/);

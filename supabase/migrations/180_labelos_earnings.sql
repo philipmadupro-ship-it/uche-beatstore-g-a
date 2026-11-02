@@ -11,11 +11,15 @@
 --                      line is waiting in the needs-review queue; NULL = fully
 --                      allocated). The freeze now lets track_id, song_track_id and
 --                      review_reason change (resolving a line); nothing else.
---   earnings_allocations  one row per (line, payee): the payee's SPLIT share of the
---                      line (share_minor; parts sum to the line's gross EXACTLY, checked
---                      here), the contract rate that applied (rate_units, 100 % =
---                      1 000 000), what the payee is owed (payable_minor) and what the
---                      label keeps (retained_minor). payable + retained = share.
+--   earnings_allocations  one row per (line, payee): what the payee is owed
+--                      (payable_minor) and on what basis. basis 'split' = gross × the
+--                      payee's share on the song's split sheet in force; basis 'rate' =
+--                      gross × the royalty rate of a SIGNED contract that covers the
+--                      payee and the song, and the split sheet is NOT applied to that
+--                      payee (orchestrator decision 2026-11-02, owner may change).
+--                      units = the share or the rate (100 % = 1 000 000). The payees of a
+--                      line never add up to more than the line, checked here; whatever
+--                      is left is retained by the label (gross − Σ payable, derived).
 --   earnings_recoupments  how much of an allocation's payable was taken against which
 --                      advance. Never more than the advance has left, never more than
 --                      the allocation's payable, never from a non-recoupable or void
@@ -50,7 +54,7 @@ ALTER TABLE public.earnings_lines DROP CONSTRAINT IF EXISTS earnings_lines_revie
 ALTER TABLE public.earnings_lines ADD CONSTRAINT earnings_lines_review_reason_check CHECK (
   review_reason IS NULL OR review_reason IN (
     'no_identifier', 'no_match', 'ambiguous_match', 'no_song', 'no_sheet', 'bad_split',
-    'no_payee', 'payee_inactive', 'currency_mismatch', 'contract_ambiguous'));
+    'no_payee', 'payee_inactive', 'currency_mismatch', 'contract_ambiguous', 'terms_exceed_gross'));
 
 CREATE INDEX IF NOT EXISTS idx_earnings_lines_review ON public.earnings_lines (org_id, import_id) WHERE review_reason IS NOT NULL;
 
@@ -108,20 +112,16 @@ CREATE TABLE IF NOT EXISTS public.earnings_allocations (
   kind              text NOT NULL,
   sheet_id          uuid NOT NULL REFERENCES public.split_sheets(id),
   contract_id       uuid REFERENCES public.contracts(id),
-  share_units       int NOT NULL,
-  share_minor       bigint NOT NULL,
-  rate_units        int NOT NULL DEFAULT 1000000,
+  basis             text NOT NULL,
+  units             int NOT NULL,
   payable_minor     bigint NOT NULL,
-  retained_minor    bigint NOT NULL,
   currency          char(3) NOT NULL,
   created_at        timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT earnings_allocations_kind_check CHECK (kind IN ('master', 'composition')),
   CONSTRAINT earnings_allocations_currency_check CHECK (currency ~ '^[A-Z]{3}$'),
-  CONSTRAINT earnings_allocations_share_check CHECK (share_units BETWEEN 1 AND 1000000),
-  CONSTRAINT earnings_allocations_rate_check CHECK (rate_units BETWEEN 0 AND 1000000),
-  CONSTRAINT earnings_allocations_sum_check CHECK (payable_minor + retained_minor = share_minor),
-  CONSTRAINT earnings_allocations_sign_check CHECK (
-    (share_minor >= 0 AND payable_minor >= 0 AND retained_minor >= 0) OR (share_minor <= 0 AND payable_minor <= 0 AND retained_minor <= 0)),
+  CONSTRAINT earnings_allocations_basis_check CHECK (basis IN ('split', 'rate')),
+  CONSTRAINT earnings_allocations_units_check CHECK (units BETWEEN 0 AND 1000000),
+  CONSTRAINT earnings_allocations_basis_contract_check CHECK ((basis = 'rate') = (contract_id IS NOT NULL)),
   CONSTRAINT earnings_allocations_one_per_payee UNIQUE (line_id, payee_id)
 );
 
@@ -253,7 +253,7 @@ CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE O
 -- ── 5. Reads ─────────────────────────────────────────────────────────────
 
 REVOKE ALL ON public.earnings_allocations, public.earnings_recoupments FROM anon, authenticated;
-GRANT SELECT (id, org_id, import_id, line_id, payee_id, party_id, artist_contact_id, song_track_id, kind, sheet_id, contract_id, share_units, share_minor, rate_units, payable_minor, retained_minor, currency, created_at)
+GRANT SELECT (id, org_id, import_id, line_id, payee_id, party_id, artist_contact_id, song_track_id, kind, sheet_id, contract_id, basis, units, payable_minor, currency, created_at)
   ON public.earnings_allocations TO authenticated;
 GRANT SELECT (id, org_id, import_id, allocation_id, payee_id, advance_id, amount_minor, currency, created_at)
   ON public.earnings_recoupments TO authenticated;
@@ -304,11 +304,11 @@ DECLARE
   v_n   int;
 BEGIN
   INSERT INTO public.earnings_allocations
-    (org_id, import_id, line_id, payee_id, party_id, song_track_id, kind, sheet_id, contract_id, share_units, share_minor, rate_units, payable_minor, retained_minor, currency)
-  SELECT p_org, p_import, x.line_id, x.payee_id, x.party_id, x.song_track_id, x.kind, x.sheet_id, x.contract_id, x.share_units, x.share_minor, x.rate_units, x.payable_minor, x.retained_minor, l.currency
+    (org_id, import_id, line_id, payee_id, party_id, song_track_id, kind, sheet_id, contract_id, basis, units, payable_minor, currency)
+  SELECT p_org, p_import, x.line_id, x.payee_id, x.party_id, x.song_track_id, x.kind, x.sheet_id, x.contract_id, x.basis, x.units, x.payable_minor, l.currency
   FROM jsonb_to_recordset(coalesce(p_allocs, '[]'::jsonb)) AS x(
     line_id uuid, payee_id uuid, party_id uuid, song_track_id uuid, kind text, sheet_id uuid, contract_id uuid,
-    share_units int, share_minor bigint, rate_units int, payable_minor bigint, retained_minor bigint)
+    basis text, units int, payable_minor bigint)
   JOIN public.earnings_lines l ON l.id = x.line_id AND l.org_id = p_org AND l.import_id = p_import;
   GET DIAGNOSTICS v_n = ROW_COUNT;
   -- An entry that names no line of this import is a caller bug, never silently dropped.
@@ -316,14 +316,19 @@ BEGIN
     RAISE EXCEPTION 'earnings: an allocation names a line that is not in this import' USING ERRCODE = 'check_violation';
   END IF;
 
-  -- Every allocated line is allocated in full.
+  -- The payees of a line are never paid more than the line, and never with the opposite sign. What is left is
+  -- the label's. (Orchestrator decision: a line whose terms exceed 100 % waits in the review queue instead.)
   SELECT l.id INTO v_bad
   FROM public.earnings_lines l
-  JOIN (SELECT a.line_id, sum(a.share_minor) AS s FROM public.earnings_allocations a WHERE a.import_id = p_import GROUP BY a.line_id) t ON t.line_id = l.id
-  WHERE l.import_id = p_import AND t.s <> l.gross_minor
+  JOIN (SELECT a.line_id, sum(a.payable_minor) AS s, min(a.payable_minor) AS lo, max(a.payable_minor) AS hi
+          FROM public.earnings_allocations a WHERE a.import_id = p_import GROUP BY a.line_id) t ON t.line_id = l.id
+  WHERE l.import_id = p_import
+    AND (abs(t.s) > abs(l.gross_minor)
+         OR (l.gross_minor >= 0 AND t.lo < 0)
+         OR (l.gross_minor <= 0 AND t.hi > 0))
   LIMIT 1;
   IF v_bad IS NOT NULL THEN
-    RAISE EXCEPTION 'earnings: allocation_mismatch — the shares of a line do not add up to the line' USING ERRCODE = 'check_violation';
+    RAISE EXCEPTION 'earnings: allocation_mismatch — the payees of a line are owed more than the line' USING ERRCODE = 'check_violation';
   END IF;
   -- A line is either waiting for review or allocated, never both.
   IF EXISTS (SELECT 1 FROM public.earnings_lines l WHERE l.import_id = p_import AND l.review_reason IS NOT NULL

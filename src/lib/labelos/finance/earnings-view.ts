@@ -13,7 +13,7 @@ type LineInput = {
   id: string; import_id: string; line_no: number; isrc: string | null; upc: string | null; title: string | null; store: string | null; territory: string | null;
   gross_minor: unknown; currency: string; track_id: string | null; song_track_id: string | null; income_class: string; review_reason: ReviewReason | string | null;
 };
-type TotalInput = { payee_id: string; artist_contact_id: string | null; currency: string; share_minor: bigint; payable_minor: bigint; retained_minor: bigint; recouped_minor: bigint; net_minor: bigint };
+type TotalInput = { payee_id: string; artist_contact_id: string | null; currency: string; payable_minor: bigint; recouped_minor: bigint; net_minor: bigint };
 
 export const importView = (r: ImportInput) => ({
   id: r.id,
@@ -51,9 +51,7 @@ export const totalView = (t: TotalInput) => ({
   payee_id: t.payee_id,
   artist_contact_id: t.artist_contact_id,
   currency: t.currency,
-  share_minor: t.share_minor.toString(),
   payable_minor: t.payable_minor.toString(),
-  retained_minor: t.retained_minor.toString(),
   recouped_minor: t.recouped_minor.toString(),
   net_minor: t.net_minor.toString(),
 });

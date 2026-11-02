@@ -6,8 +6,8 @@
 --   · the import is ONE transaction, idempotent by file hash: a second call with
 --     the same file writes nothing and returns the original import;
 --   · the invariants that must never be false are enforced by the database even
---     against a buggy caller: a line's allocations sum to the line EXACTLY;
---     payable + retained = share; no mixed currencies; the sheet is the song's
+--     against a buggy caller: a rate payee names its contract, a split payee does not;
+--     the payees of a line are never owed more than the line (the label keeps the rest); no mixed currencies; the sheet is the song's
 --     own; only a signed contract sets a rate; a recoupment never exceeds the
 --     advance or the earnings, never touches a non-recoupable or void advance;
 --   · a refused import leaves nothing behind (rolled back whole);
@@ -143,9 +143,9 @@ LANGUAGE sql AS $$
       jsonb_build_object('line_no', 4, 'gross_minor', '0', 'currency', 'USD', 'income_class', 'master', 'review_reason', 'no_identifier')),
     jsonb_build_array(
       jsonb_build_object('line_no', 2, 'payee_id', 'e2800000-0000-4000-8000-000000000001', 'party_id', 'd1800000-0000-4000-8000-000000000001', 'song_track_id', 'e1800000-0000-4000-8000-000000000001', 'kind', 'master',
-        'sheet_id', 'e3800000-0000-4000-8000-000000000001', 'share_units', 600000, 'share_minor', p_alloc_ara::text, 'rate_units', 1000000, 'payable_minor', p_payable_ara::text, 'retained_minor', (p_alloc_ara - p_payable_ara)::text),
+        'sheet_id', 'e3800000-0000-4000-8000-000000000001', 'basis', 'split', 'units', 600000, 'payable_minor', p_payable_ara::text),
       jsonb_build_object('line_no', 2, 'payee_id', 'e2800000-0000-4000-8000-000000000002', 'party_id', 'd1800000-0000-4000-8000-000000000002', 'song_track_id', 'e1800000-0000-4000-8000-000000000001', 'kind', 'master',
-        'sheet_id', 'e3800000-0000-4000-8000-000000000001', 'share_units', 400000, 'share_minor', p_alloc_bo::text, 'rate_units', 1000000, 'payable_minor', p_alloc_bo::text, 'retained_minor', '0')),
+        'sheet_id', 'e3800000-0000-4000-8000-000000000001', 'basis', 'split', 'units', 400000, 'payable_minor', p_alloc_bo::text)),
     jsonb_build_array(jsonb_build_object('line_no', 2, 'payee_id', 'e2800000-0000-4000-8000-000000000001', 'advance_id', 'e5800000-0000-4000-8000-000000000001', 'amount_minor', '500'));
 $$;
 
@@ -158,8 +158,8 @@ SELECT public.check_eq('import: allocations written', (SELECT count(*)::int FROM
 SELECT public.check_eq('import: recoupment written', (SELECT sum(amount_minor)::int FROM public.earnings_recoupments WHERE org_id = :L), 500);
 SELECT public.check_eq('an allocation takes its artist from its payee',
   (SELECT artist_contact_id FROM public.earnings_allocations WHERE payee_id = :PY1), 'c1800000-0000-4000-8000-0000000000a1'::uuid);
-SELECT public.check_eq('the allocations of the line add up to the line',
-  (SELECT sum(share_minor)::int FROM public.earnings_allocations), 1000);
+SELECT public.check_eq('the payees of the line are owed exactly the line when everyone is on the split',
+  (SELECT sum(payable_minor)::int FROM public.earnings_allocations), 1000);
 
 SET ROLE service_role;
 SELECT public.check_eq('the same file again returns the original import and says it was not created',
@@ -172,12 +172,20 @@ SELECT public.check_eq('...even when another user imports it', (SELECT count(*):
 -- ── Refusals leave nothing behind ───────────────────────────────────────
 
 SET ROLE service_role;
-SELECT public.check_raises('allocations that do not add up to the line are refused',
-  format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, p.allocs, '[]'::jsonb) FROM public.chk_payload(repeat('b', 64), 600, 399, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
+SELECT public.check_raises('payees owed more than the line are refused',
+  format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, p.allocs, '[]'::jsonb) FROM public.chk_payload(repeat('b', 64), 600, 401, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
   'allocation_mismatch');
-SELECT public.check_raises('payable + retained must equal the share',
-  format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, jsonb_set(p.allocs, '{0,retained_minor}', '"5"'), '[]'::jsonb) FROM public.chk_payload(repeat('c', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
-  'sum_check');
+SELECT public.check_raises('a rate payee names its contract; a split payee does not',
+  format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, jsonb_set(p.allocs, '{0,basis}', '"rate"'), '[]'::jsonb) FROM public.chk_payload(repeat('c', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
+  'basis_contract_check');
+SELECT public.check_raises('a payee paid with the opposite sign of the line is refused',
+  format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, jsonb_set(jsonb_set(p.allocs, '{0,payable_minor}', '"-600"'), '{1,payable_minor}', '"1600"'), '[]'::jsonb) FROM public.chk_payload(repeat('c', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
+  'allocation_mismatch');
+BEGIN;
+SET LOCAL ROLE service_role;
+SELECT public.check_eq('a label may keep part of a line: payees owed less than the line are accepted (label retains the rest)',
+  (SELECT public.labelos_earnings_import(:L, :F, p.imp, p.lines, p.allocs, '[]'::jsonb) ->> 'created' FROM public.chk_payload(repeat('d1', 32), 600, 300, 600) p), 'true');
+ROLLBACK;
 SELECT public.check_raises('a recoupment larger than the advance is refused',
   format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, p.allocs, jsonb_build_array(jsonb_build_object('line_no', 2, 'payee_id', %L, 'advance_id', %L, 'amount_minor', '501'))) FROM public.chk_payload(repeat('d', 64), 600, 400, 600) p$$,
     'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002', 'e2800000-0000-4000-8000-000000000001', 'e5800000-0000-4000-8000-000000000001'),
@@ -207,7 +215,7 @@ SELECT public.check_raises('the header must match the lines',
   format($$SELECT public.labelos_earnings_import(%L, %L, jsonb_set(p.imp, '{total_minor}', '"1601"'), p.lines, '[]'::jsonb, '[]'::jsonb) FROM public.chk_payload(repeat('5', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
   'do not add up to the import header');
 SELECT public.check_raises('an allocation that names no line of the import is refused, not dropped',
-  format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, p.allocs || jsonb_build_array(jsonb_build_object('line_no', 99, 'payee_id', 'e2800000-0000-4000-8000-000000000002', 'party_id', 'd1800000-0000-4000-8000-000000000002', 'song_track_id', 'e1800000-0000-4000-8000-000000000001', 'kind', 'master', 'sheet_id', 'e3800000-0000-4000-8000-000000000001', 'share_units', 1, 'share_minor', '0', 'rate_units', 1000000, 'payable_minor', '0', 'retained_minor', '0')), '[]'::jsonb) FROM public.chk_payload(repeat('7', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
+  format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, p.allocs || jsonb_build_array(jsonb_build_object('line_no', 99, 'payee_id', 'e2800000-0000-4000-8000-000000000002', 'party_id', 'd1800000-0000-4000-8000-000000000002', 'song_track_id', 'e1800000-0000-4000-8000-000000000001', 'kind', 'master', 'sheet_id', 'e3800000-0000-4000-8000-000000000001', 'basis', 'split', 'units', 1, 'payable_minor', '0')), '[]'::jsonb) FROM public.chk_payload(repeat('7', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
   'names a line that is not in this import');
 SELECT public.check_raises('a line with no review reason and no allocation is refused',
   format($$SELECT public.labelos_earnings_import(%L, %L, p.imp, p.lines, '[]'::jsonb, '[]'::jsonb) FROM public.chk_payload(repeat('8', 64), 600, 400, 600) p$$, 'b1800000-0000-4000-8000-000000000001', 'a1800000-0000-4000-8000-000000000002'),
@@ -245,16 +253,11 @@ SELECT public.check_raises('a line that is not waiting cannot be resolved again'
 SELECT public.labelos_earnings_resolve(:L, (SELECT id FROM public.earnings_imports LIMIT 1),
   jsonb_build_array(jsonb_build_object('line_id', (SELECT id FROM public.earnings_lines WHERE line_no = 3), 'track_id', :T3, 'song_track_id', :T3, 'review_reason', NULL)),
   jsonb_build_array(jsonb_build_object('line_id', (SELECT id FROM public.earnings_lines WHERE line_no = 3), 'payee_id', :PY2, 'party_id', :P2, 'song_track_id', :T3, 'kind', 'master',
-    'sheet_id', 'e3800000-0000-4000-8000-000000000003', 'share_units', 1000000, 'share_minor', '600', 'rate_units', 1000000, 'payable_minor', '600', 'retained_minor', '0')),
+    'sheet_id', 'e3800000-0000-4000-8000-000000000003', 'basis', 'split', 'units', 1000000, 'payable_minor', '600')),
   '[]'::jsonb);
 RESET ROLE;
 SELECT public.check_eq('the waiting line is now allocated and no longer waiting',
-  (SELECT (SELECT count(*) FROM public.earnings_lines WHERE line_no = 3 AND review_reason IS NULL) + (SELECT count(*) FROM public.earnings_allocations WHERE payee_id = :PY2 AND share_minor = 600))::int, 2);
-SELECT public.check_raises('a payable above the share is refused by the sign rule: a positive share with a negative payable',
-  format($$INSERT INTO public.earnings_allocations (org_id, import_id, line_id, payee_id, party_id, song_track_id, kind, sheet_id, share_units, share_minor, payable_minor, retained_minor, currency)
-    SELECT %L, import_id, id, %L, %L, %L, 'master', %L, 1000000, 100, -50, 150, 'USD' FROM public.earnings_lines WHERE line_no = 4$$,
-    'b1800000-0000-4000-8000-000000000001', 'e2800000-0000-4000-8000-000000000002', 'd1800000-0000-4000-8000-000000000002', 'e1800000-0000-4000-8000-000000000002', 'e3800000-0000-4000-8000-000000000002'),
-  'sign_check');
+  (SELECT (SELECT count(*) FROM public.earnings_lines WHERE line_no = 3 AND review_reason IS NULL) + (SELECT count(*) FROM public.earnings_allocations WHERE payee_id = :PY2 AND payable_minor = 600))::int, 2);
 
 -- ── Who can call the write functions or write rows ──────────────────────
 

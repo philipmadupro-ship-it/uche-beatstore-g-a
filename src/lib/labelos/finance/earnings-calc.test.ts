@@ -8,9 +8,9 @@ import {
   type AdvanceFact, type AllocFacts, type ContractFact, type MatchFacts, type SheetFact,
 } from './earnings-calc';
 
-const S1 = 'song-1', S2 = 'song-2-no-sheet', S3 = 'song-3-eur', S4 = 'song-4-bad-split', S5 = 'song-5-no-payee';
-const R1 = 'rec-1', R2 = 'rec-2', R3 = 'rec-3', R4 = 'rec-4', R5 = 'rec-5', RDUP1 = 'rec-dup-a', RDUP2 = 'rec-dup-b', RORPHAN = 'rec-orphan';
-const ARA = 'party-ara', PAT = 'party-pat', BO = 'party-bo', EUROS = 'party-euro', NOBODY = 'party-nobody';
+const S1 = 'song-1', S2 = 'song-2-no-sheet', S3 = 'song-3-eur', S4 = 'song-4-bad-split', S5 = 'song-5-no-payee', S6 = 'song-6-over', S7 = 'song-7-mixed';
+const R1 = 'rec-1', R2 = 'rec-2', R3 = 'rec-3', R4 = 'rec-4', R5 = 'rec-5', R6 = 'rec-6', R7 = 'rec-7', RDUP1 = 'rec-dup-a', RDUP2 = 'rec-dup-b', RORPHAN = 'rec-orphan';
+const ARA = 'party-ara', PAT = 'party-pat', BO = 'party-bo', EUROS = 'party-euro', NOBODY = 'party-nobody', MAIN = 'party-main';
 const Y = (party: string) => `payee-${party}`;
 
 const sheet = (id: string, songId: string, lines: [string, number][], over: Partial<SheetFact> = {}): SheetFact => ({
@@ -19,11 +19,11 @@ const sheet = (id: string, songId: string, lines: [string, number][], over: Part
 
 const match: MatchFacts = {
   recordingsByIsrc: new Map([
-    ['USABC2600001', [R1]], ['USABC2600002', [R2]], ['USABC2600003', [R3]], ['USABC2600004', [R4]], ['USABC2600005', [R5]],
+    ['USABC2600001', [R1]], ['USABC2600002', [R2]], ['USABC2600003', [R3]], ['USABC2600004', [R4]], ['USABC2600005', [R5]], ['USABC2600006', [R6]], ['USABC2600007', [R7]],
     ['USABC2600099', [RDUP1, RDUP2]], ['USABC2600098', [RORPHAN]],
   ]),
   recordingsByUpc: new Map([['012345678905', [R1]], ['012345678912', [R1, R2]]]),
-  songsOf: new Map([[R1, [S1]], [R2, [S2]], [R3, [S3]], [R4, [S4]], [R5, [S5]], [RDUP1, [S1]], [RDUP2, [S1]]]),
+  songsOf: new Map([[R1, [S1]], [R2, [S2]], [R3, [S3]], [R4, [S4]], [R5, [S5]], [R6, [S6]], [R7, [S7]], [RDUP1, [S1]], [RDUP2, [S1]]]),
 };
 
 const patContract: ContractFact = {
@@ -36,14 +36,23 @@ const alloc: AllocFacts = {
     [`${S3}:master`, [sheet('sheet-3', S3, [[ARA, 600000], [EUROS, 400000]])]],
     [`${S4}:master`, [sheet('sheet-4', S4, [[ARA, 500000], [BO, 400000]])]],
     [`${S5}:master`, [sheet('sheet-5', S5, [[ARA, 500000], [NOBODY, 500000]])]],
+    // S6: Ara has 100 % of the sheet AND the main artist has a 40 % contract on this song (not on the sheet): 140 % → review.
+    [`${S6}:master`, [sheet('sheet-6', S6, [[ARA, 1000000]])]],
+    // S7: Bo on the split, Ara on a contract rate (she is on the sheet at 70 %, the contract replaces it): 30 % + 40 % → paid, label keeps 30 %.
+    [`${S7}:master`, [sheet('sheet-7', S7, [[ARA, 700000], [BO, 300000]])]],
   ]),
   payeeByParty: new Map([
     [ARA, { id: Y(ARA), partyId: ARA, currency: 'USD', status: 'active', artistContactId: 'contact-ara' }],
     [PAT, { id: Y(PAT), partyId: PAT, currency: 'USD', status: 'active', artistContactId: null }],
     [BO, { id: Y(BO), partyId: BO, currency: 'USD', status: 'active', artistContactId: 'contact-bo' }],
+    [MAIN, { id: Y(MAIN), partyId: MAIN, currency: 'USD', status: 'active', artistContactId: null }],
     [EUROS, { id: Y(EUROS), partyId: EUROS, currency: 'EUR', status: 'active', artistContactId: null }],
   ]),
-  contracts: new Map([[PAT, [patContract]]]),
+  contracts: new Map<string, ContractFact[]>([
+    [PAT, [patContract]],
+    [MAIN, [{ ...patContract, id: 'contract-main', partyId: MAIN, partyRole: 'artist', trackId: S6, rateUnits: 400000 }]],
+    [ARA, [{ ...patContract, id: 'contract-ara-s7', partyId: ARA, partyRole: 'artist', trackId: S7, rateUnits: 400000 }]],
+  ]),
   releasesOfSong: new Map(),
 };
 
@@ -70,20 +79,77 @@ describe('matchLine', () => {
 });
 
 describe('allocateLine', () => {
-  it('splits by the sheet exactly (largest remainder, ties to the earlier row) and applies a signed contract rate half to even', () => {
+  const row = (r: ReturnType<typeof allocateLine>, party: string) => (r.ok ? r.rows.find((x) => x.partyId === party) : undefined);
+
+  it('SPLIT: gross × share by largest remainder; a contract-rate payee is paid gross × rate INSTEAD of their share; the rest is the label’s', () => {
     const r = allocateLine(line(2, 'x', 10001), 'USD', S1, alloc);
-    expect(r.ok && r.rows.map((x) => [x.partyId, x.shareMinor, x.payableMinor, x.retainedMinor])).toEqual([
-      [ARA, BigInt(5000), BigInt(5000), BigInt(0)],
-      [PAT, BigInt(3334), BigInt(617), BigInt(2717)], // 3334 × 18.5 % = 616.79 → 617
-      [BO, BigInt(1667), BigInt(1667), BigInt(0)],
+    expect(r.ok && r.rows.map((x) => [x.partyId, x.basis, x.units, x.payableMinor])).toEqual([
+      [ARA, 'split', 500000, BigInt(5000)],
+      [PAT, 'rate', 185000, BigInt(1850)], // 10001 × 18.5 % = 1850.185 → 1850 (NOT 3334 × 18.5 %: no double reduction)
+      [BO, 'split', 166667, BigInt(1667)],
     ]);
-    expect(r.ok && r.rows.reduce((s, x) => s + x.shareMinor, BigInt(0))).toBe(BigInt(10001));
+    expect(r.ok && r.retainedMinor).toBe(BigInt(10001 - 5000 - 1850 - 1667));
+    expect(row(r, PAT)?.contractId).toBe('contract-pat');
+    expect(row(r, ARA)?.contractId).toBeNull();
   });
 
-  it('allocates a negative line as the mirror of the positive one', () => {
+  it('SPLIT-ONLY: with no contract the payees add up to the line exactly and the label keeps nothing', () => {
+    const noContracts: AllocFacts = { ...alloc, contracts: new Map() };
+    const r = allocateLine(line(2, 'x', 10001), 'USD', S1, noContracts);
+    expect(r.ok && r.rows.map((x) => x.payableMinor)).toEqual([BigInt(5000), BigInt(3334), BigInt(1667)]);
+    expect(r.ok && r.retainedMinor).toBe(BigInt(0));
+  });
+
+  it('RATE-ONLY: a payee alone on the sheet with a 40 % contract is paid 40 %; the label keeps 60 %', () => {
+    const solo: AllocFacts = { ...alloc, sheets: new Map([[`${S7}:master`, [sheet('s', S7, [[ARA, 1000000]])]]]) };
+    const r = allocateLine(line(2, 'x', 1000), 'USD', S7, solo);
+    expect(r.ok && r.rows.map((x) => [x.partyId, x.basis, x.payableMinor])).toEqual([[ARA, 'rate', BigInt(400)]]);
+    expect(r.ok && r.retainedMinor).toBe(BigInt(600));
+  });
+
+  it('MIXED: one payee on a contract rate, the other on the split (50 % of the master and a 40 % royalty is 40 %, not 28 %)', () => {
+    const r = allocateLine(line(2, 'x', 1000), 'USD', S7, alloc);
+    expect(r.ok && r.rows.map((x) => [x.partyId, x.basis, x.units, x.payableMinor])).toEqual([
+      [ARA, 'rate', 400000, BigInt(400)],
+      [BO, 'split', 300000, BigInt(300)],
+    ]);
+    expect(r.ok && r.retainedMinor).toBe(BigInt(300));
+  });
+
+  it('OVER 100 %: rates and splits adding up to more than the line pay NOTHING — the line waits as terms_exceed_gross', () => {
+    // Ara 100 % of the sheet + MAIN (not on the sheet) 40 % by a song-level contract.
+    expect(allocateLine(line(2, 'x', 1000), 'USD', S6, alloc)).toEqual({ ok: false, reason: 'terms_exceed_gross' });
+    // Exactly 100 % is fine.
+    const exact: AllocFacts = { ...alloc, contracts: new Map([[MAIN, [{ ...patContract, id: 'c', partyId: MAIN, partyRole: 'artist', trackId: S6, rateUnits: 0 }]]]) };
+    expect(allocateLine(line(2, 'x', 1000), 'USD', S6, exact)).toMatchObject({ ok: true });
+  });
+
+  it('a contract-only payee (song-level, not on the sheet) is paid by rate on top of the sheet; an artist-level deal never reaches a song they are not on', () => {
+    const c = (id: string, party: string, over: Partial<ContractFact>): ContractFact => ({ ...patContract, id, partyId: party, partyRole: 'artist', ...over });
+    // Sheet Ara 80 / Bo 20; Ara's own 50 % contract REPLACES her 80 %; MAIN (not on the sheet) has a 20 % contract on the song → 50 + 20 + 20 = 90 %.
+    const only: AllocFacts = {
+      ...alloc,
+      sheets: new Map([[`${S6}:master`, [sheet('sheet-6b', S6, [[ARA, 800000], [BO, 200000]])]]]),
+      contracts: new Map([[ARA, [c('ca', ARA, { trackId: S6, rateUnits: 500000 })]], [MAIN, [c('cm', MAIN, { trackId: S6, rateUnits: 200000 })]]]),
+    };
+    const r = allocateLine(line(2, 'x', 1000), 'USD', S6, only);
+    expect(r.ok && r.rows.map((x) => [x.partyId, x.basis, x.payableMinor])).toEqual([[ARA, 'rate', BigInt(500)], [BO, 'split', BigInt(200)], [MAIN, 'rate', BigInt(200)]]);
+    expect(r.ok && r.retainedMinor).toBe(BigInt(100));
+    // An artist-level deal for MAIN (no song, no release) does not pay MAIN on a song whose sheet they are not on.
+    const artistDeal: AllocFacts = {
+      ...alloc,
+      sheets: only.sheets,
+      contracts: new Map([[MAIN, [c('cd', MAIN, { trackId: null, artistContactId: 'x', rateUnits: 500000 })]]]),
+      payeeByParty: new Map([...alloc.payeeByParty, [MAIN, { id: Y(MAIN), partyId: MAIN, currency: 'USD', status: 'active', artistContactId: 'x' }]]),
+    };
+    const d = allocateLine(line(2, 'x', 1000), 'USD', S6, artistDeal);
+    expect(d.ok && d.rows.map((x) => x.partyId)).toEqual([ARA, BO]);
+  });
+
+  it('allocates a negative line as the mirror of the positive one (a clawback)', () => {
     const r = allocateLine(line(2, 'x', -200), 'USD', S1, alloc);
-    expect(r.ok && r.rows.map((x) => x.shareMinor)).toEqual([BigInt(-100), BigInt(-67), BigInt(-33)]);
-    expect(r.ok && r.rows[1].payableMinor).toBe(BigInt(-12)); // −67 × 18.5 % = −12.395
+    expect(r.ok && r.rows.map((x) => x.payableMinor)).toEqual([BigInt(-100), BigInt(-37), BigInt(-33)]); // −200 × 18.5 % = −37
+    expect(r.ok && r.retainedMinor).toBe(BigInt(-30));
   });
 
   it('puts the WHOLE line in review rather than guess', () => {
@@ -96,7 +162,7 @@ describe('allocateLine', () => {
   });
 
   it('ignores a draft or superseded sheet and refuses two live ones', () => {
-    const only = (s: SheetFact[]): AllocFacts => ({ ...alloc, sheets: new Map([[`${S1}:master`, s]]) });
+    const only = (s: SheetFact[]): AllocFacts => ({ ...alloc, contracts: new Map(), sheets: new Map([[`${S1}:master`, s]]) });
     const base = sheet('a', S1, [[ARA, 1000000]]);
     expect(allocateLine(line(2, 'x', 100), 'USD', S1, only([{ ...base, status: 'draft' }]))).toEqual({ ok: false, reason: 'no_sheet' });
     expect(allocateLine(line(2, 'x', 100), 'USD', S1, only([{ ...base, status: 'superseded' }, { ...base, id: 'b', status: 'circulated' }]))).toMatchObject({ ok: true });
@@ -104,14 +170,14 @@ describe('allocateLine', () => {
   });
 
   it('merges a party on two rows into one allocation', () => {
-    const two: AllocFacts = { ...alloc, sheets: new Map([[`${S1}:master`, [sheet('s', S1, [[ARA, 250000], [BO, 500000], [ARA, 250000]])]]]) };
+    const two: AllocFacts = { ...alloc, contracts: new Map(), sheets: new Map([[`${S1}:master`, [sheet('s', S1, [[ARA, 250000], [BO, 500000], [ARA, 250000]])]]]) };
     const r = allocateLine(line(2, 'x', 1000), 'USD', S1, two);
-    expect(r.ok && r.rows.map((x) => [x.partyId, x.shareMinor, x.shareUnits])).toEqual([[ARA, BigInt(500), 500000], [BO, BigInt(500), 500000]]);
+    expect(r.ok && r.rows.map((x) => [x.partyId, x.payableMinor, x.units])).toEqual([[ARA, BigInt(500), 500000], [BO, BigInt(500), 500000]]);
   });
 });
 
 describe('contract rate choice', () => {
-  const ctx = { songId: S1, releaseIds: new Set(['rel-1']), payeeArtistId: 'contact-ara', periodStart: '2026-09-01', periodEnd: '2026-09-30' };
+  const ctx = { songId: S1, releaseIds: new Set(['rel-1']), payeeArtistId: 'contact-ara', onSheet: true, periodStart: '2026-09-01', periodEnd: '2026-09-30' };
   const c = (over: Partial<ContractFact>): ContractFact => ({ ...patContract, ...over });
 
   it('prefers song over release over artist, and refuses two different rates at the best level', () => {
@@ -123,6 +189,11 @@ describe('contract rate choice', () => {
     expect(chooseRate([artistWide], ctx)).toEqual({ kind: 'rate', contractId: 'c-a', rateUnits: 100000 });
     expect(chooseRate([song, c({ id: 'c-s2', rateUnits: 210000 })], ctx)).toEqual({ kind: 'ambiguous' });
     expect(chooseRate([c({ id: 'z', rateUnits: 200000 }), song], ctx)).toEqual({ kind: 'rate', contractId: 'c-s', rateUnits: 200000 });
+  });
+
+  it('an artist-level deal needs the payee on the sheet', () => {
+    const artistWide = c({ id: 'c-a', trackId: null, artistContactId: 'contact-ara', rateUnits: 100000 });
+    expect(chooseRate([artistWide], { ...ctx, onSheet: false })).toEqual({ kind: 'none' });
   });
 
   it('ignores the label side, other songs, other artists and contracts out of term', () => {
@@ -185,6 +256,8 @@ const CSV = [
   '2026-10-01,2026-09,Spotify,Ara,Chargeback,USABC2600001,,0,100,Song,US,0,-2.00',
   '2026-10-01,2026-09,Spotify,Ara,Euro Split,US-ABC-26-00003,,2,100,Song,US,0,4.00',
   '2026-10-01,2026-09,Spotify,Ara,No Code,,,2,100,Song,US,0,0.50',
+  '2026-10-01,2026-09,Spotify,Ara,Over,US-ABC-26-00006,,2,100,Song,US,0,10.00',
+  '2026-10-01,2026-09,Spotify,Ara,Mixed,US-ABC-26-00007,,2,100,Song,US,0,10.00',
 ].join('\n');
 
 const jsonSafe = (v: unknown) => JSON.parse(JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)));
@@ -204,20 +277,27 @@ describe('golden: CSV → lines → allocation → recoupment', () => {
 
   it('hand-derived key numbers', () => {
     expect(run.lines.map((l) => [l.lineNo, l.reviewReason])).toEqual([
-      [2, null], [3, null], [4, 'no_sheet'], [5, 'no_match'], [6, null], [7, 'currency_mismatch'], [8, 'no_identifier'],
+      [2, null], [3, null], [4, 'no_sheet'], [5, 'no_match'], [6, null], [7, 'currency_mismatch'], [8, 'no_identifier'], [9, 'terms_exceed_gross'], [10, null],
     ]);
-    const share = (lineNo: number, p: string) => run.allocations.find((a) => a.lineNo === lineNo && a.partyId === p)?.shareMinor;
-    expect([share(2, ARA), share(2, PAT), share(2, BO)]).toEqual([BigInt(5000), BigInt(3334), BigInt(1667)]);
-    expect([share(3, ARA), share(3, PAT), share(3, BO)]).toEqual([BigInt(50), BigInt(33), BigInt(17)]);
-    expect([share(6, ARA), share(6, PAT), share(6, BO)]).toEqual([BigInt(-100), BigInt(-67), BigInt(-33)]);
+    const paid = (lineNo: number, p: string) => run.allocations.find((a) => a.lineNo === lineNo && a.partyId === p)?.payableMinor;
+    // Line 2 (100.01): Ara 70 % split, Pat 18.5 % RATE (not split × rate), Bo split; the label keeps the rest.
+    expect([paid(2, ARA), paid(2, PAT), paid(2, BO)]).toEqual([BigInt(5000), BigInt(1850), BigInt(1667)]);
+    // Line 3 (1.00): 50 / 18.5 → 18 (half to even) / 17.
+    expect([paid(3, ARA), paid(3, PAT), paid(3, BO)]).toEqual([BigInt(50), BigInt(18), BigInt(17)]);
+    // Line 6 (−2.00): the mirror.
+    expect([paid(6, ARA), paid(6, PAT), paid(6, BO)]).toEqual([BigInt(-100), BigInt(-37), BigInt(-33)]);
+    // Line 10 (10.00, mixed): Ara by 40 % contract, Bo by 30 % split.
+    expect([paid(10, ARA), paid(10, BO)]).toEqual([BigInt(400), BigInt(300)]);
     // Ara: line 2 payable 5000 consumes the older advance (5000) exactly; line 3's 50 comes from the newer (3000 → 2950 left).
     expect(run.recoups.map((r) => [r.lineNo, r.payeeId, r.advanceId, Number(r.amountMinor)])).toEqual([
-      [2, Y(ARA), 'adv-1', 5000], [2, Y(BO), 'adv-bo', 10], [3, Y(ARA), 'adv-2', 50],
+      [2, Y(ARA), 'adv-1', 5000], [2, Y(BO), 'adv-bo', 10], [3, Y(ARA), 'adv-2', 50], [10, Y(ARA), 'adv-2', 400],
     ]);
-    // Conservation: allocated shares of every allocated line add up to the line.
+    // Never pay more than was received, and what is left is the label's.
     for (const l of built.lines) {
-      const rows = run.allocations.filter((a) => a.lineNo === l.lineNo);
-      if (rows.length) expect(rows.reduce((s, a) => s + a.shareMinor, BigInt(0))).toBe(l.grossMinor);
+      const rows = run.allocations.filter((x) => x.lineNo === l.lineNo);
+      const total = rows.reduce((sum, x) => sum + x.payableMinor, BigInt(0));
+      if (rows.length) expect(total <= l.grossMinor === l.grossMinor >= BigInt(0) || total === l.grossMinor).toBe(true);
+      if (rows.length && l.grossMinor > BigInt(0)) expect(total <= l.grossMinor).toBe(true);
     }
     // Never negative after recoupment.
     for (const a of run.allocations) {
