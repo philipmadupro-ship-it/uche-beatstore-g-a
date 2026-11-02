@@ -188,8 +188,8 @@ function Timeline({ orgId, releaseId, items, canWrite, busy, act }: { orgId: str
                 >
                   {done && <Check size={11} aria-hidden="true" />}
                 </button>
-                <span className={`${LABEL} w-16 shrink-0`}>{PHASE_LABEL[i.phase as PlanPhase] ?? i.phase}</span>
-                <div className={cn('min-w-0 flex-1 text-[13px]', done ? 'text-white/40 line-through' : 'text-white/80')}>
+                <span className={`${LABEL} w-20 shrink-0`}>{PHASE_LABEL[i.phase as PlanPhase] ?? i.phase}</span>
+                <div className={cn('min-w-0 basis-full text-[13px] sm:flex-1 sm:basis-0', done ? 'text-white/40 line-through' : 'text-white/80')}>
                   {canWrite ? (
                     <InlineText value={i.title} label="Milestone title" maxLength={PLAN_LIMITS.title} onSave={(next) => act(() => patchMilestone(orgId, releaseId, i.id, { title: next }))} className="text-[13px]" inputClassName="text-[13px]" />
                   ) : (
@@ -343,10 +343,10 @@ function Budget({ orgId, releaseId, budget, canWrite, busy, act }: { orgId: stri
         <ul className="divide-y divide-white/10">
           {budget.lines.map((l) => (
             <li key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-testid={`budget-${l.id}`}>
-              <div className="min-w-0 flex-1 text-[13px] text-white/80">
+              <div className="min-w-0 basis-full text-[13px] text-white/80 sm:flex-1 sm:basis-0">
                 {canWrite ? <InlineText value={l.label} label="Budget line" maxLength={PLAN_LIMITS.label} onSave={(next) => act(() => patchBudgetLine(orgId, releaseId, l.id, { label: next }))} className="text-[13px]" inputClassName="text-[13px]" /> : l.label}
               </div>
-              <span className="font-mono text-[12px] text-white/80" data-testid={`budget-amount-${l.id}`}>{amountText(l.amountMinor, l.currency)}</span>
+              <span className="font-mono text-[11px] text-white/80" data-testid={`budget-amount-${l.id}`}>{amountText(l.amountMinor, l.currency)}</span>
               {canWrite ? (
                 <Dropdown<BudgetStatus> value={l.status as BudgetStatus} aria-label={`Status of ${l.label}`} options={BUDGET_STATUSES.map((b) => ({ value: b, label: b[0].toUpperCase() + b.slice(1) }))} onChange={(next) => void act(() => patchBudgetLine(orgId, releaseId, l.id, { status: next }))} />
               ) : (
