@@ -136,6 +136,9 @@ function labelOsTables(): string[] {
     'statements',
     'statement_lines',
     'payments',
+    // 180_labelos_earnings.sql (LABEL-62): allocations and recoupments of imported earnings
+    'earnings_allocations',
+    'earnings_recoupments',
     // 178_labelos_contract_signing.sql (LABEL-60): service-role only behind a deny-all policy; signatures are append-only.
     'contract_signers',
     'contract_signatures',

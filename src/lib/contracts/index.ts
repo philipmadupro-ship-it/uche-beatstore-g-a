@@ -2061,6 +2061,61 @@ export const OrgPayeeCreateBodySchema = z
   .strict();
 export type OrgPayeeCreateBody = z.infer<typeof OrgPayeeCreateBodySchema>;
 
+// ── Earnings import (LABEL-62) ──────────────────────────────────────────
+
+const EarningsMappingSchema = z
+  .object({
+    amount: z.string().trim().min(1).max(120),
+    isrc: z.string().trim().min(1).max(120).optional(),
+    upc: z.string().trim().min(1).max(120).optional(),
+    title: z.string().trim().min(1).max(120).optional(),
+    store: z.string().trim().min(1).max(120).optional(),
+    territory: z.string().trim().min(1).max(120).optional(),
+    units: z.string().trim().min(1).max(120).optional(),
+    currency: z.string().trim().min(1).max(120).optional(),
+    period: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict();
+
+/**
+ * The text fields that travel with the file in a multipart upload (the file itself is the exact bytes the
+ * SHA-256 is taken over). Every value arrives as a string.
+ */
+export const OrgEarningsImportFieldsSchema = z
+  .object({
+    preset: z.enum(['auto', 'distrokid', 'tunecore', 'cdbaby', 'generic']).default('auto'),
+    currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine((c) => isFinanceCurrency(c), 'Unknown currency')
+      .optional(),
+    income_class: z.enum(['master', 'publishing']).default('master'),
+    period_id: z.string().uuid().optional(),
+    round_fractional: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    // Generic mapper only: JSON of { amount, isrc?, upc?, … } naming header texts.
+    mapping: z
+      .string()
+      .max(2000)
+      .optional()
+      .transform((v, ctx) => {
+        if (v === undefined || v === '') return undefined;
+        try {
+          const parsed = EarningsMappingSchema.safeParse(JSON.parse(v));
+          if (parsed.success) return parsed.data;
+        } catch {
+          /* fall through */
+        }
+        ctx.addIssue({ code: 'custom', message: 'The column mapping is not valid' });
+        return z.NEVER;
+      }),
+  })
+  .strict();
+export type OrgEarningsImportFields = z.infer<typeof OrgEarningsImportFieldsSchema>;
+
 /**
  * An amount sent by a client, in minor units: a whole number JSON can carry exactly (a number past 2^53 has
  * already been rounded by the parser, so it is refused — a 400, never silently a different amount) or a digit
