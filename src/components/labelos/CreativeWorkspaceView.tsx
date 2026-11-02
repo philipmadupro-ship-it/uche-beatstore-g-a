@@ -35,7 +35,7 @@ function Stat({ id, label, value, hint }: { id: string; label: string; value: nu
   return (
     <div className={CARD} data-testid={`creative-stat-${id}`}>
       <p className={LABEL}>{label}</p>
-      <p className="mt-2 font-heading text-[28px] leading-none text-white">{value}</p>
+      <p className="mt-2 font-heading text-[28px] leading-none text-white" data-testid={`creative-stat-${id}-value`}>{value}</p>
       {hint && <p className="mt-2 text-[11px] text-white/50">{hint}</p>}
     </div>
   );
@@ -45,7 +45,7 @@ function ArtistTile({ a, orgSlug, canReview, canWrite }: { a: ArtistCard; orgSlu
   const stages = SONG_STAGES.filter((s) => (a.stages.byStage[s] ?? 0) > 0);
   return (
     <li className={CARD} data-testid={`creative-artist-${a.id}`}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
           <h3 className="truncate text-[15px] text-white">{a.name}</h3>
           <p className={`${LABEL} mt-1`}>
