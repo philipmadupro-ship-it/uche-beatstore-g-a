@@ -18,7 +18,7 @@ import type { PartyRole } from './contracts/types';
 import { inChunks, pageAll, ReadError } from './paged-read';
 import type { ArtistScope } from './artist-scope';
 import type { AdvanceFact, AllocFacts, ContractFact, MatchFacts, PayeeFact, ReviewReason, RunResult, SheetFact } from './finance/earnings-calc';
-import { computeEarnings, rateIncomeClass } from './finance/earnings-calc';
+import { computeEarnings, rateIncomeClass, receivesRate } from './finance/earnings-calc';
 import type { ParsedLine } from './finance/earnings-import';
 import { minorFromDb } from './finance/money';
 
@@ -171,9 +171,8 @@ type RawContract = {
  * every signer has signed that document; this re-checks it, so a stale
  * signature never sets a rate).
  */
-async function loadContractFacts(admin: AdminClient, orgId: string, partyIds: ReadonlySet<string>): Promise<ReadonlyMap<string, ContractFact[]>> {
+async function loadContractFacts(admin: AdminClient, orgId: string): Promise<ReadonlyMap<string, ContractFact[]>> {
   const out = new Map<string, ContractFact[]>();
-  if (partyIds.size === 0) return out;
   let contracts: RawContract[];
   try {
     contracts = await guarded(() =>
@@ -228,12 +227,13 @@ async function loadContractFacts(admin: AdminClient, orgId: string, partyIds: Re
     if (!progress.complete) continue;
     const rateUnits = parseShare(c.fields?.royalty_rate as string) as number;
     for (const l of mine) {
-      if (!partyIds.has(l.party_id)) continue;
+      // Only the party in the contract type's RECEIVING role gets its rate; everyone else on it keeps their split share.
+      if (!receivesRate(c.type, l.role)) continue;
       out.set(l.party_id, [
         ...(out.get(l.party_id) ?? []),
         {
           id: c.id, partyId: l.party_id, partyRole: l.role, trackId: c.track_id, releaseId: c.release_id, artistContactId: c.artist_contact_id,
-          rateUnits, incomeClass: rateIncomeClass(c.type), effectiveDate: c.effective_date, termMonths: c.term_months,
+          rateUnits, contractType: c.type, effectiveDate: c.effective_date, termMonths: c.term_months,
         },
       ]);
     }
@@ -283,8 +283,8 @@ export async function loadAllocFacts(admin: AdminClient, orgId: string, songIds:
     sheets.set(key, [...(sheets.get(key) ?? []), { id: s.id, songId: s.track_id, kind: s.kind, status: s.status, lines }]);
   }
 
-  // Every payee can have a rated contract — including one who is on no sheet of this import (a contract-only payee).
-  const contracts = await loadContractFacts(admin, orgId, new Set(payeeByParty.keys()));
+  // Every party who RECEIVES a rate by a signed contract — payee record or not (a receiver with no payee sends the line to review).
+  const contracts = await loadContractFacts(admin, orgId);
 
   const releaseItems = await guarded(() =>
     inChunks<{ release_id: string; song_track_id: string }>(
@@ -300,8 +300,9 @@ export async function loadAllocFacts(admin: AdminClient, orgId: string, songIds:
 }
 
 /**
- * song id → the roster contacts the song is the work of: the inbox artist and the linked contacts of every
- * project of this org the song sits in (the same reach `orgProjectIdsInScope` uses for a member's artist scope).
+ * song id → the roster contacts the song is the work of: ONLY the inbox artist of an org project the song sits in
+ * (`inbox_for_contact_id`, one Inbox per artist, LABEL-14). Linked contacts (a feature, an A&R contact, a second
+ * artist on a joint project) are NOT the song's artist, so their artist-level deals never reach it.
  */
 export async function loadSongArtists(admin: AdminClient, orgId: string, songIds: readonly string[]): Promise<Map<string, Set<string>>> {
   const out = new Map<string, Set<string>>();
@@ -313,35 +314,19 @@ export async function loadSongArtists(admin: AdminClient, orgId: string, songIds
       'song placements',
     ),
   );
-  const projectIds = uniq(placements.map((p) => p.project_id));
   const projects = await guarded(() =>
     inChunks<{ id: string; inbox_for_contact_id: string | null }>(
-      projectIds,
+      uniq(placements.map((p) => p.project_id)),
       (part, from, to) => admin.from('projects').select('id, inbox_for_contact_id').eq('org_id', orgId).in('id', part).order('id').range(from, to),
       'song projects',
     ),
   );
-  const linked = await guarded(() =>
-    inChunks<{ project_id: string; contact_id: string | null }>(
-      projects.map((p) => p.id),
-      (part, from, to) => admin.from('project_contacts').select('project_id, contact_id').in('project_id', part).order('project_id').order('contact_id').range(from, to),
-      'song project contacts',
-    ),
-  );
-  const contactsOf = new Map<string, Set<string>>();
-  const add = (projectId: string, contact: string | null) => {
-    if (!contact) return;
-    const set = contactsOf.get(projectId) ?? new Set<string>();
-    set.add(contact);
-    contactsOf.set(projectId, set);
-  };
-  for (const p of projects) add(p.id, p.inbox_for_contact_id);
-  for (const l of linked) add(l.project_id, l.contact_id);
-  const inOrg = new Set(projects.map((p) => p.id));
+  const inboxOf = new Map(projects.map((p) => [p.id, p.inbox_for_contact_id]));
   for (const pl of placements) {
-    if (!inOrg.has(pl.project_id)) continue;
+    const artist = inboxOf.get(pl.project_id);
+    if (!artist) continue;
     const set = out.get(pl.track_id) ?? new Set<string>();
-    for (const c of contactsOf.get(pl.project_id) ?? []) set.add(c);
+    set.add(artist);
     out.set(pl.track_id, set);
   }
   return out;

@@ -26,17 +26,26 @@
  *    NOT applied to that payee. "Covers the song": the contract is for this song,
  *    or for a release that contains it (a payee need not be on the sheet), or it
  *    is an artist-level deal (no song, no release) and the contract's artist is
- *    the SONG's artist (inbox or linked contact of a project the song sits in) —
- *    a feature on someone else's song keeps their split share. Most specific
+ *    the SONG's own artist — the roster artist whose Inbox project the song sits in
+ *    (`inbox_for_contact_id`, LABEL-14). A feature on someone else's song, or an
+ *    A&R contact linked to a project, keeps their split share, and a project with
+ *    two artists never cross-applies their deals. Most specific
  *    level wins (song > release > artist); two contracts at the best level with
  *    DIFFERENT rates → `contract_ambiguous` (never a guess); equal rates → the
  *    lowest contract id.
- *    INCOME CLASS: a rate applies only to lines of the class its contract type
- *    carries (`rateIncomeClass`): recording, feature, producer, beat licence,
- *    distribution and 360 → `master` income; co-writing / co-publishing →
- *    `publishing` income; every other type (licence, management, NDA, …) sets no
- *    rate at all. A master rate never touches a publishing line, where that
- *    payee keeps their composition share.
+ *    WHO RECEIVES AND WHAT FOR (`RATE_TERMS`, one table): a contract's rate goes
+ *    ONLY to the party in its receiving role, and only for the income class its
+ *    type carries. recording / 360 → the `artist`; feature → the `featured`
+ *    artist (the primary artist who pays keeps their split share); producer →
+ *    the `producer` (an artist `client` keeps their split share); beat licence
+ *    and distribution → the `licensor` (the rights owner); co-writing /
+ *    co-publishing → a `collaborator` or the `publisher`. Those types are
+ *    `master` income, except co-publishing = `publishing`. Every other type
+ *    (licence, management, NDA, …) sets no rate at all, and every other party
+ *    on a contract keeps their split share. A master rate never touches a
+ *    publishing line, where that payee keeps their composition share.
+ *    A party who receives a rate but has no payee record sends the line to
+ *    review (`no_payee`): it is never silently left with the label.
  *  - SPLIT: every other payee on the song's sheet in force gets gross × their
  *    share. The sheet is the song's CURRENT one (circulated / signed / disputed;
  *    `isLive`) of the line's income class (`master` income → MASTER sheet,
@@ -125,27 +134,34 @@ export type PayeeFact = { id: string; partyId: string; currency: string; status:
 export type ContractFact = {
   id: string;
   partyId: string;
-  /** The party's role on the contract; the label's own side never sets a payee's rate. */
+  /** The party's role on the contract; only the receiving role of the contract's type gets its rate. */
   partyRole: string;
   trackId: string | null;
   releaseId: string | null;
   artistContactId: string | null;
   rateUnits: number;
-  /** The income the rate applies to, from the contract's type (`rateIncomeClass`); null = it applies to nothing. */
-  incomeClass: IncomeClass | null;
+  /** The contract's type: with `partyRole` it decides whether the party receives the rate (`RATE_TERMS`). */
+  contractType: string;
   effectiveDate: string | null;
   termMonths: number | null;
 };
 
-const MASTER_RATE_TYPES: ReadonlySet<string> = new Set(['recording', 'feature', 'producer', 'beat_licence', 'distribution', 'deal_360']);
-const PUBLISHING_RATE_TYPES: ReadonlySet<string> = new Set(['co_publishing']);
+/** Per contract type: the income its royalty rate is for, and the roles on the contract that RECEIVE it. */
+export const RATE_TERMS: Readonly<Record<string, { incomeClass: IncomeClass; roles: readonly string[] }>> = {
+  recording: { incomeClass: 'master', roles: ['artist'] },
+  deal_360: { incomeClass: 'master', roles: ['artist'] },
+  distribution: { incomeClass: 'master', roles: ['licensor'] },
+  feature: { incomeClass: 'master', roles: ['featured'] },
+  producer: { incomeClass: 'master', roles: ['producer'] },
+  beat_licence: { incomeClass: 'master', roles: ['licensor'] },
+  co_publishing: { incomeClass: 'publishing', roles: ['collaborator', 'publisher'] },
+};
 
 /** Which income a contract type's royalty rate is for. Unknown / unrelated types: null (applies to nothing). */
-export function rateIncomeClass(contractType: string): IncomeClass | null {
-  if (MASTER_RATE_TYPES.has(contractType)) return 'master';
-  if (PUBLISHING_RATE_TYPES.has(contractType)) return 'publishing';
-  return null;
-}
+export const rateIncomeClass = (contractType: string): IncomeClass | null => RATE_TERMS[contractType]?.incomeClass ?? null;
+
+/** Does this role, on this contract type, receive the royalty rate? */
+export const receivesRate = (contractType: string, role: string): boolean => RATE_TERMS[contractType]?.roles.includes(role) ?? false;
 
 export type AllocFacts = {
   /** `${songId}:${kind}` → every sheet of that song and kind (only live ones are used). */
@@ -184,8 +200,8 @@ export function chooseRate(
 ): RateChoice {
   const applicable: { c: ContractFact; rank: number }[] = [];
   for (const c of candidates) {
-    if (c.partyRole === 'label') continue;
-    if (c.incomeClass !== ctx.incomeClass) continue;
+    if (!receivesRate(c.contractType, c.partyRole)) continue;
+    if (rateIncomeClass(c.contractType) !== ctx.incomeClass) continue;
     if (!inTerm(c, ctx.periodStart, ctx.periodEnd)) continue;
     if (c.trackId !== null) {
       if (c.trackId === ctx.songId) applicable.push({ c, rank: LEVEL_RANK.song });
@@ -247,25 +263,22 @@ export function allocateLine(
       songId, releaseIds, songArtistIds, incomeClass: line.incomeClass, periodStart: line.periodStart, periodEnd: line.periodEnd,
     });
 
-  // Everyone who could be paid on this line: the sheet's parties, then parties whose signed contract names this song or one of its releases.
+  // Everyone who could be paid on this line: the sheet's parties, then parties who receive a rate by a signed contract that covers this song.
   const extra = [...facts.contracts.keys()].filter((id) => !sheetParties.has(id)).sort();
   const candidates = [...parties.map((p) => p.partyId), ...extra];
   const choices = new Map<string, RateChoice>();
   const payees = new Map<string, PayeeFact>();
   for (const partyId of candidates) {
-    const payee = payeeOf(partyId);
-    if (!payee) {
-      // A sheet party with no payee blocks the line; a contract-only party with no payee is simply not a candidate here.
-      if (sheetParties.has(partyId)) return { ok: false, reason: 'no_payee' };
-      continue;
-    }
     const choice = rateFor(partyId);
+    if (choice.kind === 'ambiguous') return { ok: false, reason: 'contract_ambiguous' };
+    // A party on no sheet is a candidate only because a contract pays them a rate on this song.
     if (!sheetParties.has(partyId) && choice.kind !== 'rate') continue;
-    if (!sheetParties.has(partyId) && choice.kind === 'rate' && payee.status !== 'active') return { ok: false, reason: 'payee_inactive' };
+    const payee = payeeOf(partyId);
+    // Someone this line must pay (a sheet party, or a party who receives a rate) with no payee record: review, never retained silently.
+    if (!payee) return { ok: false, reason: 'no_payee' };
     payees.set(partyId, payee);
     choices.set(partyId, choice);
   }
-  for (const choice of choices.values()) if (choice.kind === 'ambiguous') return { ok: false, reason: 'contract_ambiguous' };
   const chosen = [...payees.values()];
   if (chosen.some((p) => p.status !== 'active')) return { ok: false, reason: 'payee_inactive' };
   if (chosen.some((p) => p.currency !== currency)) return { ok: false, reason: 'currency_mismatch' };

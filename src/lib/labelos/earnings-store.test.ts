@@ -110,7 +110,7 @@ describe('loadAllocFacts', () => {
   it('counts only a signed contract whose signatures are valid for the frozen document and that carries a rate', async () => {
     const f = await loadAllocFacts(admin(base()), ORG, ['song-1']);
     expect(f.contracts.get('party-1')).toEqual([
-      { id: 'ct-ok', partyId: 'party-1', partyRole: 'artist', trackId: 'song-1', releaseId: null, artistContactId: null, rateUnits: 185000, incomeClass: 'master', effectiveDate: '2026-01-01', termMonths: 24 },
+      { id: 'ct-ok', partyId: 'party-1', partyRole: 'artist', trackId: 'song-1', releaseId: null, artistContactId: null, rateUnits: 185000, contractType: 'recording', effectiveDate: '2026-01-01', termMonths: 24 },
     ]);
   });
 
@@ -178,6 +178,7 @@ describe('contract kinds and who they pay (real facts, through calculate)', () =
     expect(publishing.allocations.map((a) => [a.payeeId, a.basis, Number(a.payableMinor)])).toEqual([['py-ara', 'split', 1000]]);
     // Re-typed as co-publishing it IS for publishing income: Ara 100 % + main 40 % is the over-100 % case.
     db.tables.contracts[0].type = 'co_publishing';
+    db.tables.contract_parties[0].role = 'collaborator'; // the co-writing template's receiving role (the `artist` role is not one)
     const co = await calculate(admin(db), ORG, 'USD', [line('USABC2600001', { incomeClass: 'publishing' })]);
     expect(co.lines[0].reviewReason).toBe('terms_exceed_gross');
     // …and it no longer touches master income.
@@ -194,7 +195,15 @@ describe('contract kinds and who they pay (real facts, through calculate)', () =
     expect(run.allocations.map((a) => a.payeeId)).toEqual(['py-ara']);
   });
 
-  it('M2: an artist-level deal pays its party on songs BY that artist (inbox or linked contact), not on another artist’s', async () => {
+  it('M1: a receiving party with NO payee record sends the line to review as no_payee — it is never retained silently', async () => {
+    const db = roomy();
+    db.tables.payees = db.tables.payees.filter((p) => p.party_id !== 'p-main');
+    const run = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
+    expect(run.lines[0].reviewReason).toBe('no_payee');
+    expect(run.allocations).toEqual([]);
+  });
+
+  it('M2: an artist-level deal pays its party on songs whose own artist (the Inbox project’s) it names — and only those', async () => {
     const db = roomy();
     db.tables.contracts[0] = { ...db.tables.contracts[0], track_id: null, artist_contact_id: 'c-ara', fields: { royalty_rate: '10' } };
     const byAra = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
@@ -203,10 +212,20 @@ describe('contract kinds and who they pay (real facts, through calculate)', () =
     db.tables.projects[0].inbox_for_contact_id = 'c-someone-else';
     const elsewhere = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
     expect(elsewhere.allocations.map((a) => a.payeeId)).toEqual(['py-ara', 'py-other']);
-    // A linked contact of the project counts as the song's artist too.
-    db.tables.project_contacts.push({ project_id: 'pr-1', contact_id: 'c-ara' });
-    const linked = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
-    expect(linked.allocations.map((a) => a.payeeId)).toEqual(['py-ara', 'py-other', 'py-main']);
+  });
+
+  it('M2: a contact merely LINKED to the project (a feature, an A&R contact) is not the song’s artist, and a joint project does not cross-apply', async () => {
+    const db = roomy();
+    db.tables.contracts[0] = { ...db.tables.contracts[0], track_id: null, artist_contact_id: 'c-feature', fields: { royalty_rate: '10' } };
+    // c-ara owns the Inbox; c-feature is only linked to the project.
+    db.tables.project_contacts.push({ project_id: 'pr-1', contact_id: 'c-feature' }, { project_id: 'pr-1', contact_id: 'c-ara' });
+    const run = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
+    expect(run.allocations.map((a) => a.payeeId)).toEqual(['py-ara', 'py-other']);
+    // A second Inbox (a joint project): each artist's deal applies only to a song in THEIR own Inbox.
+    db.tables.projects.push({ id: 'pr-2', org_id: ORG, inbox_for_contact_id: 'c-feature' });
+    db.tables.project_tracks.push({ project_id: 'pr-2', track_id: 'song-1' });
+    const both = await calculate(admin(db), ORG, 'USD', [line('USABC2600001')]);
+    expect(both.allocations.map((a) => a.payeeId)).toEqual(['py-ara', 'py-other', 'py-main']);
   });
 });
 

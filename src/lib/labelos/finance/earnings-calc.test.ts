@@ -27,7 +27,7 @@ const match: MatchFacts = {
 };
 
 const patContract: ContractFact = {
-  id: 'contract-pat', partyId: PAT, partyRole: 'producer', trackId: S1, releaseId: null, artistContactId: null, rateUnits: 185000, incomeClass: 'master', effectiveDate: '2026-01-01', termMonths: 24,
+  id: 'contract-pat', partyId: PAT, partyRole: 'producer', contractType: 'producer', trackId: S1, releaseId: null, artistContactId: null, rateUnits: 185000, effectiveDate: '2026-01-01', termMonths: 24,
 };
 
 const alloc: AllocFacts = {
@@ -52,8 +52,8 @@ const alloc: AllocFacts = {
   ]),
   contracts: new Map<string, ContractFact[]>([
     [PAT, [patContract]],
-    [MAIN, [{ ...patContract, id: 'contract-main', partyId: MAIN, partyRole: 'artist', trackId: S6, rateUnits: 400000 }]],
-    [ARA, [{ ...patContract, id: 'contract-ara-s7', partyId: ARA, partyRole: 'artist', trackId: S7, rateUnits: 400000 }]],
+    [MAIN, [{ ...patContract, id: 'contract-main', partyId: MAIN, partyRole: 'artist', contractType: 'recording', trackId: S6, rateUnits: 400000 }]],
+    [ARA, [{ ...patContract, id: 'contract-ara-s7', partyId: ARA, partyRole: 'artist', contractType: 'recording', trackId: S7, rateUnits: 400000 }]],
   ]),
   releasesOfSong: new Map(),
   // Whose work each song is (inbox / linked contacts of its projects).
@@ -124,12 +124,12 @@ describe('allocateLine', () => {
     // Ara 100 % of the sheet + MAIN (not on the sheet) 40 % by a song-level contract.
     expect(allocateLine(line(2, 'x', 1000), 'USD', S6, alloc)).toEqual({ ok: false, reason: 'terms_exceed_gross' });
     // Exactly 100 % is fine.
-    const exact: AllocFacts = { ...alloc, contracts: new Map([[MAIN, [{ ...patContract, id: 'c', partyId: MAIN, partyRole: 'artist', trackId: S6, rateUnits: 0 }]]]) };
+    const exact: AllocFacts = { ...alloc, contracts: new Map([[MAIN, [{ ...patContract, id: 'c', partyId: MAIN, partyRole: 'artist', contractType: 'recording', trackId: S6, rateUnits: 0 }]]]) };
     expect(allocateLine(line(2, 'x', 1000), 'USD', S6, exact)).toMatchObject({ ok: true });
   });
 
   it('a contract-only payee (song-level, not on the sheet) is paid by rate on top of the sheet; an artist-level deal never reaches a song they are not on', () => {
-    const c = (id: string, party: string, over: Partial<ContractFact>): ContractFact => ({ ...patContract, id, partyId: party, partyRole: 'artist', ...over });
+    const c = (id: string, party: string, over: Partial<ContractFact>): ContractFact => ({ ...patContract, id, partyId: party, partyRole: 'artist', contractType: 'recording', ...over });
     // Sheet Ara 80 / Bo 20; Ara's own 50 % contract REPLACES her 80 %; MAIN (not on the sheet) has a 20 % contract on the song → 50 + 20 + 20 = 90 %.
     const only: AllocFacts = {
       ...alloc,
@@ -145,6 +145,30 @@ describe('allocateLine', () => {
     expect(by.ok && by.rows.map((x) => x.partyId)).toEqual([ARA, BO, MAIN]);
     const other = allocateLine(line(2, 'x', 1000), 'USD', S6, deal('contact-nobody'));
     expect(other.ok && other.rows.map((x) => x.partyId)).toEqual([ARA, BO]);
+  });
+
+  it('receiving role: a feature contract pays the FEATURED artist the rate while the primary artist keeps their split share', () => {
+    // S7 sheet: Ara (primary, pays) 70 / Bo (featured) 30. The feature contract names Ara as `artist` and Bo as `featured`.
+    const feature = (party: string, role: string): ContractFact => ({ ...patContract, id: `f-${party}`, partyId: party, partyRole: role, contractType: 'feature', trackId: S7, rateUnits: 200000 });
+    const facts: AllocFacts = { ...alloc, contracts: new Map([[ARA, [feature(ARA, 'artist')]], [BO, [feature(BO, 'featured')]]]) };
+    const r = allocateLine(line(2, 'x', 1000), 'USD', S7, facts);
+    expect(r.ok && r.rows.map((x) => [x.partyId, x.basis, x.payableMinor])).toEqual([[ARA, 'split', BigInt(700)], [BO, 'rate', BigInt(200)]]);
+    expect(r.ok && r.retainedMinor).toBe(BigInt(100));
+  });
+
+  it('receiving role: a producer contract pays the producer; an artist CLIENT on it keeps their split share', () => {
+    const prod = (party: string, role: string): ContractFact => ({ ...patContract, id: `p-${party}`, partyId: party, partyRole: role, contractType: 'producer', trackId: S7, rateUnits: 100000 });
+    const facts: AllocFacts = { ...alloc, contracts: new Map([[ARA, [prod(ARA, 'client')]], [BO, [prod(BO, 'producer')]]]) };
+    const r = allocateLine(line(2, 'x', 1000), 'USD', S7, facts);
+    expect(r.ok && r.rows.map((x) => [x.partyId, x.basis, x.payableMinor])).toEqual([[ARA, 'split', BigInt(700)], [BO, 'rate', BigInt(100)]]);
+  });
+
+  it('M1: a party who receives a rate on this song but has no payee record sends the line to review — never retained silently', () => {
+    const noPayee: AllocFacts = { ...alloc, payeeByParty: new Map([...alloc.payeeByParty].filter(([k]) => k !== MAIN)) };
+    // S6: Ara on the sheet, MAIN receives a 40 % recording rate on the song and has no payee.
+    expect(allocateLine(line(2, 'x', 1000), 'USD', S6, noPayee)).toEqual({ ok: false, reason: 'no_payee' });
+    // A party whose contract does not cover this song is not asked for.
+    expect(allocateLine(line(2, 'x', 1000), 'USD', S1, noPayee)).toMatchObject({ ok: true });
   });
 
   it('H1: a recording (master) rate never touches publishing income — a producer on both sheets keeps their composition share there', () => {
@@ -217,14 +241,28 @@ describe('contract rate choice', () => {
     expect(chooseRate([artistWide], { ...ctx, songArtistIds: new Set() })).toEqual({ kind: 'none' });
   });
 
-  it('a rate applies only to the income class of its contract type', () => {
-    const master = c({ id: 'c-m', rateUnits: 100000, incomeClass: 'master' });
-    const publishing = c({ id: 'c-p', rateUnits: 300000, incomeClass: 'publishing' });
-    const none = c({ id: 'c-n', rateUnits: 900000, incomeClass: null });
+  it('a rate applies only to the income class of its contract type, and only to the receiving role', () => {
+    const master = c({ id: 'c-m', rateUnits: 100000 }); // producer contract, party role producer: master income
+    const publishing = c({ id: 'c-p', rateUnits: 300000, contractType: 'co_publishing', partyRole: 'collaborator' });
+    const none = c({ id: 'c-n', rateUnits: 900000, contractType: 'licence', partyRole: 'licensor' });
     expect(chooseRate([master, publishing, none], ctx)).toEqual({ kind: 'rate', contractId: 'c-m', rateUnits: 100000 });
     expect(chooseRate([master, publishing, none], { ...ctx, incomeClass: 'publishing' })).toEqual({ kind: 'rate', contractId: 'c-p', rateUnits: 300000 });
     expect(chooseRate([none], ctx)).toEqual({ kind: 'none' });
     expect(chooseRate([none], { ...ctx, incomeClass: 'publishing' })).toEqual({ kind: 'none' });
+  });
+
+  it('only the RECEIVING role of the contract type gets the rate (the payer on the same contract keeps their split share)', () => {
+    // feature: the featured artist receives, the primary artist who pays does not. producer: the producer, not the artist client.
+    expect(chooseRate([c({ contractType: 'feature', partyRole: 'featured' })], ctx)).toMatchObject({ kind: 'rate' });
+    expect(chooseRate([c({ contractType: 'feature', partyRole: 'artist' })], ctx)).toEqual({ kind: 'none' });
+    expect(chooseRate([c({ contractType: 'producer', partyRole: 'producer' })], ctx)).toMatchObject({ kind: 'rate' });
+    expect(chooseRate([c({ contractType: 'producer', partyRole: 'client' })], ctx)).toEqual({ kind: 'none' });
+    expect(chooseRate([c({ contractType: 'producer', partyRole: 'artist' })], ctx)).toEqual({ kind: 'none' });
+    expect(chooseRate([c({ contractType: 'recording', partyRole: 'artist' })], ctx)).toMatchObject({ kind: 'rate' });
+    expect(chooseRate([c({ contractType: 'recording', partyRole: 'label' })], ctx)).toEqual({ kind: 'none' });
+    expect(chooseRate([c({ contractType: 'beat_licence', partyRole: 'licensor' })], ctx)).toMatchObject({ kind: 'rate' });
+    expect(chooseRate([c({ contractType: 'beat_licence', partyRole: 'licensee' })], ctx)).toEqual({ kind: 'none' });
+    expect(chooseRate([c({ contractType: 'co_publishing', partyRole: 'publisher' })], { ...ctx, incomeClass: 'publishing' })).toMatchObject({ kind: 'rate' });
   });
 
   it('rateIncomeClass: recording-like types are master, co-publishing is publishing, everything else sets no rate', () => {
@@ -308,7 +346,8 @@ describe('golden: CSV → lines → allocation → recoupment', () => {
   const file = join(__dirname, '__golden__', 'earnings-run.json');
 
   it('matches the committed golden file', () => {
-    if (process.env.UPDATE_GOLDEN === '1' || !existsSync(file)) writeFileSync(file, JSON.stringify(jsonSafe(run), null, 2) + '\n');
+    if (process.env.UPDATE_GOLDEN === '1') writeFileSync(file, JSON.stringify(jsonSafe(run), null, 2) + '\n');
+    expect(existsSync(file), `missing golden file ${file}: regenerate with UPDATE_GOLDEN=1 after re-deriving the numbers`).toBe(true);
     expect(jsonSafe(run)).toEqual(JSON.parse(readFileSync(file, 'utf8')));
   });
 
@@ -347,7 +386,8 @@ describe('golden: CSV → lines → allocation → recoupment', () => {
     const lines = built.lines.map((l) => ({ ...l, incomeClass: 'publishing' as const }));
     const publishing = computeEarnings(lines, built.currency, match, alloc, advances);
     const file = join(__dirname, '__golden__', 'earnings-run-publishing.json');
-    if (process.env.UPDATE_GOLDEN === '1' || !existsSync(file)) writeFileSync(file, JSON.stringify(jsonSafe(publishing), null, 2) + '\n');
+    if (process.env.UPDATE_GOLDEN === '1') writeFileSync(file, JSON.stringify(jsonSafe(publishing), null, 2) + '\n');
+    expect(existsSync(file), `missing golden file ${file}: regenerate with UPDATE_GOLDEN=1 after re-deriving the numbers`).toBe(true);
     expect(jsonSafe(publishing)).toEqual(JSON.parse(readFileSync(file, 'utf8')));
     // Only Night Shift (S1) has a composition sheet. Lines 2 and 3 (gross 100.01 and 1.00): Ara 50 % / Pat 50 %, no rate, nothing retained.
     expect(publishing.allocations.map((a) => [a.lineNo, a.partyId, a.basis, Number(a.payableMinor)])).toEqual([
