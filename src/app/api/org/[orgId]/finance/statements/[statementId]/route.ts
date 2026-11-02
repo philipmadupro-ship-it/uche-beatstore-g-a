@@ -7,13 +7,14 @@
  * The approver's and generator's names are never sent; an artist sees no draft state.
  */
 import { NextRequest } from 'next/server';
+import { requireOrgModule } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { minorFromDb } from '@/lib/labelos/finance/money';
 import { statementActions } from '@/lib/labelos/finance/statement-calc';
 import { positionOf, statementDetailView } from '@/lib/labelos/finance/statement-view';
-import { json, resolveStatement } from '@/lib/labelos/statement-route';
+import { json, statementFor } from '@/lib/labelos/statement-route';
 import { isOrgOwner, payeeNames, periodsById, readLines, readPayments, StatementsNotReadyError } from '@/lib/labelos/statement-store';
 import { planApproval } from '@/lib/labelos/finance/statement-calc';
 
@@ -28,7 +29,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { orgId, statementId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'Finance needs Supabase.' });
   try {
-    const found = await resolveStatement(orgId, statementId);
+    const access0 = await requireOrgModule(orgId, 'finance');
+    if (!access0.ok) return access0.res;
+    const found = await statementFor(access0, statementId);
     if (!found.ok) return found.res;
     const { access, reader, row } = found.ctx;
     const own = reader.kind === 'own';

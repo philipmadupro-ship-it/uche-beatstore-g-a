@@ -37,6 +37,9 @@ export function formatShareUnits(units: number | null): string {
   return frac ? `${whole}.${frac}` : String(whole);
 }
 
+/** A decimal amount is digits, a point and maybe a leading minus: written as is (csvCell would neutralise the minus as a formula). */
+const amountCell = (text: string): string => (/^-?\d+(\.\d+)?$/.test(text) ? text : csvCell(text));
+
 export const dec = (minor: bigint, currency: string): string => formatMajor(money(minor, currency));
 
 export function statementFileName(statementId: string, status: string, ext: 'pdf' | 'csv'): string {
@@ -59,7 +62,8 @@ export function statementCsv(d: StatementDocument): string {
     ['Total', 'Paid', '', dec(d.paidMinor, d.currency)],
     ['Total', 'Outstanding', '', dec(d.outstandingMinor, d.currency)],
   ];
-  return [STATEMENT_CSV_COLUMNS.map(csvCell).join(','), ...rows.map((r) => r.map(csvCell).join(','))].join('\r\n') + '\r\n';
+  const line = (r: (string | number)[]) => r.map((c, i) => (i === 3 || i === 2 ? amountCell(String(c)) : csvCell(c))).join(',');
+  return [STATEMENT_CSV_COLUMNS.map(csvCell).join(','), ...rows.map(line)].join('\r\n') + '\r\n';
 }
 
 // ── Payout CSV ───────────────────────────────────────────────────────────
@@ -95,7 +99,7 @@ export function payoutCsv(rows: readonly PayoutRow[]): string {
       PAYMENT_STATE_LABEL[r.paymentState],
       r.paymentReference ?? '',
     ]
-      .map(csvCell)
+      .map((c, i) => (i >= 4 && i <= 6 ? amountCell(c) : csvCell(c)))
       .join(','),
   );
   return [PAYOUT_CSV_COLUMNS.map(csvCell).join(','), ...lines].join('\r\n') + '\r\n';

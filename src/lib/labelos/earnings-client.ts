@@ -5,7 +5,7 @@
  */
 import { formatMajor, isCurrency, money } from './finance/money';
 
-export type EarningsImport = { id: string; source: string; file_name: string | null; currency: string; row_count: number; total_minor: string; created_at: string };
+export type EarningsImport = { id: string; period_id?: string | null; status?: string; source: string; file_name: string | null; currency: string; row_count: number; total_minor: string; created_at: string };
 export type ReviewLine = {
   id: string; import_id: string; line_no: number; isrc: string | null; upc: string | null; title: string | null; store: string | null;
   gross_minor: string; currency: string; matched: boolean; reason: string | null; reason_label: string | null;

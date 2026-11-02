@@ -5,12 +5,13 @@
  * worked out again without it.
  */
 import { NextRequest } from 'next/server';
+import { requireOrgModule } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { isUUID } from '@/lib/validate';
 import { auditRpc, type AuditRpcAdmin } from '@/lib/labelos/audit-rpc';
-import { json, resolveStatement } from '@/lib/labelos/statement-route';
+import { json, statementFor } from '@/lib/labelos/statement-route';
 import { readPayment, rpcAnswer, STATEMENTS_NOT_READY, StatementsNotReadyError } from '@/lib/labelos/statement-store';
 
 export const runtime = 'nodejs';
@@ -24,7 +25,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const { orgId, statementId, paymentId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'Finance needs Supabase.' });
   try {
-    const found = await resolveStatement(orgId, statementId, 'finance.write');
+    const access0 = await requireOrgModule(orgId, 'finance', 'finance.write');
+    if (!access0.ok) return access0.res;
+    const found = await statementFor(access0, statementId, true);
     if (!found.ok) return found.res;
     const { access, row } = found.ctx;
     if (!isUUID(paymentId)) return json(404, { error: 'Payment not found' });

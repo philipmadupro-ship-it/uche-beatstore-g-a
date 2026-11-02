@@ -11,6 +11,7 @@
  * there is none anywhere in the finance record.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { requireOrgModule } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -20,7 +21,7 @@ import { groupBySong } from '@/lib/labelos/finance/statement-calc';
 import { statementCsv, statementFileName, type StatementDocument } from '@/lib/labelos/finance/statement-document';
 import { renderStatementPdf } from '@/lib/labelos/finance/statement-pdf';
 import { positionOf } from '@/lib/labelos/finance/statement-view';
-import { json, resolveStatement } from '@/lib/labelos/statement-route';
+import { json, statementFor } from '@/lib/labelos/statement-route';
 import { payeeNames, periodsById, readLines, readPayments, StatementsNotReadyError } from '@/lib/labelos/statement-store';
 
 export const runtime = 'nodejs';
@@ -36,7 +37,9 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (!isSupabaseConfigured()) return json(501, { error: 'Finance needs Supabase.' });
   const format = new URL(req.url).searchParams.get('format') === 'csv' ? 'csv' : 'pdf';
   try {
-    const found = await resolveStatement(orgId, statementId);
+    const access0 = await requireOrgModule(orgId, 'finance');
+    if (!access0.ok) return access0.res;
+    const found = await statementFor(access0, statementId);
     if (!found.ok) return found.res;
     const { access, reader, row } = found.ctx;
     if (row.status === 'void') return json(404, { error: 'Statement not found' });

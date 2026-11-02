@@ -8,12 +8,13 @@
  * again. 403 for the rule, so the page can say why.
  */
 import { NextRequest } from 'next/server';
+import { requireOrgModule } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { auditRpc, type AuditRpcAdmin } from '@/lib/labelos/audit-rpc';
 import { planApproval } from '@/lib/labelos/finance/statement-calc';
-import { json, resolveStatement } from '@/lib/labelos/statement-route';
+import { json, statementFor } from '@/lib/labelos/statement-route';
 import { isOrgOwner, rpcAnswer, STATEMENTS_NOT_READY, StatementsNotReadyError } from '@/lib/labelos/statement-store';
 
 export const runtime = 'nodejs';
@@ -27,7 +28,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const { orgId, statementId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'Finance needs Supabase.' });
   try {
-    const found = await resolveStatement(orgId, statementId, 'finance.approve');
+    const access0 = await requireOrgModule(orgId, 'finance', 'finance.approve');
+    if (!access0.ok) return access0.res;
+    const found = await statementFor(access0, statementId, true);
     if (!found.ok) return found.res;
     const { access, row } = found.ctx;
     if (row.status !== 'draft') return json(409, { error: 'Only a draft is approved.', code: 'not_draft' });

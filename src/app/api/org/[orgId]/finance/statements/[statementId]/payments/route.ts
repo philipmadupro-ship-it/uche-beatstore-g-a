@@ -10,13 +10,14 @@
  */
 import { NextRequest } from 'next/server';
 import { OrgPaymentCreateBodySchema } from '@/lib/contracts';
+import { requireOrgModule } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
 import { auditRpc, type AuditRpcAdmin } from '@/lib/labelos/audit-rpc';
 import { looksLikeBankNumber } from '@/lib/labelos/payee';
-import { json, resolveStatement } from '@/lib/labelos/statement-route';
+import { json, statementFor } from '@/lib/labelos/statement-route';
 import { rpcAnswer, STATEMENTS_NOT_READY, StatementsNotReadyError } from '@/lib/labelos/statement-store';
 
 export const runtime = 'nodejs';
@@ -30,7 +31,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { orgId, statementId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'Finance needs Supabase.' });
   try {
-    const found = await resolveStatement(orgId, statementId, 'finance.write');
+    const access0 = await requireOrgModule(orgId, 'finance', 'finance.write');
+    if (!access0.ok) return access0.res;
+    const found = await statementFor(access0, statementId, true);
     if (!found.ok) return found.res;
     const body = await readBody(req, OrgPaymentCreateBodySchema);
     if (!body.ok) return body.res;
