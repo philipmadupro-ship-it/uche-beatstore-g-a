@@ -186,6 +186,8 @@ export const VERBS = [
   'marketing_plan.asset_requested',
   'marketing_plan.asset_changed',
   'marketing_plan.requirement_changed',
+  // Artistic direction (LABEL-68): whether releases need a creative approval. The switch only; never a name or a note.
+  'creative_gate.changed',
   // PR and press (LABEL-66): ids and field names only, never a bio, a note, a URL or a contact's name.
   'press_kit.created',
   'press_kit.updated',
@@ -262,6 +264,8 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'digest.channel_removed',
   // Whether the marketing gate asks for a plan is a release-gate setting.
   'marketing_plan.requirement_changed',
+  // So is whether a release needs a creative approval (LABEL-68).
+  'creative_gate.changed',
 ];
 
 export type EventVisibility = 'internal' | 'artist';
@@ -421,6 +425,7 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'marketing_plan.asset_requested': 'internal',
   'marketing_plan.asset_changed': 'internal',
   'marketing_plan.requirement_changed': 'internal',
+  'creative_gate.changed': 'internal',
   // Press is the label's business side: a press contact, an outreach status and who holds a link are not the artist's feed.
   'press_kit.created': 'internal',
   'press_kit.updated': 'internal',

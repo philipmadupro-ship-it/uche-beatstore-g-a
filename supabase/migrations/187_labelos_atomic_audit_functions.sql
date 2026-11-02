@@ -98,7 +98,7 @@ REVOKE ALL ON FUNCTION public.labelos_release_latest_approval(uuid, text) FROM P
 
 -- ── 1. deliver ───────────────────────────────────────────────────────────
 -- p_expect: { release_updated_at: <raw string>, items: <labelos_release_items_key text>,
---             approvals: { master|artwork|legal|marketing|metadata: <latest approval id or ''> } }
+--             approvals: { master|artwork|legal|marketing|metadata|creative: <latest approval id or ''> } }  (creative: LABEL-68, only for an org that switched the gate on)
 -- p_ctx: { artist_id, project_id }. Answers {"release": <row>} or
 -- {"error": "not_found" | "not_draft" | "changed", "state"?}.
 
@@ -147,7 +147,7 @@ BEGIN
     RETURN jsonb_build_object('error', 'changed');
   END IF;
   FOR v_gate IN SELECT jsonb_object_keys(p_expect->'approvals') LOOP
-    IF v_gate NOT IN ('master', 'artwork', 'legal', 'marketing', 'metadata') THEN
+    IF v_gate NOT IN ('master', 'artwork', 'legal', 'marketing', 'metadata', 'creative') THEN
       RAISE EXCEPTION 'unknown gate %', v_gate USING ERRCODE = '22023';
     END IF;
     IF public.labelos_release_latest_approval(p_release, v_gate) IS DISTINCT FROM lower(coalesce(p_expect->'approvals'->>v_gate, '')) THEN
@@ -550,7 +550,7 @@ BEGIN
   IF p_kind NOT IN ('song', 'release') THEN
     RAISE EXCEPTION 'unknown approval subject %', p_kind USING ERRCODE = '22023';
   END IF;
-  IF p_gate NOT IN ('master', 'artwork', 'legal', 'marketing', 'metadata') OR (p_kind = 'song' AND p_gate <> 'legal') THEN
+  IF p_gate NOT IN ('master', 'artwork', 'legal', 'marketing', 'metadata', 'creative') OR (p_kind = 'song' AND p_gate <> 'legal') THEN
     RETURN jsonb_build_object('error', 'bad_gate');
   END IF;
   IF p_decision NOT IN ('approved', 'changes_requested') THEN

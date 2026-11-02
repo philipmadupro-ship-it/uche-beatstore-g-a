@@ -31,18 +31,19 @@ export function releaseItemsKey(items: readonly ItemRef[]): string {
 export type ApprovalRef = { id: string; gate: string; created_at: string };
 
 /** The latest approval row id per gate ('' = none). Newest first by created_at, then id — as the SQL does. */
-export function latestApprovalIds(rows: readonly ApprovalRef[]): Record<FingerprintGate, string> {
-  const out = Object.fromEntries(FINGERPRINT_GATES.map((g) => [g, ''])) as Record<FingerprintGate, string>;
+export function latestApprovalIds(rows: readonly ApprovalRef[]): Record<FingerprintGate | 'creative', string> {
+  const out = Object.fromEntries([...FINGERPRINT_GATES, 'creative'].map((g) => [g, ''])) as Record<FingerprintGate | 'creative', string>;
   const best: Partial<Record<string, ApprovalRef>> = {};
   for (const r of rows) {
     const cur = best[r.gate];
     if (!cur || r.created_at > cur.created_at || (r.created_at === cur.created_at && r.id > cur.id)) best[r.gate] = r;
   }
-  for (const g of FINGERPRINT_GATES) out[g] = best[g]?.id.toLowerCase() ?? '';
+  for (const g of [...FINGERPRINT_GATES, 'creative'] as const) out[g] = best[g]?.id.toLowerCase() ?? '';
   return out;
 }
 
-export type Fingerprint = { updatedAt: string; items: string; approvals: Record<FingerprintGate, string> };
+/** `creative` (LABEL-68) is present only for an org that switched the creative gate on: migration 185's function is what accepts the key. */
+export type Fingerprint = { updatedAt: string; items: string; approvals: Record<FingerprintGate, string> & { creative?: string } };
 
 export function deliverExpectation(f: Fingerprint): Record<string, unknown> {
   return { release_updated_at: f.updatedAt, items: f.items, approvals: f.approvals };
@@ -66,12 +67,13 @@ export async function readItemsKey(admin: Admin, releaseId: string): Promise<str
 }
 
 /** Null when the release is not there. The approvals table missing (157) reads as no approvals. */
-export async function readFingerprint(admin: Admin, org: string, releaseId: string): Promise<Fingerprint | null> {
+export async function readFingerprint(admin: Admin, org: string, releaseId: string, opts: { creative?: boolean } = {}): Promise<Fingerprint | null> {
   const rel = await admin.from('releases').select('updated_at').eq('id', releaseId).eq('org_id', org).maybeSingle();
   if (rel.error) throw new Error(`release: ${rel.error.message}`);
   if (!rel.data) return null;
   const items = await readItemsKey(admin, releaseId);
   const ap = await admin.from('approvals').select('id, gate, created_at').eq('release_id', releaseId).eq('org_id', org).order('created_at', { ascending: false }).limit(500);
   if (ap.error && ap.error.code !== '42P01' && ap.error.code !== 'PGRST205') throw new Error(`approvals: ${ap.error.message}`);
-  return { updatedAt: (rel.data as { updated_at: string }).updated_at, items, approvals: latestApprovalIds((ap.data ?? []) as ApprovalRef[]) };
+  const { creative, ...core } = latestApprovalIds((ap.data ?? []) as ApprovalRef[]);
+  return { updatedAt: (rel.data as { updated_at: string }).updated_at, items, approvals: opts.creative ? { ...core, creative } : core };
 }

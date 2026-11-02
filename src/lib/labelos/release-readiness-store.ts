@@ -15,7 +15,7 @@ import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { ApprovalsNotReadyError, currentSnapshot, isMissingApprovalsSchema, listApprovals, readReleaseFacts } from './approvals-store';
 import { CreditsNotReadyError } from './credits-store';
 import { SplitsNotReadyError } from './splits-store';
-import { currentDecision, GATES, type Gate } from './approvals';
+import { currentDecision, GATES, type CoreGate } from './approvals';
 import { readProjectAssetHead } from '@/lib/storage/project-assets';
 import { evaluateLegalReadiness, type LegalReadiness } from './legal-readiness';
 import { LegalReadinessNotReadyError, loadLegalFacts, readReadinessSong } from './legal-readiness-store';
@@ -156,13 +156,20 @@ export async function loadReleaseReadinessFacts(admin: AdminClient, org: string,
 
   // Approvals and the snapshot of what each gate covers right now (LABEL-30).
   let rows;
-  const approvals = {} as Record<Gate, ReadinessApproval>;
+  const approvals = {} as Record<CoreGate, ReadinessApproval> & { creative?: ReadinessApproval };
   try {
     rows = await listApprovals(admin, org, { kind: 'release', id: releaseId });
     for (const gate of GATES) {
       approvals[gate] = {
         current: currentDecision(rows.filter((r) => r.gate === gate)),
         now: await currentSnapshot(admin, org, { kind: 'release', id: releaseId }, gate, base),
+      };
+    }
+    // LABEL-68: the creative gate is read only while the org has it on; off, nothing about it is loaded or evaluated.
+    if (settings.creative_gate === 'on') {
+      approvals.creative = {
+        current: currentDecision(rows.filter((r) => r.gate === 'creative')),
+        now: await currentSnapshot(admin, org, { kind: 'release', id: releaseId }, 'creative', base),
       };
     }
   } catch (err) {

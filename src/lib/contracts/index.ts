@@ -26,7 +26,7 @@ import { CONTRACT_TYPE_IDS, type ContractTypeId } from '@/lib/labelos/contract-t
 import { PARTY_ROLES, TEMPLATE_TYPE_IDS, type PartyRole, type TemplateTypeId } from '@/lib/labelos/contracts/types';
 import { STORE_PLAYBACKS } from '@/lib/labelos/store-listing';
 import { CURSOR_RE } from '@/lib/labelos/activity-feed';
-import { DECISIONS as APPROVAL_DECISIONS, GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
+import { DECISIONS as APPROVAL_DECISIONS, ALL_GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
 import { SONG_STAGES } from '@/lib/labelos/song-stage';
 import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
 import { ASSET_KINDS as MARKETING_ASSET_KINDS, ASSET_STATUSES as MARKETING_ASSET_STATUSES, BUDGET_STATUSES as MARKETING_BUDGET_STATUSES, PLAN_LIMITS as MARKETING_LIMITS, PLAN_PHASES as MARKETING_PHASES, PLATFORMS as MARKETING_PLATFORMS, PLATFORM_STEPS as MARKETING_PLATFORM_STEPS } from '@/lib/labelos/marketing-plan';
@@ -1039,6 +1039,11 @@ export const OrgReadinessSettingsSchema = z.object({
   require_signed_master_split: z.boolean().catch(false),
   /** LABEL-65: the marketing gate also needs a marketing plan with its required timeline items. Off unless exactly `true`. */
   marketing_plan_required: z.boolean().catch(false),
+  /**
+   * LABEL-68: the OPTIONAL creative approval gate on a release (`creative.approve`). Off unless the stored value is exactly
+   * the string `on` — a missing, misspelt or malformed value reads as off, so a bad row can never add a gate nobody asked for.
+   */
+  creative_gate: z.enum(['on', 'off']).catch('off'),
   /** The shorter side of cover art, in pixels (09 §4: 3000 is the common DSP minimum). Whole numbers 600-10000; anything else reads as 3000. */
   artwork_min_px: z.number().int().min(600).max(10000).catch(3000),
 });
@@ -2187,6 +2192,9 @@ export const MarketingAssetPatchBodySchema = z.object({ status: z.enum(MARKETING
 
 /** PUT …/settings/marketing-plan (owner only). */
 export const MarketingPlanRequiredBodySchema = z.object({ required: z.boolean() }).strict();
+
+/** PUT …/settings/creative-gate (owner only, LABEL-68): switch the optional creative approval gate on or off. */
+export const CreativeGateBodySchema = z.object({ enabled: z.boolean() }).strict();
 
 
 // ── PR and press (LABEL-66) ───────────────────────────────────────────────

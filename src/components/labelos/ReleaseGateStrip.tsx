@@ -6,7 +6,7 @@
  */
 import { cn } from '@/lib/utils';
 import { GATE_SHORT, gateTone, gateWord, gateSummary, type BoardGate, type GateTone } from '@/lib/labelos/release-board';
-import { RELEASE_GATE_LABEL } from '@/lib/labelos/release-readiness';
+import { CREATIVE_GATE_LABEL, RELEASE_GATE_LABEL } from '@/lib/labelos/release-readiness';
 
 export const TONE_TEXT: Record<GateTone, string> = {
   good: 'border-[#6DC6A4]/40 text-[#6DC6A4]',
@@ -21,13 +21,14 @@ export function ReleaseGateStrip({ gates }: { gates: readonly BoardGate[] }) {
     <div className="flex flex-wrap items-center gap-1.5" role="list" aria-label={gateSummary(gates)} data-testid="release-gate-strip">
       {gates.map((g) => {
         const word = gateWord(g.status);
+        const label = g.gate === 'creative' ? CREATIVE_GATE_LABEL : RELEASE_GATE_LABEL[g.gate];
         const detail = g.blockerCount > 0 ? `${word} · ${g.blockerCount} to fix` : word;
         return (
           <span
             key={g.gate}
             role="listitem"
-            title={`${RELEASE_GATE_LABEL[g.gate]}: ${detail}`}
-            aria-label={`${RELEASE_GATE_LABEL[g.gate]}: ${detail}`}
+            title={`${label}: ${detail}`}
+            aria-label={`${label}: ${detail}`}
             data-gate={g.gate}
             data-status={g.status}
             className={cn('rounded-lg border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em]', TONE_TEXT[gateTone(g.status)])}
