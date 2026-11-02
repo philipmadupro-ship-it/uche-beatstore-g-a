@@ -38,10 +38,10 @@ INSERT INTO public.org_members (org_id, user_id, role, functions, scope, cap_gra
   (:L2, :X, 'owner', '{}', 'org', '{}');
 INSERT INTO public.contacts (id, user_id, org_id, name, email, category) VALUES
   (:C1, NULL, :L, 'Nova', 'nova183@local.test', 'artist');
-INSERT INTO public.projects (id, org_id, created_by, name, inbox_for_contact_id) VALUES
-  (:PR, :L, :O, 'Inbox', :C1);
-INSERT INTO public.releases (id, org_id, project_id, title, type, created_by) VALUES
-  (:R, :L, :PR, 'Night Shift', 'single', :O);
+INSERT INTO public.projects (id, org_id, user_id, name, inbox_for_contact_id) VALUES
+  (:PR, :L, NULL, 'Inbox', :C1);
+INSERT INTO public.releases (id, org_id, project_id, contact_id, title, created_by) VALUES
+  (:R, :L, :PR, :C1, 'Night Shift', :O);
 
 CREATE FUNCTION public.check_eq(label text, got anyelement, want anyelement) RETURNS void
 LANGUAGE plpgsql AS $$

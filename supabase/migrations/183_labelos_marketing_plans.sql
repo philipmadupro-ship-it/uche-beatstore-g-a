@@ -150,19 +150,56 @@ CREATE INDEX IF NOT EXISTS idx_marketing_asset_requests_plan ON public.marketing
 
 -- ── Access: service role only, deny-all for the API roles ────────────────
 
-DO $do$
-DECLARE t text;
-BEGIN
-  FOREACH t IN ARRAY ARRAY['marketing_plans', 'marketing_plan_items', 'marketing_platform_steps', 'marketing_budget_lines', 'marketing_asset_requests'] LOOP
-    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
-    EXECUTE format('DROP TRIGGER IF EXISTS labelos_org_rows_service_only ON public.%I', t);
-    EXECUTE format('CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.labelos_org_rows_service_only(%L, %L)', t, 'self', 'org_id');
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', t || '_no_direct_access', t);
-    EXECUTE format('CREATE POLICY %I ON public.%I FOR ALL TO anon, authenticated USING (false) WITH CHECK (false)', t || '_no_direct_access', t);
-    EXECUTE format('REVOKE ALL ON public.%I FROM anon, authenticated', t);
-  END LOOP;
-END
-$do$;
+ALTER TABLE public.marketing_plans ENABLE ROW LEVEL SECURITY;
+DROP TRIGGER IF EXISTS labelos_org_rows_service_only ON public.marketing_plans;
+CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE ON public.marketing_plans
+  FOR EACH ROW EXECUTE FUNCTION public.labelos_org_rows_service_only('self', 'org_id');
+DROP POLICY IF EXISTS marketing_plans_no_direct_access ON public.marketing_plans;
+CREATE POLICY marketing_plans_no_direct_access ON public.marketing_plans
+  FOR ALL TO anon, authenticated
+  USING (false) WITH CHECK (false);
+REVOKE ALL ON public.marketing_plans FROM anon, authenticated;
+
+ALTER TABLE public.marketing_plan_items ENABLE ROW LEVEL SECURITY;
+DROP TRIGGER IF EXISTS labelos_org_rows_service_only ON public.marketing_plan_items;
+CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE ON public.marketing_plan_items
+  FOR EACH ROW EXECUTE FUNCTION public.labelos_org_rows_service_only('self', 'org_id');
+DROP POLICY IF EXISTS marketing_plan_items_no_direct_access ON public.marketing_plan_items;
+CREATE POLICY marketing_plan_items_no_direct_access ON public.marketing_plan_items
+  FOR ALL TO anon, authenticated
+  USING (false) WITH CHECK (false);
+REVOKE ALL ON public.marketing_plan_items FROM anon, authenticated;
+
+ALTER TABLE public.marketing_platform_steps ENABLE ROW LEVEL SECURITY;
+DROP TRIGGER IF EXISTS labelos_org_rows_service_only ON public.marketing_platform_steps;
+CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE ON public.marketing_platform_steps
+  FOR EACH ROW EXECUTE FUNCTION public.labelos_org_rows_service_only('self', 'org_id');
+DROP POLICY IF EXISTS marketing_platform_steps_no_direct_access ON public.marketing_platform_steps;
+CREATE POLICY marketing_platform_steps_no_direct_access ON public.marketing_platform_steps
+  FOR ALL TO anon, authenticated
+  USING (false) WITH CHECK (false);
+REVOKE ALL ON public.marketing_platform_steps FROM anon, authenticated;
+
+ALTER TABLE public.marketing_budget_lines ENABLE ROW LEVEL SECURITY;
+DROP TRIGGER IF EXISTS labelos_org_rows_service_only ON public.marketing_budget_lines;
+CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE ON public.marketing_budget_lines
+  FOR EACH ROW EXECUTE FUNCTION public.labelos_org_rows_service_only('self', 'org_id');
+DROP POLICY IF EXISTS marketing_budget_lines_no_direct_access ON public.marketing_budget_lines;
+CREATE POLICY marketing_budget_lines_no_direct_access ON public.marketing_budget_lines
+  FOR ALL TO anon, authenticated
+  USING (false) WITH CHECK (false);
+REVOKE ALL ON public.marketing_budget_lines FROM anon, authenticated;
+
+ALTER TABLE public.marketing_asset_requests ENABLE ROW LEVEL SECURITY;
+DROP TRIGGER IF EXISTS labelos_org_rows_service_only ON public.marketing_asset_requests;
+CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE ON public.marketing_asset_requests
+  FOR EACH ROW EXECUTE FUNCTION public.labelos_org_rows_service_only('self', 'org_id');
+DROP POLICY IF EXISTS marketing_asset_requests_no_direct_access ON public.marketing_asset_requests;
+CREATE POLICY marketing_asset_requests_no_direct_access ON public.marketing_asset_requests
+  FOR ALL TO anon, authenticated
+  USING (false) WITH CHECK (false);
+REVOKE ALL ON public.marketing_asset_requests FROM anon, authenticated;
+
 
 -- ── The plan requirement: setting + audit event, one transaction ─────────
 -- Owner only (a role, not a capability). Merges the one key under the row
@@ -201,7 +238,8 @@ BEGIN
   END IF;
 
   v_settings := coalesce(v_settings, '{}'::jsonb);
-  v_before := (v_settings -> 'marketing_plan_required') = 'true'::jsonb;
+  -- A missing key is NULL = 'true', so coalesce: only the exact JSON true counts as on.
+  v_before := coalesce((v_settings -> 'marketing_plan_required') = 'true'::jsonb, false);
   IF v_before = p_required THEN
     RETURN jsonb_build_object('required', p_required, 'changed', false);
   END IF;
