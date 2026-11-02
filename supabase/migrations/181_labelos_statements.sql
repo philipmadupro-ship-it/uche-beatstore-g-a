@@ -75,7 +75,7 @@ BEGIN
     -- transaction-local setting. Nothing else is ever deleted.
     IF TG_TABLE_NAME IN ('earnings_allocations', 'earnings_recoupments')
        AND nullif(current_setting('labelos.voiding_import', true), '') IS NOT NULL
-       AND current_setting('labelos.voiding_import', true) = OLD.import_id::text THEN
+       AND current_setting('labelos.voiding_import', true) = (to_jsonb(OLD) ->> 'import_id') THEN
       RETURN OLD;
     END IF;
     IF NOT public.labelos_finance_org_gone(OLD.org_id) THEN
