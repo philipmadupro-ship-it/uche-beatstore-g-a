@@ -9552,3 +9552,24 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
     - `contacts_artist_cap` 23514 becomes a raw 500 for future writers;
     - the approval tie-break uses id where the plan uses array order.
 - 2026-11-02 — LABEL-62 #169: orchestrator decision on royalties. A signed contract's royalty rate REPLACES the split share for that payee (never split × rate); lines whose shares exceed 100% go to review (`terms_exceed_gross`); the remainder is retained by the label. LABEL-65 #170 is in review.
+- 2026-11-02 — **LABEL-65 Done**: #170 squash `44bb802`, migration 183 (not applied; second paste).
+  - What it adds: release marketing plans (timeline, tasks, budget lines in integer minor units, platform checklist, asset requests to the artist with one recipient), an owner-only "plan required" switch that only counts while the marketing module is present, and plan milestones in the calendar feed.
+  - Gate: CI green on `f46424d`; preview checked; independent review found no High. Fixed before merge:
+    - M1: plan requirement without the marketing module;
+    - L2: one notification recipient;
+    - L3: the artist sees how to deliver an ask;
+    - L4: all plan events internal.
+  - Follow-up: the artist cannot mark an asset as received in-app.
+- 2026-11-02 — **LABEL-62 Done**: #169 squash `8302d8a`, migration 180 (not applied; second paste).
+  - What it adds: distributor CSV import (idempotent by file bytes), ISRC/UPC matching, allocation, recoupment, and a needs-review queue scoped to the member's artists.
+  - Gate: CI green on `31d64ba`; preview checked. The independent review was BLOCKING twice. Fixed before merge:
+    - income class per contract type;
+    - contract-only payees loaded;
+    - the song's artist = the Inbox contact only;
+    - the rate goes only to the receiving role (`RATE_TERMS`);
+    - a receiver with no payee → `no_payee` review, never retained silently;
+    - golden tests fail when their file is missing.
+  - **Royalty rule (orchestrator decision; owner may change):** a signed contract's rate REPLACES the split share for the receiving party; shares over 100 % go to review (`terms_exceed_gross`); the remainder is retained by the label.
+  - CI change: the Type-check step runs with `NODE_OPTIONS=--max-old-space-size=4096`, because tsc on the branch exceeds node's 2 GB default heap. Main needs the same change at final integration.
+- 2026-11-02 — LABEL-66 started (session_019AUhHdgtc1yjaLzBLRhKxP, migration 184). LABEL-63 started (session_019AUhHfmYhmCPwuv3PbWtUU, migration 181). Next reserved: 182 (LABEL-64).
+- Follow-up: `ArInboxView.test.tsx` "Escape abandons the note" timing flake (recurring) → LABEL-77.
