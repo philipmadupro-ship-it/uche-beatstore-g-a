@@ -1,4 +1,4 @@
-/** Budget helpers shared by the two budget routes (LABEL-65). Not a route. */
+/** Budget helpers shared by the two budget routes (LABEL-65). */
 import { money } from '@/lib/labelos/finance/money';
 import type { BudgetRowOut } from '@/lib/labelos/marketing-plan-store';
 

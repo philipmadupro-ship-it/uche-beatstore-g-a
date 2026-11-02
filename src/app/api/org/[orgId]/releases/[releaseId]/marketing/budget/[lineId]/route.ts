@@ -5,13 +5,14 @@
  */
 import { NextRequest } from 'next/server';
 import { MarketingBudgetPatchBodySchema } from '@/lib/contracts';
+import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { MarketingNotReadyError, patchBudget, removeBudget } from '@/lib/labelos/marketing-plan-store';
 import { readBody } from '@/lib/validate';
 import { badId, json, planWriteContext } from '../../access';
-import { budgetLineOut, moneyProblem } from '../shared';
+import { budgetLineOut, moneyProblem } from '@/lib/labelos/marketing-budget';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,9 @@ type Params = { params: Promise<{ orgId: string; releaseId: string; lineId: stri
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { orgId, releaseId, lineId } = await params;
-  const made = await planWriteContext(orgId, releaseId, { create: false, budget: true });
+  const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
+  if (!access.ok) return access.res;
+  const made = await planWriteContext(access, { create: false, budget: true });
   if (!made.ok) return made.res;
   if (badId(lineId)) return json(404, { error: 'Not found' });
   const { ctx } = made;
@@ -48,7 +51,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const { orgId, releaseId, lineId } = await params;
-  const made = await planWriteContext(orgId, releaseId, { create: false, budget: true });
+  const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
+  if (!access.ok) return access.res;
+  const made = await planWriteContext(access, { create: false, budget: true });
   if (!made.ok) return made.res;
   if (badId(lineId)) return json(404, { error: 'Not found' });
   const { ctx } = made;

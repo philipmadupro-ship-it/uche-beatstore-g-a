@@ -5,6 +5,7 @@
  */
 import { NextRequest } from 'next/server';
 import { MarketingStepBodySchema } from '@/lib/contracts';
+import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
@@ -20,7 +21,9 @@ type Params = { params: Promise<{ orgId: string; releaseId: string }> };
 
 export async function PUT(req: NextRequest, { params }: Params) {
   const { orgId, releaseId } = await params;
-  const made = await planWriteContext(orgId, releaseId, { create: true });
+  const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
+  if (!access.ok) return access.res;
+  const made = await planWriteContext(access, { create: true });
   if (!made.ok) return made.res;
   const { ctx } = made;
   const parsed = await readBody(req, MarketingStepBodySchema);

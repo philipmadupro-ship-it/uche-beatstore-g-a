@@ -10,6 +10,7 @@
  * for a caller who may not read budgets, never zeroed.
  */
 import { NextRequest } from 'next/server';
+import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { mayReadBudget, mayWriteBudget, mayWritePlan, missingPhases, planView, REQUIRED_PHASES } from '@/lib/labelos/marketing-plan';
@@ -25,7 +26,9 @@ type Params = { params: Promise<{ orgId: string; releaseId: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const { orgId, releaseId } = await params;
-  const read = await planReadAccess(orgId, releaseId);
+  const authorised = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
+  if (!authorised.ok) return authorised.res;
+  const read = await planReadAccess(authorised);
   if (!read.ok) return read.res;
   const { access } = read;
   if (!read.ready) return json(200, { schemaReady: false });

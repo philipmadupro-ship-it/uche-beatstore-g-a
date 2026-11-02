@@ -183,7 +183,7 @@ const ASSET_COLUMNS = 'id, kind, note, status, created_at, resolved_at, recipien
 
 export async function addAssetRequest(admin: AdminClient, org: string, plan: string, userId: string, b: { kind: AssetKind; note?: string | null; recipientId: string | null }): Promise<AssetRowOut | 'full'> {
   if ((await count(admin, 'marketing_asset_requests', org, plan)) >= PLAN_LIMITS.assetRequests) return 'full';
-  const res = await admin.from('marketing_asset_requests').insert({ org_id: org, plan_id: plan, requested_by: userId, kind: b.kind, note: b.note ?? null, recipient_id: b.recipientId }).select(ASSET_COLUMNS).single();
+  const res = await admin.from('marketing_asset_requests').insert({ org_id: org, plan_id: plan, requested_by: userId, kind: b.kind, note: b.note ?? null, recipient_id: b.recipientId, status: 'open' }).select(ASSET_COLUMNS).single();
   check('asset request create', res.error);
   return res.data as AssetRowOut;
 }

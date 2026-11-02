@@ -144,6 +144,12 @@ function labelOsTables(): string[] {
     // 186_labelos_listing_consent.sql (LABEL-71): service-role only behind a deny-all policy.
     'listing_consents',
     'store_listing_vetoes',
+    // 183_labelos_marketing_plans.sql (LABEL-65): service-role only behind a deny-all policy; budget lines are business data.
+    'marketing_plans',
+    'marketing_plan_items',
+    'marketing_platform_steps',
+    'marketing_budget_lines',
+    'marketing_asset_requests',
   ];
 }
 

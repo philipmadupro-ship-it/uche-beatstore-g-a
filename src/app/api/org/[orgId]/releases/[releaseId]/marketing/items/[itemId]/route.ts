@@ -5,6 +5,7 @@
  */
 import { NextRequest } from 'next/server';
 import { MarketingItemPatchBodySchema } from '@/lib/contracts';
+import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
@@ -20,7 +21,9 @@ type Params = { params: Promise<{ orgId: string; releaseId: string; itemId: stri
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { orgId, releaseId, itemId } = await params;
-  const made = await planWriteContext(orgId, releaseId, { create: false });
+  const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
+  if (!access.ok) return access.res;
+  const made = await planWriteContext(access, { create: false });
   if (!made.ok) return made.res;
   if (badId(itemId)) return json(404, { error: 'Not found' });
   const { ctx } = made;
@@ -42,7 +45,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const { orgId, releaseId, itemId } = await params;
-  const made = await planWriteContext(orgId, releaseId, { create: false });
+  const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
+  if (!access.ok) return access.res;
+  const made = await planWriteContext(access, { create: false });
   if (!made.ok) return made.res;
   if (badId(itemId)) return json(404, { error: 'Not found' });
   const { ctx } = made;

@@ -16,7 +16,7 @@
  *    empty 404).
  */
 import { NextResponse } from 'next/server';
-import { orgHasModule, requireObjectAccess } from '@/lib/auth/org-access';
+import { orgHasModule, type ObjectAccessResult } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { recordEvent } from '@/lib/labelos/activity';
 import { mayReadBudget, mayWriteBudget, mayWritePlan } from '@/lib/labelos/marketing-plan';
@@ -26,7 +26,7 @@ import { isUUID } from '@/lib/validate';
 export const NO_STORE = { 'Cache-Control': 'no-store' };
 export const json = (status: number, body: Record<string, unknown>) => NextResponse.json(body, { status, headers: NO_STORE });
 
-type Access = Extract<Awaited<ReturnType<typeof requireObjectAccess>>, { ok: true }>;
+export type Access = Extract<ObjectAccessResult, { ok: true }>;
 
 export type ReleaseInfo = { id: string; title: string; state: string; contactId: string | null; projectId: string | null };
 export type PlanContext = {
@@ -48,10 +48,11 @@ async function readRelease(admin: AdminClient, org: string, id: string): Promise
   return r ? { id: r.id, title: r.title, state: r.state, contactId: r.contact_id, projectId: r.project_id } : null;
 }
 
-/** Read access: the release, the module, and whether the tables exist. */
-export async function planReadAccess(orgId: string, releaseId: string): Promise<{ ok: true; access: Access; ready: boolean } | { ok: false; res: NextResponse }> {
-  const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
-  if (!access.ok) return { ok: false, res: access.res };
+/**
+ * The release, as every route here first authorises it (`requireObjectAccess` on `releases`, `catalog.read`),
+ * then: the module, and whether the tables exist.
+ */
+export async function planReadAccess(access: Access): Promise<{ ok: true; access: Access; ready: boolean } | { ok: false; res: NextResponse }> {
   if (!orgHasModule(access, 'marketing')) return { ok: false, res: json(404, { error: 'Not found' }) };
   return { ok: true, access, ready: await planTablesReady(access.admin) };
 }
@@ -60,8 +61,8 @@ export async function planReadAccess(orgId: string, releaseId: string): Promise<
  * Write access, with the plan made on first write when `create` (a PATCH or DELETE of a row that
  * cannot exist without a plan answers 404 instead). `budget` demands the business reader too.
  */
-export async function planWriteContext(orgId: string, releaseId: string, opts: { create: boolean; budget?: boolean }): Promise<{ ok: true; ctx: PlanContext } | { ok: false; res: NextResponse }> {
-  const read = await planReadAccess(orgId, releaseId);
+export async function planWriteContext(authorised: Access, opts: { create: boolean; budget?: boolean }): Promise<{ ok: true; ctx: PlanContext } | { ok: false; res: NextResponse }> {
+  const read = await planReadAccess(authorised);
   if (!read.ok) return read;
   const { access } = read;
   if (opts.budget ? !mayWriteBudget(access.capabilities, access.role) : !mayWritePlan(access.capabilities)) return { ok: false, res: json(403, { error: 'Forbidden' }) };

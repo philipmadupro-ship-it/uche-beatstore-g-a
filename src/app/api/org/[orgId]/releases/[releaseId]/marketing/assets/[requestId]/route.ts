@@ -5,6 +5,7 @@
  */
 import { NextRequest } from 'next/server';
 import { MarketingAssetPatchBodySchema } from '@/lib/contracts';
+import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
@@ -20,7 +21,9 @@ type Params = { params: Promise<{ orgId: string; releaseId: string; requestId: s
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { orgId, releaseId, requestId } = await params;
-  const made = await planWriteContext(orgId, releaseId, { create: false });
+  const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
+  if (!access.ok) return access.res;
+  const made = await planWriteContext(access, { create: false });
   if (!made.ok) return made.res;
   if (badId(requestId)) return json(404, { error: 'Not found' });
   const { ctx } = made;

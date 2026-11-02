@@ -8,6 +8,7 @@
  */
 import { NextRequest } from 'next/server';
 import { MarketingBudgetCreateBodySchema } from '@/lib/contracts';
+import { requireObjectAccess } from '@/lib/auth/org-access';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
@@ -15,7 +16,7 @@ import { PLAN_LIMITS } from '@/lib/labelos/marketing-plan';
 import { MarketingNotReadyError, addBudget } from '@/lib/labelos/marketing-plan-store';
 import { readBody } from '@/lib/validate';
 import { json, planWriteContext } from '../access';
-import { budgetLineOut, moneyProblem } from './shared';
+import { budgetLineOut, moneyProblem } from '@/lib/labelos/marketing-budget';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,9 @@ type Params = { params: Promise<{ orgId: string; releaseId: string }> };
 
 export async function POST(req: NextRequest, { params }: Params) {
   const { orgId, releaseId } = await params;
-  const made = await planWriteContext(orgId, releaseId, { create: true, budget: true });
+  const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
+  if (!access.ok) return access.res;
+  const made = await planWriteContext(access, { create: true, budget: true });
   if (!made.ok) return made.res;
   const { ctx } = made;
   const parsed = await readBody(req, MarketingBudgetCreateBodySchema);
