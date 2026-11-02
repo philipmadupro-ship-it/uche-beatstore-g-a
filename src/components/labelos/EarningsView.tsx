@@ -21,7 +21,7 @@ const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/60';
 const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
 const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/[0.06]';
-const FIELD = 'w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[12px] text-white/80 outline-none focus:border-white/30';
+const FIELD = 'w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-white/80 outline-none focus:border-white/30';
 
 const PRESET_OPTIONS = [
   { value: 'auto', label: 'Detect the service' },
@@ -98,7 +98,7 @@ export function EarningsView({ orgId }: { orgId: string }) {
                     {[l.isrc, l.upc, l.store, `line ${l.line_no}`].filter(Boolean).join(' · ')}
                   </p>
                 </div>
-                <span className="text-[12px] text-white/80 tabular-nums">{showMoney(l.gross_minor, l.currency)}</span>
+                <span className="text-[11px] text-white/80 tabular-nums">{showMoney(l.gross_minor, l.currency)}</span>
                 <span className="rounded-full border border-[#c8a47a]/40 px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.1em] text-[#c8a47a]">{l.reason_label ?? 'Needs review'}</span>
               </li>
             ))}
@@ -139,7 +139,7 @@ function ImportRow({ orgId, item, canWrite, waiting, onDone }: { orgId: string; 
         <p className="text-[11px] text-white/60">{item.source} · {item.row_count} lines · {new Date(item.created_at).toLocaleDateString('en-GB')}</p>
         {note && <p className="mt-1 text-[11px] text-white/60" role="status">{note}</p>}
       </div>
-      <span className="text-[12px] text-white/80 tabular-nums">{showMoney(item.total_minor, item.currency)}</span>
+      <span className="text-[11px] text-white/80 tabular-nums">{showMoney(item.total_minor, item.currency)}</span>
       {canWrite && waiting > 0 && (
         <button type="button" className={BTN} disabled={busy} onClick={() => void rerun()} data-testid="import-rerun">
           <RefreshCw size={12} strokeWidth={1.75} aria-hidden="true" />

@@ -80,6 +80,9 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'advances', source: { by: 'org' }, order: ['id'], omit: ['note'] },
   { name: 'earnings_imports', source: { by: 'org' }, order: ['id'] },
   { name: 'earnings_lines', source: { by: 'org' }, order: ['id'] },
+  // LABEL-62: how each line was split between payees, and what was recouped against which advance.
+  { name: 'earnings_allocations', source: { by: 'org' }, order: ['id'] },
+  { name: 'earnings_recoupments', source: { by: 'org' }, order: ['id'] },
   { name: 'statements', source: { by: 'org' }, order: ['id'], omit: ['void_reason'] },
   { name: 'statement_lines', source: { by: 'org' }, order: ['id'] },
   { name: 'payments', source: { by: 'org' }, order: ['id'], omit: ['reference'] },
