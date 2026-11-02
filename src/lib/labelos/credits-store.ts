@@ -227,7 +227,7 @@ export async function updateParty(admin: AdminClient, org: string, partyId: stri
 /**
  * How many credits, split lines and contracts name the party (a party that is on any
  * is not deleted: the credits are a record, and so are a circulated split sheet,
- * LABEL-28, and a contract, LABEL-57). A database without 155 simply has no lines.
+ * LABEL-28, a contract, LABEL-57, and a payee, LABEL-61). A database without 155 simply has no lines.
  */
 export async function creditsOfParty(admin: AdminClient, org: string, partyId: string): Promise<number> {
   const res = await admin.from('track_collaborators').select('id', { count: 'exact', head: true }).eq('org_id', org).eq('party_id', partyId);
@@ -237,7 +237,10 @@ export async function creditsOfParty(admin: AdminClient, org: string, partyId: s
   // LABEL-57: a party a contract names is not deleted either (contract_parties has a plain foreign key). A database without 176 has none.
   const contracts = await admin.from('contract_parties').select('contract_id', { count: 'exact', head: true }).eq('org_id', org).eq('party_id', partyId);
   if (contracts.error && !isMissingCreditsSchema(contracts.error)) throw new Error(`party contracts: ${contracts.error.message}`);
-  return (res.count ?? 0) + (lines.error ? 0 : lines.count ?? 0) + (contracts.error ? 0 : contracts.count ?? 0);
+  // LABEL-61: a party that is a payee is not deleted either (payees has a plain foreign key to parties). A database without 179 has none.
+  const payees = await admin.from('payees').select('id', { count: 'exact', head: true }).eq('org_id', org).eq('party_id', partyId);
+  if (payees.error && !isMissingCreditsSchema(payees.error)) throw new Error(`party payees: ${payees.error.message}`);
+  return (res.count ?? 0) + (lines.error ? 0 : lines.count ?? 0) + (contracts.error ? 0 : contracts.count ?? 0) + (payees.error ? 0 : payees.count ?? 0);
 }
 
 export async function deleteParty(admin: AdminClient, org: string, partyId: string): Promise<boolean> {

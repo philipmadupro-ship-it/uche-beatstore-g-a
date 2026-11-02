@@ -15,6 +15,7 @@
  * type). e.g. `RateBodySchema` and `RateBody = z.infer<typeof RateBodySchema>`.
  */
 import { z } from 'zod';
+import { isCurrency as isFinanceCurrency } from '@/lib/labelos/finance/currency';
 import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
 import { DECISIONS } from '@/lib/contacts/decisions';
 import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
@@ -2039,3 +2040,40 @@ export const OrgContractPatchBodySchema = z
   .refine((b) => b.status !== 'void' || Object.keys(b).every((k) => k === 'status' || k === 'void_reason'), { message: 'Void a contract on its own' })
   .refine((b) => Object.keys(b).some((k) => k !== 'base_version'), { message: 'Nothing to update' });
 export type OrgContractPatchBody = z.infer<typeof OrgContractPatchBodySchema>;
+
+// ── Finance (LABEL-61) ──────────────────────────────────────────────────
+
+/** A payee: a rights holder (`parties`) who is paid. The currency is an ISO-4217 code the money helpers know. */
+export const OrgPayeeCreateBodySchema = z
+  .object({
+    party_id: z.string().uuid(),
+    // The artist the writer expects the party to stand for (null = none). The database refuses the insert if the party says otherwise.
+    artist_contact_id: z.string().uuid().nullable(),
+    currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine((c) => isFinanceCurrency(c), 'Unknown currency')
+      .default('USD'),
+    // Free text for finance ("wire details on file"), never an account number: the route and the database refuse one.
+    payment_reference: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+export type OrgPayeeCreateBody = z.infer<typeof OrgPayeeCreateBodySchema>;
+
+/**
+ * An amount sent by a client, in minor units: a whole number JSON can carry exactly (a number past 2^53 has
+ * already been rounded by the parser, so it is refused — a 400, never silently a different amount) or a digit
+ * string inside the signed 64-bit range of the database column.
+ */
+export const OrgMinorAmountSchema = z.union([
+  z.number().int().safe(),
+  z
+    .string()
+    .regex(/^-?\d{1,19}$/)
+    .refine((v) => {
+      if (!/^-?\d{1,19}$/.test(v)) return false;
+      const n = BigInt(v);
+      return n <= BigInt('9223372036854775807') && n >= -BigInt('9223372036854775807') - BigInt(1);
+    }, 'Amount is outside the range of a 64-bit integer'),
+]);

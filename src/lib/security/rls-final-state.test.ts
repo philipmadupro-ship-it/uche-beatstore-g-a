@@ -127,6 +127,15 @@ function labelOsTables(): string[] {
     'contract_templates',
     'contracts',
     'contract_parties',
+    // 179_labelos_finance.sql (LABEL-61): org-only, service-role writes, finance.read + artist scope
+    'payees',
+    'finance_periods',
+    'advances',
+    'earnings_imports',
+    'earnings_lines',
+    'statements',
+    'statement_lines',
+    'payments',
     // 178_labelos_contract_signing.sql (LABEL-60): service-role only behind a deny-all policy; signatures are append-only.
     'contract_signers',
     'contract_signatures',
@@ -166,6 +175,8 @@ const ORG_HELPERS = [
   'labelos_visible_members',
   // 164 (LABEL-43): the caller's own live orgs, the own-row fast path of org_members_member_read.
   'labelos_my_live_orgs',
+  // 179 (LABEL-61): the payees that are the caller (a roster artist's own), one uncorrelated call, for payees / statements / payments.
+  'labelos_my_payees',
 ];
 const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 
@@ -610,6 +621,64 @@ describe('final RLS policy state', () => {
       expect(body).toMatch(/user_id = \(SELECT auth\.uid\(\)\)/);
       expect(body).not.toMatch(/has_org_cap\(\s*org_id/);
       expect(body).not.toMatch(/WITH CHECK/i);
+    });
+  });
+
+  describe('Label OS finance (mig 179, LABEL-61)', () => {
+    const sql = () => readFileSync(join(DIR, '179_labelos_finance.sql'), 'utf8').replace(/--[^\n]*/g, '');
+    const TABLES = ['payees', 'finance_periods', 'advances', 'earnings_imports', 'earnings_lines', 'statements', 'statement_lines', 'payments'];
+    const HIDDEN: Record<string, string[]> = { payees: ['payment_reference'], advances: ['note'], payments: ['reference'] };
+
+    it('every finance table has exactly one SELECT policy and no write policy of any kind', () => {
+      for (const t of TABLES) {
+        const own = [...policies].filter(([k]) => k.startsWith(`${t}.`));
+        expect(own.map(([k]) => k), t).toEqual([`${t}.${t}_member_read`]);
+        expect(own[0][1], t).toMatch(/^\s*FOR SELECT\b/i);
+        expect(own[0][1], t).not.toMatch(/WITH CHECK/i);
+      }
+    });
+
+    it('takes the table-wide grants away and never grants the free-text columns to an API role', () => {
+      expect(sql()).toMatch(/REVOKE ALL ON public\.payees[\s\S]*?FROM anon, authenticated;/);
+      for (const t of TABLES) {
+        const grant = sql().match(new RegExp(`GRANT SELECT \\(([^)]*)\\)\\s+ON public\\.${t} TO authenticated;`));
+        expect(grant, `column grant on ${t}`).not.toBeNull();
+        const cols = grant![1].split(',').map((c) => c.trim());
+        for (const hidden of HIDDEN[t] ?? []) expect(cols, `${t}.${hidden}`).not.toContain(hidden);
+        expect(cols, t).toContain('org_id');
+      }
+      for (const m of realMigrations().filter((x) => x.name > '179')) {
+        const body = readFileSync(join(DIR, m.name), 'utf8').replace(/--[^\n]*/g, '');
+        expect(body, m.name).not.toMatch(new RegExp(`GRANT\\s+(SELECT|ALL)(\\s+PRIVILEGES)?\\s+ON\\s+(TABLE\\s+)?(public\\.)?(${TABLES.join('|')})\\b`, 'i'));
+      }
+    });
+
+    it('staff read needs finance.read and not role artist; the artist path goes through the one helper and only ISSUED statements', () => {
+      for (const t of ['payees', 'advances', 'statements', 'payments']) {
+        const body = policies.get(`${t}.${t}_member_read`) ?? '';
+        expect(body, t).toMatch(/cm\.role <> 'artist' AND public\.has_org_cap\(cm\.org_id, 'finance\.read'\)/);
+        expect(body, t).toMatch(/member_artist_scopes/);
+      }
+      expect(policies.get('statements.statements_member_read')).toMatch(/status = 'issued' AND payee_id IN \(SELECT mp\.payee_id FROM public\.labelos_my_payees\(\) mp\)/);
+      // advances, earnings: no artist path at all
+      for (const t of ['advances', 'earnings_imports', 'earnings_lines']) expect(policies.get(`${t}.${t}_member_read`), t).not.toMatch(/labelos_my_payees/);
+      // earnings are whole-org finance readers only
+      for (const t of ['earnings_imports', 'earnings_lines']) expect(policies.get(`${t}.${t}_member_read`), t).toMatch(/cm\.scope = 'org'/);
+    });
+
+    it('"own" never goes through a party’s linked account', () => {
+      const fn = sql().match(/FUNCTION public\.labelos_my_payees\(\)[\s\S]*?\$\$;/)?.[0] ?? '';
+      expect(fn).toMatch(/member_artist_scopes/);
+      expect(fn).toMatch(/org_self_artist/);
+      expect(fn).not.toMatch(/parties|\.user_id = p\./);
+    });
+
+    it('is service-role only for writes and carries no processor column', () => {
+      for (const t of TABLES) expect(sql(), t).toMatch(new RegExp(`CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE ON public\\.${t}\\b`));
+      const body = sql().match(/CREATE TABLE IF NOT EXISTS public\.payments \(([\s\S]*?)\n\);/)?.[1] ?? '';
+      const columns = [...body.matchAll(/^ {2}([a-z_]+)\s+(?:uuid|bigint|char|date|timestamptz|text)\b/gm)].map((m) => m[1]);
+      expect(columns.length).toBeGreaterThan(8);
+      for (const c of columns) expect(c, c).not.toMatch(/stripe|processor|account|iban|transfer|payout|bank|method/i);
     });
   });
 
