@@ -145,3 +145,13 @@ describe('one artist per artist org, held by the database (migration 166)', () =
     expect(sql).toMatch(new RegExp(`CREATE UNIQUE INDEX IF NOT EXISTS ${ONE_ARTIST_INDEX}\\s+ON public\\.contacts \\(org_id\\)\\s+WHERE org_self_artist`));
   });
 });
+
+import { isArtistCapError, ARTIST_CAP_REACHED } from './roster';
+describe('isArtistCapError (187)', () => {
+  it('recognises the trigger error and nothing else', () => {
+    expect(isArtistCapError({ code: '23514', message: 'artist_limit: this organization has reached the number of artists its licence includes' })).toBe(true);
+    expect(isArtistCapError({ code: '23505', message: 'duplicate key' })).toBe(false);
+    expect(isArtistCapError(null)).toBe(false);
+    expect(ARTIST_CAP_REACHED).toMatch(/licence/);
+  });
+});

@@ -192,9 +192,10 @@ function sqlHasOrgCap(map: Mapping, m: SqlMember, cap: string): boolean {
 }
 
 describe('has_org_cap mapping (latest definition) equals capabilities.ts + entitlements.ts', () => {
-  it('finds the definitions: 136 first, 171 the latest', () => {
+  it('finds the definitions: 136 first, 187 the latest', () => {
     expect(DEFINING[0]).toMatch(/^136_labelos_org_core\.sql$/);
-    expect(FILE).toMatch(/^171_/);
+    // 187 (LABEL-73) re-states 171's function with one extra step (departments_off); the mapping is 171's.
+    expect(FILE).toMatch(/^187_/);
   });
 
   const map = parseMapping(readFileSync(join(MIGRATIONS, FILE!), 'utf8'));

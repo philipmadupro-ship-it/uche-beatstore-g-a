@@ -48,6 +48,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       if (isMissingAuditRpc(error) || isMissingConnections(error)) return json(503, { error: CONNECTIONS_NOT_READY });
       throw new Error(error.message);
     }
+    if (data?.error === 'artist_limit') return json(409, { error: 'This organization has reached the number of artists its licence includes.' });
     if (data?.error === 'contact_taken') return json(409, { error: 'That roster contact already stands for another artist organization' });
     if (data?.error) return json(404, { error: 'Not found' });
     return json(200, { ok: true });

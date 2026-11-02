@@ -316,3 +316,52 @@ describe('failure modes', () => {
     expect(events()).toHaveLength(1);
   });
 });
+
+describe('with migration 187 applied (labelos_audit_release_deliver)', () => {
+  const calls: Record<string, unknown>[] = [];
+  beforeEach(() => {
+    ready = true;
+    calls.length = 0;
+  });
+  const withRpc = (answer: (args: Record<string, unknown>) => unknown) => {
+    db.rpc = {
+      labelos_audit_release_deliver: (args) => {
+        calls.push(args);
+        return { data: answer(args), error: null };
+      },
+    };
+  };
+
+  it('delivers through the function with the fingerprint read before readiness, and writes no event itself', async () => {
+    withRpc(() => ({ release: { ...release(R1, L, LP1, C1), state: 'delivered', delivered_to: 'DistroKid', delivered_at: '2026-10-12T12:00:00.000Z' } }));
+    const res = await deliver(AR, L, R1);
+    expect(res.status).toBe(200);
+    expect((await res.json()).release).toMatchObject({ state: 'delivered', deliveredTo: 'DistroKid' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ p_org: L, p_release: R1, p_visibility: 'artist', p_ctx: { artist_id: C1, project_id: LP1 } });
+    expect(calls[0].p_expect).toMatchObject({ release_updated_at: '2026-10-01T00:00:00Z', items: '' });
+    // The function owns the claim and the event: the route did neither.
+    expect(row(R1).state).toBe('draft');
+    expect(events()).toHaveLength(0);
+  });
+
+  it('changed → 409 and the route does not fall back to its own claim', async () => {
+    withRpc(() => ({ error: 'changed' }));
+    const res = await deliver(OWN, L, R1);
+    expect(res.status).toBe(409);
+    expect(row(R1).state).toBe('draft');
+  });
+
+  it('not_draft → 409', async () => {
+    withRpc(() => ({ error: 'not_draft', state: 'delivered' }));
+    expect((await deliver(OWN, L, R1)).status).toBe(409);
+  });
+
+  it('an overridden delivery is filed internal', async () => {
+    ready = false;
+    withRpc(() => ({ release: { ...release(R1, L, LP1, C1), state: 'delivered', delivered_at: '2026-10-12T12:00:00.000Z' } }));
+    const res = await deliver(OWN, L, R1, { distributor: 'D', override: true, override_note: 'Owner signed it off' });
+    expect(res.status).toBe(200);
+    expect(calls[0]).toMatchObject({ p_visibility: 'internal' });
+  });
+});

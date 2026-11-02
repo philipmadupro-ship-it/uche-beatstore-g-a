@@ -79,7 +79,7 @@ describe('PATCH', () => {
     expect(res.status).toBe(200);
     expect(admin.rpcs).toEqual([
       {
-        name: 'labelos_audit_org_settings',
+        name: 'labelos_audit_org_settings_atomic',
         args: {
           p_org: ORG,
           p_actor: ME,

@@ -17,6 +17,8 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
+import { auditRpc, isMissingAtomicRpc } from '@/lib/labelos/audit-rpc';
+import { encryptWebhook } from '@/lib/labelos/webhook-secret';
 import { validateSlackWebhookUrl } from '@/lib/labelos/slack-webhook';
 import { SecretUnavailableError } from '@/lib/labelos/webhook-secret';
 import { DigestSchemaMissing, clearChannel, undoChannelChange, writeChannel } from '@/lib/labelos/weekly-digest-store';
@@ -62,6 +64,31 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const checked = validateSlackWebhookUrl(parsed.data.url);
   if (!checked.ok) return json(400, { error: checked.reason });
 
+  // 187 (LABEL-73): the cipher and `digest.channel_set` in one transaction; `replaced` is read under the lock.
+  try {
+    const { data, error } = await auditRpc(access.admin, 'digestChannelSet', {
+      p_org: access.orgId,
+      p_actor: access.userId,
+      p_cipher: encryptWebhook(checked.url, access.orgId),
+      p_payload: {},
+    });
+    if (!error) {
+      if (data?.error) return json(404, { error: 'Not found' });
+      return json(200, { configured: true });
+    }
+    if (/org_digest_channels/.test(error.message) && (error.code === '42P01' || error.code === 'PGRST205')) {
+      return json(503, { error: 'The weekly digest is not available yet.', schemaReady: false });
+    }
+    if (!isMissingAtomicRpc(error)) {
+      log.error('digest channel write failed', { orgId, error: error.message });
+      return json(500, { error: 'Could not save the Slack webhook' });
+    }
+  } catch (err) {
+    if (err instanceof SecretUnavailableError) return json(503, { error: 'The server has no secret configured to store a webhook.' });
+    log.error('digest channel write failed', { orgId, error: errorMessage(err) });
+    return json(500, { error: 'Could not save the Slack webhook' });
+  }
+
   let change: Awaited<ReturnType<typeof writeChannel>>;
   try {
     change = await writeChannel(access.admin, access.orgId, access.userId, checked.url);
@@ -86,6 +113,18 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   // a secret the org saved must never become undeletable. Only setting one needs the module.
   const access = await requireOrgCapability(orgId, 'org.manage');
   if (!access.ok) return access.res;
+  try {
+    const { error } = await auditRpc(access.admin, 'digestChannelRemove', { p_org: access.orgId, p_actor: access.userId, p_payload: {} });
+    if (!error) return json(200, { configured: false });
+    if (/org_digest_channels/.test(error.message) && (error.code === '42P01' || error.code === 'PGRST205')) return json(200, { configured: false });
+    if (!isMissingAtomicRpc(error)) {
+      log.error('digest channel clear failed', { orgId, error: error.message });
+      return json(500, { error: 'Could not remove the Slack webhook' });
+    }
+  } catch (err) {
+    log.error('digest channel clear failed', { orgId, error: errorMessage(err) });
+    return json(500, { error: 'Could not remove the Slack webhook' });
+  }
   let change: Awaited<ReturnType<typeof clearChannel>>;
   try {
     change = await clearChannel(access.admin, access.orgId);
