@@ -162,7 +162,7 @@ function Photos({ photos }: { photos: { id: string; url: string; caption: string
         {photos.map((p) => (
           <li key={p.id} className="overflow-hidden rounded-xl border border-white/10 bg-[#0D0D0A]">
             {/* eslint-disable-next-line @next/next/no-img-element -- streamed through the token-gated route; no optimiser may fetch it */}
-            <img src={p.url} alt={p.caption ?? ''} loading="lazy" className="aspect-square w-full object-cover" />
+            <img src={p.url} alt={p.caption ?? 'Press photo'} loading="lazy" className="aspect-square w-full object-cover" />
             <div className="flex items-center justify-between gap-2 px-2 py-1.5 print:hidden">
               <span className="min-w-0 truncate text-[10px] text-white/60">{p.caption ?? ''}</span>
               <a href={p.url} download aria-label="Download photo" className="text-white/60 hover:text-white">
