@@ -92,7 +92,7 @@ export function EarningsView({ orgId }: { orgId: string }) {
           <ul className="space-y-2">
             {queue.map((l) => (
               <li key={l.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="queue-line" data-reason={l.reason ?? ''}>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
                   <p className="truncate text-[13px] text-white">{l.title ?? l.isrc ?? l.upc ?? `Line ${l.line_no}`}</p>
                   <p className="text-[11px] text-white/60">
                     {[l.isrc, l.upc, l.store, `line ${l.line_no}`].filter(Boolean).join(' · ')}
@@ -134,7 +134,7 @@ function ImportRow({ orgId, item, canWrite, waiting, onDone }: { orgId: string; 
   }
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="import-row">
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
         <p className="truncate text-[13px] text-white">{item.file_name ?? 'Earnings file'}</p>
         <p className="text-[11px] text-white/60">{item.source} · {item.row_count} lines · {new Date(item.created_at).toLocaleDateString('en-GB')}</p>
         {note && <p className="mt-1 text-[11px] text-white/60" role="status">{note}</p>}
