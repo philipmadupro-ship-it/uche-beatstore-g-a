@@ -47,6 +47,8 @@ import { OrgReleaseStoreBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
+import { auditRpc, isMissingAtomicRpc } from '@/lib/labelos/audit-rpc';
+import { readItemsKey, storeExpectation } from '@/lib/labelos/release-fingerprint';
 import { releaseEventSubject } from '@/lib/labelos/releases';
 import { effectivePlayback, isReleasedForStore, planList, planUnlist, releasedPublicly, type ListingFacts } from '@/lib/labelos/store-listing';
 import { proposalRecipients, summarizeConsents, planProposal, answerableContacts } from '@/lib/labelos/store-consent';
@@ -203,31 +205,64 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (!plan.ok) return json(plan.status, { error: plan.error, field: plan.field });
     // Playback goes back to the default with the listing: a later listing by someone who may not choose
     // `full` must not inherit a manager's earlier choice.
-    const was = await readPlayback(admin, release.id);
-    const before = { store_listed: true, store_listed_at: release.store_listed_at, ...(was.schemaReady ? { store_playback: was.playback } : {}) };
-    const { data, error } = await admin
-      .from('releases')
-      .update({ store_listed: false, store_listed_at: null, ...(was.schemaReady ? { store_playback: 'preview' } : {}) })
-      .eq('id', release.id)
-      .eq('org_id', org)
-      .eq('store_listed', true)
-      .select('id')
-      .maybeSingle();
-    if (error) return fail(500, 'Could not take the release off the store').res;
-    if (!data) return json(409, { error: 'This release is not on the store', field: 'store_listed' });
+    // 187: the change and `release.store_unlisted` in one transaction, against the facts the plan read.
+    let atomic = false;
     try {
-      await recordEvent(admin, actor, 'release.store_unlisted', subject, {
-        askedToDeletePreviews: plan.askToDeletePreviews,
-        deletePreviews: plan.deletePreviews,
+      const { data, error: rpcError } = await auditRpc(admin, 'releaseStore', {
+        p_org: org,
+        p_actor: access.userId,
+        p_release: release.id,
+        p_list: false,
+        p_playback: null,
+        p_expect: storeExpectation(release, await readItemsKey(admin, release.id)),
+        p_ctx: { artist_id: release.contact_id, project_id: release.project_id },
+        p_payload: { askedToDeletePreviews: plan.askToDeletePreviews, deletePreviews: plan.deletePreviews },
       });
-    } catch (err) {
-      log.error('unlist audit failed', { releaseId, error: errorMessage(err) });
-      const { error: revertError } = await admin.from('releases').update(before).eq('id', release.id).eq('org_id', org).eq('store_listed', false);
-      if (revertError) {
-        log.error('unlist put-back FAILED: release is off the store without its event', { releaseId, error: revertError.message });
-        return json(500, { error: 'The release is off the store, but the record of it could not be written. Nothing is public; putting it on and taking it off again is safe.', listed: false });
+      if (!rpcError) {
+        if (data?.error === 'not_listed') return json(409, { error: 'This release is not on the store', field: 'store_listed' });
+        if (data?.error === 'changed') return json(409, { error: 'The release changed while it was being taken off; check it and try again', field: 'state' });
+        if (data?.error === 'not_found') return json(404, { error: 'Not found' });
+        atomic = true;
+      } else if (!isMissingAtomicRpc(rpcError)) {
+        log.error('unlist failed', { releaseId, error: rpcError.message });
+        return json(500, { error: 'Could not take the release off the store' });
       }
+    } catch (err) {
+      log.error('unlist failed', { releaseId, error: errorMessage(err) });
       return json(500, { error: 'Could not take the release off the store' });
+    }
+    if (!atomic) {
+      // Migration 187 is not applied: change, then event, put back on failure.
+      const legacy = await (async (): Promise<Response | null> => {
+        const was = await readPlayback(admin, release.id);
+        const before = { store_listed: true, store_listed_at: release.store_listed_at, ...(was.schemaReady ? { store_playback: was.playback } : {}) };
+        const { data, error } = await admin
+          .from('releases')
+          .update({ store_listed: false, store_listed_at: null, ...(was.schemaReady ? { store_playback: 'preview' } : {}) })
+          .eq('id', release.id)
+          .eq('org_id', org)
+          .eq('store_listed', true)
+          .select('id')
+          .maybeSingle();
+        if (error) return fail(500, 'Could not take the release off the store').res;
+        if (!data) return json(409, { error: 'This release is not on the store', field: 'store_listed' });
+        try {
+          await recordEvent(admin, actor, 'release.store_unlisted', subject, {
+            askedToDeletePreviews: plan.askToDeletePreviews,
+            deletePreviews: plan.deletePreviews,
+          });
+        } catch (err) {
+          log.error('unlist audit failed', { releaseId, error: errorMessage(err) });
+          const { error: revertError } = await admin.from('releases').update(before).eq('id', release.id).eq('org_id', org).eq('store_listed', false);
+          if (revertError) {
+            log.error('unlist put-back FAILED: release is off the store without its event', { releaseId, error: revertError.message });
+            return json(500, { error: 'The release is off the store, but the record of it could not be written. Nothing is public; putting it on and taking it off again is safe.', listed: false });
+          }
+          return json(500, { error: 'Could not take the release off the store' });
+        }
+        return null;
+      })();
+      if (legacy) return legacy;
     }
     let previewsDeleted = false;
     if (plan.deletePreviews) {
@@ -248,7 +283,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   let current;
   let consents;
   let veto;
+  let itemsKey: string | null = null;
   try {
+    // Before the facts the plan is made from: anything that changes after this is caught under the lock (187).
+    itemsKey = await readItemsKey(admin, release.id).catch(() => null);
     [owner, items, current, consents, veto] = await Promise.all([
       loadStoreOwnerOrgs(admin),
       loadListingItems(admin, org, release.id),
@@ -337,35 +375,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return json(500, { error: 'Could not prepare the previews' });
   }
 
-  const before = { store_listed: release.store_listed, store_listed_at: release.store_listed_at };
-  /** Put the release row, and a first listing's promoted previews, back as they were before the claim. */
-  const putBackClaim = async () => {
-    await admin
-      .from('releases')
-      .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
-      .eq('id', release.id)
-      .eq('org_id', org);
-    if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
-    // The put-back restores `store_listed` as it was; if an artist said no meanwhile, "as it was" must not re-open it.
-    await enforceRefusal(admin, org, release.id, current.schemaReady).catch((e) => log.error('refusal enforcement after put-back failed', { releaseId, error: errorMessage(e) }));
-  };
-  const listedAt = release.store_listed_at ?? now.toISOString();
-  // Guarded: the statement itself repeats what the plan judged (state, import flag and release date as
-  // read), so a change between the plan and this write cannot store a listing for a release that is
-  // not out. The date of a release that went out is fixed by the PATCH route as well.
-  let guarded = admin
-    .from('releases')
-    .update({ store_listed: true, store_listed_at: listedAt, ...(current.schemaReady ? { store_playback: plan.playback } : {}) })
-    .eq('id', release.id)
-    .eq('org_id', org)
-    .eq('state', release.state)
-    .eq('imported_released', release.imported_released);
-  guarded = release.release_date === null ? guarded.is('release_date', null) : guarded.eq('release_date', release.release_date);
-  const { data: claimed, error } = await guarded.select('id').maybeSingle();
-  if (error) return fail(500, 'Could not put the release on the store').res;
-  if (!claimed) {
-    // The release changed under the plan. Copies promoted for it must not stay public if the music is not
-    // (and was not) publicly out — judged on the release as it is now.
+  /** The previews promoted for a first listing that did not happen. */
+  const dropPromoted = async () => {
     if (!plan.alreadyListed && promoted.length > 0) {
       try {
         const fresh = await loadListingRelease(admin, org, release.id);
@@ -374,58 +385,144 @@ export async function PUT(req: NextRequest, { params }: Params) {
         log.error('could not remove the previews promoted for a listing that did not happen', { releaseId, error: errorMessage(cleanupErr) });
       }
     }
-    return json(409, { error: 'The release changed while it was being listed; check it and try again', field: 'state' });
-  }
-  // An artist may have said no (or the store owner vetoed) between the plan's read and the claim above. The public
-  // routes would refuse the release anyway; this keeps the flag honest and tells the lister, instead of a listing
-  // that looks live and serves nothing. A read that fails is treated like an answer we cannot rule out: the claim is
-  // put back (the listing must not stand on a check that did not happen).
-  if (consents.schemaReady) {
-    let refusedNow: boolean;
-    try {
-      refusedNow = (await blockedByConsent(admin, [release.id])).has(release.id.toLowerCase());
-    } catch (err) {
-      log.error('consent re-check failed: putting the claim back', { releaseId, error: errorMessage(err) });
-      await putBackClaim();
-      return json(500, { error: 'Could not check the artists’ answers; nothing was put on the store' });
-    }
-    if (refusedNow) {
-      await putBackClaim();
-      return json(409, { error: 'An artist on this release said no while it was being listed; nothing was put on the store', field: 'consent' });
-    }
-  }
-  // recordEvent + put-back, as LABEL-33's delivery: there is no audit RPC for these verbs (that would be a
-  // second migration), so the change is written first and undone if its record cannot be written.
-  try {
-    await recordEvent(admin, actor, 'release.store_listed', subject, {
-      playback: plan.playback,
-      effectivePlayback: plan.effective,
-      items: items.length,
-      promoted: promoted.length,
-      derivatives,
-      relisted: plan.alreadyListed,
-      // LABEL-71: counts only — never who, never what they answered.
-      consentAsked: proposal.asked.length,
-      consentUnreachable: proposal.unreachable.length,
+  };
+
+  // 187: the claim, the consent re-check and `release.store_listed` in ONE transaction under the release's lock.
+  // Derivatives were cut above, outside it. No claim exists to put back.
+  let atomic = false;
+  if (itemsKey !== null) {
+    const { data, error: rpcError } = await auditRpc(admin, 'releaseStore', {
+      p_org: org,
+      p_actor: access.userId,
+      p_release: release.id,
+      p_list: true,
+      p_playback: current.schemaReady ? plan.playback : null,
+      p_expect: storeExpectation(release, itemsKey),
+      p_ctx: { artist_id: release.contact_id, project_id: release.project_id },
+      p_payload: {
+        playback: plan.playback,
+        effectivePlayback: plan.effective,
+        items: items.length,
+        promoted: promoted.length,
+        derivatives,
+        relisted: plan.alreadyListed,
+        consentAsked: proposal.asked.length,
+        consentUnreachable: proposal.unreachable.length,
+      },
     });
-  } catch (err) {
-    log.error('list audit failed', { releaseId, error: errorMessage(err) });
-    const { error: revertError } = await admin
-      .from('releases')
-      .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
-      .eq('id', release.id)
-      .eq('org_id', org);
-    await enforceRefusal(admin, org, release.id, current.schemaReady).catch((e) => log.error('refusal enforcement after put-back failed', { releaseId, error: errorMessage(e) }));
-    if (revertError) {
-      // A public listing with no event: say so loudly. The release stays listed until an owner unlists it.
-      log.error('list put-back FAILED: release is listed without its event', { releaseId, error: revertError.message });
-      return json(500, { error: 'The release was listed but could not be recorded, and could not be undone. Take it off the store and try again.', listed: true });
+    if (!rpcError) {
+      if (data?.error === 'consent') {
+        await dropPromoted();
+        return json(409, { error: 'An artist on this release said no while it was being listed; nothing was put on the store', field: 'consent' });
+      }
+      if (data?.error === 'changed' || data?.error === 'not_released') {
+        await dropPromoted();
+        return json(409, { error: 'The release changed while it was being listed; check it and try again', field: 'state' });
+      }
+      if (data?.error === 'not_found') return json(404, { error: 'Not found' });
+      atomic = true;
+    } else if (!isMissingAtomicRpc(rpcError)) {
+      await dropPromoted();
+      log.error('list failed', { releaseId, error: rpcError.message });
+      return json(500, { error: 'Could not put the release on the store' });
     }
-    if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
-    return json(500, { error: 'Could not put the release on the store' });
   }
-  // Tell the artists. Best effort, after the listing is recorded: the release is listed either way, and a
-  // bell that failed to write is the lister's to see in `consent.notified`, not a failed listing.
+  if (!atomic) {
+    // Migration 187 is not applied: claim, re-check, event, put back on failure.
+    const legacy = await (async (): Promise<Response | null> => {
+  const before = { store_listed: release.store_listed, store_listed_at: release.store_listed_at };
+    /** Put the release row, and a first listing's promoted previews, back as they were before the claim. */
+    const putBackClaim = async () => {
+      await admin
+        .from('releases')
+        .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
+        .eq('id', release.id)
+        .eq('org_id', org);
+      if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
+      // The put-back restores `store_listed` as it was; if an artist said no meanwhile, "as it was" must not re-open it.
+      await enforceRefusal(admin, org, release.id, current.schemaReady).catch((e) => log.error('refusal enforcement after put-back failed', { releaseId, error: errorMessage(e) }));
+    };
+    const listedAt = release.store_listed_at ?? now.toISOString();
+    // Guarded: the statement itself repeats what the plan judged (state, import flag and release date as
+    // read), so a change between the plan and this write cannot store a listing for a release that is
+    // not out. The date of a release that went out is fixed by the PATCH route as well.
+    let guarded = admin
+      .from('releases')
+      .update({ store_listed: true, store_listed_at: listedAt, ...(current.schemaReady ? { store_playback: plan.playback } : {}) })
+      .eq('id', release.id)
+      .eq('org_id', org)
+      .eq('state', release.state)
+      .eq('imported_released', release.imported_released);
+    guarded = release.release_date === null ? guarded.is('release_date', null) : guarded.eq('release_date', release.release_date);
+    const { data: claimed, error } = await guarded.select('id').maybeSingle();
+    if (error) return fail(500, 'Could not put the release on the store').res;
+    if (!claimed) {
+      // The release changed under the plan. Copies promoted for it must not stay public if the music is not
+      // (and was not) publicly out — judged on the release as it is now.
+      if (!plan.alreadyListed && promoted.length > 0) {
+        try {
+          const fresh = await loadListingRelease(admin, org, release.id);
+          if (!fresh || !releasedPublicly(fresh, new Date())) await deletePromotedPreviews(release.id);
+        } catch (cleanupErr) {
+          log.error('could not remove the previews promoted for a listing that did not happen', { releaseId, error: errorMessage(cleanupErr) });
+        }
+      }
+      return json(409, { error: 'The release changed while it was being listed; check it and try again', field: 'state' });
+    }
+    // An artist may have said no (or the store owner vetoed) between the plan's read and the claim above. The public
+    // routes would refuse the release anyway; this keeps the flag honest and tells the lister, instead of a listing
+    // that looks live and serves nothing. A read that fails is treated like an answer we cannot rule out: the claim is
+    // put back (the listing must not stand on a check that did not happen).
+    if (consents.schemaReady) {
+      let refusedNow: boolean;
+      try {
+        refusedNow = (await blockedByConsent(admin, [release.id])).has(release.id.toLowerCase());
+      } catch (err) {
+        log.error('consent re-check failed: putting the claim back', { releaseId, error: errorMessage(err) });
+        await putBackClaim();
+        return json(500, { error: 'Could not check the artists’ answers; nothing was put on the store' });
+      }
+      if (refusedNow) {
+        await putBackClaim();
+        return json(409, { error: 'An artist on this release said no while it was being listed; nothing was put on the store', field: 'consent' });
+      }
+    }
+    // recordEvent + put-back, as LABEL-33's delivery: there is no audit RPC for these verbs (that would be a
+    // second migration), so the change is written first and undone if its record cannot be written.
+    try {
+      await recordEvent(admin, actor, 'release.store_listed', subject, {
+        playback: plan.playback,
+        effectivePlayback: plan.effective,
+        items: items.length,
+        promoted: promoted.length,
+        derivatives,
+        relisted: plan.alreadyListed,
+        // LABEL-71: counts only — never who, never what they answered.
+        consentAsked: proposal.asked.length,
+        consentUnreachable: proposal.unreachable.length,
+      });
+    } catch (err) {
+      log.error('list audit failed', { releaseId, error: errorMessage(err) });
+      const { error: revertError } = await admin
+        .from('releases')
+        .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
+        .eq('id', release.id)
+        .eq('org_id', org);
+      await enforceRefusal(admin, org, release.id, current.schemaReady).catch((e) => log.error('refusal enforcement after put-back failed', { releaseId, error: errorMessage(e) }));
+      if (revertError) {
+        // A public listing with no event: say so loudly. The release stays listed until an owner unlists it.
+        log.error('list put-back FAILED: release is listed without its event', { releaseId, error: revertError.message });
+        return json(500, { error: 'The release was listed but could not be recorded, and could not be undone. Take it off the store and try again.', listed: true });
+      }
+      if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
+      return json(500, { error: 'Could not put the release on the store' });
+    }
+    // Tell the artists. Best effort, after the listing is recorded: the release is listed either way, and a
+    // bell that failed to write is the lister's to see in `consent.notified`, not a failed listing.
+      return null;
+    })();
+    if (legacy) return legacy;
+  }
   let notified = 0;
   if (proposal.recipients.length > 0) {
     const res = await askArtistsAboutListing(admin, {

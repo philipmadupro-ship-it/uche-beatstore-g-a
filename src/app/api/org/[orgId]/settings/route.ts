@@ -23,7 +23,7 @@ import { requireOrgOwner, type OrgOwnerOk } from '@/lib/auth/org-access';
 import { OrgSettingsPatchBodySchema } from '@/lib/contracts';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
-import { ORG_SETTINGS_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
+import { ORG_SETTINGS_NOT_READY, auditRpc, isMissingAtomicRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { loadEntitlements } from '@/lib/labelos/entitlements-store';
 import { SWITCHABLE_MODULES, parseOrgSettings, planSettingsChange } from '@/lib/labelos/org-settings';
 import { createLogger } from '@/lib/log';
@@ -91,12 +91,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!plan.ok) return json(422, { error: plan.error });
     if (plan.keys.length === 0) return json(200, { ...view(loaded.raw, loaded.licensed), changed: [] });
 
-    const { data, error } = await auditRpc(access.admin, 'orgSettings', {
-      p_org: access.org.id,
-      p_actor: access.userId,
-      p_patch: plan.patch,
-      p_payload: plan.payload,
-    });
+    const args = { p_org: access.org.id, p_actor: access.userId, p_patch: plan.patch, p_payload: plan.payload };
+    // 187: the audit payload's `from` is read under the row lock. Without it, the previous function.
+    let { data, error } = await auditRpc(access.admin, 'orgSettingsAtomic', args);
+    if (isMissingAtomicRpc(error)) ({ data, error } = await auditRpc(access.admin, 'orgSettings', args));
     if (isMissingAuditRpc(error)) return json(503, { error: ORG_SETTINGS_NOT_READY });
     if (error) throw new Error(error.message);
     if (data?.error === 'not_owner') return json(403, { error: 'Forbidden' });

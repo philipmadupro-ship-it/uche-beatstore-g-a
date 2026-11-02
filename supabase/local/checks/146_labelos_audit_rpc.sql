@@ -77,7 +77,10 @@ SELECT public.check_eq('all five functions exist',
      -- 176 (LABEL-57) adds the contract void; checked in 176's own file.
      AND proname <> 'labelos_audit_contract_void'
      -- 178 (LABEL-60) adds signer links, signing and supersede; checked in 178's own file.
-     AND proname NOT LIKE 'labelos\_audit\_contract\_%'), 5);
+     AND proname NOT LIKE 'labelos\_audit\_contract\_%'
+     -- 187 (LABEL-73) adds deliver, store listing, import, org delete / restore / export and the digest channel; checked in 187's own file.
+     AND proname NOT LIKE 'labelos\_audit\_release\_%' AND proname NOT LIKE 'labelos\_audit\_org\_%'
+     AND proname NOT LIKE 'labelos\_audit\_digest\_%'), 5);
 SELECT public.check_eq('the private event helper has no caller but its owner',
   (SELECT (has_function_privilege('service_role', p.oid, 'EXECUTE'), has_function_privilege('authenticated', p.oid, 'EXECUTE'))::text
    FROM pg_proc p WHERE p.proname = 'labelos_audit_insert'),
