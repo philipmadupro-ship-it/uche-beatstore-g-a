@@ -241,6 +241,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           email: invitation.email,
           role: invitation.project_role,
           allow_downloads: invitation.allow_downloads === true,
+          collaborator_role: collab.intent?.role ?? null,
           expires_at: invitation.expires_at,
           created_at: invitation.created_at,
         },

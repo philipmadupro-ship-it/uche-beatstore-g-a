@@ -83,7 +83,7 @@ export function MySessionsView({ sessions }: { sessions: OrgSession[] }) {
                     {p.asks.map((a) => (
                       <li key={a.key} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 px-3 py-2" data-testid={`ask-${a.kind}`}>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[12px] text-white/80">{a.label}</span>
+                          <span className="block text-[11px] text-white/80">{a.label}</span>
                           {a.trackTitle && <span className="block truncate text-[11px] text-white/40">{a.trackTitle}</span>}
                         </span>
                         {a.kind === 'contract' ? (

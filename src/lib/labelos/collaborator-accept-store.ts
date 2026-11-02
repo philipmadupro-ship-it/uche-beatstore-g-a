@@ -8,7 +8,7 @@
  * inviter lost `rights.write`, the song left the project) leaves them on the
  * project with nothing proposed. The inviter proposes by hand then.
  */
-import { liveMembership } from '@/lib/auth/org-access';
+import { objectAccessFor } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from './activity';
@@ -19,6 +19,9 @@ import { resolveCreditScope } from './credit-roles';
 
 const log = createLogger('labelos.collaborator-accept');
 
+/** How recently the invitation must have been accepted for this call to follow it. */
+const FRESH_MS = 2 * 60 * 1000;
+
 export type CollaboratorAcceptResult = { proposed: true; creditId: string } | { proposed: false; reason: string };
 
 export async function proposeCollaboratorCredit(
@@ -28,17 +31,25 @@ export async function proposeCollaboratorCredit(
   try {
     const inv = await admin
       .from('org_invitations')
-      .select('functions, invited_by, email')
+      .select('functions, invited_by, email, accepted_at')
       .eq('token_hash', a.tokenHash)
       .eq('org_id', a.orgId)
       .eq('project_id', a.projectId)
       .maybeSingle();
     if (inv.error) throw new Error(inv.error.message);
-    const row = inv.data as { functions: string[] | null; invited_by: string | null; email: string | null } | null;
+    const row = inv.data as { functions: string[] | null; invited_by: string | null; email: string | null; accepted_at: string | null } | null;
     const intent = parseCollaboratorIntent(row?.functions);
     if (!row || !intent) return { proposed: false, reason: 'no_intent' };
+    // The accept function stamps `accepted_at` in the same call. A person who was already on the project also
+    // answers `already_member` (their invitation is spent without changing anything), so the credit follows the
+    // invitation being accepted JUST NOW, not the answer. A spent link opened again later proposes nothing, so a
+    // credit the inviter withdrew stays withdrawn.
+    const acceptedAt = row.accepted_at ? Date.parse(row.accepted_at) : NaN;
+    if (!Number.isFinite(acceptedAt) || Math.abs(Date.now() - acceptedAt) > FRESH_MS) return { proposed: false, reason: 'not_fresh' };
 
-    const inviter = row.invited_by ? await liveMembership(admin, a.orgId, row.invited_by) : null;
+    // The inviter's own access to THIS song — membership, artist scope and the org's licence, as a credit proposed
+    // through the route would be judged — not just a role that once held rights.write.
+    const inviter = row.invited_by ? await objectAccessFor(row.invited_by, { table: 'tracks', id: intent.songId, cap: 'rights.write', orgId: a.orgId }) : null;
     const placed = await admin.from('project_tracks').select('track_id').eq('project_id', a.projectId).eq('track_id', intent.songId).maybeSingle();
     if (placed.error) throw new Error(placed.error.message);
     const track = placed.data
@@ -49,7 +60,7 @@ export async function proposeCollaboratorCredit(
     const plan = planAcceptCredit({
       intent,
       inviterId: row.invited_by,
-      inviterCanWriteRights: !!inviter?.capabilities.has('rights.write'),
+      inviterCanWriteRights: !!inviter?.ok,
       songInProject: !!track?.data,
     });
     if (!plan.ok) return { proposed: false, reason: plan.reason };

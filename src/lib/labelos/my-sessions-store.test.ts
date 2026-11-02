@@ -3,6 +3,7 @@ import type { AdminClient } from '@/lib/auth/ownership';
 import { loadMySessions } from './my-sessions-store';
 import type { SessionProject } from './my-sessions';
 
+vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
 vi.mock('@/lib/auth/ownership', () => ({ createServiceClient: () => ({}) }));
 
 type Row = Record<string, unknown>;
@@ -12,14 +13,18 @@ function fake(tables: Record<string, Row[]>, missing: string[] = []): AdminClien
   return {
     from(name: string) {
       const filters: ((r: Row) => boolean)[] = [];
+      let window: [number, number] | null = null;
       const q = {
         select: () => q,
+        order: () => q,
+        range: (from: number, to: number) => ((window = [from, to]), q),
         in: (c: string, v: unknown[]) => (filters.push((r) => v.includes(r[c])), q),
         eq: (c: string, v: unknown) => (filters.push((r) => r[c] === v), q),
         is: (c: string, v: unknown) => (filters.push((r) => (r[c] ?? null) === v), q),
         then(resolve: (v: { data: Row[] | null; error: { message: string; code?: string } | null }) => unknown) {
           if (missing.includes(name)) return resolve({ data: null, error: { message: `relation ${name}`, code: '42P01' } });
-          return resolve({ data: (tables[name] ?? []).filter((r) => filters.every((f) => f(r))), error: null });
+          const rows = (tables[name] ?? []).filter((r) => filters.every((f) => f(r)));
+          return resolve({ data: window ? rows.slice(window[0], window[1] + 1) : rows, error: null });
         },
       };
       return q;
@@ -57,8 +62,10 @@ const base = (): Record<string, Row[]> => ({
     { id: 'l-theirs', split_sheet_id: 's1', track_id: 't1', party_id: 'party-you', signed_at: null, split_sheets: { status: 'circulated' } },
   ],
   contract_parties: [{ contract_id: 'k1', party_id: 'party-me', org_id: O1 }],
-  contracts: [{ id: 'k1', title: 'Producer agreement', status: 'sent', track_id: 't1', sent_document_sha256: 'a'.repeat(64) }],
+  contracts: [{ id: 'k1', org_id: O1, title: 'Producer agreement', status: 'sent', track_id: 't1', sent_document_sha256: 'a'.repeat(64) }],
   contract_signatures: [],
+  organizations: [{ id: O1, kind: 'label' }, { id: O2, kind: 'label' }],
+  org_entitlements: [],
 });
 
 const asksOf = (s: Awaited<ReturnType<typeof loadMySessions>>) => s.flatMap((o) => o.projects.flatMap((p) => p.asks.map((a) => a.key)));
@@ -66,7 +73,7 @@ const asksOf = (s: Awaited<ReturnType<typeof loadMySessions>>) => s.flatMap((o) 
 describe('loadMySessions', () => {
   it('lists the caller’s own credit, split line and contract on their project — and nothing else', async () => {
     const s = await loadMySessions(ME, [proj('p1', O1, 'Night Shift')], fake(base()));
-    expect(asksOf(s).sort()).toEqual(['contract:k1:p1', 'credit:c-mine:p1', 'split:l-mine:p1']);
+    expect(asksOf(s).sort()).toEqual(['contract:k1', 'credit:c-mine', 'split:l-mine']);
   });
 
   it('never lists another person’s credit or line, a self-proposed credit, a draft sheet, or a song outside their projects', async () => {
@@ -94,7 +101,34 @@ describe('loadMySessions', () => {
     t.track_collaborators.push({ id: 'c2', track_id: 't2', role: 'vocalist', status: 'proposed', created_by: 'x', party_id: 'party-me-2' });
     const s = await loadMySessions(ME, [proj('p1', O1, 'Night Shift'), proj('p2', O2, 'Label B')], fake(t));
     expect(s.map((o) => o.orgId).sort()).toEqual([O1, O2]);
-    expect(asksOf(s)).toContain('credit:c2:p2');
+    expect(asksOf(s)).toContain('credit:c2');
+  });
+
+  it('a song in several of the person’s projects is ONE ask, filed under its first project', async () => {
+    const t = base();
+    t.project_tracks.push({ project_id: 'p0', track_id: 't1' });
+    const s = await loadMySessions(ME, [proj('p1', O1, 'N'), proj('p0', O1, 'N')], fake(t));
+    expect(asksOf(s).filter((k) => k.startsWith('credit'))).toEqual(['credit:c-mine']);
+    expect(s[0].askCount).toBe(3);
+    expect(s[0].projects.find((p) => p.asks.length)?.id).toBe('p0');
+  });
+
+  it('contracts: omitted for an org whose licence has no contracts module, or with no frozen sent copy', async () => {
+    const t = base();
+    t.org_entitlements.push({ org_id: O1, modules: ['catalogue'], max_seats: null, max_artists: null, setup_done: true });
+    expect(asksOf(await loadMySessions(ME, [proj('p1', O1, 'N')], fake(t))).join()).not.toContain('contract');
+    const t2 = base();
+    t2.contracts[0].sent_document_sha256 = null;
+    expect(asksOf(await loadMySessions(ME, [proj('p1', O1, 'N')], fake(t2))).join()).not.toContain('contract');
+  });
+
+  it('a project with hundreds of songs is read in chunks and pages, and the ask is still found', async () => {
+    const t = base();
+    for (let i = 0; i < 450; i++) {
+      t.project_tracks.push({ project_id: 'p1', track_id: `bulk-${i}` });
+      t.tracks.push({ id: `bulk-${i}`, title: `Bulk ${i}`, org_id: O1 });
+    }
+    expect(asksOf(await loadMySessions(ME, [proj('p1', O1, 'N')], fake(t))).sort()).toEqual(['contract:k1', 'credit:c-mine', 'split:l-mine']);
   });
 
   it('a signature on the current document clears the contract ask', async () => {
@@ -105,7 +139,7 @@ describe('loadMySessions', () => {
 
   it('degrades where the contract tables are not applied: credits and splits remain, no error', async () => {
     const s = await loadMySessions(ME, [proj('p1', O1, 'N')], fake(base(), ['contract_parties', 'contracts', 'contract_signatures']));
-    expect(asksOf(s).sort()).toEqual(['credit:c-mine:p1', 'split:l-mine:p1']);
+    expect(asksOf(s).sort()).toEqual(['credit:c-mine', 'split:l-mine']);
   });
 
   it('degrades when credits and splits are missing too: the project list still comes back', async () => {
