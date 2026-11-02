@@ -43,8 +43,12 @@ jobs:
 
       # Type-check standalone first — gives a fast, focused error
       # message before the slower `next build` runs.
+      # The whole-repo program is now ~2.3 GB (Label OS), over node's default ~2 GB heap:
+      # `tsc` died with "JavaScript heap out of memory" on the integration branch itself.
       - name: Type-check
         run: npx tsc --noEmit
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       # ESLint — errors block, warnings don't (87 pre-existing warnings as of
       # 2026-09-17). Catches hook-rule and unused-import mistakes tsc misses.
