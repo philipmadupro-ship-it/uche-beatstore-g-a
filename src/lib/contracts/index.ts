@@ -1119,6 +1119,9 @@ export const OrgProjectInviteBodySchema = z.object({
   email: z.string().trim().email('Enter a valid email address').max(200),
   role: z.string().min(1).max(40),
   allow_downloads: z.boolean().optional().default(false),
+  /** LABEL-69: invite as a collaborator (beatmaker, producer, rapper, feature, engineer) and propose that credit on `song_id` once they accept. Both or neither. */
+  collaborator_role: z.string().min(1).max(40).optional(),
+  song_id: z.string().uuid().optional(),
 }).strict();
 export type OrgProjectInviteBody = z.infer<typeof OrgProjectInviteBodySchema>;
 

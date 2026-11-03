@@ -41,6 +41,7 @@ import {
   invitationState,
   isWellFormedInvitationToken,
 } from '@/lib/labelos/invitations';
+import { proposeCollaboratorCredit } from '@/lib/labelos/collaborator-accept-store';
 import { createLogger } from '@/lib/log';
 import { clientIp, rateLimitDurable } from '@/lib/security/rate-limit';
 import { readBody } from '@/lib/validate';
@@ -173,6 +174,10 @@ export async function POST(req: NextRequest) {
     const { data: org } = await admin.from('organizations').select('name, slug, kind').eq('id', outcome.orgId).maybeSingle();
     const o = org as { name: string; slug: string; kind: string } | null;
     if (outcome.projectId) {
+      // LABEL-69: a collaborator invitation also proposes the named credit. Also when the person was already on the
+      // project (`alreadyMember`: the invitation was spent without changing their access); the store only follows an
+      // invitation accepted just now, so opening a spent link later proposes nothing.
+      await proposeCollaboratorCredit(admin, { tokenHash, orgId: outcome.orgId, projectId: outcome.projectId, userId: session!.userId });
       // Admitted to one project: say where it opens, never the org's slug.
       const { data: proj } = await admin.from('projects').select('name').eq('id', outcome.projectId).eq('org_id', outcome.orgId).maybeSingle();
       return NextResponse.json({

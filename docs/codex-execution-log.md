@@ -9573,3 +9573,16 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - CI change: the Type-check step runs with `NODE_OPTIONS=--max-old-space-size=4096`, because tsc on the branch exceeds node's 2 GB default heap. Main needs the same change at final integration.
 - 2026-11-02 — LABEL-66 started (session_019AUhHdgtc1yjaLzBLRhKxP, migration 184). LABEL-63 started (session_019AUhHfmYhmCPwuv3PbWtUU, migration 181). Next reserved: 182 (LABEL-64).
 - Follow-up: `ArInboxView.test.tsx` "Escape abandons the note" timing flake (recurring) → LABEL-77.
+- 2026-11-02 — **LABEL-66 Done**: #172 squash `a0da509`, migration 184 (not applied; second paste).
+  - What it adds: release press kits, press contacts and a public press page by token with an embargo, and PR tasks. No private audio reaches a public route.
+  - Gate: CI green on `7f30782`; preview checked; independent review found nothing blocking.
+  - Follow-ups (low):
+    - a store teaser can reveal what the press embargo hides;
+    - the embargo page shows title and artist;
+    - ids appear in public JSON;
+    - the per-IP photo limit;
+    - the token sits in the page path;
+    - the link, photo and live-share caps are not atomic.
+- 2026-11-02 — LABEL-69 started (session_019AUhHbF14KRc9E5FH2NgNa, no migration). LABEL-68 started (session_019AUhHeNHwgaBP1ijwbN479, PR #176).
+  - Orchestrator decision: LABEL-68's migration moves from 185 to **194**, because it redefines 187's approval-decide and release-deliver functions and must sort after 187. Merged migrations are never edited. 185 is released; the next free number outside the backlog is 195.
+- 2026-11-02 — LABEL-63 CI: `src/lib/store/filters.test.ts:130` and `marketing/route.test.ts:296` failed once with order swaps (possibly unstable sort ties). Under investigation; LABEL-77 is the home if recurring.

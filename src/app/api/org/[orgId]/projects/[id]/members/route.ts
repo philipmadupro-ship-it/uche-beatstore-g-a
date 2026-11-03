@@ -27,6 +27,7 @@ import { inviterDisplayName, sendProjectInvitationEmail } from '@/lib/labelos/in
 import { INVITATION_TTL_MS, newInvitationToken } from '@/lib/labelos/invitations';
 import { memberIdentities } from '@/lib/labelos/member-identity';
 import { PROJECT_ROLE_LABELS, membershipLive, projectRoleSummary, validateProjectInvite, isExternalProjectRole } from '@/lib/labelos/project-members';
+import { checkCollaboratorInvite, encodeCollaboratorIntent, parseCollaboratorIntent } from '@/lib/labelos/collaborators';
 import { createLogger } from '@/lib/log';
 import { rateLimitDurable } from '@/lib/security/rate-limit';
 import { readBody } from '@/lib/validate';
@@ -50,6 +51,7 @@ type InvitationRow = {
   email: string;
   project_role: string | null;
   project_allow_downloads: boolean | null;
+  functions?: string[] | null;
   expires_at: string;
   created_at: string;
 };
@@ -69,7 +71,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       // scopedOrgQuery to narrow by.
       admin
         .from('org_invitations')
-        .select('id, email, project_role, project_allow_downloads, expires_at, created_at')
+        .select('id, email, project_role, project_allow_downloads, functions, expires_at, created_at')
         .eq('org_id', access.orgId)
         .eq('project_id', id)
         .is('accepted_at', null)
@@ -114,6 +116,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
           email: i.email,
           role: i.project_role,
           allow_downloads: i.project_allow_downloads === true,
+          collaborator_role: parseCollaboratorIntent(i.functions)?.role ?? null,
           expires_at: i.expires_at,
           created_at: i.created_at,
         })),
@@ -136,8 +139,26 @@ export async function POST(req: NextRequest, { params }: Params) {
   const invite = validateProjectInvite({ email: parsed.data.email, role: parsed.data.role, allowDownloads: parsed.data.allow_downloads });
   if (!invite.ok) return NextResponse.json({ error: invite.error }, { status: 400 });
 
+  // LABEL-69: a collaborator role also proposes a credit, which is a rights act of its own.
+  const collab = checkCollaboratorInvite({
+    collaboratorRole: parsed.data.collaborator_role,
+    songId: parsed.data.song_id,
+    inviterCanWriteRights: access.capabilities.has('rights.write'),
+  });
+  if (!collab.ok) return NextResponse.json({ error: collab.error }, { status: collab.status });
+
   const { admin } = access;
   try {
+    if (collab.intent) {
+      // The song must be a song of THIS project and org: otherwise the tag would name nothing on accept.
+      const placed = await admin.from('project_tracks').select('track_id').eq('project_id', id).eq('track_id', collab.intent.songId).maybeSingle();
+      if (placed.error) throw new Error(placed.error.message);
+      const song = placed.data
+        ? await admin.from('tracks').select('id').eq('id', collab.intent.songId).eq('org_id', access.orgId).maybeSingle()
+        : null;
+      if (song?.error) throw new Error(song.error.message);
+      if (!song?.data) return NextResponse.json({ error: 'That song is not in this project' }, { status: 404 });
+    }
     const [pendingRes, orgRes, projectRes, inviterName] = await Promise.all([
       admin
         .from('org_invitations')
@@ -190,6 +211,19 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (result?.error === 'not_found') return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const invitation = (result?.invitation ?? null) as Record<string, unknown> | null;
     if (!invitation) throw new Error('invitation insert returned nothing');
+    if (collab.intent && typeof invitation.id === 'string') {
+      // The intent rides on `functions` (no migration; see lib/labelos/collaborators.ts). If it cannot be stored the
+      // invitation must not go out as a plain one, so withdraw it again.
+      const tagged = await admin
+        .from('org_invitations')
+        .update({ functions: encodeCollaboratorIntent(collab.intent.role, collab.intent.songId) })
+        .eq('id', invitation.id)
+        .eq('org_id', access.orgId);
+      if (tagged.error) {
+        await admin.from('org_invitations').update({ revoked_at: new Date().toISOString() }).eq('id', invitation.id).eq('org_id', access.orgId);
+        throw new Error(`collaborator tag failed: ${tagged.error.message}`);
+      }
+    }
 
     const sent = await sendProjectInvitationEmail({
       to: invite.email,
@@ -207,6 +241,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           email: invitation.email,
           role: invitation.project_role,
           allow_downloads: invitation.allow_downloads === true,
+          collaborator_role: collab.intent?.role ?? null,
           expires_at: invitation.expires_at,
           created_at: invitation.created_at,
         },
