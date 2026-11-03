@@ -232,7 +232,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Read-only cross-roster view for `exec.read`: pipeline by stage, releases by month, blocked releases, approvals waiting, income vs cost, top songs, task load by department, exports (CSV). Respects entitlements and D4; no audio.
 
 ### LABEL-68 — Artistic direction workspace
-**Priority:** P2 · **Risk:** Medium · **Deps:** 49, 53 · **Migration:** 194 (185 released: the migration redefines 187's functions, so it must sort after 187) · **Status:** In Progress (session_019AUhHeNHwgaBP1ijwbN479, PR #176)
+**Priority:** P2 · **Risk:** Medium · **Deps:** 49, 53 · **Migration:** 194 (185 released: the migration redefines 187's functions, so it must sort after 187) · **Status:** Done (#176, `9d55067`)
 - `creative.read/approve`: one place across direction, references, reviews, song stages and releases; optional **creative approval** gate on a release (off by default, toggled in settings).
 
 ---

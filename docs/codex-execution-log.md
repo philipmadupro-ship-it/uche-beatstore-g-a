@@ -9609,3 +9609,9 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
     - exports show display names, not legal names.
 - 2026-11-03 — LABEL-70 (session_019AUhHdnLXe7mLCoov8wmhq, no migration) and LABEL-64 (session_019AUhHbQckpjX1sMdPkHon5, migration 182) started.
   - LABEL-68's first review was BLOCKING: a creative gate left on after the artistic department was switched off or unlicensed blocked delivery. Fixed with `creativeGateEffective`; re-review pending.
+- 2026-11-03 — **LABEL-68 Done**: #176 squash `9d55067`, migration 194 (not applied; second paste).
+  - What it adds: a creative workspace reading direction, references, reviews, song stages and releases through the existing scope and D4 rules, and an optional creative approval release gate. The gate is OFF by default and owner-toggled. It is in force only while the artistic department is licensed and on (`creativeGateEffective`).
+  - Gate: CI green on `3d86ea0`; preview checked. The independent review was BLOCKING once (H1, fixed); the re-review was NOT BLOCKING.
+  - Follow-ups:
+    - saved-view filters cannot select the creative gate;
+    - the real-db `label-org-departments` 1440 "Approve statements" switch timeout is pre-existing (→ LABEL-77).
