@@ -9586,3 +9586,26 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
 - 2026-11-02 — LABEL-69 started (session_019AUhHbF14KRc9E5FH2NgNa, no migration). LABEL-68 started (session_019AUhHeNHwgaBP1ijwbN479, PR #176).
   - Orchestrator decision: LABEL-68's migration moves from 185 to **194**, because it redefines 187's approval-decide and release-deliver functions and must sort after 187. Merged migrations are never edited. 185 is released; the next free number outside the backlog is 195.
 - 2026-11-02 — LABEL-63 CI: `src/lib/store/filters.test.ts:130` and `marketing/route.test.ts:296` failed once with order swaps (possibly unstable sort ties). Under investigation; LABEL-77 is the home if recurring.
+- 2026-11-03 — **LABEL-69 Done**: #175 squash `d3997f3` (no migration).
+  - What it adds: invite a collaborator to a project with a role (beatmaker, producer, rapper, feature, engineer); on accept, a credit is proposed for the invitee's own party, which they confirm themselves. "My sessions" on `/shared` groups their projects by org with what is waiting on them: a credit, a split line, a contract.
+  - Gate: CI green on `ace0e77`; preview checked; independent review NOT BLOCKING.
+  - Follow-ups (low):
+    - the compensating revoke is not audited;
+    - the collaborator intent is not in the invitation audit payload;
+    - a credit withdrawn within 2 minutes can be proposed again;
+    - a duplicate-by-name skip is silent;
+    - a contract ask may show without an issued signing link;
+    - `song_id` is not checked to be a song;
+    - storing the intent atomically needs a column (migration 195+);
+    - no resend-signing-link action;
+    - collaborator statements.
+- 2026-11-03 — **LABEL-63 Done**: #174 squash `9dde850`, migration 181 (not applied; second paste).
+  - What it adds: statements per payee per period (generate / approve / issue / void, PDF and CSV), payments recorded (never moved), payout CSV, and earnings import void. The artist sees only their own issued statements.
+  - Gate: CI green on `c9a0d2b`; preview checked; independent review NOT BLOCKING (totals = allocations − recoupments in SQL, append-only approval, void rules). Fixed before merge: the flaky 181 local check (amount regex vs UUIDs) and period creation probing only 179.
+  - Decisions: no "statement issued" notification for now; an import with no period never reaches a statement; an import into a period with an approved or issued statement is refused until it is voided.
+  - Follow-ups:
+    - the self-approval check is skipped once the generator account is deleted;
+    - no carry-forward of a negative net;
+    - exports show display names, not legal names.
+- 2026-11-03 — LABEL-70 (session_019AUhHdnLXe7mLCoov8wmhq, no migration) and LABEL-64 (session_019AUhHbQckpjX1sMdPkHon5, migration 182) started.
+  - LABEL-68's first review was BLOCKING: a creative gate left on after the artistic department was switched off or unlicensed blocked delivery. Fixed with `creativeGateEffective`; re-review pending.
