@@ -39,6 +39,8 @@
  *   statementGenerate | statementApprove | statementIssue | statementVoid   statement.* (181, LABEL-63)
  *   paymentRecord | paymentVoid   payment.recorded | payment.voided (181)
  *   earningsImportVoid   earnings.import_voided (181; releases the import's allocations and recoupments)
+ *   advanceCreate | advanceUpdate | advanceVoid   advance.created | updated | voided (182, LABEL-64)
+ *   periodClose | periodReopen   period.closed | period.reopened (182; reopen is owner-only, checked again in SQL)
  *   digestChannelSet | digestChannelRemove   digest.channel_set | digest.channel_removed (187)
  *
  * Accepting an invitation (`member.joined`) is 138's
@@ -120,6 +122,11 @@ export const AUDIT_RPCS = {
   paymentRecord: 'labelos_audit_payment_record',
   paymentVoid: 'labelos_audit_payment_void',
   earningsImportVoid: 'labelos_audit_earnings_import_void',
+  advanceCreate: 'labelos_audit_advance_create',
+  advanceUpdate: 'labelos_audit_advance_update',
+  advanceVoid: 'labelos_audit_advance_void',
+  periodClose: 'labelos_audit_period_close',
+  periodReopen: 'labelos_audit_period_reopen',
   digestChannelSet: 'labelos_audit_digest_channel_set',
   digestChannelRemove: 'labelos_audit_digest_channel_remove',
 } as const;
@@ -381,6 +388,16 @@ export type AuditRpcArgs = {
   paymentRecord: { p_org: string; p_actor: string; p_statement: string; p_amount: string; p_paid_on: string; p_reference: string | null; p_payload: EventPayload };
   paymentVoid: { p_org: string; p_actor: string; p_payment: string; p_payload: EventPayload };
   earningsImportVoid: { p_org: string; p_actor: string; p_import: string; p_payload: EventPayload };
+  /** 182: answers { id } or { error: not_found | payee_inactive }. */
+  advanceCreate: { p_org: string; p_actor: string; p_payee: string; p_kind: string; p_amount: string; p_paid_on: string | null; p_note: string | null; p_payload: EventPayload };
+  /** 182: p_patch holds only the keys to change (null clears paid_on / note). Answers { updated, fields } or { error: not_found | advance_void | advance_referenced | no_change }. */
+  advanceUpdate: { p_org: string; p_actor: string; p_advance: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
+  /** 182: answers { voided } or { error: not_found | already_void | advance_referenced }. */
+  advanceVoid: { p_org: string; p_actor: string; p_advance: string; p_payload: EventPayload };
+  /** 182: answers { closed } or { error: not_found | already_closed | drafts_open }. */
+  periodClose: { p_org: string; p_actor: string; p_period: string; p_payload: EventPayload };
+  /** 182: owner only. Answers { reopened } or { error: not_found | not_owner | not_closed }. */
+  periodReopen: { p_org: string; p_actor: string; p_period: string; p_payload: EventPayload };
   digestChannelSet: { p_org: string; p_actor: string; p_cipher: string; p_payload: EventPayload };
   /** 187: answers { configured: false, changed }. */
   digestChannelRemove: { p_org: string; p_actor: string; p_payload: EventPayload };
