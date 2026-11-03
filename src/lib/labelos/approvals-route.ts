@@ -39,7 +39,7 @@ import {
 } from './approvals';
 import { approverCandidates, currentSnapshot, listApprovals, namesOf, readReleaseFacts, releasesOfSong, approvalView, type ApprovalView, type Subject } from './approvals-store';
 import { readReadinessSong } from './legal-readiness-store';
-import { readReadinessSettings } from './release-readiness-store';
+import { readCreativeGate } from './creative-store';
 import { scopeAllowsContact } from './artist-scope';
 import { memberMayReadSongRow } from './song-stage-store';
 
@@ -82,8 +82,7 @@ export async function resolveSubject(orgId: string, subject: Subject): Promise<R
  */
 export async function creativeGateRefusal(admin: AdminClient, org: string, gate: string): Promise<NextResponse | null> {
   if (gate !== CREATIVE_GATE) return null;
-  const settings = await readReadinessSettings(admin, org);
-  if (settings.creative_gate === 'on') return null;
+  if (await readCreativeGate(admin, org)) return null;
   return json(409, { error: 'Creative approval is not switched on for this organization.', code: 'gate_off' });
 }
 
@@ -145,7 +144,7 @@ export async function gateStates(admin: AdminClient, access: OrgAccessOk, resolv
   const out: GateState[] = [];
   const onReleases = subject.kind === 'song' ? await releasesOfSong(admin, org, subject.id) : [];
   // LABEL-68: the creative gate is listed only while the org has it on.
-  const creative = subject.kind === 'release' && (await readReadinessSettings(admin, org)).creative_gate === 'on';
+  const creative = subject.kind === 'release' && (await readCreativeGate(admin, org));
   for (const gate of gatesFor(subject.kind, { creative })) {
     const current = currentDecision(all.filter((r) => r.gate === gate));
     let stale = false;

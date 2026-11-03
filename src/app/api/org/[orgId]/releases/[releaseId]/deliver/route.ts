@@ -39,7 +39,8 @@ import { auditRpc, isMissingAtomicRpc } from '@/lib/labelos/audit-rpc';
 import { deliverExpectation, readFingerprint } from '@/lib/labelos/release-fingerprint';
 import { planDelivery, type OpenGate } from '@/lib/labelos/release-delivery';
 import { evaluateReleaseReadiness, RELEASE_GATES, releaseReadinessView } from '@/lib/labelos/release-readiness';
-import { loadReleaseReadinessFacts, readReadinessSettings, ReleaseReadinessNotReadyError } from '@/lib/labelos/release-readiness-store';
+import { readCreativeGate } from '@/lib/labelos/creative-store';
+import { loadReleaseReadinessFacts, ReleaseReadinessNotReadyError } from '@/lib/labelos/release-readiness-store';
 import { RELEASE_COLUMNS, releaseEventSubject, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
 import { notReady, releaseRow, schemaAware, writeError } from '../../access';
 
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   let fingerprint: Awaited<ReturnType<typeof readFingerprint>> = null;
   try {
     // LABEL-68: with the creative gate on, a creative decision that lands between this read and the claim is caught too.
-    const creative = (await readReadinessSettings(access.admin, org)).creative_gate === 'on';
+    const creative = await readCreativeGate(access.admin, org);
     fingerprint = await readFingerprint(access.admin, org, release.id, { creative });
   } catch (err) {
     // A failed read is a failure, not a downgrade to the weaker path.

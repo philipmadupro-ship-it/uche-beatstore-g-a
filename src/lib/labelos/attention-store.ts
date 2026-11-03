@@ -216,7 +216,7 @@ async function readReleases(access: OrgAccessOk, roster: readonly RosterArtist[]
   if (rows.length === 0) return { ready: true, list: [] };
 
   let ready = true;
-  const evaluated: Array<{ row: ReleaseRow; gates: Array<{ gate: (typeof RELEASE_GATES)[number]; blocked: boolean; approver: string | null }> } | null> = [];
+  const evaluated: Array<{ row: ReleaseRow; gates: Array<{ gate: (typeof RELEASE_GATES)[number] | 'creative'; blocked: boolean; approver: string | null }> } | null> = [];
   for (let i = 0; i < rows.length; i += RELEASE_CONCURRENCY) {
     evaluated.push(
       ...(await Promise.all(
@@ -227,14 +227,20 @@ async function readReleases(access: OrgAccessOk, roster: readonly RosterArtist[]
             const readiness = evaluateReleaseReadiness(facts);
             return {
               row,
-              gates: RELEASE_GATES.map((gate) => {
-                const approvalGate = APPROVAL_GATE[gate];
-                return {
-                  gate,
-                  blocked: readiness.gates[gate].blockers.length > 0,
-                  approver: approvalGate ? (facts.approvals[approvalGate].current.pending?.approver_id ?? null) : null,
-                };
-              }),
+              gates: [
+                ...RELEASE_GATES.map((gate) => {
+                  const approvalGate = APPROVAL_GATE[gate];
+                  return {
+                    gate,
+                    blocked: readiness.gates[gate].blockers.length > 0,
+                    approver: approvalGate ? (facts.approvals[approvalGate].current.pending?.approver_id ?? null) : null,
+                  };
+                }),
+                // LABEL-68: only while the gate is in force (readiness has no `creative` otherwise).
+                ...(readiness.creative
+                  ? [{ gate: 'creative' as const, blocked: readiness.creative.blockers.length > 0, approver: facts.approvals.creative?.current.pending?.approver_id ?? null }]
+                  : []),
+              ],
             };
           } catch (err) {
             if (err instanceof ReleaseReadinessNotReadyError) {

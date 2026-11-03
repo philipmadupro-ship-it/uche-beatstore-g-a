@@ -201,6 +201,39 @@ describe('the marketing plan requirement and the marketing module (LABEL-65, M1)
   });
 });
 
+describe('the optional creative gate and the artistic department (LABEL-68, review H1)', () => {
+  const readinessOf = async (release = R1) => (await (await read(OWN, L, release)).json()).readiness as { readyToDeliver: boolean; creative?: { status: string }; gates: Record<string, unknown> };
+
+  it('on + department present: the creative gate exists and holds the release back until it is approved', async () => {
+    db.tables.organizations[0].settings = { creative_gate: 'on' };
+    const r = await readinessOf();
+    expect(r.creative?.status).toBe('not_started');
+    expect(r.readyToDeliver).toBe(false);
+  });
+
+  it('on + the owner switched the artistic department off: readiness is exactly what it is with the gate off', async () => {
+    const off = await readinessOf();
+    db.tables.organizations[0].settings = { creative_gate: 'on', departments_off: ['artistic'] };
+    const r = await readinessOf();
+    expect(r).toEqual(off);
+    expect('creative' in r).toBe(false);
+  });
+
+  it('on + the artistic module not licensed: the same', async () => {
+    const off = await readinessOf();
+    db.tables.organizations[0].settings = { creative_gate: 'on' };
+    db.tables.org_entitlements.push({ org_id: L, modules: ['contracts', 'finance'], max_seats: null, max_artists: null, setup_done: true });
+    expect(await readinessOf()).toEqual(off);
+  });
+
+  it('turning the department back on brings the gate back (the setting was never lost)', async () => {
+    db.tables.organizations[0].settings = { creative_gate: 'on', departments_off: ['artistic'] };
+    expect((await readinessOf()).creative).toBeUndefined();
+    db.tables.organizations[0].settings = { creative_gate: 'on' };
+    expect((await readinessOf()).creative?.status).toBe('not_started');
+  });
+});
+
 describe('the derived gates', () => {
   it('a half-finished release is blocked where it should be and not ready', async () => {
     const res = await read(OWN, L, R1);

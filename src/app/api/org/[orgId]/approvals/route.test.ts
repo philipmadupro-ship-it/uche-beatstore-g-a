@@ -745,6 +745,18 @@ describe('LABEL-68 — the optional creative gate', () => {
     expect(creativeOf(await state(OWN, `?release=${R1}`))).toMatchObject({ stale: true, changed: ['items'] });
   });
 
+  it('ON but the artistic department is gone (switched off, or not licensed): no creative gate is listed and asking or deciding it is a 409, like OFF', async () => {
+    (db.tables.organizations[0] as Record<string, unknown>).settings = { creative_gate: 'on', departments_off: ['artistic'] };
+    expect(creativeOf(await state(OWN, `?release=${R1}`))).toBeUndefined();
+    expect((await request(OWN, release(), 'creative', OWN)).status).toBe(409);
+    expect((await decide(OWN, release(), 'creative', 'approved', undefined, 'k')).status).toBe(409);
+    expect(db.tables.approvals).toHaveLength(0);
+    (db.tables.organizations[0] as Record<string, unknown>).settings = { creative_gate: 'on' };
+    (db.tables as Record<string, unknown[]>).org_entitlements = [{ org_id: L, modules: ['contracts'], max_seats: null, max_artists: null, setup_done: true }];
+    expect(creativeOf(await state(OWN, `?release=${R1}`))).toBeUndefined();
+    expect((await request(OWN, release(), 'creative', OWN)).status).toBe(409);
+  });
+
   it('turning the gate OFF again hides the rows without touching them (they are kept)', async () => {
     on();
     await request(OWN, release(), 'creative', AD);

@@ -7,9 +7,13 @@
 -- labelos_audit_release_deliver exactly as they were, and drops the switch function. The check is restored as it was, so
 -- it REFUSES while creative approval rows exist: approvals are append-only (no UPDATE or DELETE for anyone), so first
 -- switch the gate off (PUT …/settings/creative-gate) and, if rows remain, delete them through the organization's hard
--- delete, or accept that this rollback does not apply to an organization that used the gate. The `creative_gate` key
--- stays in organizations.settings (readers ignore an unknown key) and the `creative_gate.changed` events stay: the log
--- is append-only.
+-- delete, or accept that this rollback does not apply to an organization that used the gate. The `creative_gate` key is
+-- REMOVED from organizations.settings (see below) and the `creative_gate.changed` events stay: the log is append-only.
+
+-- Force the gate off BEFORE anything else: the application sends a `creative` key to the deliver function whenever the
+-- setting reads on, and the restored 187 function refuses an unknown gate (22023, a 500). Removing the key makes the
+-- setting read as off, so nothing sends it. (The `creative_gate.changed` events stay: the log is append-only.)
+UPDATE public.organizations SET settings = settings - 'creative_gate' WHERE settings ? 'creative_gate';
 
 DROP FUNCTION IF EXISTS public.labelos_audit_creative_gate(uuid, uuid, boolean);
 

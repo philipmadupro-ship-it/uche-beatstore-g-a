@@ -28,7 +28,7 @@ import { isWorkspaceSong, partitionSongs } from './org-workspace';
 import { orgTrackFacts, projectArtists } from './org-workspace-store';
 import { chunks, inChunks, pageAll } from './paged-read';
 import { creativeGateState } from './release-readiness';
-import { readReadinessSettings } from './release-readiness-store';
+import { readCreativeGate } from './creative-store';
 import { RELEASE_COLUMNS, type ReleaseRow } from './releases';
 import { restrictedCountFor } from './restricted-counts';
 import { isRosterContact, NO_WORKSPACE } from './roster';
@@ -48,8 +48,7 @@ type ContactRow = { id: string; name: string; avatar_url: string | null; categor
 
 export async function loadCreativeWorkspace(access: OrgAccessOk): Promise<CreativeWorkspace> {
   const { admin, orgId: org } = access;
-  const settings = await readReadinessSettings(admin, org);
-  const gate = settings.creative_gate === 'on';
+  const gate = await readCreativeGate(admin, org);
   const canApprove = access.capabilities.has('creative.approve');
   const base = { gate, canApprove, canWrite: access.capabilities.has('catalog.write') };
 

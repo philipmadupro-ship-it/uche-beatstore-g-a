@@ -22,6 +22,7 @@ import { LegalReadinessNotReadyError, loadLegalFacts, readReadinessSong } from '
 import { IMAGE_HEAD_BYTES, readImageInfo, type ImageInfo } from './image-size';
 import { ARTWORK_MIME, type MasterRelation, type ReadinessApproval, type ReadinessItem, type ReleaseReadinessFacts } from './release-readiness';
 import { orgHasMarketing, readPlanPhases } from './marketing-plan-store';
+import { creativeGateEffective, orgHasArtistic } from './creative-store';
 import { RELEASE_ITEM_COLUMNS, type ReleaseItemRow } from './releases';
 
 export class ReleaseReadinessNotReadyError extends Error {
@@ -75,11 +76,15 @@ export async function loadReleaseReadinessFacts(admin: AdminClient, org: string,
   }
   if (!base) return null;
 
-  const [relRes, settings] = await Promise.all([
+  const [relRes, storedSettings] = await Promise.all([
     admin.from('releases').select('title, type, upc, label_name, c_line, p_line, primary_genre, target_date, release_date, state').eq('id', releaseId).eq('org_id', org).maybeSingle(),
     readReadinessSettings(admin, org),
   ]);
   check('release read', relRes.error);
+  // LABEL-68: a creative gate left on after the artistic department is gone gates nothing (see creativeGateEffective), so
+  // readiness is evaluated exactly as if it were off: no creative key, no approval read.
+  const settings: OrgReadinessSettings =
+    storedSettings.creative_gate === 'on' && !creativeGateEffective('on', await orgHasArtistic(admin, org)) ? { ...storedSettings, creative_gate: 'off' } : storedSettings;
   const rel = relRes.data as Record<string, string | null> | null;
   if (!rel) return null;
 

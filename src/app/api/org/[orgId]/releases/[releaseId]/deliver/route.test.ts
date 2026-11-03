@@ -66,6 +66,8 @@ vi.mock('@supabase/supabase-js', () => ({
   }),
 }));
 vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
+// LABEL-68: whether the creative gate is IN FORCE (set on AND the department present) is `readCreativeGate`'s own tested rule.
+vi.mock('@/lib/labelos/creative-store', () => ({ readCreativeGate: async () => creativeOn }));
 vi.mock('@/lib/labelos/release-readiness-store', async () => {
   class ReleaseReadinessNotReadyError extends Error {}
   return {
