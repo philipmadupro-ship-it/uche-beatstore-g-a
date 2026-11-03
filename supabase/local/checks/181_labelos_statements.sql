@@ -183,7 +183,7 @@ RESET ROLE;
 SELECT public.check_eq('generated: net = Σ allocations − Σ recoupments (600 − 500)', (SELECT net_minor::int FROM public.statements WHERE id = :'st1'), 100);
 SELECT public.check_eq('generated: it is a draft by the generator', (SELECT status || ':' || (created_by = :F)::text FROM public.statements WHERE id = :'st1'), 'draft:true');
 SELECT public.check_eq('generated: an event', (SELECT count(*)::int FROM public.activity_events WHERE verb = 'statement.generated' AND subject_id = :'st1'::uuid AND audit AND visibility = 'internal'), 1);
-SELECT public.check_eq('generated: no amount in the event', (SELECT count(*)::int FROM public.activity_events WHERE verb = 'statement.generated' AND payload::text ~ '600|500|100'), 0);
+SELECT public.check_eq('generated: no amount in the event', (SELECT count(*)::int FROM public.activity_events WHERE verb = 'statement.generated' AND (payload::text ~* '"[a-z_]*(amount|minor|net)[a-z_]*"' OR payload::text ~ ':\s*(600|500|100)[,}]')), 0);
 
 SET ROLE service_role;
 SELECT public.check_eq('a payee with nothing in the period gets no statement',
@@ -280,7 +280,7 @@ SELECT public.check_eq('a statement with a live payment is not voided', public.l
 SELECT public.check_eq('a payment is voided once', public.labelos_audit_payment_void(:L, :G, :'pay2'::uuid, '{}'::jsonb) ->> 'voided', 'true');
 SELECT public.check_eq('...not twice', public.labelos_audit_payment_void(:L, :G, :'pay2'::uuid, '{}'::jsonb) ->> 'error', 'already_void');
 RESET ROLE;
-SELECT public.check_eq('the payment events carry no amount', (SELECT count(*)::int FROM public.activity_events WHERE verb LIKE 'payment.%' AND payload::text ~ '160|100|60'), 0);
+SELECT public.check_eq('the payment events carry no amount', (SELECT count(*)::int FROM public.activity_events WHERE verb LIKE 'payment.%' AND (payload::text ~* '"[a-z_]*(amount|minor|net|paid|remaining)[a-z_]*"' OR payload::text ~ ':\s*(160|100|60)[,}]')), 0);
 
 -- ── Reads ────────────────────────────────────────────────────────────────
 

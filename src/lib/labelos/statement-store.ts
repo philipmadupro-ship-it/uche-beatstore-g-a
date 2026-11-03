@@ -64,7 +64,9 @@ export async function insertPeriod(
   userId: string,
   body: { label: string; starts_on: string; ends_on: string },
 ): Promise<{ period: PeriodRow } | { duplicate: true }> {
-  await assertStatementsSchema(admin);
+  // A period is 179's table alone: probing 180's allocations here answered 503 on a database with 179 but not 180.
+  const probe = await admin.from('finance_periods').select('id').limit(1);
+  check('periods probe', probe.error);
   const res = await admin
     .from('finance_periods')
     .insert({ org_id: orgId, label: body.label, starts_on: body.starts_on, ends_on: body.ends_on, created_by: userId })
