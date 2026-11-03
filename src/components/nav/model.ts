@@ -147,7 +147,7 @@ function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | 
  * producer's CRM, which the producer hubs already reach — and only for a
  * member who can see the catalogue (the page's own capability).
  */
-function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null): NavGroup {
+function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null, artistic: boolean): NavGroup {
   // LABEL-37: Music is the org-wide list of songs with the structured filter bar and saved views; same capability as the roster.
   const items: NavGroup['items'] = [
     { label: 'Artists', href: `/o/${slug}/artists`, icon: Mic2 },
@@ -155,6 +155,8 @@ function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null
   ];
   // The A&R inbox (LABEL-25) is the reviewers' queue: only a member who can rate sees the entry. The page itself stays open to the catalogue, so an artist reads the reviews of their songs by link.
   if (caps?.has('review.write')) items.push({ label: 'A&R inbox', href: `/o/${slug}/ar`, icon: Inbox });
+  // The artistic direction workspace (LABEL-68): `creative.read`, in an org that has the artistic department.
+  if (artistic && caps?.has('creative.read')) items.push({ label: 'Artistic direction', href: `/o/${slug}/creative`, icon: Palette });
   return { key: 'roster', label: 'Artists', icon: Mic2, items };
 }
 
@@ -223,7 +225,7 @@ export function navGroupsFor(
   if (!(ORG_KINDS as readonly string[]).includes(orgKind)) return [];
   if (!org) return orgKind === 'producer' ? NAV_GROUPS : [];
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
-  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps)] : [];
+  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps, licensed(org, 'artistic'))] : [];
   const releases = orgKind !== 'producer' && caps?.has('catalog.read') ? [releasesGroup(org.slug)] : [];
   // The legal queue belongs to the contracts module (LABEL-47); Parties is for anyone who reads a party.
   const rightsHub =

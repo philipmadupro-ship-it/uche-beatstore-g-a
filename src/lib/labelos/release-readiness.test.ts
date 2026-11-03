@@ -1,7 +1,7 @@
 import type { ImageInfo } from './image-size';
 import { describe, expect, it } from 'vitest';
 import { parseReadinessSettings } from '@/lib/contracts';
-import { buildSnapshot, currentDecision, GATES, type ApprovalRow, type Gate } from './approvals';
+import { buildSnapshot, currentDecision, GATES, type ApprovalRow, type CoreGate, type Gate } from './approvals';
 import type { LegalReadiness, Reason } from './legal-readiness';
 import {
   evaluateReleaseReadiness,
@@ -48,7 +48,7 @@ function ready(over: Partial<ReleaseReadinessFacts> = {}): ReleaseReadinessFacts
     artwork: { mime: 'image/jpeg', info: GOOD_ART },
     items: [item(1), item(2, S2)],
     legal: new Map([[S1, legal()], [S2, legal()]]),
-    approvals: Object.fromEntries(GATES.map((g) => [g, approved(g)])) as Record<Gate, ReadinessApproval>,
+    approvals: Object.fromEntries(GATES.map((g) => [g, approved(g)])) as Record<CoreGate, ReadinessApproval>,
     settings: parseReadinessSettings({}),
     ...over,
   };
@@ -58,14 +58,14 @@ const status = (f: ReleaseReadinessFacts, g: (typeof RELEASE_GATES)[number]) => 
 
 describe('settings are total', () => {
   it('defaults on a missing, malformed or unknown value, and drops unknown keys', () => {
-    expect(parseReadinessSettings(null)).toEqual({ legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, marketing_plan_required: false, artwork_min_px: 3000 });
+    expect(parseReadinessSettings(null)).toEqual({ legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, marketing_plan_required: false, creative_gate: 'off', artwork_min_px: 3000 });
     expect(parseReadinessSettings('off')).toEqual(parseReadinessSettings({}));
     expect(parseReadinessSettings([])).toEqual(parseReadinessSettings({}));
     expect(parseReadinessSettings({ legal_gate: 'maybe', marketing_gate: 0, require_signed_master_split: 'yes', digest: {} })).toEqual({
-      legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, marketing_plan_required: false, artwork_min_px: 3000,
+      legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, marketing_plan_required: false, creative_gate: 'off', artwork_min_px: 3000,
     });
     expect(parseReadinessSettings({ legal_gate: 'off', marketing_gate: 'off', require_signed_master_split: true })).toEqual({
-      legal_gate: 'off', marketing_gate: 'off', require_signed_master_split: true, marketing_plan_required: false, artwork_min_px: 3000,
+      legal_gate: 'off', marketing_gate: 'off', require_signed_master_split: true, marketing_plan_required: false, creative_gate: 'off', artwork_min_px: 3000,
     });
   });
 });
@@ -316,5 +316,90 @@ describe('the marketing plan requirement (LABEL-65)', () => {
   it('with the requirement met but no approval yet, the gate waits for a person as before', () => {
     const f = ready({ settings: on, marketingPlan: { phases: ['teaser', 'release'] }, approvals: { ...ready().approvals, marketing: none('marketing') } });
     expect(status(f, 'marketing')).toBe('not_started');
+  });
+});
+
+describe('the optional creative approval gate (LABEL-68)', () => {
+  const on = parseReadinessSettings({ creative_gate: 'on' });
+
+  it('is off unless the stored value is exactly the string on', () => {
+    expect(parseReadinessSettings({}).creative_gate).toBe('off');
+    for (const v of [true, 1, 'ON', 'On', 'yes', 'true', null, [], {}, 'off']) expect(parseReadinessSettings({ creative_gate: v }).creative_gate).toBe('off');
+    expect(parseReadinessSettings({ creative_gate: 'on' }).creative_gate).toBe('on');
+  });
+
+  it('while off, readiness is byte-for-byte what it was: no creative key, even when a creative approval row exists', () => {
+    const base = ready();
+    const withRow = ready({ approvals: { ...base.approvals, creative: none('creative') } });
+    const a = evaluateReleaseReadiness(base);
+    const b = evaluateReleaseReadiness(withRow);
+    expect(b).toEqual(a);
+    expect('creative' in a).toBe(false);
+    expect(JSON.stringify(a)).not.toContain('creative');
+    expect(a.readyToDeliver).toBe(true);
+    // The view and the board's strip stay the seven gates.
+    expect('creative' in releaseReadinessView(a, true)).toBe(false);
+  });
+
+  it('while off, existing releases keep every gate status they had', () => {
+    const f = ready({ approvals: { ...ready().approvals, marketing: none('marketing') } });
+    const r = evaluateReleaseReadiness(f);
+    expect(r.gates.marketing.status).toBe('not_started');
+    expect(r.readyToDeliver).toBe(false);
+    expect(r.creative).toBeUndefined();
+  });
+
+  it('on and never asked: the release is not ready to deliver', () => {
+    const r = evaluateReleaseReadiness(ready({ settings: on, approvals: { ...ready().approvals, creative: none('creative') } }));
+    expect(r.creative?.status).toBe('not_started');
+    expect(r.readyToDeliver).toBe(false);
+    expect(Object.values(r.gates).every((g) => ['approved', 'satisfied'].includes(g.status))).toBe(true);
+  });
+
+  it('on and approved on the current artwork and running order: ready', () => {
+    const r = evaluateReleaseReadiness(ready({ settings: on, approvals: { ...ready().approvals, creative: approved('creative') } }));
+    expect(r.creative?.status).toBe('approved');
+    expect(r.readyToDeliver).toBe(true);
+  });
+
+  it('on and asked: awaiting approval; changes requested: blocked with the note-less blocker', () => {
+    const asked = ready({ settings: on, approvals: { ...ready().approvals, creative: { current: currentDecision([row('creative', 'requested', {})]), now: buildSnapshot('creative', {}) } } });
+    expect(evaluateReleaseReadiness(asked).creative?.status).toBe('awaiting_approval');
+    const changes = ready({ settings: on, approvals: { ...ready().approvals, creative: { current: currentDecision([row('creative', 'changes_requested', {})]), now: buildSnapshot('creative', {}) } } });
+    const r = evaluateReleaseReadiness(changes);
+    expect(r.creative?.status).toBe('blocked');
+    expect(r.creative?.blockers.map((b) => b.code)).toEqual(['changes_requested']);
+    expect(r.creative?.blockers[0].gate).toBe('creative');
+    expect(r.creative?.blockers[0].fixCapability).toBe('creative.approve');
+  });
+
+  it('an approval goes stale when the artwork or the running order changes', () => {
+    const then = buildSnapshot('creative', { artworkAssetId: 'art', items: [{ songId: S1, masterId: 'm1' }] });
+    const now = buildSnapshot('creative', { artworkAssetId: 'art2', items: [{ songId: S1, masterId: 'm1' }] });
+    const f = ready({ settings: on, approvals: { ...ready().approvals, creative: { current: currentDecision([row('creative', 'approved', then)]), now } } });
+    const r = evaluateReleaseReadiness(f);
+    expect(r.creative?.status).toBe('stale');
+    expect(r.creative?.blockers[0]).toMatchObject({ code: 'approval_stale', gate: 'creative' });
+    expect(r.readyToDeliver).toBe(false);
+    const reordered = buildSnapshot('creative', { artworkAssetId: 'art', items: [{ songId: S2, masterId: 'm2' }, { songId: S1, masterId: 'm1' }] });
+    expect(evaluateReleaseReadiness(ready({ settings: on, approvals: { ...ready().approvals, creative: { current: currentDecision([row('creative', 'approved', then)]), now: reordered } } })).creative?.status).toBe('stale');
+  });
+
+  it('it never makes a satisfied release delivered, and a cancelled release requires nothing', () => {
+    const cancelled = evaluateReleaseReadiness(ready({ settings: on, release: { ...ready().release, state: 'cancelled' }, approvals: { ...ready().approvals, creative: none('creative') } }));
+    expect(cancelled.creative?.status).toBe('not_required');
+    expect(cancelled.readyToDeliver).toBe(false);
+    const delivered = evaluateReleaseReadiness(ready({ settings: on, release: { ...ready().release, state: 'delivered' }, approvals: { ...ready().approvals, creative: approved('creative') } }));
+    expect(delivered.readyToDeliver).toBe(false);
+  });
+
+  it('is independent of legal_gate / marketing_gate switches', () => {
+    const f = ready({ settings: parseReadinessSettings({ creative_gate: 'on', legal_gate: 'off', marketing_gate: 'off' }), approvals: { ...ready().approvals, creative: none('creative') } });
+    expect(evaluateReleaseReadiness(f).creative?.status).toBe('not_started');
+  });
+
+  it('the view carries the creative gate only while it is on', () => {
+    const v = releaseReadinessView(evaluateReleaseReadiness(ready({ settings: on, approvals: { ...ready().approvals, creative: approved('creative') } })), false);
+    expect(v.creative).toMatchObject({ status: 'approved', blockerCount: 0 });
   });
 });

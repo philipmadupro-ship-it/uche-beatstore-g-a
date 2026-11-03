@@ -49,7 +49,7 @@ import { formatTerritories, parseLanguage, parseTerritories } from '@/lib/labelo
 import { OrgApprovals } from '@/components/labelos/OrgApprovals';
 import type { ReleaseDetail } from '@/lib/labelos/release-detail-store';
 import { gateSkipNotice } from '@/lib/labelos/org-settings';
-import { RELEASE_GATES, RELEASE_GATE_LABEL, type ReleaseGate } from '@/lib/labelos/release-readiness';
+import { CREATIVE_GATE_LABEL, RELEASE_GATES, RELEASE_GATE_LABEL, type ReleaseGate } from '@/lib/labelos/release-readiness';
 import { moveBy, moveTo } from '@/lib/labelos/release-tracklist';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
@@ -528,25 +528,29 @@ function Gates({ detail, orgSlug }: { detail: Detail; orgSlug: string }) {
           {RELEASE_GATES.map((g) => (
             <GateRow key={g} gate={g} view={readiness.gates[g]} mayReadRights={detail.me.mayReadRights} orgSlug={orgSlug} canFix={detail.me.canWrite} />
           ))}
+          {/* LABEL-68: the optional creative approval, listed only while the org has switched it on. */}
+          {readiness.creative && (
+            <GateRow gate="creative" view={readiness.creative} mayReadRights={detail.me.mayReadRights} orgSlug={orgSlug} canFix={detail.me.canWrite} />
+          )}
         </ul>
       )}
     </section>
   );
 }
 
-function GateRow({ gate, view, mayReadRights, orgSlug, canFix }: { gate: ReleaseGate; view: NonNullable<Detail['readiness']>['gates'][ReleaseGate]; mayReadRights: boolean; orgSlug: string; canFix: boolean }) {
+function GateRow({ gate, view, mayReadRights, orgSlug, canFix }: { gate: ReleaseGate | 'creative'; view: NonNullable<Detail['readiness']>['gates'][ReleaseGate]; mayReadRights: boolean; orgSlug: string; canFix: boolean }) {
   const tone = gateTone(view.status);
   const hasDetail = view.blockerCount > 0 || view.warningCount > 0;
   return (
     <li className="flex flex-wrap items-center justify-between gap-2" data-testid={`release-gate-${gate}`} data-status={view.status}>
-      <span className="text-[13px] text-white">{RELEASE_GATE_LABEL[gate]}</span>
+      <span className="text-[13px] text-white">{gate === 'creative' ? CREATIVE_GATE_LABEL : RELEASE_GATE_LABEL[gate]}</span>
       <span className="flex items-center gap-2">
         <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.1em]', TONE_TEXT[tone])} data-testid={`release-gate-chip-${gate}`}>
           {gateWord(view.status)}
         </span>
         {hasDetail && (
           <Popover
-            label={`${RELEASE_GATE_LABEL[gate]}: what is open`}
+            label={`${gate === 'creative' ? CREATIVE_GATE_LABEL : RELEASE_GATE_LABEL[gate]}: what is open`}
             width={320}
             align="right"
             trigger={({ toggle, ref, open }) => (
@@ -690,7 +694,7 @@ function Delivery({ orgId, detail, busy, act }: { orgId: string; detail: Detail;
   }
 
   const ready = readiness?.readyToDeliver === true;
-  const open = readiness ? Object.values(readiness.gates).filter((g) => !['approved', 'satisfied', 'not_required'].includes(g.status)).length : 0;
+  const open = readiness ? [...Object.values(readiness.gates), ...(readiness.creative ? [readiness.creative] : [])].filter((g) => !['approved', 'satisfied', 'not_required'].includes(g.status)).length : 0;
   const overriding = !ready && override;
   const problem =
     !readiness ? 'The gates could not be worked out.'

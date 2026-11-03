@@ -18,6 +18,7 @@ import { Field } from '@/components/ui/Field';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { MODULES, MODULE_LABELS, type Module } from '@/lib/labelos/entitlements';
 import { CONTRACT_TYPES, TEMPLATES_LATER, parseContractTypes, type ContractTypeId } from '@/lib/labelos/contract-types';
+import { fetchCreativeGate, putCreativeGate } from '@/lib/labelos/creative-client';
 import { CONTRACTS_NEED_LEGAL_OFF, SWITCHABLE_MODULES, contractsLockout, parseDepartmentsOff, patchFromDraft, type OrgSettingsView } from '@/lib/labelos/org-settings';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
@@ -34,6 +35,42 @@ function ToggleRow({ id, label, hint, checked, disabled, onChange }: { id: strin
         <span className="mt-0.5 block text-[11px] leading-relaxed text-white/60">{hint}</span>
       </label>
     </div>
+  );
+}
+
+/**
+ * LABEL-68: the optional creative approval gate. Its own switch, saved the moment it is pressed (it has its own route and
+ * audit event, and is deliberately not part of the form's Save): off by default, owner only. Not drawn at all where the
+ * organization has no artistic department, since the gate could never be given there.
+ */
+function CreativeGateRow({ orgId }: { orgId: string }) {
+  const [state, setState] = useState<{ enabled: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetchCreativeGate(orgId).then((g) => alive && setState(g));
+    return () => {
+      alive = false;
+    };
+  }, [orgId]);
+  if (!state) return null;
+  const change = async (enabled: boolean) => {
+    setBusy(true);
+    const res = await putCreativeGate(orgId, enabled);
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error);
+    setState({ enabled: res.enabled });
+    toast.success(res.enabled ? 'Creative approval is now required' : 'Creative approval is no longer required');
+  };
+  return (
+    <ToggleRow
+      id="creative-gate"
+      label="Require creative approval"
+      hint="Adds a sign-off on the artwork and the running order, given by the artistic direction. Off by default; releases are not affected while it is off. Saved straight away."
+      checked={state.enabled}
+      disabled={busy}
+      onChange={change}
+    />
   );
 }
 
@@ -145,6 +182,7 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
           <ToggleRow id="legal-gate" label="Require legal approval" hint="Off is an explicit skip, shown on every release it affects." checked={draft.legal_gate === 'on'} onChange={(v) => set('legal_gate', v ? 'on' : 'off')} />
           <ToggleRow id="marketing-gate" label="Require marketing approval" hint="Off skips the marketing sign-off on a release." checked={draft.marketing_gate === 'on'} onChange={(v) => set('marketing_gate', v ? 'on' : 'off')} />
           <ToggleRow id="signed-split" label="Require a signed master split" hint="A contract can only be signed once the master split sheet is signed." checked={draft.require_signed_master_split} onChange={(v) => set('require_signed_master_split', v)} />
+          <CreativeGateRow orgId={orgId} />
         </div>
       </section>
 

@@ -21,7 +21,9 @@
  */
 import { categorizeDue } from '@/lib/contacts/tasks';
 import type { OrgAttentionSettings } from '@/lib/contracts';
-import { RELEASE_GATE_LABEL, type ReleaseGate } from './release-readiness';
+import { CREATIVE_GATE_LABEL, RELEASE_GATE_LABEL, type ReleaseGate } from './release-readiness';
+
+const gateLabel = (gate: ReleaseGate | 'creative'): string => (gate === 'creative' ? CREATIVE_GATE_LABEL : RELEASE_GATE_LABEL[gate]);
 import { SONG_STAGE_LABEL, isSongStage, type SongStage } from './song-stage';
 import { targetHref, type TaskTarget } from './tasks';
 
@@ -67,7 +69,8 @@ export type AttentionItem = {
 // ── Inputs ──────────────────────────────────────────────────────────────
 
 export type AttentionReleaseGate = {
-  gate: ReleaseGate;
+  /** The seven gates, plus LABEL-68's `creative` while the org has it in force. */
+  gate: ReleaseGate | 'creative';
   /** The gate holds at least one blocker. */
   blocked: boolean;
   /** Who is asked to clear it (the pending approval's approver), when known. */
@@ -194,10 +197,10 @@ function releaseItem(r: AttentionRelease, input: AttentionInput): AttentionItem 
   ]);
   const named = blocked.map((g) => {
     const p = accountable(g);
-    return p ? `${RELEASE_GATE_LABEL[g.gate]} (${first(p.name)})` : RELEASE_GATE_LABEL[g.gate];
+    return p ? `${gateLabel(g.gate)} (${first(p.name)})` : gateLabel(g.gate);
   });
   const when = days < 0 ? `target passed ${plural(-days, 'day')} ago` : days === 0 ? 'target is today' : `target in ${plural(days, 'day')}`;
-  const firstGate = RELEASE_GATE_LABEL[blocked[0].gate];
+  const firstGate = gateLabel(blocked[0].gate);
   return {
     id: `release:${r.id}`,
     kind: 'release',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { capabilitiesFor } from './capabilities';
 import { canTransition, parseShare, validateSheet, type SplitLineInput } from './splits';
 import {
+  ALL_GATES,
   GATES,
   SNAPSHOT_PARTS,
   approvalChip,
@@ -408,5 +409,50 @@ describe('approvalChip', () => {
   });
   it('gates are exactly the five of the spec', () => {
     expect([...GATES] as Gate[]).toEqual(['master', 'artwork', 'legal', 'marketing', 'metadata']);
+  });
+});
+
+describe('the optional creative gate (LABEL-68)', () => {
+  const creativeBase = { kind: 'release' as const, gate: 'creative', actor: actor('member', ['project_manager']), approverId: OTHER, approverMayDecide: true, current: NONE };
+
+  it('the five gates of 09 §2 stay exactly five; the sixth is separate and applies to a release only', () => {
+    expect([...GATES]).toEqual(['master', 'artwork', 'legal', 'marketing', 'metadata']);
+    expect([...ALL_GATES]).toEqual([...GATES, 'creative']);
+    expect(gateAppliesTo('release', 'creative')).toBe(true);
+    expect(gateAppliesTo('song', 'creative')).toBe(false);
+  });
+
+  it('is decided by creative.approve, not by a release.approve.* capability', () => {
+    expect(gateCapability('creative')).toBe('creative.approve');
+    expect(gateCapability('artwork')).toBe('release.approve.artwork');
+  });
+
+  it('what it covers is the artwork and the running order', () => {
+    expect([...SNAPSHOT_PARTS.creative]).toEqual(['artwork', 'items']);
+    const a = buildSnapshot('creative', { artworkAssetId: 'a', items: [{ songId: 's', masterId: 'm' }], release: { title: 'x' } });
+    expect(Object.keys(a.parts).sort()).toEqual(['artwork', 'items']);
+    // Retitling the release does not stale a creative approval; swapping the artwork does.
+    const retitled = buildSnapshot('creative', { artworkAssetId: 'a', items: [{ songId: 's', masterId: 'm' }], release: { title: 'y' } });
+    expect(isStale(a, retitled)).toBe(false);
+    expect(isStale(a, buildSnapshot('creative', { artworkAssetId: 'b', items: [{ songId: 's', masterId: 'm' }] }))).toBe(true);
+  });
+
+  it('a request needs release.write / rights.write / creative.approve, like the other gates', () => {
+    expect(planRequest(creativeBase).ok).toBe(true);
+    expect(planRequest({ ...creativeBase, actor: actor('member', ['marketing']) })).toMatchObject({ ok: false, status: 403 });
+    expect(planRequest({ ...creativeBase, kind: 'song' })).toMatchObject({ ok: false, status: 400, code: 'bad_gate' });
+  });
+
+  it('only a holder of creative.approve decides it (owner and admin hold it; a project manager does not)', () => {
+    const KEY = 'k';
+    const asked = currentDecision([row({ decision: 'requested', actor_id: OTHER, approver_id: ME })]);
+    const decide = { kind: 'release' as const, gate: 'creative', decision: 'approved', current: asked, stale: false, seen: KEY, currentKey: KEY, songOnRelease: false };
+    expect(planDecide({ ...decide, actor: actor('member', ['project_manager']) })).toMatchObject({ ok: false, status: 403, code: 'forbidden' });
+    expect(planDecide({ ...decide, actor: actor('member', ['artistic_director']) }).ok).toBe(true);
+    expect(planDecide({ ...decide, actor: actor('owner') }).ok).toBe(true);
+    // The standing rules still hold for it: a note for changes, `seen` for an approval, an addressed request.
+    expect(planDecide({ ...decide, decision: 'changes_requested', actor: actor('owner') })).toMatchObject({ ok: false, code: 'note_required' });
+    expect(planDecide({ ...decide, seen: null, actor: actor('owner') })).toMatchObject({ ok: false, code: 'seen_required' });
+    expect(planDecide({ ...decide, current: NONE, actor: actor('member', ['artistic_director']) })).toMatchObject({ ok: false, code: 'no_request' });
   });
 });

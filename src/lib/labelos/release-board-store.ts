@@ -107,7 +107,7 @@ export async function loadReleaseBoard(access: OrgAccessOk, opts: BoardOptions =
       const facts = await loadReleaseReadinessFacts(admin, org, row.id);
       if (!facts) return base;
       const view = releaseReadinessView(evaluateReleaseReadiness(facts), mayReadRights);
-      return { ...base, gates: boardGates(view.gates), readyToDeliver: view.readyToDeliver };
+      return { ...base, gates: boardGates(view.gates, view.creative), readyToDeliver: view.readyToDeliver };
     } catch (err) {
       if (err instanceof ReleaseReadinessNotReadyError) {
         schemaReady = false;
