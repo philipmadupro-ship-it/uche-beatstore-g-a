@@ -188,12 +188,14 @@ function rightsGroup(slug: string, items: { parties: boolean; legal: boolean; co
 /**
  * The finance hub (LABEL-62): Earnings — the imported distributor files and the
  * needs-review queue. For anyone who reads finance, in orgs licensed for the
- * finance module (the page's own check). Statements and the dashboard grow
- * here (LABEL-63 / 64).
+ * finance module (the page's own check). Statements (LABEL-63) and the overview and advances
+ * ledger (LABEL-64) live here too.
  */
 function financeGroup(slug: string): NavGroup {
   return { key: 'finance', label: 'Finance', icon: Coins, items: [
+      { label: 'Overview', href: `/o/${slug}/finance`, icon: Coins },
       { label: 'Earnings', href: `/o/${slug}/finance/earnings`, icon: Coins },
+      { label: 'Advances', href: `/o/${slug}/finance/advances`, icon: Coins },
       { label: 'Statements', href: `/o/${slug}/finance/statements`, icon: Coins },
     ],
   };
