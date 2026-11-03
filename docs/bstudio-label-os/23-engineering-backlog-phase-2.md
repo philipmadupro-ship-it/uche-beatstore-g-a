@@ -219,7 +219,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: scoped to the release's artist; marketing role without audio access cannot hear working demos.
 
 ### LABEL-66 — PR and press
-**Priority:** P1 · **Risk:** Medium · **Deps:** 65 · **Migration:** 184 · **Status:** In Progress (session_019AUhHdgtc1yjaLzBLRhKxP)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 65 · **Migration:** 184 · **Status:** Done (#172, `a0da509`)
 - Press kit builder (bio, photos, links, one-sheet from release data), press contacts (org contacts with role `press`), outreach tracker per release (sent/opened/replied/coverage URL), embargo date. Press-kit page shareable by token with the same grant discipline as artist portals.
 - Acceptance: embargo respected on shared pages; no private audio exposed (previews of unreleased music stay private, D8).
 
@@ -232,7 +232,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Read-only cross-roster view for `exec.read`: pipeline by stage, releases by month, blocked releases, approvals waiting, income vs cost, top songs, task load by department, exports (CSV). Respects entitlements and D4; no audio.
 
 ### LABEL-68 — Artistic direction workspace
-**Priority:** P2 · **Risk:** Medium · **Deps:** 49, 53 · **Migration:** 185 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Medium · **Deps:** 49, 53 · **Migration:** 194 (185 released: the migration redefines 187's functions, so it must sort after 187) · **Status:** In Progress (session_019AUhHeNHwgaBP1ijwbN479, PR #176)
 - `creative.read/approve`: one place across direction, references, reviews, song stages and releases; optional **creative approval** gate on a release (off by default, toggled in settings).
 
 ---
@@ -240,7 +240,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## H. Collaborators and role views
 
 ### LABEL-69 — Collaborators: producers, rappers, features
-**Priority:** P1 · **Risk:** Medium · **Deps:** 50, 54, 59 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 50, 54, 59 · **Status:** In Progress (session_019AUhHbF14KRc9E5FH2NgNa)
 - Invite a collaborator to a song or project with a role (beatmaker, producer, rapper, feature, engineer); they accept their credit and their split, see their contract and statements (scoped), upload stems/versions (existing external-member rules), and ask for things through the closed notification kinds. "My sessions" list for a collaborator who has several labels.
 
 ### LABEL-70 — Role views

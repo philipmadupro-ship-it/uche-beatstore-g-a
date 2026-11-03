@@ -32,6 +32,8 @@ const P1 = '40000000-0000-4000-8000-0000000000a1';
 const P2 = '40000000-0000-4000-8000-0000000000a2';
 const XP = '40000000-0000-4000-8000-0000000000b1';
 const PRODUCER_P = '40000000-0000-4000-8000-0000000000c1';
+const SONG = '50000000-0000-4000-8000-000000000001';
+const SONG_ELSEWHERE = '50000000-0000-4000-8000-000000000002';
 const INV_OLD = '80000000-0000-4000-8000-000000000001';
 const INV_ORG = '80000000-0000-4000-8000-000000000002';
 
@@ -97,6 +99,11 @@ beforeEach(() => {
         { id: PRODUCER_P, org_id: null, user_id: OWNER, name: 'Producer project', inbox_for_contact_id: null },
       ],
       project_contacts: [],
+      project_tracks: [{ project_id: P1, track_id: SONG }],
+      tracks: [
+        { id: SONG, org_id: L, title: 'Midnight', type: 'song' },
+        { id: SONG_ELSEWHERE, org_id: L, title: 'Other', type: 'song' },
+      ],
       project_members: [
         pm(EXT, 'editor', P1, L, { invitation_id: INV_OLD }),
         pm(VIEW, 'viewer', P1),
@@ -252,6 +259,41 @@ describe('POST: invite', () => {
     const r = await invite(AR);
     expect(r.status).toBe(503);
     expect(String(r.json?.error)).toContain('148');
+  });
+});
+
+describe('POST: invite as a collaborator (LABEL-69)', () => {
+  const collab = { collaborator_role: 'rapper', song_id: SONG };
+
+  it('tags the invitation with the role and song, lists it back, and sends the same email', async () => {
+    const r = await invite(OWNER, collab);
+    expect(r.status).toBe(201);
+    const row = db.tables.org_invitations.find((i) => i.email === 'guest@local.test')!;
+    expect(row.functions).toEqual(['collab:rapper', `song:${SONG}`]);
+    expect(row).toMatchObject({ project_id: P1, project_role: 'contributor' });
+    const listed = await members('GET', OWNER);
+    expect((listed.json?.invitations as { collaborator_role: string | null }[]).find((i) => i.collaborator_role)?.collaborator_role).toBe('rapper');
+    expect(emails).toHaveLength(1);
+  });
+
+  it('an ordinary invitation carries no tags', async () => {
+    await invite(OWNER);
+    expect(db.tables.org_invitations.find((i) => i.email === 'guest@local.test')!.functions ?? []).toEqual([]);
+  });
+
+  it('proposing a credit needs rights.write: A&R may share but not credit — 403, nothing written', async () => {
+    const r = await invite(AR, collab);
+    expect(r.status).toBe(403);
+    expect(db.tables.org_invitations.some((i) => i.email === 'guest@local.test')).toBe(false);
+    expect(emails).toHaveLength(0);
+  });
+
+  it('400 for half a request or an unknown role; 404 for a song that is not in this project', async () => {
+    expect((await invite(OWNER, { collaborator_role: 'rapper' })).status).toBe(400);
+    expect((await invite(OWNER, { song_id: SONG })).status).toBe(400);
+    expect((await invite(OWNER, { collaborator_role: 'drummer', song_id: SONG })).status).toBe(400);
+    expect((await invite(OWNER, { collaborator_role: 'rapper', song_id: SONG_ELSEWHERE })).status).toBe(404);
+    expect(emails).toHaveLength(0);
   });
 });
 
