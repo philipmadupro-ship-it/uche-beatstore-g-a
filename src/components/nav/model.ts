@@ -110,6 +110,8 @@ export interface OrgNavContext {
   modules?: ReadonlySet<string> | readonly string[];
   /** The viewer's role is `owner` (LABEL-51): the owner-only settings entry is drawn. */
   isOwner?: boolean;
+  /** The viewer's role in the org (LABEL-70): a label's roster artist gets "My music", not the label's roster wording. */
+  role?: string;
 }
 
 /** Is the module in the org's licence? No list = the default (yes). */
@@ -147,8 +149,18 @@ function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | 
  * producer's CRM, which the producer hubs already reach — and only for a
  * member who can see the catalogue (the page's own capability).
  */
-function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null): NavGroup {
+function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null, orgKind: string, role?: string): NavGroup {
   // LABEL-37: Music is the org-wide list of songs with the structured filter bar and saved views; same capability as the roster.
+  // LABEL-70: an independent artist's org and a label's roster artist have no roster to run: "My music" and their own artist page.
+  if (orgKind === 'artist' || role === 'artist') {
+    return {
+      key: 'roster', label: 'My music', icon: Music2,
+      items: [
+        { label: 'My music', href: `/o/${slug}/music`, icon: Music2 },
+        { label: 'Artist profile', href: `/o/${slug}/artists`, icon: Mic2 },
+      ],
+    };
+  }
   const items: NavGroup['items'] = [
     { label: 'Artists', href: `/o/${slug}/artists`, icon: Mic2 },
     { label: 'Music', href: `/o/${slug}/music`, icon: Music2 },
@@ -219,12 +231,12 @@ export function navGroupsFor(
   if (!(ORG_KINDS as readonly string[]).includes(orgKind)) return [];
   if (!org) return orgKind === 'producer' ? NAV_GROUPS : [];
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
-  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps)] : [];
+  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps, orgKind, org.role)] : [];
   const releases = orgKind !== 'producer' && caps?.has('catalog.read') ? [releasesGroup(org.slug)] : [];
   // The legal queue belongs to the contracts module (LABEL-47); Parties is for anyone who reads a party.
   const rightsHub =
     orgKind !== 'producer' && caps
-      ? rightsGroup(org.slug, { parties: canSeeParties(caps), legal: canSeeLegalQueue(caps) && licensed(org, 'contracts'), contracts: canSeeContracts(caps) && licensed(org, 'contracts') })
+      ? rightsGroup(org.slug, { parties: canSeeParties(caps), legal: orgKind === 'label' && canSeeLegalQueue(caps) && licensed(org, 'contracts'), contracts: canSeeContracts(caps) && licensed(org, 'contracts') })
       : null;
   const rights = rightsHub ? [rightsHub] : [];
   const finance = orgKind !== 'producer' && caps?.has('finance.read') && licensed(org, 'finance') ? [financeGroup(org.slug)] : [];
