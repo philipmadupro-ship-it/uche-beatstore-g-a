@@ -75,6 +75,7 @@ export function pageAllowed(page: OrgPage, i: ViewInput): boolean {
     case 'overview':
     case 'members':
       return true;
+    // Every member may open it (it shows each of them only what is theirs); owner/admin acts are the route's own rule.
     case 'store_listings':
       return licensed(i.modules, 'store');
     case 'artists':

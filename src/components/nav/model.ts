@@ -165,7 +165,7 @@ function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null
     { label: 'Artists', href: `/o/${slug}/artists`, icon: Mic2 },
     { label: 'Music', href: `/o/${slug}/music`, icon: Music2 },
   ];
-  // The A&R inbox (LABEL-25) is the reviewers' queue: only a member who can rate sees the entry. The page itself stays open to the catalogue, so an artist reads the reviews of their songs by link.
+  // The A&R inbox (LABEL-25) is the reviewers' queue: only a member who can rate sees the entry. The page is a label staff tool (`pageAllowed('ar')`, LABEL-70): a roster artist reads the reviews of their songs on the song page.
   if (caps?.has('review.write')) items.push({ label: 'A&R inbox', href: `/o/${slug}/ar`, icon: Inbox });
   return { key: 'roster', label: 'Artists', icon: Mic2, items };
 }
