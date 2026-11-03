@@ -25,7 +25,7 @@ export function RoleHomeTiles({ tiles, songCount }: { tiles: readonly HomeTile[]
             className="group rounded-xl border border-white/10 bg-[#0D0D0A] p-4 transition-colors hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
           >
             <Icon size={16} strokeWidth={1.5} className="mb-3 text-white/40 transition-colors group-hover:text-white/70" aria-hidden="true" />
-            <p className="font-heading text-[15px] font-bold leading-tight text-white/80">{t.label}</p>
+            <p className="font-heading text-[16px] font-bold leading-tight text-white/80">{t.label}</p>
             <p className="mt-1 text-[11px] leading-relaxed text-white/60">{t.hint}</p>
             {t.page === 'music' && songCount !== undefined && (
               <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40" data-testid="home-tile-music-count">
