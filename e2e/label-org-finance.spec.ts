@@ -173,7 +173,9 @@ test('3 · staff: the owner reads all, a scoped finance member only Nova’s, ma
   expect(ids(all.statements)).toEqual(Object.values(statementIds).sort());
   const nova = all.statements.find((s: Row) => s.id === statementIds.novaIssued);
   expect(nova.netMinor).toBe('75000');
-  expect((nova.lines as Row[]).map((l) => l.amountMinor)).toEqual(['100000', '-25000']);
+  expect(nova).not.toHaveProperty('lines');
+  const detail = (await (await ownerCtx.request.get(`/api/org/${ORG}/finance/statements/${statementIds.novaIssued}`)).json()).statement;
+  expect([detail.songs[0].earnedMinor, detail.recoupedMinor]).toEqual(['100000', '25000']);
   const payees = await (await ownerCtx.request.get(`/api/org/${ORG}/finance/payees`)).json();
   expect(payees.payees).toHaveLength(3);
   expect(payees.payees.find((p: Row) => p.partyId === P_NOVA).paymentReference).toBe('wire details on file');

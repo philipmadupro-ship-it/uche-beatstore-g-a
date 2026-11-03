@@ -377,6 +377,7 @@ function mapWriteError(error: NonNullable<DbError>): ImportOutcome | null {
   if (/recoup_exceeds|line_not_waiting/.test(error.message) || error.code === '40001') {
     return { ok: false, code: 'recoup_conflict', message: 'Advances or lines changed while this was running. Nothing was written; try again.' };
   }
+  if (/statement_exists/.test(error.message)) return { ok: false, code: 'refused', message: 'A payee in this file already has an approved or issued statement for that period. Void that statement first, or import into another period.' };
   if (/period/.test(error.message)) return { ok: false, code: 'period_closed', message: 'That period cannot take new earnings.' };
   if (error.code === '23514' || error.code === '23503') return { ok: false, code: 'refused', message: 'The database refused these rows.' };
   return null;
@@ -450,13 +451,16 @@ export async function readImport(admin: AdminClient, orgId: string, importId: st
 
 /** Every line of an import still waiting for review (paged). */
 export async function reviewLines(admin: AdminClient, orgId: string, importId: string | null): Promise<ReviewLine[]> {
-  return guardedColumns(() =>
+  // Lines of a void import (LABEL-63) are not waiting for anything.
+  const voided = new Set((await listImports(admin, orgId)).filter((i) => i.status === 'void').map((i) => i.id));
+  const all = await guardedColumns(() =>
     pageAll<ReviewLine>((from, to) => {
       let q = admin.from('earnings_lines').select(LINE_COLUMNS).eq('org_id', orgId).not('review_reason', 'is', null);
       if (importId) q = q.eq('import_id', importId);
       return q.order('import_id').order('line_no').range(from, to);
     }, 'review lines'),
   );
+  return all.filter((l) => !voided.has(l.import_id));
 }
 
 /**
