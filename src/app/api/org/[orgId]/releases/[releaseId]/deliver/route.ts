@@ -37,8 +37,9 @@ import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { auditRpc, isMissingAtomicRpc } from '@/lib/labelos/audit-rpc';
 import { deliverExpectation, readFingerprint } from '@/lib/labelos/release-fingerprint';
-import { planDelivery } from '@/lib/labelos/release-delivery';
+import { planDelivery, type OpenGate } from '@/lib/labelos/release-delivery';
 import { evaluateReleaseReadiness, RELEASE_GATES, releaseReadinessView } from '@/lib/labelos/release-readiness';
+import { readCreativeGate } from '@/lib/labelos/creative-store';
 import { loadReleaseReadinessFacts, ReleaseReadinessNotReadyError } from '@/lib/labelos/release-readiness-store';
 import { RELEASE_COLUMNS, releaseEventSubject, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
 import { notReady, releaseRow, schemaAware, writeError } from '../../access';
@@ -69,7 +70,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   // Read BEFORE the readiness facts: whatever changes after this is caught under the lock.
   let fingerprint: Awaited<ReturnType<typeof readFingerprint>> = null;
   try {
-    fingerprint = await readFingerprint(access.admin, org, release.id);
+    // LABEL-68: with the creative gate on, a creative decision that lands between this read and the claim is caught too.
+    const creative = await readCreativeGate(access.admin, org);
+    fingerprint = await readFingerprint(access.admin, org, release.id, { creative });
   } catch (err) {
     // A failed read is a failure, not a downgrade to the weaker path.
     log.error('fingerprint read failed', { releaseId, error: errorMessage(err) });
@@ -88,7 +91,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     return json(500, { error: 'Could not work out whether the release is ready' });
   }
 
-  const openGates = RELEASE_GATES.filter((g) => !['approved', 'satisfied', 'not_required'].includes(readiness.gates[g].status));
+  const isOpen = (status: string) => !['approved', 'satisfied', 'not_required'].includes(status);
+  const openGates: OpenGate[] = [
+    ...RELEASE_GATES.filter((g) => isOpen(readiness.gates[g].status)),
+    ...(readiness.creative && isOpen(readiness.creative.status) ? (['creative'] as const) : []),
+  ];
   const plan = planDelivery(
     { state: release.state, readyToDeliver: readiness.readyToDeliver, openGates },
     { distributor: body.distributor, deliveredOn: body.delivered_on ?? null, override: body.override === true, note: body.override_note ?? null },

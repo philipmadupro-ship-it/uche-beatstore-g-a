@@ -33,9 +33,9 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { approvalIsStale, currentDecision, isOwnerOrAdmin, planDecide, snapshotKey } from '@/lib/labelos/approvals';
 import { ApprovalsNotReadyError, approvalContext, currentSnapshot, isMissingApprovalsSchema, legalGateReadiness, listApprovals, readReleaseFacts, releasesOfSong } from '@/lib/labelos/approvals-store';
-import { actorOf, gateStates, json, resolveSubject } from '@/lib/labelos/approvals-route';
+import { actorOf, creativeGateRefusal, gateStates, json, resolveSubject } from '@/lib/labelos/approvals-route';
 import { APPROVALS_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
-import { latestApprovalIds } from '@/lib/labelos/release-fingerprint';
+import { latestGateId } from '@/lib/labelos/release-fingerprint';
 import { CreditsNotReadyError } from '@/lib/labelos/credits-store';
 import { LegalReadinessNotReadyError } from '@/lib/labelos/legal-readiness-store';
 import { SplitsNotReadyError } from '@/lib/labelos/splits-store';
@@ -66,6 +66,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { access } = resolved;
     const { admin } = access;
     const org = access.orgId;
+    const off = await creativeGateRefusal(admin, org, body.gate);
+    if (off) return off;
 
     const rows = await listApprovals(admin, org, subject);
     const current = currentDecision(rows.filter((r) => r.gate === body.gate));
@@ -107,7 +109,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       p_ctx: {
         ...ctx,
         check: {
-          latest: latestApprovalIds(rows.map((r) => ({ id: r.id, gate: r.gate, created_at: r.created_at })))[plan.gate] ?? '',
+          latest: latestGateId(rows.map((r) => ({ id: r.id, gate: r.gate, created_at: r.created_at })), plan.gate),
           seen: body.seen ?? '',
           key: snapshotKey(snapshot),
         },

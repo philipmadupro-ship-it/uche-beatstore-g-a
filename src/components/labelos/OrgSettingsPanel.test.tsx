@@ -17,16 +17,25 @@ const DEFAULTS = { legal_gate: 'on', marketing_gate: 'on', require_signed_master
 let calls: { url: string; method: string; body: unknown }[];
 let getReply: { status: number; body: unknown };
 let patchReply: { status: number; body: unknown };
+let gateReply: { status: number; body: unknown };
+let gatePutReply: { status: number; body: unknown };
 
 beforeEach(() => {
   calls = [];
   getReply = { status: 200, body: { settings: DEFAULTS, licensed: ['finance', 'store', 'export'], switchable: ['finance', 'store'] } };
   patchReply = { status: 200, body: { settings: { ...DEFAULTS, marketing_gate: 'off' }, licensed: ['finance', 'store', 'export'], switchable: ['finance', 'store'], changed: ['marketing_gate'] } };
+  gateReply = { status: 404, body: { error: 'Not found' } };
+  gatePutReply = { status: 200, body: { enabled: true, changed: true } };
   confirmToast.mockReset();
   toast.success.mockReset();
+  toast.error.mockReset();
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    if (url.endsWith('/settings/creative-gate')) {
+      const g = method === 'GET' ? gateReply : gatePutReply;
+      return { ok: g.status < 400, status: g.status, json: async () => g.body } as Response;
+    }
     const r = method === 'GET' ? getReply : patchReply;
     return { ok: r.status < 400, status: r.status, json: async () => r.body } as Response;
   });
@@ -116,5 +125,37 @@ describe('OrgSettingsPanel', () => {
     const box = screen.getByLabelText(/^marketing/i) as HTMLInputElement;
     expect(box.checked).toBe(false);
     expect(screen.getAllByText(/not in your licence/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe('the creative approval switch (LABEL-68)', () => {
+  it('is not drawn where the organization has no artistic department (the route answers 404)', async () => {
+    render(<OrgSettingsPanel orgId="o1" />);
+    await screen.findByTestId('org-settings');
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith('/settings/creative-gate'))).toBe(true));
+    expect(screen.queryByLabelText(/require creative approval/i)).toBeNull();
+  });
+
+  it('shows where it stands (off by default) and saves the moment it is pressed, apart from the form’s Save', async () => {
+    gateReply = { status: 200, body: { enabled: false, available: true } };
+    render(<OrgSettingsPanel orgId="o1" />);
+    const box = (await screen.findByLabelText(/require creative approval/i)) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ url: '/api/org/o1/settings/creative-gate', body: { enabled: true } }));
+    await waitFor(() => expect((screen.getByLabelText(/require creative approval/i) as HTMLInputElement).checked).toBe(true));
+    expect(toast.success).toHaveBeenCalledWith('Creative approval is now required');
+    // The form itself is untouched: nothing to save, no PATCH.
+    expect(save().hasAttribute('disabled')).toBe(true);
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false);
+  });
+
+  it('says why when the server refuses, and leaves the switch where it was', async () => {
+    gateReply = { status: 200, body: { enabled: false, available: true } };
+    gatePutReply = { status: 503, body: { error: 'Creative approval needs migration 194, which has not been applied yet.' } };
+    render(<OrgSettingsPanel orgId="o1" />);
+    fireEvent.click(await screen.findByLabelText(/require creative approval/i));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Creative approval needs migration 194, which has not been applied yet.'));
+    expect((screen.getByLabelText(/require creative approval/i) as HTMLInputElement).checked).toBe(false);
   });
 });
