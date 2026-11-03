@@ -26,6 +26,8 @@ export interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+  /** Active on this exact path only: the item's href is also the prefix of its siblings' (Finance → Overview). */
+  exact?: boolean;
 }
 
 export interface NavGroup {
@@ -78,8 +80,8 @@ export const ACCOUNT_GROUP: NavGroup = {
 
 export const ALL_GROUPS = [...NAV_GROUPS, ACCOUNT_GROUP];
 
-export function isItemActive(href: string, pathname: string): boolean {
-  return pathname === href || pathname.startsWith(href + '/');
+export function isItemActive(href: string, pathname: string, exact = false): boolean {
+  return pathname === href || (!exact && pathname.startsWith(href + '/'));
 }
 
 export function activeGroupFor(pathname: string): NavGroup {
@@ -88,7 +90,7 @@ export function activeGroupFor(pathname: string): NavGroup {
 
 /** The group of the current page among `groups`, else the first (undefined when empty). */
 export function activeGroupIn(groups: readonly NavGroup[], pathname: string): NavGroup | undefined {
-  return groups.find((g) => g.items.some((it) => isItemActive(it.href, pathname))) ?? groups[0];
+  return groups.find((g) => g.items.some((it) => isItemActive(it.href, pathname, it.exact))) ?? groups[0];
 }
 
 // ── Label OS (LABEL-09) ─────────────────────────────────────────────────
@@ -193,7 +195,7 @@ function rightsGroup(slug: string, items: { parties: boolean; legal: boolean; co
  */
 function financeGroup(slug: string): NavGroup {
   return { key: 'finance', label: 'Finance', icon: Coins, items: [
-      { label: 'Overview', href: `/o/${slug}/finance`, icon: Coins },
+      { label: 'Overview', href: `/o/${slug}/finance`, icon: Coins, exact: true },
       { label: 'Earnings', href: `/o/${slug}/finance/earnings`, icon: Coins },
       { label: 'Advances', href: `/o/${slug}/finance/advances`, icon: Coins },
       { label: 'Statements', href: `/o/${slug}/finance/statements`, icon: Coins },

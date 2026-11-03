@@ -247,16 +247,16 @@ BEGIN
 
   v_kind := d.kind; v_amount := d.amount_minor; v_paid := d.paid_on; v_note := d.note;
   IF p_patch ? 'kind' AND p_patch ->> 'kind' IS DISTINCT FROM d.kind THEN
-    v_kind := p_patch ->> 'kind'; v_fields := v_fields || 'kind';
+    v_kind := p_patch ->> 'kind'; v_fields := array_append(v_fields, 'kind'::text);
   END IF;
   IF p_patch ? 'amount_minor' AND (p_patch ->> 'amount_minor')::bigint IS DISTINCT FROM d.amount_minor THEN
-    v_amount := (p_patch ->> 'amount_minor')::bigint; v_fields := v_fields || 'amount';
+    v_amount := (p_patch ->> 'amount_minor')::bigint; v_fields := array_append(v_fields, 'amount'::text);
   END IF;
   IF p_patch ? 'paid_on' AND nullif(p_patch ->> 'paid_on', '')::date IS DISTINCT FROM d.paid_on THEN
-    v_paid := nullif(p_patch ->> 'paid_on', '')::date; v_fields := v_fields || 'paid_on';
+    v_paid := nullif(p_patch ->> 'paid_on', '')::date; v_fields := array_append(v_fields, 'paid_on'::text);
   END IF;
   IF p_patch ? 'note' AND nullif(p_patch ->> 'note', '') IS DISTINCT FROM d.note THEN
-    v_note := nullif(p_patch ->> 'note', ''); v_fields := v_fields || 'note';
+    v_note := nullif(p_patch ->> 'note', ''); v_fields := array_append(v_fields, 'note'::text);
   END IF;
   IF cardinality(v_fields) = 0 THEN RETURN jsonb_build_object('error', 'no_change'); END IF;
   IF v_fields && ARRAY['kind', 'amount', 'paid_on'] AND public.labelos_advance_referenced(d.id) THEN
