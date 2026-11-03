@@ -2199,6 +2199,40 @@ export const MarketingPlanRequiredBodySchema = z.object({ required: z.boolean() 
 /** PUT …/settings/creative-gate (owner only, LABEL-68): switch the optional creative approval gate on or off. */
 export const CreativeGateBodySchema = z.object({ enabled: z.boolean() }).strict();
 
+// ── Statements and payment tracking (LABEL-63) ──────────────────────────
+
+const FinanceDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-09-30')
+  .refine((d) => {
+    const t = Date.parse(`${d}T00:00:00Z`);
+    return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === d;
+  }, 'That date does not exist');
+
+/** A reporting period statements are made for. Open when made; closing is LABEL-64's. */
+export const OrgFinancePeriodCreateBodySchema = z
+  .object({ label: z.string().trim().min(1).max(80), starts_on: FinanceDateSchema, ends_on: FinanceDateSchema })
+  .strict()
+  .refine((b) => b.ends_on >= b.starts_on, { message: 'The period cannot end before it starts', path: ['ends_on'] });
+export type OrgFinancePeriodCreateBody = z.infer<typeof OrgFinancePeriodCreateBodySchema>;
+
+/** Make (or replace the draft of) the statement for one payee and one period. */
+export const OrgStatementGenerateBodySchema = z.object({ payee_id: z.string().uuid(), period_id: z.string().uuid() }).strict();
+export type OrgStatementGenerateBody = z.infer<typeof OrgStatementGenerateBodySchema>;
+
+export const OrgStatementVoidBodySchema = z.object({ reason: z.string().trim().min(1).max(500).optional() }).strict();
+export type OrgStatementVoidBody = z.infer<typeof OrgStatementVoidBodySchema>;
+
+/** A payment somebody made elsewhere. The amount is minor units as digits (no float on the wire). A reference is never an account number. */
+export const OrgPaymentCreateBodySchema = z
+  .object({
+    amount_minor: z.string().regex(/^[1-9]\d{0,17}$/, 'Enter an amount above zero'),
+    paid_on: FinanceDateSchema,
+    reference: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+export type OrgPaymentCreateBody = z.infer<typeof OrgPaymentCreateBodySchema>;
+
 
 // ── PR and press (LABEL-66) ───────────────────────────────────────────────
 

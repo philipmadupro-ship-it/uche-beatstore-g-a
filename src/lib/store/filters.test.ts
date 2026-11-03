@@ -122,9 +122,11 @@ describe('filterAndSortTracks', () => {
 
   it('popular sort tiebreaker is deterministic by title when score is equal', () => {
     const tracks = [
-      makeTrack({ id: 'z', rating: 4, bpm: 100, title: 'Zebra' }),
-      makeTrack({ id: 'a', rating: 4, bpm: 100, title: 'Apple' }),
-      makeTrack({ id: 'm', rating: 4, bpm: 100, title: 'Mango' }),
+      // A fixed created_at: popularity ties break by NEWEST first, and makeTrack's default is "now", so three
+      // tracks built across a millisecond boundary used to rank by creation order instead of by id.
+      makeTrack({ id: 'z', rating: 4, bpm: 100, title: 'Zebra', created_at: '2026-01-01T00:00:00.000Z' }),
+      makeTrack({ id: 'a', rating: 4, bpm: 100, title: 'Apple', created_at: '2026-01-01T00:00:00.000Z' }),
+      makeTrack({ id: 'm', rating: 4, bpm: 100, title: 'Mango', created_at: '2026-01-01T00:00:00.000Z' }),
     ];
     const sorted = filterAndSortTracks(tracks, { ...DEFAULT_FILTERS, sortBy: 'popular' });
     expect(sorted.map((t) => t.id)).toEqual(['a', 'm', 'z']);

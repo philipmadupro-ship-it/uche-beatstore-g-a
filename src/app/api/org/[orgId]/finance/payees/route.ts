@@ -26,6 +26,7 @@ import { scopeAllowsContact } from '@/lib/labelos/artist-scope';
 import { FINANCE_NOT_READY, FinanceNotReadyError, insertPayee, listPayees, partyForPayee } from '@/lib/labelos/finance-store';
 import { mayReadPaymentReference, payeeView } from '@/lib/labelos/finance/view';
 import { looksLikeBankNumber } from '@/lib/labelos/payee';
+import { payeeNames } from '@/lib/labelos/statement-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -46,7 +47,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const reference = mayReadPaymentReference(access.capabilities);
     const rows = await listPayees(access.admin, access.orgId, access.artistScope, { reference });
-    return json(200, { schemaReady: true, canWrite: access.capabilities.has('finance.write'), payees: rows.map((r) => payeeView(r, { reference })) });
+    const names = await payeeNames(access.admin, access.orgId, rows.map((r) => r.id));
+    return json(200, { schemaReady: true, canWrite: access.capabilities.has('finance.write'), payees: rows.map((r) => ({ ...payeeView(r, { reference }), name: names.get(r.id) ?? null })) });
   } catch (err) {
     if (err instanceof FinanceNotReadyError) return json(200, { schemaReady: false, canWrite: false, payees: [] });
     log.error('payee list failed', { orgId: access.orgId, error: errorMessage(err) });

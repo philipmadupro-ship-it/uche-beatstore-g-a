@@ -194,7 +194,11 @@ function rightsGroup(slug: string, items: { parties: boolean; legal: boolean; co
  * here (LABEL-63 / 64).
  */
 function financeGroup(slug: string): NavGroup {
-  return { key: 'finance', label: 'Finance', icon: Coins, items: [{ label: 'Earnings', href: `/o/${slug}/finance/earnings`, icon: Coins }] };
+  return { key: 'finance', label: 'Finance', icon: Coins, items: [
+      { label: 'Earnings', href: `/o/${slug}/finance/earnings`, icon: Coins },
+      { label: 'Statements', href: `/o/${slug}/finance/statements`, icon: Coins },
+    ],
+  };
 }
 
 /**
@@ -230,5 +234,11 @@ export function navGroupsFor(
       : null;
   const rights = rightsHub ? [rightsHub] : [];
   const finance = orgKind !== 'producer' && caps?.has('finance.read') && licensed(org, 'finance') ? [financeGroup(org.slug)] : [];
-  return [...producerHubs, ...roster, ...releases, ...rights, ...finance, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];
+  // LABEL-63: the payee's own artist (a roster artist, or the owner of an artist org) reads the statements issued to them.
+  const ownStatements =
+    orgKind !== 'producer' && caps && !caps.has('finance.read') && licensed(org, 'finance') &&
+    ((orgKind === 'artist' && org.isOwner === true) || (caps.has('review.comment') && !caps.has('review.write') && !caps.has('catalog.write')))
+      ? [{ key: 'finance', label: 'Finance', icon: Coins, items: [{ label: 'My statements', href: `/o/${org.slug}/finance/statements`, icon: Coins }] } as NavGroup]
+      : [];
+  return [...producerHubs, ...roster, ...releases, ...rights, ...finance, ...ownStatements, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];
 }

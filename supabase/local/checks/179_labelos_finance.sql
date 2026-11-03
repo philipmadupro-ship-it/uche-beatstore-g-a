@@ -405,6 +405,8 @@ DELETE FROM public.org_entitlements WHERE org_id = :L;
 
 -- ── Voiding ─────────────────────────────────────────────────────────────
 
+-- 181: a statement with a live payment is not voided; void the payment first.
+UPDATE public.payments SET voided_at = now() WHERE statement_id = :ST2 AND voided_at IS NULL;
 UPDATE public.statements SET status = 'void', voided_at = now(), void_reason = 'wrong period' WHERE id = :ST2;
 SELECT public.check_eq('a void statement frees the payee''s period', (SELECT count(*)::int FROM public.statements WHERE payee_id = 'e2790000-0000-4000-8000-000000000002' AND status <> 'void'), 0);
 SELECT public.check_raises('a void statement is final',

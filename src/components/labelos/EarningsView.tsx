@@ -16,6 +16,8 @@ import {
   fetchImports, fetchQueue, recalculate, showMoney, uploadEarnings,
   type EarningsImport, type ImportAttempt, type ReviewLine,
 } from '@/lib/labelos/earnings-client';
+import { fetchPeriods, voidImport, type PeriodItem } from '@/lib/labelos/statements-client';
+import { confirmToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
@@ -132,15 +134,30 @@ function ImportRow({ orgId, item, canWrite, waiting, onDone }: { orgId: string; 
     setNote(r.ok ? `${r.resolved} line${r.resolved === 1 ? '' : 's'} allocated, ${r.stillWaiting} still waiting.` : r.error);
     if (r.ok) await onDone();
   }
+  async function voidIt() {
+    const ok = await confirmToast('Void this file?', 'Its allocations and recoupments are released and any draft statement that used them is discarded. This is refused while an approved or issued statement includes it.', { confirmLabel: 'Void file', danger: true });
+    if (!ok) return;
+    setBusy(true);
+    const r = await voidImport(orgId, item.id);
+    setBusy(false);
+    if (r.ok) await onDone();
+    else setNote(r.error);
+  }
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="import-row">
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="import-row" data-status={item.status ?? 'imported'}>
       <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
         <p className="truncate text-[13px] text-white">{item.file_name ?? 'Earnings file'}</p>
         <p className="text-[11px] text-white/60">{item.source} · {item.row_count} lines · {new Date(item.created_at).toLocaleDateString('en-GB')}</p>
         {note && <p className="mt-1 text-[11px] text-white/60" role="status">{note}</p>}
       </div>
       <span className="text-[11px] text-white/80 tabular-nums">{showMoney(item.total_minor, item.currency)}</span>
-      {canWrite && waiting > 0 && (
+      {item.status === 'void' && <span className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.1em] text-white/60" data-testid="import-void-badge">Void</span>}
+      {canWrite && item.status !== 'void' && (
+        <button type="button" className={BTN} disabled={busy} onClick={() => void voidIt()} data-testid="import-void">
+          Void file
+        </button>
+      )}
+      {canWrite && item.status !== 'void' && waiting > 0 && (
         <button type="button" className={BTN} disabled={busy} onClick={() => void rerun()} data-testid="import-rerun">
           <RefreshCw size={12} strokeWidth={1.75} aria-hidden="true" />
           Re-run {waiting} waiting
@@ -156,6 +173,17 @@ function ImportForm({ orgId, onDone }: { orgId: string; onDone: () => Promise<vo
   const [currency, setCurrency] = useState('');
   const [incomeClass, setIncomeClass] = useState<'master' | 'publishing'>('master');
   const [round, setRound] = useState(false);
+  const [periods, setPeriods] = useState<PeriodItem[]>([]);
+  const [periodId, setPeriodId] = useState('');
+  useEffect(() => {
+    let live = true;
+    void fetchPeriods(orgId).then((r) => {
+      if (live && r.ok) setPeriods(r.periods.filter((p) => p.status === 'open'));
+    });
+    return () => {
+      live = false;
+    };
+  }, [orgId]);
   const [amountCol, setAmountCol] = useState('');
   const [isrcCol, setIsrcCol] = useState('');
   const [upcCol, setUpcCol] = useState('');
@@ -171,6 +199,7 @@ function ImportForm({ orgId, onDone }: { orgId: string; onDone: () => Promise<vo
     form.set('preset', preset);
     if (currency.trim()) form.set('currency', currency.trim());
     form.set('income_class', incomeClass);
+    if (periodId) form.set('period_id', periodId);
     form.set('round_fractional', round ? 'true' : 'false');
     if (preset === 'generic') {
       form.set('mapping', JSON.stringify({ amount: amountCol, ...(isrcCol ? { isrc: isrcCol } : {}), ...(upcCol ? { upc: upcCol } : {}) }));
@@ -201,6 +230,10 @@ function ImportForm({ orgId, onDone }: { orgId: string; onDone: () => Promise<vo
           <span className="text-[11px] text-white/60">Currency (when the file does not say)</span>
           <input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))} placeholder="USD" className={FIELD} data-testid="earnings-currency" />
         </label>
+        <div className="block space-y-1">
+          <span className="text-[11px] text-white/60">Period (statements are made per period)</span>
+          <Dropdown<string> value={periodId} onChange={setPeriodId} options={[{ value: '', label: 'No period yet' }, ...periods.map((p) => ({ value: p.id, label: p.label }))]} className="w-full" aria-label="Period" />
+        </div>
         <div className="block space-y-1">
           <span className="text-[11px] text-white/60">Income is</span>
           <Dropdown<'master' | 'publishing'> value={incomeClass} onChange={setIncomeClass} options={[{ value: 'master', label: 'Master (recording) income' }, { value: 'publishing', label: 'Publishing income' }]} className="w-full" aria-label="Income is" />
