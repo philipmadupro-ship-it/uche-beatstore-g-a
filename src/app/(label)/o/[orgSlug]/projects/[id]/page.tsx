@@ -74,7 +74,13 @@ export default async function OrgProjectPage({ params }: { params: Promise<{ org
 
       {/* LABEL-21: people from outside the org, for members who may share externally. */}
       {shell.capabilities.includes('share.external') && (
-        <ProjectMembersPanel orgId={shell.org.id} orgName={shell.org.name} projectId={detail.project.id} />
+        <ProjectMembersPanel
+          orgId={shell.org.id}
+          orgName={shell.org.name}
+          projectId={detail.project.id}
+          songs={detail.songs.map((s) => ({ id: s.id, title: s.title ?? 'Untitled' }))}
+          canProposeCredit={shell.capabilities.includes('rights.write')}
+        />
       )}
 
       <ProjectFilesSection projectId={detail.project.id} org={{ orgId: shell.org.id }} />
