@@ -12,13 +12,13 @@ describe('RoleHomeTiles', () => {
   it('draws one link per tile, to the page, with the scoped song count only on My music', () => {
     render(<RoleHomeTiles tiles={homeTiles('nova', owner)} songCount={3} />);
     expect(screen.getByTestId('home-tile-music').getAttribute('href')).toBe('/o/nova/music');
-    expect(screen.getByTestId('home-tile-earnings').getAttribute('href')).toBe('/o/nova/finance/earnings');
+    expect(screen.getByTestId('home-tile-statements').getAttribute('href')).toBe('/o/nova/finance/statements');
     expect(screen.getByTestId('home-tile-music-count').textContent).toBe('3 songs');
     expect(screen.getAllByRole('link')).toHaveLength(4);
   });
-  it('a roster artist has no money tile', () => {
+  it('a roster artist money tile opens their own statements', () => {
     render(<RoleHomeTiles tiles={homeTiles('ns', roster)} songCount={1} />);
-    expect(screen.queryByTestId('home-tile-earnings')).toBeNull();
+    expect(screen.getByTestId('home-tile-statements').getAttribute('href')).toBe('/o/ns/finance/statements');
     expect(screen.getByTestId('home-tile-music-count').textContent).toBe('1 song');
   });
   it('renders nothing without tiles', () => {

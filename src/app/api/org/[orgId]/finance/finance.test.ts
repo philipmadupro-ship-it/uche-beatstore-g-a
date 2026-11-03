@@ -101,7 +101,7 @@ async function call(path: 'payees' | 'statements', method: string, as: string | 
 const ids = async (res: Response, key: string) => ((await res.json())[key] as { id: string }[]).map((x) => x.id).sort();
 
 describe('GET /finance/statements — who reads what', () => {
-  it('finance.read reads every statement of the org, drafts and voids included, with lines', async () => {
+  it('finance.read reads every statement of the org, drafts and voids included (summaries: lines are the detail route\'s)', async () => {
     for (const who of [OWN, FIN]) {
       const res = await call('statements', 'GET', who, L);
       expect(res.status).toBe(200);
@@ -110,7 +110,7 @@ describe('GET /finance/statements — who reads what', () => {
       expect(body.statements.map((s: { id: string }) => s.id).sort()).toEqual(['st-ara-draft', 'st-ara-issued', 'st-bo-issued', 'st-bo-void']);
       const ara = body.statements.find((s: { id: string }) => s.id === 'st-ara-issued');
       expect(ara.netMinor).toBe('75000');
-      expect(ara.lines.map((l: { amountMinor: string }) => l.amountMinor)).toEqual(['100000', '-25000']);
+      expect(ara).not.toHaveProperty('lines');
     }
   });
 
@@ -124,7 +124,8 @@ describe('GET /finance/statements — who reads what', () => {
     expect(body.own).toBe(true);
     expect(body.statements.map((s: { id: string }) => s.id)).toEqual(['st-ara-issued']);
     expect(body.statements[0]).not.toHaveProperty('approvedAt');
-    expect(body.statements[0].lines).toHaveLength(2);
+    expect(body.statements[0]).not.toHaveProperty('lines');
+    expect(body.statements[0].status).toBe('issued');
   });
 
   it('a party linked to your account gives you nothing of its payee (LABEL-71 H1)', async () => {

@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { Coins, Disc3, FileText, Music2, type LucideIcon } from 'lucide-react';
 import type { HomeTile, OrgPage } from '@/lib/labelos/role-view';
 
-const ICONS: Partial<Record<OrgPage, LucideIcon>> = { music: Music2, releases: Disc3, earnings: Coins, contracts: FileText };
+const ICONS: Partial<Record<OrgPage, LucideIcon>> = { music: Music2, releases: Disc3, statements: Coins, contracts: FileText };
 
 export function RoleHomeTiles({ tiles, songCount }: { tiles: readonly HomeTile[]; songCount?: number }) {
   if (tiles.length === 0) return null;

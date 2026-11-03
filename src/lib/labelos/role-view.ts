@@ -28,7 +28,7 @@ export type ViewInput = {
 };
 
 export const ORG_PAGES = [
-  'overview', 'members', 'artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'legal', 'earnings', 'store_listings', 'connections',
+  'overview', 'members', 'artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'legal', 'earnings', 'statements', 'store_listings', 'connections',
 ] as const;
 export type OrgPage = (typeof ORG_PAGES)[number];
 
@@ -44,6 +44,7 @@ export const PAGE_PATH: Readonly<Record<OrgPage, string>> = {
   contracts: '/rights/contracts',
   legal: '/rights/legal',
   earnings: '/finance/earnings',
+  statements: '/finance/statements',
   store_listings: '/releases/store',
   connections: '/settings/connections',
 };
@@ -94,6 +95,9 @@ export function pageAllowed(page: OrgPage, i: ViewInput): boolean {
       return i.kind === 'label' && canSeeLegalQueue(caps) && licensed(i.modules, 'contracts');
     case 'earnings':
       return face && i.role !== 'artist' && caps.has('finance.read') && licensed(i.modules, 'finance');
+    // LABEL-63: finance staff read all; a roster artist and an owner read the statements issued to them (the page's own rule), in orgs licensed for finance.
+    case 'statements':
+      return face && licensed(i.modules, 'finance') && ((caps.has('finance.read') && i.role !== 'artist') || i.role === 'artist' || i.role === 'owner');
     case 'connections':
       return face && caps.has('org.manage');
   }
@@ -104,7 +108,7 @@ export type HomeTile = { page: OrgPage; label: string; href: string; hint: strin
 const TILES: ReadonlyArray<{ page: OrgPage; label: string; hint: string }> = [
   { page: 'music', label: 'My music', hint: 'Your songs, demos and masters' },
   { page: 'releases', label: 'My releases', hint: 'What is out and what is coming' },
-  { page: 'earnings', label: 'My money', hint: 'Earnings and what you are owed' },
+  { page: 'statements', label: 'My money', hint: 'Statements and what you are owed' },
   { page: 'contracts', label: 'My contracts', hint: 'What you have signed and what waits for you' },
 ];
 

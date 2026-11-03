@@ -36,6 +36,9 @@
  *   releaseStore             release.store_listed | release.store_unlisted (187; consent re-checked under the lock)
  *   releaseImport            project.created + release.created + release.imported (187)
  *   orgDelete | orgRestore | orgExport   org.deletion_scheduled | org.restored | org.exported (187)
+ *   statementGenerate | statementApprove | statementIssue | statementVoid   statement.* (181, LABEL-63)
+ *   paymentRecord | paymentVoid   payment.recorded | payment.voided (181)
+ *   earningsImportVoid   earnings.import_voided (181; releases the import's allocations and recoupments)
  *   digestChannelSet | digestChannelRemove   digest.channel_set | digest.channel_removed (187)
  *
  * Accepting an invitation (`member.joined`) is 138's
@@ -109,6 +112,14 @@ export const AUDIT_RPCS = {
   orgDelete: 'labelos_audit_org_delete',
   orgRestore: 'labelos_audit_org_restore',
   orgExport: 'labelos_audit_org_export',
+  // Migration 181 (LABEL-63): statements, payment records and voiding an earnings import, each with its event.
+  statementGenerate: 'labelos_audit_statement_generate',
+  statementApprove: 'labelos_audit_statement_approve',
+  statementIssue: 'labelos_audit_statement_issue',
+  statementVoid: 'labelos_audit_statement_void',
+  paymentRecord: 'labelos_audit_payment_record',
+  paymentVoid: 'labelos_audit_payment_void',
+  earningsImportVoid: 'labelos_audit_earnings_import_void',
   digestChannelSet: 'labelos_audit_digest_channel_set',
   digestChannelRemove: 'labelos_audit_digest_channel_remove',
 } as const;
@@ -355,6 +366,21 @@ export type AuditRpcArgs = {
   /** 187: answers { recorded } or { error: not_found | not_owner }. */
   orgExport: { p_org: string; p_actor: string; p_payload: EventPayload };
   /** 187: p_cipher is the AES-GCM ciphertext; answers { configured, replaced } or { error: not_found }. */
+  statementGenerate: {
+    p_org: string;
+    p_actor: string;
+    p_payee: string;
+    p_period: string;
+    /** From `buildStatementLines` (snake_case, amounts as strings); the function re-proves them against the tables. */
+    p_lines: Record<string, unknown>[];
+    p_payload: EventPayload;
+  };
+  statementApprove: { p_org: string; p_actor: string; p_statement: string; p_payload: EventPayload };
+  statementIssue: { p_org: string; p_actor: string; p_statement: string; p_payload: EventPayload };
+  statementVoid: { p_org: string; p_actor: string; p_statement: string; p_reason: string | null; p_payload: EventPayload };
+  paymentRecord: { p_org: string; p_actor: string; p_statement: string; p_amount: string; p_paid_on: string; p_reference: string | null; p_payload: EventPayload };
+  paymentVoid: { p_org: string; p_actor: string; p_payment: string; p_payload: EventPayload };
+  earningsImportVoid: { p_org: string; p_actor: string; p_import: string; p_payload: EventPayload };
   digestChannelSet: { p_org: string; p_actor: string; p_cipher: string; p_payload: EventPayload };
   /** 187: answers { configured: false, changed }. */
   digestChannelRemove: { p_org: string; p_actor: string; p_payload: EventPayload };
