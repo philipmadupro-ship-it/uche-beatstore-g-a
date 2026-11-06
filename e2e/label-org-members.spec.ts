@@ -56,6 +56,11 @@ test.beforeAll(async ({ request }) => {
   await rest(request, 'POST', 'user_profiles', { user_id: BUYER_ID, display_name: 'Dana Buyer' });
 });
 
+test.afterAll(async ({ request }) => {
+  // The seeded users are shared by every spec: a display name left behind changes what a later spec's page says about them.
+  await rest(request, 'DELETE', `user_profiles?user_id=eq.${BUYER_ID}`);
+});
+
 for (const width of [1440, 390]) {
   test.describe(`at ${width}px`, () => {
     test.use({ viewport: { width, height: width > 500 ? 900 : 844 } });
