@@ -7,6 +7,7 @@ import {
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
 import { canSeeParties } from '@/lib/labelos/parties-view';
+import { pageAllowed } from '@/lib/labelos/role-view';
 import { canSeeContracts } from '@/lib/labelos/contracts-nav';
 import { ADMIN_CENTRE_CAPABILITY } from '@/lib/labelos/admin-centre';
 
@@ -247,9 +248,10 @@ export function navGroupsFor(
   const rights = rightsHub ? [rightsHub] : [];
   const finance = orgKind !== 'producer' && caps?.has('finance.read') && licensed(org, 'finance') ? [financeGroup(org.slug)] : [];
   // LABEL-63: the payee's own artist (a roster artist, or the owner of an artist org) reads the statements issued to them.
+  // Finance staff already have the Finance hub (with Statements); everyone else who may open the page (`pageAllowed('statements')`: a roster artist, or the owner of an artist org) gets their own.
   const ownStatements =
-    orgKind !== 'producer' && caps && !caps.has('finance.read') && licensed(org, 'finance') &&
-    ((orgKind === 'artist' && org.isOwner === true) || (caps.has('review.comment') && !caps.has('review.write') && !caps.has('catalog.write')))
+    orgKind !== 'producer' && caps && !caps.has('finance.read') &&
+    pageAllowed('statements', { kind: orgKind, role: org.role ?? (org.isOwner ? 'owner' : ''), capabilities: caps, modules: org.modules })
       ? [{ key: 'finance', label: 'Finance', icon: Coins, items: [{ label: 'My statements', href: `/o/${org.slug}/finance/statements`, icon: Coins }] } as NavGroup]
       : [];
   return [...producerHubs, ...roster, ...releases, ...rights, ...finance, ...ownStatements, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];

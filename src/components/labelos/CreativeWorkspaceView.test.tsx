@@ -35,16 +35,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const shell = (role: 'owner' | 'member', capabilities: string[] = ['creative.read']) => ({
-  org: { id: 'o1', name: 'Night Shift', slug: 'ns', kind: 'label' as const },
+const shell = (role: 'owner' | 'member', capabilities: string[] = ['creative.read'], kind: 'label' | 'artist' = 'label') => ({
+  org: { id: 'o1', name: 'Night Shift', slug: 'ns', kind },
   role,
   scope: 'org' as const,
   capabilities: capabilities as never[],
   viewerIsProducer: false,
 });
-const view = (role: 'owner' | 'member' = 'member', caps?: string[]) =>
+const view = (role: 'owner' | 'member' = 'member', caps?: string[], kind: 'label' | 'artist' = 'label') =>
   render(
-    <OrgShellProvider value={shell(role, caps)}>
+    <OrgShellProvider value={shell(role, caps, kind)}>
       <CreativeWorkspaceView orgId="o1" orgSlug="ns" />
     </OrgShellProvider>,
   );
@@ -74,8 +74,12 @@ describe('CreativeWorkspaceView', () => {
   });
 
   it('songs waiting link to the A&R inbox only for a member who can review; otherwise they are just a number', async () => {
-    view('member', ['creative.read', 'review.write']);
+    view('member', ['creative.read', 'catalog.read', 'review.write']);
     expect((await screen.findByTestId('creative-waiting-c1')).getAttribute('href')).toBe('/o/ns/ar');
+    cleanup();
+    // LABEL-70: an independent artist org has no A&R queue (/ar is a 404 there), so the count is plain text even for its owner.
+    view('owner', ['creative.read', 'catalog.read', 'review.write'], 'artist');
+    expect((await screen.findByTestId('creative-waiting-c1')).getAttribute('href')).toBeNull();
     cleanup();
     view('member', ['creative.read']);
     const plain = await screen.findByTestId('creative-waiting-c1');

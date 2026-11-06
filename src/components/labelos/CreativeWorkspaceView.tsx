@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { useOrgShell } from '@/components/labelos/OrgShellContext';
+import { pageAllowed, viewInputOf } from '@/lib/labelos/role-view';
 import { creativeOpen, creativeStatusWord, type ArtistCard, type CreativeRelease, type CreativeWorkspace } from '@/lib/labelos/creative-workspace';
 import { fetchCreativeWorkspace } from '@/lib/labelos/creative-client';
 import { SONG_STAGES, SONG_STAGE_LABEL } from '@/lib/labelos/song-stage';
@@ -128,7 +129,8 @@ function ReleaseRow({ r, orgSlug }: { r: CreativeRelease; orgSlug: string }) {
 export function CreativeWorkspaceView({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   const shell = useOrgShell();
   const isOwner = shell?.role === 'owner';
-  const canReview = shell?.capabilities.includes('review.write') ?? false;
+  // The A&R queue is a label staff page (`pageAllowed('ar')`): anyone else sees the count as plain text, not a dead link.
+  const canReview = shell ? pageAllowed('ar', viewInputOf(shell)) : false;
   const [data, setData] = useState<CreativeWorkspace | null>(null);
   const [failed, setFailed] = useState(false);
 
