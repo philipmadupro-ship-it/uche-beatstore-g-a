@@ -10,7 +10,7 @@ import path from 'node:path';
  */
 const realDbSpecs = fs
   .readdirSync(path.join(__dirname, 'e2e'))
-  .filter((f) => f.endsWith('.spec.ts') && fs.readFileSync(path.join(__dirname, 'e2e', f), 'utf8').includes('E2E_REAL_DB'))
+  .filter((f) => f.endsWith('.spec.ts') && fs.readFileSync(path.join(__dirname, 'e2e', f), 'utf8').includes('process.env.E2E_REAL_DB'))
   .map((f) => `**/e2e/${f}`);
 const realDb = process.env.E2E_REAL_DB === '1';
 
@@ -36,7 +36,8 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1,                                    // single-producer storefront; one tab is enough
   reporter: process.env.CI ? 'github' : 'list',
-  timeout: 30_000,
+  // Real-database flows (and their beforeAll hooks, which drive routes through browser sessions) outlast the 30 s default.
+  timeout: realDb ? 90_000 : 30_000,
   // The real-database flows hit PostgREST + RLS + a cold Next dev compile on
   // every first visit to a route; the 5 s default expect timeout made
   // assertions race the compile. 25 s is the budget the flows are written for.

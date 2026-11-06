@@ -21,6 +21,10 @@ describe('fitPanelTop', () => {
     expect(fitPanelTop({ triggerTop: 440, triggerBottom: 470, panelHeight: 2000, viewportHeight: view })).toBe(8);
   });
 
+  it('a trigger scrolled off the TOP still yields a panel that starts on screen', () => {
+    expect(fitPanelTop({ triggerTop: -230, triggerBottom: -200, panelHeight: 300, viewportHeight: view })).toBe(8);
+  });
+
   it('a trigger scrolled off the bottom of the viewport still yields an on-screen panel', () => {
     const top = fitPanelTop({ triggerTop: 1500, triggerBottom: 1530, panelHeight: 300, viewportHeight: view });
     expect(top).toBeGreaterThanOrEqual(8);

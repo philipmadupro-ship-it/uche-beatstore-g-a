@@ -22,7 +22,7 @@ export function fitPanelTop({
   viewportHeight: number;
 }): number {
   const below = triggerBottom + POPOVER_GAP;
-  if (below + panelHeight <= viewportHeight - POPOVER_MARGIN) return below;
+  if (below + panelHeight <= viewportHeight - POPOVER_MARGIN) return Math.max(POPOVER_MARGIN, below);
   const above = triggerTop - POPOVER_GAP - panelHeight;
   if (above >= POPOVER_MARGIN && above + panelHeight <= viewportHeight - POPOVER_MARGIN) return above;
   return Math.max(POPOVER_MARGIN, Math.min(below, viewportHeight - POPOVER_MARGIN - panelHeight));
