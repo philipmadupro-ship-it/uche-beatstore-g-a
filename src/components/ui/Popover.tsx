@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { fitPanelTop } from '@/lib/ui/popover-position';
 
 /**
  * Lightweight popover primitive. The existing Dropdown is select-style only
@@ -48,9 +49,12 @@ export function Popover({
   const triggerRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  // The panel's height is only known once it is in the DOM, so the first position (under the trigger) is refined once.
+  const fitted = useRef(false);
 
   useEffect(() => {
-    if (!open) { setPos(null); return; }
+    if (!open) { setPos(null); fitted.current = false; return; }
+    fitted.current = false;
     const t = triggerRef.current;
     if (!t) return;
     const r = t.getBoundingClientRect();
@@ -59,6 +63,17 @@ export function Popover({
     const top = Math.min(r.bottom + 6, window.innerHeight - 16);
     setPos({ top, left });
   }, [open, align, width]);
+
+  useLayoutEffect(() => {
+    if (!open || !pos || fitted.current) return;
+    const panel = panelRef.current;
+    const t = triggerRef.current;
+    if (!panel || !t) return;
+    fitted.current = true;
+    const r = t.getBoundingClientRect();
+    const top = fitPanelTop({ triggerTop: r.top, triggerBottom: r.bottom, panelHeight: panel.getBoundingClientRect().height, viewportHeight: window.innerHeight });
+    if (top !== pos.top) setPos({ top, left: pos.left });
+  }, [open, pos]);
 
   useEffect(() => {
     if (!open) return;
