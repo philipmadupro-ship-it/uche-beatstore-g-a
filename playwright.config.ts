@@ -1,4 +1,18 @@
 import { defineConfig, devices } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+
+/**
+ * The specs that drive a REAL database stack (scripts/local-db): every spec file that names E2E_REAL_DB.
+ * Found by that marker rather than listed by hand, so a new real-database spec runs under `npm run e2e:real-db`
+ * the day it is written (the list in package.json was 55 file names that had to be kept by hand) and can never
+ * leak into the default run, where it would only add skips to a count CI checks.
+ */
+const realDbSpecs = fs
+  .readdirSync(path.join(__dirname, 'e2e'))
+  .filter((f) => f.endsWith('.spec.ts') && fs.readFileSync(path.join(__dirname, 'e2e', f), 'utf8').includes('E2E_REAL_DB'))
+  .map((f) => `**/e2e/${f}`);
+const realDb = process.env.E2E_REAL_DB === '1';
 
 /**
  * Playwright config for end-to-end smoke tests.
@@ -15,9 +29,8 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e',
-  // artist-workspace drives a REAL database (scripts/local-db); it is not part
-  // of the default run, so CI's expected skip count is unchanged.
-  testIgnore: process.env.E2E_REAL_DB === '1' ? [] : ['**/artist-workspace*.spec.ts'],
+  // `npm run e2e:real-db` runs exactly the real-database specs; the default run (and CI) runs everything else.
+  ...(realDb ? { testMatch: realDbSpecs } : { testIgnore: realDbSpecs }),
   fullyParallel: false,                          // share one cart/player
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
