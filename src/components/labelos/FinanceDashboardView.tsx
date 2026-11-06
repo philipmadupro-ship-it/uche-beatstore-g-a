@@ -144,7 +144,7 @@ function Stat({ label, value, testid }: { label: string; value: string; testid?:
   return (
     <div>
       <p className={LABEL}>{label}</p>
-      <p className="mt-1 text-[15px] tabular-nums text-white" data-testid={testid}>{value}</p>
+      <p className="mt-1 text-[16px] tabular-nums text-white" data-testid={testid}>{value}</p>
     </div>
   );
 }
@@ -152,7 +152,7 @@ function Cell({ label, value, testid }: { label: string; value: string; testid?:
   return (
     <div>
       <dt className="text-[10px] text-white/40">{label}</dt>
-      <dd className="text-[12px] tabular-nums text-white/80" data-testid={testid}>{value}</dd>
+      <dd className="text-[11px] tabular-nums text-white/80" data-testid={testid}>{value}</dd>
     </div>
   );
 }

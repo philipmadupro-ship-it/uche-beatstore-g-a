@@ -24,7 +24,7 @@ const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/60';
 const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
 const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/[0.06]';
-const FIELD = 'w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-white/80 outline-none focus:border-white/30 disabled:opacity-40';
+const FIELD = 'w-full min-w-0 max-w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-white/80 outline-none focus:border-white/30 disabled:opacity-40';
 const KINDS = [
   { value: 'recoupable', label: 'Recoupable — repaid out of earnings' },
   { value: 'non_recoupable', label: 'Non-recoupable — never repaid' },
@@ -111,7 +111,7 @@ function Stat({ label, value, testid }: { label: string; value: string; testid?:
   return (
     <div>
       <p className={LABEL}>{label}</p>
-      <p className="mt-1 text-[15px] tabular-nums text-white" data-testid={testid}>{value}</p>
+      <p className="mt-1 text-[16px] tabular-nums text-white" data-testid={testid}>{value}</p>
     </div>
   );
 }
@@ -149,25 +149,25 @@ function AdvanceForm({ orgId, payees, onDone }: { orgId: string; payees: Advance
   return (
     <form onSubmit={(e) => void submit(e)} className={cn(CARD, 'space-y-4')} data-testid="advance-form">
       <h2 className={LABEL}>Record an advance</h2>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="block space-y-1">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
+        <div className="block min-w-0 space-y-1">
           <span className="text-[11px] text-white/60">Payee</span>
           <Dropdown<string> value={payeeId} onChange={setPayeeId} options={[{ value: '', label: 'Choose a payee' }, ...active.map((p) => ({ value: p.id, label: `${p.name ?? 'Payee'} · ${p.currency}` }))]} className="w-full" aria-label="Payee" />
         </div>
-        <div className="block space-y-1">
+        <div className="block min-w-0 space-y-1">
           <span className="text-[11px] text-white/60">Kind</span>
           <Dropdown<'recoupable' | 'non_recoupable'> value={kind} onChange={setKind} options={KINDS.map((k) => ({ value: k.value, label: k.label }))} className="w-full" aria-label="Kind" />
         </div>
-        <label className="block space-y-1">
+        <label className="block min-w-0 space-y-1">
           <span className="text-[11px] text-white/60">Amount{payee ? ` (${payee.currency})` : ''}</span>
           <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="1,500.00" className={FIELD} data-testid="advance-amount" />
         </label>
-        <label className="block space-y-1">
+        <label className="block min-w-0 space-y-1">
           <span className="text-[11px] text-white/60">Paid on (optional)</span>
           <input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} className={FIELD} data-testid="advance-date" />
         </label>
       </div>
-      <label className="block space-y-1">
+      <label className="block min-w-0 space-y-1">
         <span className="text-[11px] text-white/60">Note (optional, up to 500 characters)</span>
         <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className={FIELD} data-testid="advance-note" />
       </label>
@@ -269,21 +269,21 @@ function AdvanceRow({ orgId, advance: a, payee, canWrite, onDone }: { orgId: str
       )}
       {editing && (
         <form onSubmit={(e) => void save(e)} className="mt-3 space-y-3 border-t border-white/10 pt-3" data-testid="advance-edit-form">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="block space-y-1">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-3">
+            <div className="block min-w-0 space-y-1">
               <span className="text-[11px] text-white/60">Kind</span>
               <Dropdown<string> value={kind} onChange={(v) => setKind(v as AdvanceItem['kind'])} options={KINDS.map((k) => ({ value: k.value, label: k.label }))} disabled={!a.canEditTerms} className="w-full" aria-label="Kind" />
             </div>
-            <label className="block space-y-1">
+            <label className="block min-w-0 space-y-1">
               <span className="text-[11px] text-white/60">Amount ({a.currency})</span>
               <input value={amount} onChange={(e) => setAmount(e.target.value)} disabled={!a.canEditTerms} inputMode="decimal" className={FIELD} data-testid="advance-edit-amount" />
             </label>
-            <label className="block space-y-1">
+            <label className="block min-w-0 space-y-1">
               <span className="text-[11px] text-white/60">Paid on</span>
               <input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} disabled={!a.canEditTerms} className={FIELD} />
             </label>
           </div>
-          <label className="block space-y-1">
+          <label className="block min-w-0 space-y-1">
             <span className="text-[11px] text-white/60">Note</span>
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className={FIELD} data-testid="advance-edit-note" />
           </label>
