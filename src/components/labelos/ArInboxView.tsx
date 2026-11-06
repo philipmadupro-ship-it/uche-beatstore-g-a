@@ -103,6 +103,9 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
   const latest = useRef<ArInboxSong[]>([]);
   // The cursor, readable by a key pressed before React has re-rendered the one before it (J then Space in the same tick).
   const cursorRef = useRef<string | null>(null);
+  // Same reason for "may this viewer review": `act` is re-registered in a passive effect after the render that carries the
+  // first answer, so a key pressed in that gap saw `canReview` still false and toasted "You can read reviews but not add one".
+  const canReviewRef = useRef(false);
 
   const songs = useMemo(() => inbox?.songs ?? [], [inbox]);
   useEffect(() => { latest.current = songs; }, [songs]);
@@ -120,6 +123,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
     if (seq !== reloadSeq.current) return;
     if (!next) { setFailed(true); return; }
     setFailed(false);
+    canReviewRef.current = next.canReview;
     const gone = keep?.removed ?? new Set(before.filter((id) => !next.songs.some((s) => s.id === id)));
     setCursor(cursorAfterRemoval(before, cursorRef.current, gone) ?? next.songs[0]?.id ?? null);
     latest.current = next.songs;
@@ -133,6 +137,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
       if (cancelled) return;
       if (!next) { setFailed(true); return; }
       latest.current = next.songs;
+      canReviewRef.current = next.canReview;
       setInbox(next);
       setCursor(next.songs[0]?.id ?? null);
     });
@@ -171,11 +176,11 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
   }, [orgId, reload]);
 
   const saveReview = useCallback((song: ArInboxSong, patch: ReviewPatch) => {
-    if (!canReview) { toast.error('You can read reviews but not add one.'); return Promise.resolve(); }
+    if (!canReviewRef.current) { toast.error('You can read reviews but not add one.'); return Promise.resolve(); }
     // Saves and stage moves share one queue: each starts when the one before has answered.
     chain.current = chain.current.then(() => runSave(song.id, patch)).catch(() => undefined);
     return chain.current;
-  }, [canReview, runSave]);
+  }, [runSave]);
 
   const runMove = useCallback(async (ids: readonly string[], to: SongStage) => {
     const targets = latest.current.filter((s) => ids.includes(s.id));
@@ -230,7 +235,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
       case 'stage': if (focused) void moveStage(selected.size > 0 ? [...selected] : [focused.id], a.to); return;
       case 'comment':
         if (!focused) return;
-        if (!canReview) { toast.error('You can read reviews but not add one.'); return; }
+        if (!canReviewRef.current) { toast.error('You can read reviews but not add one.'); return; }
         setNoteDraft(focused.mine?.note ?? '');
         noteClosed.current = false;
         setNoteFor(focused.id);
@@ -239,7 +244,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
         if (focused) setSelected((sel) => { const n = new Set(sel); if (n.has(focused.id)) n.delete(focused.id); else n.add(focused.id); return n; });
         return;
     }
-  }, [selected, canReview, saveReview, moveStage, togglePlay, setCursor]);
+  }, [selected, saveReview, moveStage, togglePlay, setCursor]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

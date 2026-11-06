@@ -24,6 +24,11 @@ export default defineConfig({
   workers: 1,                                    // single-producer storefront; one tab is enough
   reporter: process.env.CI ? 'github' : 'list',
   timeout: 30_000,
+  // The real-database flows hit PostgREST + RLS + a cold Next dev compile on
+  // every first visit to a route; the 5 s default expect timeout made
+  // assertions race the compile. 25 s is the budget the flows are written for.
+  // The default (local-store) suite keeps Playwright's 5 s.
+  expect: { timeout: process.env.E2E_REAL_DB === '1' ? 25_000 : 5_000 },
 
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3457',
