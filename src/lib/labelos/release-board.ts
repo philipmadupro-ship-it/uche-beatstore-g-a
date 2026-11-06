@@ -7,7 +7,8 @@
  */
 import { RELEASE_GATES, type GateStatus, type ReleaseGate } from './release-readiness';
 
-export type BoardGate = { gate: ReleaseGate; status: GateStatus; blockerCount: number };
+/** One chip of the strip: the seven gates, plus LABEL-68's optional `creative` while the org has it on. */
+export type BoardGate = { gate: ReleaseGate | 'creative'; status: GateStatus; blockerCount: number };
 
 export type BoardRelease = {
   id: string;
@@ -91,7 +92,7 @@ export function gateSummary(gates: readonly BoardGate[]): string {
 }
 
 /** Short names for the strip (the label is `RELEASE_GATE_LABEL`; the strip has no room). */
-export const GATE_SHORT: Record<ReleaseGate, string> = {
+export const GATE_SHORT: Record<ReleaseGate | 'creative', string> = {
   tracklist: 'Tracks',
   masters: 'Masters',
   credits_splits: 'Splits',
@@ -99,11 +100,18 @@ export const GATE_SHORT: Record<ReleaseGate, string> = {
   artwork: 'Art',
   metadata: 'Meta',
   marketing: 'Mktg',
+  creative: 'Creative',
 };
 
 /** A board row built from a view of the readiness, for the store and for tests. */
-export function boardGates(gates: Record<ReleaseGate, { status: GateStatus; blockerCount: number }>): BoardGate[] {
-  return RELEASE_GATES.map((gate) => ({ gate, status: gates[gate].status, blockerCount: gates[gate].blockerCount }));
+export function boardGates(
+  gates: Record<ReleaseGate, { status: GateStatus; blockerCount: number }>,
+  creative?: { status: GateStatus; blockerCount: number },
+): BoardGate[] {
+  const out: BoardGate[] = RELEASE_GATES.map((gate) => ({ gate, status: gates[gate].status, blockerCount: gates[gate].blockerCount }));
+  // LABEL-68: the creative gate has a chip only for an org that switched it on; otherwise the strip is exactly the seven.
+  if (creative) out.push({ gate: 'creative', status: creative.status, blockerCount: creative.blockerCount });
+  return out;
 }
 
 // ── How a gate reads (board strip and detail share it) ──────────────────

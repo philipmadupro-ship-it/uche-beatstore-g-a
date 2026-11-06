@@ -503,6 +503,7 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'marketing_plan.asset_requested': { one: 'asked for marketing material', many: 'asked for marketing material {n} times' },
   'marketing_plan.asset_changed': { one: 'updated a request for marketing material', many: 'updated requests for marketing material {n} times' },
   'marketing_plan.requirement_changed': { one: 'changed whether a marketing plan is required', many: 'changed whether a marketing plan is required {n} times' },
+  'creative_gate.changed': { one: 'changed whether releases need a creative approval', many: 'changed whether releases need a creative approval {n} times' },
   'press_kit.created': { one: 'started a press kit', many: 'started {n} press kits' },
   'press_kit.updated': { one: 'updated a press kit', many: 'updated press kits {n} times' },
   'press_kit.shared': { one: 'shared a press kit', many: 'shared press kits {n} times' },

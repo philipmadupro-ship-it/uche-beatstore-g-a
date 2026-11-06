@@ -201,12 +201,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: golden-file tests for allocation and recoupment; re-importing a file changes nothing; unmatched queue is scoped.
 
 ### LABEL-63 — Statements and payment tracking
-**Priority:** P1 · **Risk:** Medium · **Deps:** 62 · **Migration:** 181 · **Status:** In Progress (session_019AUhHfmYhmCPwuv3PbWtUU)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 62 · **Migration:** 181 · **Status:** Done (#174, `9dde850`)
 - Generate a statement per payee per period (PDF/CSV), approve (`finance.approve`), mark paid with a reference, export a payout CSV. Payee statements visible to the artist/collaborator in their own view.
 - Acceptance: statement totals equal the sum of allocations (test); approval is append-only; artist sees only theirs.
 
 ### LABEL-64 — Finance dashboard and advances
-**Priority:** P2 · **Risk:** Low · **Deps:** 63 · **Migration:** 182 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** 63 · **Migration:** 182 · **Status:** In Progress (session_019AUhHbQckpjX1sMdPkHon5)
 - Advances ledger (recoupable / non-recoupable), per-artist position, per-release income vs cost, period close; feeds the executive dashboard (LABEL-67).
 
 ---
@@ -232,7 +232,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Read-only cross-roster view for `exec.read`: pipeline by stage, releases by month, blocked releases, approvals waiting, income vs cost, top songs, task load by department, exports (CSV). Respects entitlements and D4; no audio.
 
 ### LABEL-68 — Artistic direction workspace
-**Priority:** P2 · **Risk:** Medium · **Deps:** 49, 53 · **Migration:** 194 (185 released: the migration redefines 187's functions, so it must sort after 187) · **Status:** In Progress (session_019AUhHeNHwgaBP1ijwbN479, PR #176)
+**Priority:** P2 · **Risk:** Medium · **Deps:** 49, 53 · **Migration:** 194 (185 released: the migration redefines 187's functions, so it must sort after 187) · **Status:** Done (#176, `9d55067`)
 - `creative.read/approve`: one place across direction, references, reviews, song stages and releases; optional **creative approval** gate on a release (off by default, toggled in settings).
 
 ---
@@ -240,11 +240,11 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## H. Collaborators and role views
 
 ### LABEL-69 — Collaborators: producers, rappers, features
-**Priority:** P1 · **Risk:** Medium · **Deps:** 50, 54, 59 · **Status:** In Progress (session_019AUhHbF14KRc9E5FH2NgNa)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 50, 54, 59 · **Status:** Done (#175, `d3997f3`, no migration)
 - Invite a collaborator to a song or project with a role (beatmaker, producer, rapper, feature, engineer); they accept their credit and their split, see their contract and statements (scoped), upload stems/versions (existing external-member rules), and ask for things through the closed notification kinds. "My sessions" list for a collaborator who has several labels.
 
 ### LABEL-70 — Role views
-**Priority:** P0 · **Risk:** Medium · **Deps:** 47, 49, 69 · **Status:** Not Started
+**Priority:** P0 · **Risk:** Medium · **Deps:** 47, 49, 69 · **Status:** In Progress (session_019AUhHdnLXe7mLCoov8wmhq)
 - Navigation and home driven by `accountFace` + role + functions + entitlements (`navGroupsFor`): **independent artist/producer home** ("my music, my releases, my money, my contracts"), **label shell** (current, plus finance, marketing/PR, executive, artistic direction), **roster-artist "My music"** (own songs, releases, splits, contracts, statements, open asks), **collaborator home**. Artist-org owners no longer see A&R inbox / Legal queue / roster wording.
 - Acceptance: persona matrix like G10's for every role×face, at 1440 and 390 px; forbidden pages 404 (settings may explain).
 

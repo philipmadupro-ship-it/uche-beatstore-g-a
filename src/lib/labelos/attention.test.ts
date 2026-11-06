@@ -200,3 +200,24 @@ describe('date helpers', () => {
     expect(attentionHref('a b', { kind: 'tasks', id: 'x' })).toBe('/o/a%20b');
   });
 });
+
+describe('the optional creative gate (LABEL-68)', () => {
+  const base = CANONICAL_RELEASES[1]; // Single 01: ready, target within the threshold
+  const withCreative = (blocked: boolean) => ({
+    ...base,
+    gates: [...base.gates, { gate: 'creative' as const, blocked, person: P.dana }],
+  });
+
+  it('a release blocked ONLY on creative approval appears, naming the gate and the person', () => {
+    const { items } = run({ releases: [withCreative(true)] });
+    const item = items.find((i) => i.id === `release:${base.id}`);
+    expect(item).toBeTruthy();
+    expect(item!.detail).toContain('Creative (Dana)');
+    expect(item!.action.verb).toBe('Unblock Creative');
+  });
+
+  it('an open creative gate that holds no blocker (never asked) lists nothing, like the other approval gates; no creative chip means nothing changes', () => {
+    expect(run({ releases: [withCreative(false)] }).items.some((i) => i.id === `release:${base.id}`)).toBe(false);
+    expect(run({ releases: [base] }).items.some((i) => i.id === `release:${base.id}`)).toBe(false);
+  });
+});

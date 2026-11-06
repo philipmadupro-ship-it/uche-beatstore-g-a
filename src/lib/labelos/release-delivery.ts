@@ -17,6 +17,9 @@
  */
 import type { ReleaseGate } from './release-readiness';
 
+/** The gates a delivery can list as open: the seven, plus LABEL-68's optional creative one. */
+export type OpenGate = ReleaseGate | 'creative';
+
 export const DELIVERY_NOTE_MAX = 1000;
 export const DISTRIBUTOR_MAX = 120;
 
@@ -24,7 +27,7 @@ export type DeliveryFacts = {
   state: string;
   readyToDeliver: boolean;
   /** Gates not satisfied right now, for the override record. */
-  openGates: readonly ReleaseGate[];
+  openGates: readonly OpenGate[];
 };
 
 export type DeliveryRequest = {
@@ -36,7 +39,7 @@ export type DeliveryRequest = {
 };
 
 export type DeliveryPlan =
-  | { ok: true; override: boolean; note: string | null; deliveredAt: string; openGates: readonly ReleaseGate[] }
+  | { ok: true; override: boolean; note: string | null; deliveredAt: string; openGates: readonly OpenGate[] }
   | { ok: false; status: 400 | 403 | 409 | 422; error: string; field?: string };
 
 /** The instant a date means: noon UTC of that day, so every timezone reads the same calendar day. */

@@ -26,7 +26,7 @@
  *  - A cancelled release gates nothing (`not_required`); a delivered one still
  *    shows its gates but is never "ready to deliver" again.
  */
-import { approvalIsStale, changedParts, gateCapability, type CurrentApproval, type Gate, type Snapshot } from './approvals';
+import { approvalIsStale, changedParts, gateCapability, type CoreGate, type CurrentApproval, type Gate, type Snapshot } from './approvals';
 import type { Capability } from './capabilities';
 import { isReady, type LegalReadiness } from './legal-readiness';
 import { artworkSizeProblems, type ImageInfo } from './image-size';
@@ -40,7 +40,7 @@ export type ReleaseGate = (typeof RELEASE_GATES)[number];
 export type GateStatus = 'not_started' | 'blocked' | 'awaiting_approval' | 'approved' | 'satisfied' | 'not_required' | 'stale';
 
 /** The approval gate behind a release gate, for the five that need a person. */
-export const APPROVAL_GATE: Partial<Record<ReleaseGate, Gate>> = {
+export const APPROVAL_GATE: Partial<Record<ReleaseGate, CoreGate>> = {
   masters: 'master',
   legal: 'legal',
   artwork: 'artwork',
@@ -103,7 +103,10 @@ export type ReleaseReadinessFacts = {
   items: readonly ReadinessItem[];
   /** Legal readiness of each distinct song on the tracklist. */
   legal: ReadonlyMap<string, LegalReadiness>;
-  approvals: Readonly<Record<Gate, ReadinessApproval>>;
+  approvals: Readonly<Record<CoreGate, ReadinessApproval>> & {
+    /** LABEL-68: only present while the org has `creative_gate` on (the store loads it only then). */
+    creative?: ReadinessApproval;
+  };
   settings: OrgReadinessSettings;
   /**
    * LABEL-65: the release's marketing plan, for the gate that may require one. null = no plan; the timeline
@@ -118,7 +121,8 @@ export type ReleaseReadinessFacts = {
 export type ReadinessBlocker = {
   code: string;
   message: string;
-  gate: ReleaseGate;
+  /** One of the seven gates, or LABEL-68's optional `creative`. */
+  gate: ReleaseGate | 'creative';
   /** The capability that can close the gap. */
   fixCapability: Capability;
   itemId?: string;
@@ -147,8 +151,15 @@ export type GateState = {
 export type ReleaseReadiness = {
   releaseState: string;
   gates: Record<ReleaseGate, GateState>;
+  /**
+   * LABEL-68: the optional creative approval gate. ABSENT (not `not_required`) unless the org switched it on, so for
+   * every org that did not, the result is byte-for-byte what it was before the gate existed.
+   */
+  creative?: GateState;
   readyToDeliver: boolean;
 };
+
+export const CREATIVE_GATE_LABEL = 'Creative';
 
 // ── Evaluation ──────────────────────────────────────────────────────────
 
@@ -181,7 +192,7 @@ const gateState = (status: GateStatus, blockers: ReadinessBlocker[] = [], warnin
  * beside it so it is not forgotten.
  */
 function approvalGate(
-  rg: ReleaseGate,
+  rg: ReleaseGate | 'creative',
   gate: Gate,
   a: ReadinessApproval,
   preconditions: ReadinessBlocker[],
@@ -209,6 +220,14 @@ function approvalGate(
   if (a.current.status === 'requested') return gateState('awaiting_approval', blockers, warnings, approval);
   // Never asked: nothing to do yet when there is nothing to approve.
   return gateState('not_started', blockers, warnings, approval);
+}
+
+/**
+ * LABEL-68: where the optional creative gate stands. One function for the readiness and for the artistic workspace, so
+ * the two can never disagree. `empty` = a release with no tracks has nothing to approve yet.
+ */
+export function creativeGateState(approval: ReadinessApproval, empty: boolean): GateState {
+  return empty ? gateState('not_started', [], [], approvalState('creative', approval)) : approvalGate('creative', 'creative', approval, [], []);
 }
 
 export function evaluateReleaseReadiness(facts: ReleaseReadinessFacts): ReleaseReadiness {
@@ -343,14 +362,22 @@ export function evaluateReleaseReadiness(facts: ReleaseReadinessFacts): ReleaseR
 
   const gates: Record<ReleaseGate, GateState> = { tracklist, masters, credits_splits, legal, artwork, metadata, marketing };
 
+  // LABEL-68: creative approval, only while the org switched it on. A person's sign-off on the artwork and the running
+  // order, so it has nothing to wait for but the approval itself (and a tracklist to approve).
+  let creative: GateState | undefined;
+  if (settings.creative_gate === 'on' && facts.approvals.creative) {
+    creative = creativeGateState(facts.approvals.creative, empty);
+  }
+
   if (release.state === 'cancelled') {
     // Not going out: nothing is required of it.
     const off = Object.fromEntries(RELEASE_GATES.map((g) => [g, gateState('not_required')])) as Record<ReleaseGate, GateState>;
-    return { releaseState: release.state, gates: off, readyToDeliver: false };
+    return { releaseState: release.state, gates: off, ...(creative ? { creative: gateState('not_required') } : {}), readyToDeliver: false };
   }
 
-  const ready = release.state === 'draft' && RELEASE_GATES.every((g) => GATE_SATISFIED.includes(gates[g].status));
-  return { releaseState: release.state, gates, readyToDeliver: ready };
+  const ready =
+    release.state === 'draft' && RELEASE_GATES.every((g) => GATE_SATISFIED.includes(gates[g].status)) && (!creative || GATE_SATISFIED.includes(creative.status));
+  return { releaseState: release.state, gates, ...(creative ? { creative } : {}), readyToDeliver: ready };
 }
 
 // ── What a caller may be told ───────────────────────────────────────────
@@ -371,18 +398,18 @@ export type ReleaseReadinessView = {
   releaseState: string;
   readyToDeliver: boolean;
   gates: Record<ReleaseGate, GateView>;
+  /** LABEL-68: present only while the org has the creative gate on. */
+  creative?: GateView;
 };
 
 /** Field by field: a new property of a blocker is never sent until it is named here. */
 export function releaseReadinessView(r: ReleaseReadiness, mayReadRights: boolean): ReleaseReadinessView {
   const pick = (b: ReadinessBlocker) => ({ code: b.code, message: b.message, fixCapability: b.fixCapability, itemId: b.itemId ?? null, songId: b.songId ?? null, trackId: b.trackId ?? null });
-  const gates = {} as Record<ReleaseGate, GateView>;
-  for (const g of RELEASE_GATES) {
-    const s = r.gates[g];
+  const gateView = (s: GateState): GateView => {
     const visible = (list: ReadinessBlocker[]) => list.filter((b) => mayReadRights || !b.sensitive);
     const blockers = visible(s.blockers);
     const warnings = visible(s.warnings);
-    gates[g] = {
+    return {
       status: s.status,
       blockerCount: s.blockers.length,
       warningCount: s.warnings.length,
@@ -391,6 +418,8 @@ export function releaseReadinessView(r: ReleaseReadiness, mayReadRights: boolean
       withheld: s.blockers.length - blockers.length + (s.warnings.length - warnings.length),
       approval: s.approval ? { gate: s.approval.gate, status: s.approval.status, stale: s.approval.stale, requestedAt: s.approval.requestedAt, decidedAt: s.approval.decidedAt } : null,
     };
-  }
-  return { releaseState: r.releaseState, readyToDeliver: r.readyToDeliver, gates };
+  };
+  const gates = {} as Record<ReleaseGate, GateView>;
+  for (const g of RELEASE_GATES) gates[g] = gateView(r.gates[g]);
+  return { releaseState: r.releaseState, readyToDeliver: r.readyToDeliver, gates, ...(r.creative ? { creative: gateView(r.creative) } : {}) };
 }
