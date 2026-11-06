@@ -28,6 +28,7 @@ const A_ARA2 = '80000000-0000-4000-8000-000000000002'; // Ara's untouched advanc
 const A_BO = '80000000-0000-4000-8000-000000000003';
 const PER_OPEN = '90000000-0000-4000-8000-000000000001';
 const PER_CLOSED = '90000000-0000-4000-8000-000000000002';
+const IMP = 'a0000000-0000-4000-8000-0000000000c1';
 const PROJ = '40000000-0000-4000-8000-000000000001';
 
 let current: string | null = null;
@@ -79,11 +80,11 @@ beforeEach(() => {
       ],
       advances: [advance(A_ARA, YARA, ARA, 'recoupable', 5000), advance(A_ARA2, YARA, ARA, 'non_recoupable', 700), advance(A_BO, YBO, BO, 'recoupable', 9000)],
       earnings_recoupments: [{ id: 'r1', org_id: L, advance_id: A_ARA, payee_id: YARA, amount_minor: 1200 }],
-      earnings_allocations: [{ id: 'al1', org_id: L, payee_id: YARA, payable_minor: 4000, import_id: 'i1', line_id: 'ln1' }, { id: 'al2', org_id: L, payee_id: YBO, payable_minor: 800, import_id: 'i1', line_id: 'ln2' }, { id: 'al3', org_id: L, payee_id: YBO, payable_minor: 2000, import_id: 'i1', line_id: 'ln1' }],
-      earnings_imports: [{ id: 'i1', org_id: L, period_id: PER_OPEN, status: 'imported' }],
+      earnings_allocations: [{ id: 'al1', org_id: L, payee_id: YARA, payable_minor: 4000, import_id: IMP, line_id: 'ln1' }, { id: 'al2', org_id: L, payee_id: YBO, payable_minor: 800, import_id: IMP, line_id: 'ln2' }, { id: 'al3', org_id: L, payee_id: YBO, payable_minor: 2000, import_id: IMP, line_id: 'ln1' }],
+      earnings_imports: [{ id: IMP, org_id: L, period_id: PER_OPEN, status: 'imported' }],
       earnings_lines: [
-        { id: 'ln1', org_id: L, import_id: 'i1', upc: null, song_track_id: 's1', gross_minor: 8000, currency: 'USD' },
-        { id: 'ln2', org_id: L, import_id: 'i1', upc: null, song_track_id: 's2', gross_minor: 1600, currency: 'USD' },
+        { id: 'ln1', org_id: L, import_id: IMP, upc: null, song_track_id: 's1', gross_minor: 8000, currency: 'USD' },
+        { id: 'ln2', org_id: L, import_id: IMP, upc: null, song_track_id: 's2', gross_minor: 1600, currency: 'USD' },
       ],
       statements: [{ id: 'st1', org_id: L, payee_id: YARA, period_id: PER_OPEN, status: 'issued', net_minor: 2800 }],
       statement_lines: [],
@@ -107,6 +108,7 @@ beforeEach(() => {
       labelos_audit_advance_void: rpc('void', { voided: true }),
       labelos_audit_period_close: rpc('close', { closed: true }),
       labelos_audit_period_reopen: rpc('reopen', { reopened: true }),
+      labelos_audit_earnings_import_void: rpc('importVoid', { voided: true, allocations: 1, recoupments: 0, drafts: 0 }),
     },
   };
 });
@@ -119,6 +121,7 @@ const MODULES: Record<string, () => Promise<unknown>> = {
   dashboard: () => import('./dashboard/route'),
   close: () => import('./periods/[periodId]/close/route'),
   reopen: () => import('./periods/[periodId]/reopen/route'),
+  importVoid: () => import('./earnings/imports/[importId]/void/route'),
 };
 
 async function call(which: keyof typeof MODULES, method: string, as: string | null, org: string, extra: Record<string, string> = {}, body?: unknown) {
@@ -301,5 +304,14 @@ describe('closing and reopening a period', () => {
   it('a period of another organization is 404', async () => {
     expect((await call('close', 'POST', STR, L2, { periodId: PER_OPEN })).status).toBe(404);
     expect((await call('reopen', 'POST', STR, L2, { periodId: PER_CLOSED })).status).toBeGreaterThanOrEqual(403);
+  });
+});
+
+describe('voiding an import in a closed period', () => {
+  it('is 409 period_closed, with a plain code', async () => {
+    answers.importVoid = { error: 'period_closed' };
+    const res = await call('importVoid', 'POST', FIN, L, { importId: IMP });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('period_closed');
   });
 });

@@ -49,9 +49,9 @@
 --   half-finished insert, and an insert that starts after sees the closed row.
 --   Events: period.closed | period.reopened (audit, internal).
 --
--- Functions 182 does NOT redefine: labelos_finance_frozen (181), the 180/181
--- earnings and statement functions. finance_periods_guard and advances' freeze
--- trigger are defined only in 179 and no later migration touches them.
+-- Functions 182 redefines: finance_periods_guard and the advances freeze (179, defined nowhere else) and
+-- labelos_audit_earnings_import_void (181, defined nowhere else: it now refuses period_closed). Not redefined:
+-- labelos_finance_frozen (181), the 180 earnings functions, the other 181 functions.
 --
 -- Idempotent: CREATE OR REPLACE, DROP … IF EXISTS first.
 -- Rollback: supabase/rollback/182_labelos_finance_advances_close.down.sql.
@@ -370,5 +370,63 @@ $$;
 ALTER FUNCTION public.labelos_audit_period_reopen(uuid, uuid, uuid, jsonb) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.labelos_audit_period_reopen(uuid, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.labelos_audit_period_reopen(uuid, uuid, uuid, jsonb) TO service_role;
+
+-- ── 5. Voiding an import in a closed period is refused ─────────────────
+-- 181's function with one more check, under the same advisory lock the close takes (no later migration defines it).
+
+CREATE OR REPLACE FUNCTION public.labelos_audit_earnings_import_void(p_org uuid, p_actor uuid, p_import uuid, p_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  i public.earnings_imports%ROWTYPE;
+  v_allocs int;
+  v_recoups int;
+  v_drafts int;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('labelos.earnings:' || p_org::text, 0));
+  SELECT * INTO i FROM public.earnings_imports WHERE id = p_import AND org_id = p_org FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
+  IF i.status = 'void' THEN RETURN jsonb_build_object('error', 'already_void'); END IF;
+  -- 182 (LABEL-64): a closed period is immutable. Same lock as the close took above; reopen the period first.
+  IF EXISTS (SELECT 1 FROM public.finance_periods fp WHERE fp.id = i.period_id AND fp.status <> 'open') THEN
+    RETURN jsonb_build_object('error', 'period_closed');
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.statement_lines l
+    JOIN public.statements s ON s.id = l.statement_id
+    JOIN public.earnings_lines el ON el.id = l.earnings_line_id
+    WHERE el.import_id = i.id AND s.status IN ('approved', 'issued')
+  ) THEN
+    RETURN jsonb_build_object('error', 'statement_exists');
+  END IF;
+
+  DELETE FROM public.statements s
+  WHERE s.org_id = p_org AND s.status = 'draft'
+    AND EXISTS (SELECT 1 FROM public.statement_lines l JOIN public.earnings_lines el ON el.id = l.earnings_line_id WHERE l.statement_id = s.id AND el.import_id = i.id);
+  GET DIAGNOSTICS v_drafts = ROW_COUNT;
+
+  PERFORM set_config('labelos.voiding_import', i.id::text, true);
+  DELETE FROM public.earnings_recoupments WHERE import_id = i.id;
+  GET DIAGNOSTICS v_recoups = ROW_COUNT;
+  DELETE FROM public.earnings_allocations WHERE import_id = i.id;
+  GET DIAGNOSTICS v_allocs = ROW_COUNT;
+  PERFORM set_config('labelos.voiding_import', '', true);
+
+  UPDATE public.earnings_imports SET status = 'void' WHERE id = i.id;
+
+  PERFORM public.labelos_finance_event(p_org, p_actor, 'earnings.import_voided', 'earnings_import', i.id, NULL,
+    p_payload || jsonb_build_object('importId', i.id, 'allocations', v_allocs, 'recoupments', v_recoups, 'draftsDiscarded', v_drafts));
+  RETURN jsonb_build_object('voided', true, 'allocations', v_allocs, 'recoupments', v_recoups, 'drafts', v_drafts);
+END;
+$$;
+
+ALTER FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) TO service_role;
 
 NOTIFY pgrst, 'reload schema';

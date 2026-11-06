@@ -218,6 +218,19 @@ RESET ROLE;
 SELECT public.check_raises('the reopen flag does not outlive its transaction: a bare reopen still fails',
   format($$UPDATE public.finance_periods SET status = 'closed', closed_at = now() WHERE id = %L; UPDATE public.finance_periods SET status = 'open', closed_at = NULL WHERE id = %L$$, :PER2, :PER2), 'stays closed');
 
+-- ── Voiding an import in a closed period is refused; allowed again after a reopen ──
+
+SET ROLE service_role;
+SELECT public.chk_import(repeat('7', 64), :PER2, NULL, NULL);
+SELECT public.labelos_audit_period_close(:L, :O, :PER2, '{}'::jsonb);
+RESET ROLE;
+SELECT id AS imp2 FROM public.earnings_imports WHERE period_id = :PER2 \gset
+SET ROLE service_role;
+SELECT public.check_eq('a closed period''s import is not voided', public.labelos_audit_earnings_import_void(:L, :O, :'imp2', '{}'::jsonb) ->> 'error', 'period_closed');
+SELECT public.check_eq('the owner reopens it', public.labelos_audit_period_reopen(:L, :O, :PER2, '{}'::jsonb) ->> 'reopened', 'true');
+SELECT public.check_eq('...and then the import is voided', public.labelos_audit_earnings_import_void(:L, :O, :'imp2', '{}'::jsonb) ->> 'voided', 'true');
+RESET ROLE;
+
 -- ── A line waiting for review blocks the close (180 would refuse to allocate it afterwards) ──
 
 INSERT INTO public.finance_periods (id, org_id, label, starts_on, ends_on) VALUES (:PER4, :L, 'Q5', '2027-01-01', '2027-03-31');

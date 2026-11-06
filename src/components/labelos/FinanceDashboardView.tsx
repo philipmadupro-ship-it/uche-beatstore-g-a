@@ -111,7 +111,7 @@ export function FinanceDashboardView({ orgId }: { orgId: string }) {
           </ul>
         )}
         <p className="mt-2 text-[11px] leading-relaxed text-white/40">
-          Cost is the marketing spend recorded on the release’s plan; no other cost is recorded in the system yet.
+          Costs = spent marketing budget (the release’s marketing plan). No other cost is recorded in the system yet.
         </p>
         {data.unattributed.length > 0 && (
           <ul className="mt-2 space-y-1 text-[11px] text-white/50" data-testid="finance-unattributed">

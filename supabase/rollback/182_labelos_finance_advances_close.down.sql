@@ -46,3 +46,55 @@ CREATE TRIGGER advances_frozen BEFORE UPDATE OR DELETE ON public.advances
   FOR EACH ROW EXECUTE FUNCTION public.labelos_finance_frozen('note', 'voided_at', 'voided_by');
 DROP FUNCTION IF EXISTS public.advances_edit_frozen();
 DROP FUNCTION IF EXISTS public.labelos_advance_referenced(uuid);
+
+-- 181's import void (without the closed-period refusal).
+CREATE OR REPLACE FUNCTION public.labelos_audit_earnings_import_void(p_org uuid, p_actor uuid, p_import uuid, p_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  i public.earnings_imports%ROWTYPE;
+  v_allocs int;
+  v_recoups int;
+  v_drafts int;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('labelos.earnings:' || p_org::text, 0));
+  SELECT * INTO i FROM public.earnings_imports WHERE id = p_import AND org_id = p_org FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
+  IF i.status = 'void' THEN RETURN jsonb_build_object('error', 'already_void'); END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.statement_lines l
+    JOIN public.statements s ON s.id = l.statement_id
+    JOIN public.earnings_lines el ON el.id = l.earnings_line_id
+    WHERE el.import_id = i.id AND s.status IN ('approved', 'issued')
+  ) THEN
+    RETURN jsonb_build_object('error', 'statement_exists');
+  END IF;
+
+  DELETE FROM public.statements s
+  WHERE s.org_id = p_org AND s.status = 'draft'
+    AND EXISTS (SELECT 1 FROM public.statement_lines l JOIN public.earnings_lines el ON el.id = l.earnings_line_id WHERE l.statement_id = s.id AND el.import_id = i.id);
+  GET DIAGNOSTICS v_drafts = ROW_COUNT;
+
+  PERFORM set_config('labelos.voiding_import', i.id::text, true);
+  DELETE FROM public.earnings_recoupments WHERE import_id = i.id;
+  GET DIAGNOSTICS v_recoups = ROW_COUNT;
+  DELETE FROM public.earnings_allocations WHERE import_id = i.id;
+  GET DIAGNOSTICS v_allocs = ROW_COUNT;
+  PERFORM set_config('labelos.voiding_import', '', true);
+
+  UPDATE public.earnings_imports SET status = 'void' WHERE id = i.id;
+
+  PERFORM public.labelos_finance_event(p_org, p_actor, 'earnings.import_voided', 'earnings_import', i.id, NULL,
+    p_payload || jsonb_build_object('importId', i.id, 'allocations', v_allocs, 'recoupments', v_recoups, 'draftsDiscarded', v_drafts));
+  RETURN jsonb_build_object('voided', true, 'allocations', v_allocs, 'recoupments', v_recoups, 'drafts', v_drafts);
+END;
+$$;
+
+ALTER FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) TO service_role;

@@ -41,6 +41,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       await auditRpc(access.admin as unknown as AuditRpcAdmin, 'earningsImportVoid', { p_org: access.orgId, p_actor: access.userId, p_import: imp.id, p_payload: {} }),
       'import void',
     );
+    if (out.error === 'period_closed') return json(409, { error: 'This file belongs to a closed period. Ask an owner to reopen the period first.', code: 'period_closed' });
     if (out.error === 'statement_exists') return json(409, { error: 'An approved or issued statement includes this file’s earnings. Void that statement first.', code: 'statement_exists' });
     if (out.error === 'already_void') return json(409, { error: 'This file is already void.', code: 'already_void' });
     if (out.error) return json(404, { error: 'Import not found' });
