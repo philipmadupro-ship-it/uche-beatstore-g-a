@@ -5,8 +5,10 @@
  *
  * The import is driven through the page, a file picker and the real routes —
  * nothing a finance person does is seeded with the service key. Seeded with the
- * service key: the cast, the songs, their circulated split sheets and an
- * advance (advances have no screen until LABEL-64).
+ * service key: the cast, the songs and an advance (advances have no
+ * screen until LABEL-64). The split sheets are started and circulated through the
+ * splits routes, as a rights writer does it. The split sheets are made and
+ * circulated through the splits routes, not seeded.
  *
  *   1 · the owner imports a DistroKid-style CSV on /o/<slug>/finance/earnings:
  *       fractional cents are refused until "round fractional cents" is ticked;
@@ -26,6 +28,7 @@
 import { test, expect, type APIRequestContext, type Browser, type BrowserContext } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { circulateSplitSheet } from './support/real-flows';
 import { ANON_KEY, ARTIST_A_ID, ARTIST_B_ID, BUYER_ID, PRODUCER_ID, SERVICE_KEY, sessionCookie, userToken } from '../scripts/local-db/jwt.mjs';
 
 const REST = 'http://127.0.0.1:54321/rest/v1';
@@ -134,15 +137,13 @@ test('1 · the owner makes payees through the route, a sheet circulates, an adva
   expect((await post({ party_id: P_NOVA, artist_contact_id: NOVA })).status()).toBe(201);
   expect((await post({ party_id: P_PAT, artist_contact_id: null })).status()).toBe(201);
   expect((await post({ party_id: P_KILO, artist_contact_id: KILO })).status()).toBe(201);
-  await ctx.close();
 
-  // Night Shift: Nova 70 % / Pat 30 % master sheet, circulated.
-  const [sheet] = (await rest(request, 'POST', 'split_sheets', { org_id: ORG, track_id: SONG_NIGHT, kind: 'master', version: 1 })) as Row[];
-  await rest(request, 'POST', 'split_lines', [
-    { split_sheet_id: sheet.id, party_id: P_NOVA, role: 'master_owner', share: 70, position: 0 },
-    { split_sheet_id: sheet.id, party_id: P_PAT, role: 'master_owner', share: 30, position: 1 },
+  // Night Shift: Nova 70 % / Pat 30 % master sheet, circulated through the splits routes.
+  await circulateSplitSheet(ctx.request, ORG, SONG_NIGHT, 'master', [
+    { party_id: P_NOVA, role: 'master_owner', share: 70 },
+    { party_id: P_PAT, role: 'master_owner', share: 30 },
   ]);
-  await rest(request, 'PATCH', `split_sheets?id=eq.${sheet.id}`, { status: 'circulated', circulated_at: new Date().toISOString() });
+  await ctx.close();
   // Nova's recoupable advance: $50.00.
   const payees = (await rest(request, 'GET', `payees?select=id,party_id&org_id=eq.${ORG}`)) as Row[];
   const nova = String(payees.find((p) => p.party_id === P_NOVA)!.id);
@@ -247,10 +248,8 @@ test('5 · a finance member limited to Nova sees only Nova’s waiting line and 
 });
 
 test('6 · circulating the missing sheet and pressing Re-run allocates that line', async ({ browser, baseURL, request }) => {
-  const [sheet] = (await rest(request, 'POST', 'split_sheets', { org_id: ORG, track_id: SONG_NOSHEET, kind: 'master', version: 1 })) as Row[];
-  await rest(request, 'POST', 'split_lines', { split_sheet_id: sheet.id, party_id: P_NOVA, role: 'master_owner', share: 100, position: 0 });
-  await rest(request, 'PATCH', `split_sheets?id=eq.${sheet.id}`, { status: 'circulated', circulated_at: new Date().toISOString() });
   const ctx = await as(browser, baseURL!, owner);
+  await circulateSplitSheet(ctx.request, ORG, SONG_NOSHEET, 'master', [{ party_id: P_NOVA, role: 'master_owner', share: 100 }]);
   const page = await ctx.newPage();
   await page.goto(PAGE);
   await expect(page.getByTestId('import-rerun')).toContainText('Re-run 3 waiting', { timeout: 25_000 });
