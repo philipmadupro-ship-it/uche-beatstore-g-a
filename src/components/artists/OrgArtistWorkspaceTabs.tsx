@@ -261,17 +261,13 @@ function ReleasesTab({ orgId, workspace, base }: { orgId: string; workspace: Org
             <p className="shrink-0 text-[11px] text-white/40">{releaseMeta(r)}</p>
           </div>
           {r.items.length === 0 ? (
-            <p className="mt-2 text-[11px] text-white/40">No tracks yet.</p>
+            <p className="mt-2 text-[11px] text-white/40">No tracks to show.</p>
           ) : (
             <ol className="mt-3 divide-y divide-white/[0.06] border-t border-white/[0.06]">
               {r.items.map((i) => (
                 <li key={`${i.position}-${i.songTrackId}`} className="flex items-center gap-3 py-2">
                   <span className="w-5 shrink-0 text-right font-mono text-[10px] text-white/30">{i.position}</span>
-                  {i.restricted ? (
-                    <span className="flex items-center gap-1.5 text-[11px] text-white/40"><Lock size={10} aria-hidden="true" /> Restricted song</span>
-                  ) : (
-                    <Link href={`${base}/songs/${i.songTrackId}`} className="min-w-0 truncate text-[13px] text-white/80 hover:text-white">{i.title}</Link>
-                  )}
+                  <Link href={`${base}/songs/${i.songTrackId}`} className="min-w-0 truncate text-[13px] text-white/80 hover:text-white">{i.title}</Link>
                 </li>
               ))}
             </ol>

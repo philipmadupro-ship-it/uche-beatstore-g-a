@@ -8,6 +8,8 @@ import {
   partitionReferences,
   referenceFileAllowed,
   referenceReadableBy,
+  referencesAtCap,
+  REFERENCES_PER_ARTIST_MAX,
   safeReferenceUrl,
   sameDirection,
   toReferenceView,
@@ -105,5 +107,18 @@ describe('nextReferencePosition', () => {
   it('goes after the last', () => {
     expect(nextReferencePosition([])).toBe(0);
     expect(nextReferencePosition([0, 4, 2])).toBe(5);
+  });
+});
+
+describe('references cap (LABEL-74)', () => {
+  const rows = (artist: number, internal: number) => [
+    ...Array.from({ length: artist }, () => ({ visibility: 'artist' })),
+    ...Array.from({ length: internal }, () => ({ visibility: 'internal' })),
+  ];
+  it('counts internal references for the team only', () => {
+    const full = rows(REFERENCES_PER_ARTIST_MAX - 1, 1);
+    expect(referencesAtCap('member', full)).toBe(true);
+    expect(referencesAtCap('artist', full)).toBe(false); // the refusal must not reveal the hidden one
+    expect(referencesAtCap('artist', rows(REFERENCES_PER_ARTIST_MAX, 0))).toBe(true);
   });
 });

@@ -227,17 +227,18 @@ export function abSeekFraction(progress: number, fromSeconds: number | null | un
 // ── Releases tab ────────────────────────────────────────────────────────
 
 export interface ReleaseItemTitle {
+  /** 1-based place among the songs the member can see (not the stored position). */
   position: number;
   songTrackId: string;
-  /** Null when the member may not see the song's row: the item is shown as restricted. */
-  title: string | null;
-  restricted: boolean;
+  title: string;
 }
 
 /**
  * A release's tracklist with titles joined from the track rows (LABEL-16
- * carry: items carry ids only). A song the member may not see keeps its
- * position and reads "restricted" — never its title.
+ * carry: items carry ids only). A song the member may not see is DROPPED, not
+ * shown as a placeholder (LABEL-74): a "Restricted song" line, or a gap in the
+ * numbering, would let a scoped viewer count the songs they cannot open. The
+ * remaining songs are renumbered 1..n for the same reason.
  */
 export function releaseItemTitles(
   items: ReadonlyArray<{ position: number; song_track_id: string }>,
@@ -246,10 +247,8 @@ export function releaseItemTitles(
 ): ReleaseItemTitle[] {
   return [...items]
     .sort((a, b) => a.position - b.position)
-    .map((i) => {
-      const ok = visible(i.song_track_id) && titles.has(i.song_track_id);
-      return { position: i.position, songTrackId: i.song_track_id, title: ok ? (titles.get(i.song_track_id) ?? 'Untitled') : null, restricted: !ok };
-    });
+    .filter((i) => visible(i.song_track_id) && titles.has(i.song_track_id))
+    .map((i, n) => ({ position: n + 1, songTrackId: i.song_track_id, title: titles.get(i.song_track_id) ?? 'Untitled' }));
 }
 
 // ── Permissions the page needs ──────────────────────────────────────────

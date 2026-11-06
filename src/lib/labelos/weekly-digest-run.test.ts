@@ -13,7 +13,7 @@ const FULL: WeeklyDigestContent = {
 };
 
 /** An in-memory database with the same compare-and-set the SQL claim has. */
-function fake(opts: { members?: Array<Partial<DueRow> & { userId: string }>; channel?: boolean; email?: boolean; roles?: Record<string, string | null>; content?: (r: RecipientAccess) => WeeklyDigestContent; sendOk?: boolean } = {}) {
+function fake(opts: { members?: Array<Partial<DueRow> & { userId: string }>; channel?: boolean; email?: boolean; roles?: Record<string, string | null>; content?: (r: RecipientAccess) => WeeklyDigestContent; channelContent?: (r: RecipientAccess) => WeeklyDigestContent; sendOk?: boolean } = {}) {
   const rows = new Map<string, DueRow>();
   for (const m of opts.members ?? []) rows.set(`${m.orgId ?? ORG}|${m.userId}`, { orgId: ORG, enabled: true, lastSentWeek: '', ...m } as DueRow);
   const rowOf = (orgId: string, userId: string) => rows.get(`${orgId}|${userId}`);
@@ -21,6 +21,7 @@ function fake(opts: { members?: Array<Partial<DueRow> & { userId: string }>; cha
   const sent: Array<{ to: string; subject: string; text: string }> = [];
   const posts: string[] = [];
   const builtFor: string[] = [];
+  const channelBuilt: string[] = [];
   const state = { sendOk: opts.sendOk ?? true };
   const ports: DigestPorts = {
     emailConfigured: opts.email ?? true,
@@ -44,6 +45,11 @@ function fake(opts: { members?: Array<Partial<DueRow> & { userId: string }>; cha
     async content(r) {
       builtFor.push(r.userId);
       return opts.content ? opts.content(r) : FULL;
+    },
+    async channelContent(r) {
+      builtFor.push(r.userId);
+      channelBuilt.push(r.userId);
+      return opts.channelContent ? opts.channelContent(r) : FULL;
     },
     async claimMember(orgId, userId, week) {
       await Promise.resolve(); // yield, so concurrent runs interleave
@@ -82,7 +88,7 @@ function fake(opts: { members?: Array<Partial<DueRow> & { userId: string }>; cha
       return true;
     },
   };
-  return { ports, rows, channel, sent, posts, builtFor, state };
+  return { ports, rows, channel, sent, posts, builtFor, channelBuilt, state };
 }
 
 describe('runWeeklyDigest', () => {
@@ -212,6 +218,12 @@ describe('runWeeklyDigest', () => {
   });
 
   describe('Slack', () => {
+    it('is built from the channel view, never the poster\u2019s own (LABEL-74)', async () => {
+      const f = fake({ members: [{ userId: 'boss' }], channel: true, roles: { boss: 'owner' }, email: false, content: () => { throw new Error('the member view must not be used'); } });
+      expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ slacked: 1 });
+      expect(f.channelBuilt).toEqual(['boss']);
+    });
+
     it('posts once a week, from an opted-in owner or admin’s view', async () => {
       const f = fake({ members: [{ userId: 'm' }, { userId: 'boss' }], channel: true, roles: { boss: 'owner' }, email: false });
       expect(await runWeeklyDigest(f.ports, NOW)).toMatchObject({ slacked: 1 });
