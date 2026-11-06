@@ -29,8 +29,9 @@ const SQL_176 = readFileSync(join(process.cwd(), 'supabase/migrations/176_labelo
 const SQL_178 = readFileSync(join(process.cwd(), 'supabase/migrations/178_labelos_contract_signing.sql'), 'utf8');
 // LABEL-63 adds statements, payments and the import void.
 const SQL_181 = readFileSync(join(process.cwd(), 'supabase/migrations/181_labelos_statements.sql'), 'utf8');
+const SQL_182 = readFileSync(join(process.cwd(), 'supabase/migrations/182_labelos_finance_advances_close.sql'), 'utf8');
 const SQL_187 = readFileSync(join(process.cwd(), 'supabase/migrations/187_labelos_atomic_audit_functions.sql'), 'utf8');
-const SQL_BEFORE_187 = SQL_146 + SQL_148 + SQL_153 + SQL_154 + SQL_155 + SQL_157 + SQL_170 + SQL_172 + SQL_174 + SQL_176 + SQL_178 + SQL_181 + SQL_183 + SQL_190;
+const SQL_BEFORE_187 = SQL_146 + SQL_148 + SQL_153 + SQL_154 + SQL_155 + SQL_157 + SQL_170 + SQL_172 + SQL_174 + SQL_176 + SQL_178 + SQL_181 + SQL_182 + SQL_183 + SQL_190;
 const SQL = SQL_BEFORE_187 + SQL_187;
 
 describe('auditRpc', () => {
@@ -68,7 +69,7 @@ describe('auditRpc', () => {
   });
 });
 
-describe('migrations 146 + 148 + 153 + 154 + 155 + 157 + 170 + 172 + 174 + 176 + 178 + 181 + 183 + 187 + 190 hold exactly these functions, service_role only', () => {
+describe('migrations 146 + 148 + 153 + 154 + 155 + 157 + 170 + 172 + 174 + 176 + 178 + 181 + 182 + 183 + 187 + 190 hold exactly these functions, service_role only', () => {
   for (const [key, name] of Object.entries(AUDIT_RPCS)) {
     it(`${key} → ${name}`, () => {
       expect(SQL).toMatch(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\(`));
