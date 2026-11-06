@@ -7,6 +7,7 @@ import {
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
 import { canSeeParties } from '@/lib/labelos/parties-view';
+import { pageAllowed } from '@/lib/labelos/role-view';
 import { canSeeContracts } from '@/lib/labelos/contracts-nav';
 import { ADMIN_CENTRE_CAPABILITY } from '@/lib/labelos/admin-centre';
 
@@ -110,6 +111,8 @@ export interface OrgNavContext {
   modules?: ReadonlySet<string> | readonly string[];
   /** The viewer's role is `owner` (LABEL-51): the owner-only settings entry is drawn. */
   isOwner?: boolean;
+  /** The viewer's role in the org (LABEL-70): a label's roster artist gets "My music", not the label's roster wording. */
+  role?: string;
 }
 
 /** Is the module in the org's licence? No list = the default (yes). */
@@ -147,13 +150,23 @@ function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | 
  * producer's CRM, which the producer hubs already reach — and only for a
  * member who can see the catalogue (the page's own capability).
  */
-function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null, artistic: boolean): NavGroup {
+function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null, orgKind: string, role: string | undefined, artistic: boolean): NavGroup {
   // LABEL-37: Music is the org-wide list of songs with the structured filter bar and saved views; same capability as the roster.
+  // LABEL-70: an independent artist's org and a label's roster artist have no roster to run: "My music" and their own artist page.
+  if (orgKind === 'artist' || role === 'artist') {
+    const own: NavGroup['items'] = [
+      { label: 'My music', href: `/o/${slug}/music`, icon: Music2 },
+      { label: 'Artist profile', href: `/o/${slug}/artists`, icon: Mic2 },
+    ];
+    // LABEL-68 / 70: an independent artist who holds the artistic department (`creative.read`) keeps its workspace.
+    if (artistic && caps?.has('creative.read')) own.push({ label: 'Artistic direction', href: `/o/${slug}/creative`, icon: Palette });
+    return { key: 'roster', label: 'My music', icon: Music2, items: own };
+  }
   const items: NavGroup['items'] = [
     { label: 'Artists', href: `/o/${slug}/artists`, icon: Mic2 },
     { label: 'Music', href: `/o/${slug}/music`, icon: Music2 },
   ];
-  // The A&R inbox (LABEL-25) is the reviewers' queue: only a member who can rate sees the entry. The page itself stays open to the catalogue, so an artist reads the reviews of their songs by link.
+  // The A&R inbox (LABEL-25) is the reviewers' queue: only a member who can rate sees the entry. The page is a label staff tool (`pageAllowed('ar')`, LABEL-70): a roster artist reads the reviews of their songs on the song page.
   if (caps?.has('review.write')) items.push({ label: 'A&R inbox', href: `/o/${slug}/ar`, icon: Inbox });
   // The artistic direction workspace (LABEL-68): `creative.read`, in an org that has the artistic department.
   if (artistic && caps?.has('creative.read')) items.push({ label: 'Artistic direction', href: `/o/${slug}/creative`, icon: Palette });
@@ -225,19 +238,20 @@ export function navGroupsFor(
   if (!(ORG_KINDS as readonly string[]).includes(orgKind)) return [];
   if (!org) return orgKind === 'producer' ? NAV_GROUPS : [];
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
-  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps, licensed(org, 'artistic'))] : [];
+  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps, orgKind, org.role, licensed(org, 'artistic'))] : [];
   const releases = orgKind !== 'producer' && caps?.has('catalog.read') ? [releasesGroup(org.slug)] : [];
   // The legal queue belongs to the contracts module (LABEL-47); Parties is for anyone who reads a party.
   const rightsHub =
     orgKind !== 'producer' && caps
-      ? rightsGroup(org.slug, { parties: canSeeParties(caps), legal: canSeeLegalQueue(caps) && licensed(org, 'contracts'), contracts: canSeeContracts(caps) && licensed(org, 'contracts') })
+      ? rightsGroup(org.slug, { parties: canSeeParties(caps), legal: orgKind === 'label' && canSeeLegalQueue(caps) && licensed(org, 'contracts'), contracts: canSeeContracts(caps) && licensed(org, 'contracts') })
       : null;
   const rights = rightsHub ? [rightsHub] : [];
   const finance = orgKind !== 'producer' && caps?.has('finance.read') && licensed(org, 'finance') ? [financeGroup(org.slug)] : [];
   // LABEL-63: the payee's own artist (a roster artist, or the owner of an artist org) reads the statements issued to them.
+  // Finance staff already have the Finance hub (with Statements); everyone else who may open the page (`pageAllowed('statements')`: a roster artist, or the owner of an artist org) gets their own.
   const ownStatements =
-    orgKind !== 'producer' && caps && !caps.has('finance.read') && licensed(org, 'finance') &&
-    ((orgKind === 'artist' && org.isOwner === true) || (caps.has('review.comment') && !caps.has('review.write') && !caps.has('catalog.write')))
+    orgKind !== 'producer' && caps && !caps.has('finance.read') &&
+    pageAllowed('statements', { kind: orgKind, role: org.role ?? (org.isOwner ? 'owner' : ''), capabilities: caps, modules: org.modules })
       ? [{ key: 'finance', label: 'Finance', icon: Coins, items: [{ label: 'My statements', href: `/o/${org.slug}/finance/statements`, icon: Coins }] } as NavGroup]
       : [];
   return [...producerHubs, ...roster, ...releases, ...rights, ...finance, ...ownStatements, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];
