@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { pageAllowed, viewInputOf } from '@/lib/labelos/role-view';
 import { useOrgShell } from '@/components/labelos/OrgShellContext';
 import { fetchOrgSearch } from '@/lib/labelos/org-search-client';
 import {
@@ -119,10 +120,13 @@ export function OrgCommandPalette() {
       if (!text || label.toLowerCase().includes(text)) out.push({ key: `go-${path}`, label: `Go to ${label}`, sub: null, icon, href: `/o/${slug}${path}`, group: null });
     };
     if (!result.jump) {
+      // LABEL-70: only the pages this person can open, in the wording their nav uses.
+      const view = viewInputOf(shell);
+      const own = view.kind === 'artist' || view.role === 'artist';
       go('Overview', '', Home);
-      go('Artists', '/artists', Users);
-      go('A&R', '/ar', Inbox);
-      go('Releases', '/releases', CalendarDays);
+      if (pageAllowed('artists', view)) go(own ? 'Artist profile' : 'Artists', '/artists', Users);
+      if (pageAllowed('ar', view)) go('A&R', '/ar', Inbox);
+      if (pageAllowed('releases', view)) go('Releases', '/releases', CalendarDays);
     }
     const push = (h: SearchHit, group: string | null) => {
       out.push({ key: `${h.group}-${h.id}`, label: h.title, sub: h.sub, icon: GROUP_ICON[h.group], href: searchHitHref(slug, h), group });
@@ -130,7 +134,7 @@ export function OrgCommandPalette() {
     if (result.jump) push(result.jump, 'Jump to');
     for (const g of result.groups) for (const h of g.hits) push(h, SEARCH_GROUP_LABEL[g.group]);
     return out;
-  }, [q, result, slug]);
+  }, [q, result, slug, shell]);
 
   // Keyboard order = the rows that go somewhere.
   const navigable = useMemo(() => rows.map((r, i) => (r.href ? i : -1)).filter((i) => i >= 0), [rows]);

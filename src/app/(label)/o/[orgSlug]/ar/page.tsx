@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ArInboxView } from '@/components/labelos/ArInboxView';
 import { orgShellFor } from '@/lib/auth/org-access';
+import { pageAllowed, viewInputOf } from '@/lib/labelos/role-view';
 import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,8 @@ export const dynamic = 'force-dynamic';
 export default async function ArInboxPage({ params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
   const shell = await orgShellFor(orgSlug);
-  if (!shell || !shell.capabilities.includes('catalog.read')) notFound();
+  // LABEL-70: the reviewers' queue is a label's staff tool: an independent artist's org and a roster artist get a real 404.
+  if (!shell || !pageAllowed('ar', viewInputOf(shell))) notFound();
   return (
     <PageContainer>
       <header className="mb-6 sm:mb-8">

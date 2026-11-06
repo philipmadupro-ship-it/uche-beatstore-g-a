@@ -10,6 +10,7 @@ import { FilteredReleaseBoard } from '@/components/labelos/FilteredReleaseBoard'
 import { NewReleasePanel } from '@/components/labelos/NewReleasePanel';
 import { ReleaseImportPanel } from '@/components/labelos/ReleaseImportPanel';
 import { orgShellFor, requireOrgCapability, scopedOrgQuery } from '@/lib/auth/org-access';
+import { pageAllowed, viewInputOf } from '@/lib/labelos/role-view';
 import { isBoardFilter } from '@/lib/labelos/release-board';
 import { loadReleaseBoard } from '@/lib/labelos/release-board-store';
 import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
@@ -25,7 +26,7 @@ export default async function ReleaseBoardPage({
 }) {
   const [{ orgSlug }, { state }] = await Promise.all([params, searchParams]);
   const shell = await orgShellFor(orgSlug);
-  if (!shell || !shell.capabilities.includes('catalog.read')) notFound();
+  if (!shell || !pageAllowed('releases', viewInputOf(shell))) notFound();
   const access = await requireOrgCapability(shell.org.id, 'catalog.read');
   if (!access.ok) notFound();
   const board = await loadReleaseBoard(access);
