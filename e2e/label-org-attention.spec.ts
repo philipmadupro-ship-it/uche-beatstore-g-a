@@ -31,9 +31,10 @@ const KILO_INBOX = randomUUID();
 const TRACK_04 = randomUUID();
 const FRESH = randomUUID();
 const KILO_SONG = randomUUID();
-const EP = randomUUID();
-const FAR = randomUUID();
-const KILO_EP = randomUUID();
+// The release ids come back from the create route, as the label's owner makes them.
+let EP = '';
+let FAR = '';
+let KILO_EP = '';
 
 const DAY = 86_400_000;
 const daysFromNow = (n: number) => new Date(Date.now() + n * DAY);
@@ -64,14 +65,19 @@ const song = (id: string, title: string, stage: string, createdDaysAgo: number) 
   id, org_id: ORG, user_id: null, created_by: PRODUCER_ID, title, type: 'song', song_stage: stage,
   audio_url: `/uploads/labelos-e2e-${id}.mp3`, created_at: daysFromNow(-createdDaysAgo).toISOString(),
 });
-const release = (id: string, project: string, contact: string, title: string, target: string) => ({
-  id, org_id: ORG, project_id: project, contact_id: contact, title, type: 'ep', target_date: target, state: 'draft', created_by: PRODUCER_ID,
-});
-const task = (title: string, dueInDays: number) => ({
-  org_id: ORG, title, due_at: daysFromNow(dueInDays).toISOString(), assignee_id: PRODUCER_ID, created_by: PRODUCER_ID,
-});
+/** A draft release through the create route (`POST …/releases`), as the owner makes one. Returns its id. */
+async function createRelease(api: APIRequestContext, project: string, contact: string, title: string, target: string): Promise<string> {
+  const res = await api.post(`/api/org/${ORG}/releases`, { data: { title, contact_id: contact, project_id: project, type: 'ep', target_date: target } });
+  expect(res.status(), `create release: ${await res.text()}`).toBe(201);
+  return ((await res.json()) as { release: { id: string } }).release.id;
+}
+/** A task through the tasks route, assigned to the owner, due `dueInDays` from now (negative = overdue). */
+async function createTask(api: APIRequestContext, title: string, dueInDays: number) {
+  const res = await api.post(`/api/org/${ORG}/tasks`, { data: { title, due_at: daysFromNow(dueInDays).toISOString(), assignee_id: PRODUCER_ID } });
+  expect(res.status(), `create task: ${await res.text()}`).toBe(201);
+}
 
-test.beforeAll(async ({ request }) => {
+test.beforeAll(async ({ request, browser, baseURL }) => {
   await rest(request, 'DELETE', `org_members?user_id=eq.${BUYER_ID}`);
   await rest(request, 'POST', 'organizations', { id: ORG, name: `Attention Records ${run}`, slug: SLUG, kind: 'label', created_by: PRODUCER_ID });
   await rest(request, 'POST', 'org_members', { org_id: ORG, user_id: PRODUCER_ID, role: 'owner', scope: 'org' });
@@ -90,11 +96,11 @@ test.beforeAll(async ({ request }) => {
     { project_id: NOVA_INBOX, track_id: TRACK_04, position: 0 },
     { project_id: NOVA_INBOX, track_id: FRESH, position: 1 },
   ]);
-  await rest(request, 'POST', 'releases', [
-    release(EP, NOVA_INBOX, NOVA, `EP 2027 ${run}`, dateOnly(23)),
-    release(FAR, NOVA_INBOX, NOVA, `Far away ${run}`, dateOnly(200)),
-  ]);
-  await rest(request, 'POST', 'tasks', [task('Get Producer X IPI', -5), task('Chase the artwork', -3), task('Send the EP', 7)]);
+  const owner = await as(browser, baseURL!, PRODUCER_ID, 'producer@local.test');
+  EP = await createRelease(owner.request, NOVA_INBOX, NOVA, `EP 2027 ${run}`, dateOnly(23));
+  FAR = await createRelease(owner.request, NOVA_INBOX, NOVA, `Far away ${run}`, dateOnly(200));
+  for (const [title, due] of [['Get Producer X IPI', -5], ['Chase the artwork', -3], ['Send the EP', 7]] as const) await createTask(owner.request, title, due);
+  await owner.close();
 });
 
 test.afterAll(async ({ request }) => {
@@ -143,7 +149,9 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
 test('2 · a member scoped to Kilo sees only Kilo’s items, on the page and in the API', async ({ browser, baseURL, request }) => {
   await rest(request, 'POST', 'tracks', [song(KILO_SONG, `Kilo demo ${run}`, 'in_review', 60)]);
   await rest(request, 'POST', 'project_tracks', [{ project_id: KILO_INBOX, track_id: KILO_SONG, position: 0 }]);
-  await rest(request, 'POST', 'releases', [release(KILO_EP, KILO_INBOX, KILO, `Kilo EP ${run}`, dateOnly(10))]);
+  const ownerCtx = await as(browser, baseURL!, PRODUCER_ID, 'producer@local.test');
+  KILO_EP = await createRelease(ownerCtx.request, KILO_INBOX, KILO, `Kilo EP ${run}`, dateOnly(10));
+  await ownerCtx.close();
   await rest(request, 'DELETE', `member_artist_scopes?user_id=eq.${BUYER_ID}`);
   await rest(request, 'POST', 'member_artist_scopes', { org_id: ORG, user_id: BUYER_ID, contact_id: KILO });
 
