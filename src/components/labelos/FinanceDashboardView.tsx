@@ -53,7 +53,7 @@ export function FinanceDashboardView({ orgId }: { orgId: string }) {
 
   return (
     <div className="space-y-10" data-testid="finance-dashboard" data-scoped={data.scoped ? 'true' : 'false'}>
-      {data.scoped && <p className="text-[11px] text-white/50" data-testid="finance-scoped">You see the payees and releases of your artists only.</p>}
+      {data.scoped && <p className="text-[11px] text-white/50" data-testid="finance-scoped">You see the payees and releases of your artists only; royalties are your artists’ payees’ share.</p>}
 
       {data.summary.currencies.map((c) => (
         <section key={c.currency} aria-label={`Summary in ${c.currency}`} className={cn(CARD, 'grid grid-cols-2 gap-4 lg:grid-cols-4')} data-testid="finance-summary" data-currency={c.currency}>
@@ -75,7 +75,7 @@ export function FinanceDashboardView({ orgId }: { orgId: string }) {
               <li key={p.payeeId} className="rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="position-row" data-payee={p.payeeId}>
                 <p className="text-[13px] text-white">{p.name ?? 'Payee'} <span className="text-white/40">· {p.currency}{p.active ? '' : ' · inactive'}</span></p>
                 <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-6">
-                  <Cell label="Advanced" value={showMoney(p.recoupableAdvancedMinor, p.currency)} />
+                  <Cell label="Recoupable advance" value={showMoney(p.recoupableAdvancedMinor, p.currency)} />
                   <Cell label="Still to recover" value={showMoney(p.unrecoupedMinor, p.currency)} testid="pos-unrecouped" />
                   <Cell label="Earned" value={showMoney(p.earnedMinor, p.currency)} />
                   <Cell label="Recouped" value={showMoney(p.recoupedMinor, p.currency)} />

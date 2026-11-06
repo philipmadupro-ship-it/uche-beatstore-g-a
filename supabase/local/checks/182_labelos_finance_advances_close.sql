@@ -38,6 +38,8 @@
 \set PER '''e4820000-0000-4000-8000-000000000001'''
 \set PER2 '''e4820000-0000-4000-8000-000000000002'''
 \set PER3 '''e4820000-0000-4000-8000-000000000003'''
+\set PER4 '''e4820000-0000-4000-8000-000000000004'''
+\set IMP4 '''e6820000-0000-4000-8000-000000000004'''
 
 INSERT INTO auth.users (id, email) VALUES (:O, 'o182@local.test'), (:F, 'f182@local.test'), (:Z, 'z182@local.test');
 INSERT INTO public.organizations (id, name, slug, kind, created_by) VALUES
@@ -215,6 +217,17 @@ SELECT public.check_eq('after a reopen an import is accepted again', (SELECT (pu
 RESET ROLE;
 SELECT public.check_raises('the reopen flag does not outlive its transaction: a bare reopen still fails',
   format($$UPDATE public.finance_periods SET status = 'closed', closed_at = now() WHERE id = %L; UPDATE public.finance_periods SET status = 'open', closed_at = NULL WHERE id = %L$$, :PER2, :PER2), 'stays closed');
+
+-- ── A line waiting for review blocks the close (180 would refuse to allocate it afterwards) ──
+
+INSERT INTO public.finance_periods (id, org_id, label, starts_on, ends_on) VALUES (:PER4, :L, 'Q5', '2027-01-01', '2027-03-31');
+INSERT INTO public.earnings_imports (id, org_id, period_id, source, file_sha256, currency, row_count, total_minor, imported_by)
+  VALUES (:IMP4, :L, :PER4, 'generic', repeat('9', 64), 'USD', 1, 100, :F);
+INSERT INTO public.earnings_lines (org_id, import_id, line_no, gross_minor, currency, review_reason) VALUES (:L, :IMP4, 1, 100, 'USD', 'no_match');
+SET ROLE service_role;
+SELECT public.check_eq('a period with a line waiting for review does not close', public.labelos_audit_period_close(:L, :O, :PER4, '{}'::jsonb) ->> 'error', 'lines_waiting');
+RESET ROLE;
+SELECT public.check_eq('...and stays open', (SELECT status FROM public.finance_periods WHERE id = :PER4), 'open');
 
 -- ── The org's hard delete takes everything ───────────────────────────────
 

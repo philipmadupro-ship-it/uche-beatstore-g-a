@@ -67,6 +67,7 @@ export type PeriodOverviewItem = {
   closedAt: string | null;
   imports: number;
   draftStatements: number;
+  linesWaiting: number;
   payeesWithoutStatement: number;
   canClose: boolean;
   closeBlocked: string | null;

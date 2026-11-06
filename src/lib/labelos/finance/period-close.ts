@@ -4,6 +4,7 @@
  * Closing freezes a period: it takes no new import and no new statement (the database enforces
  * it, under the same lock imports use). Rules:
  *  - a period with a DRAFT statement does not close (`drafts_open`): approve or void it first;
+ *  - nor does one with earnings lines still waiting for review (`lines_waiting`): a closed period cannot allocate them;
  *  - a period that has earnings but a payee with no live statement still closes — that payee is
  *    listed as a warning, because after the close their earnings can only be statemented by
  *    reopening, which is the owner's;
@@ -13,13 +14,15 @@
 export type PeriodCloseFacts = {
   status: string;
   draftStatements: number;
+  /** Lines of the period's imports still waiting for review. */
+  linesWaiting: number;
   /** Payees with an allocation in the period and no non-void statement for it. */
   payeesWithoutStatement: number;
 };
 
 export type CloseCheck =
   | { ok: true; warnings: string[] }
-  | { ok: false; code: 'already_closed' | 'drafts_open'; message: string };
+  | { ok: false; code: 'already_closed' | 'drafts_open' | 'lines_waiting'; message: string };
 
 export function closeCheck(f: PeriodCloseFacts): CloseCheck {
   if (f.status === 'closed') return { ok: false, code: 'already_closed', message: 'This period is already closed.' };
@@ -28,6 +31,13 @@ export function closeCheck(f: PeriodCloseFacts): CloseCheck {
       ok: false,
       code: 'drafts_open',
       message: `${f.draftStatements} draft statement${f.draftStatements === 1 ? '' : 's'} in this period. Approve or void ${f.draftStatements === 1 ? 'it' : 'them'} first.`,
+    };
+  }
+  if (f.linesWaiting > 0) {
+    return {
+      ok: false,
+      code: 'lines_waiting',
+      message: `${f.linesWaiting} earnings line${f.linesWaiting === 1 ? ' is' : 's are'} still waiting for review. Resolve ${f.linesWaiting === 1 ? 'it' : 'them'} first: a closed period cannot allocate them.`,
     };
   }
   const warnings: string[] = [];
@@ -50,12 +60,13 @@ export type PeriodOverview = {
   status: string;
   closedAt: string | null;
   draftStatements: number;
+  linesWaiting: number;
   payeesWithoutStatement: number;
   imports: number;
 };
 
 export function periodOverviewView(p: PeriodOverview, opts: { canClose: boolean; canReopen: boolean }) {
-  const check = closeCheck({ status: p.status, draftStatements: p.draftStatements, payeesWithoutStatement: p.payeesWithoutStatement });
+  const check = closeCheck({ status: p.status, draftStatements: p.draftStatements, linesWaiting: p.linesWaiting, payeesWithoutStatement: p.payeesWithoutStatement });
   return {
     id: p.id,
     label: p.label,
@@ -65,6 +76,7 @@ export function periodOverviewView(p: PeriodOverview, opts: { canClose: boolean;
     closedAt: p.closedAt,
     imports: p.imports,
     draftStatements: p.draftStatements,
+    linesWaiting: p.linesWaiting,
     payeesWithoutStatement: p.payeesWithoutStatement,
     canClose: opts.canClose && check.ok,
     closeBlocked: check.ok ? null : check.code === 'already_closed' ? null : check.message,

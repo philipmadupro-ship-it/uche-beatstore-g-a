@@ -3,19 +3,22 @@ import { closeCheck, mayCloseRole, mayReopenRole, periodOverviewView } from './p
 
 describe('closeCheck', () => {
   it('closes an open period with nothing in flux', () => {
-    expect(closeCheck({ status: 'open', draftStatements: 0, payeesWithoutStatement: 0 })).toEqual({ ok: true, warnings: [] });
+    expect(closeCheck({ status: 'open', draftStatements: 0, linesWaiting: 0, payeesWithoutStatement: 0 })).toEqual({ ok: true, warnings: [] });
   });
   it('refuses while a draft statement exists', () => {
-    const c = closeCheck({ status: 'open', draftStatements: 2, payeesWithoutStatement: 0 });
+    const c = closeCheck({ status: 'open', draftStatements: 2, linesWaiting: 0, payeesWithoutStatement: 0 });
     expect(c).toMatchObject({ ok: false, code: 'drafts_open' });
     expect(!c.ok && c.message).toContain('2 draft statements');
   });
   it('warns, but does not refuse, when a payee has earnings and no statement', () => {
-    const c = closeCheck({ status: 'open', draftStatements: 0, payeesWithoutStatement: 1 });
+    const c = closeCheck({ status: 'open', draftStatements: 0, linesWaiting: 0, payeesWithoutStatement: 1 });
     expect(c.ok && c.warnings[0]).toContain('1 payee has earnings');
   });
+  it('refuses while earnings lines wait for review', () => {
+    expect(closeCheck({ status: 'open', draftStatements: 0, linesWaiting: 3, payeesWithoutStatement: 0 })).toMatchObject({ ok: false, code: 'lines_waiting' });
+  });
   it('a closed period is already closed', () => {
-    expect(closeCheck({ status: 'closed', draftStatements: 0, payeesWithoutStatement: 0 })).toMatchObject({ ok: false, code: 'already_closed' });
+    expect(closeCheck({ status: 'closed', draftStatements: 0, linesWaiting: 0, payeesWithoutStatement: 0 })).toMatchObject({ ok: false, code: 'already_closed' });
   });
 });
 
@@ -32,7 +35,7 @@ describe('who may', () => {
 });
 
 describe('periodOverviewView', () => {
-  const p = { id: 'p', label: 'Q1', startsOn: '2026-01-01', endsOn: '2026-03-31', status: 'open', closedAt: null, draftStatements: 1, payeesWithoutStatement: 0, imports: 3 };
+  const p = { id: 'p', label: 'Q1', startsOn: '2026-01-01', endsOn: '2026-03-31', status: 'open', closedAt: null, draftStatements: 1, linesWaiting: 0, payeesWithoutStatement: 0, imports: 3 };
   it('explains a blocked close and offers no reopen on an open period', () => {
     const v = periodOverviewView(p, { canClose: true, canReopen: true });
     expect(v).toMatchObject({ canClose: false, canReopen: false });

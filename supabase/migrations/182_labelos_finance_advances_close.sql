@@ -35,7 +35,8 @@
 --   close    open → closed, under the SAME advisory lock that imports, re-runs,
 --            statement generation and approval take (hashtextextended
 --            ('labelos.earnings:'||org)). A period with a DRAFT statement does not
---            close (`drafts_open`): approve or void it first, so nothing half-made
+--            close (`drafts_open`), nor one with a line still waiting for review (`lines_waiting`:
+--            180 refuses to allocate it once closed): approve, void or resolve first, so nothing half-made
 --            is left behind a closed door. Closing needs `finance.approve` (route).
 --   reopen   closed → open. OWNER ONLY, checked again here. 179 made "closed stays
 --            closed" a hard rule; this function is the one exception, through a
@@ -304,7 +305,7 @@ GRANT EXECUTE ON FUNCTION public.labelos_audit_advance_void(uuid, uuid, uuid, js
 
 -- ── 4. Period close / reopen ─────────────────────────────────────────────
 
--- Answers { closed: true } or { error: not_found | already_closed | drafts_open }.
+-- Answers { closed: true } or { error: not_found | already_closed | drafts_open | lines_waiting }.
 CREATE OR REPLACE FUNCTION public.labelos_audit_period_close(p_org uuid, p_actor uuid, p_period uuid, p_payload jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -321,6 +322,11 @@ BEGIN
   IF fp.status = 'closed' THEN RETURN jsonb_build_object('error', 'already_closed'); END IF;
   IF EXISTS (SELECT 1 FROM public.statements s WHERE s.period_id = fp.id AND s.status = 'draft') THEN
     RETURN jsonb_build_object('error', 'drafts_open');
+  END IF;
+  -- Lines still waiting for review would be stranded: 180's resolve refuses a closed period.
+  IF EXISTS (SELECT 1 FROM public.earnings_lines l JOIN public.earnings_imports i ON i.id = l.import_id
+             WHERE i.period_id = fp.id AND i.status = 'imported' AND l.review_reason IS NOT NULL) THEN
+    RETURN jsonb_build_object('error', 'lines_waiting');
   END IF;
   -- clock_timestamp(): the moment the lock was won, not the start of the transaction.
   UPDATE public.finance_periods SET status = 'closed', closed_by = p_actor, closed_at = clock_timestamp() WHERE id = fp.id;

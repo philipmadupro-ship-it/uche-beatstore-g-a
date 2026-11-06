@@ -399,7 +399,7 @@ export type AuditRpcArgs = {
   advanceUpdate: { p_org: string; p_actor: string; p_advance: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
   /** 182: answers { voided } or { error: not_found | already_void | advance_referenced }. */
   advanceVoid: { p_org: string; p_actor: string; p_advance: string; p_payload: EventPayload };
-  /** 182: answers { closed } or { error: not_found | already_closed | drafts_open }. */
+  /** 182: answers { closed } or { error: not_found | already_closed | drafts_open | lines_waiting }. */
   periodClose: { p_org: string; p_actor: string; p_period: string; p_payload: EventPayload };
   /** 182: owner only. Answers { reopened } or { error: not_found | not_owner | not_closed }. */
   periodReopen: { p_org: string; p_actor: string; p_period: string; p_payload: EventPayload };

@@ -98,7 +98,7 @@ export function AdvancesView({ orgId }: { orgId: string }) {
         ) : (
           <ul className="space-y-2">
             {[...data.advances].reverse().map((a) => (
-              <AdvanceRow key={a.id} orgId={orgId} advance={a} payee={names.get(a.payeeId) ?? 'Payee'} canWrite={data.canWrite} onDone={load} />
+              <AdvanceRow key={`${a.id}|${a.kind}|${a.amountMinor}|${a.paidOn}|${a.note}|${a.canEditTerms}`} orgId={orgId} advance={a} payee={names.get(a.payeeId) ?? 'Payee'} canWrite={data.canWrite} onDone={load} />
             ))}
           </ul>
         )}

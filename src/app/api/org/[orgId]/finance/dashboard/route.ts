@@ -38,11 +38,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (access.role === 'artist') return json(403, { error: 'Not allowed' });
   try {
     const whole = access.artistScope === null;
-    const [facts, rel, periods] = await Promise.all([
+    const [facts, periods] = await Promise.all([
       loadPositionFacts(access.admin, access.orgId, access.artistScope),
-      loadReleaseFacts(access.admin, access.orgId),
       whole ? loadPeriodOverviews(access.admin, access.orgId) : Promise.resolve(null),
     ]);
+    // A scoped reader's royalties are their own payees' only: the others' shares are another payee's numbers (D2).
+    const rel = await loadReleaseFacts(access.admin, access.orgId, whole ? null : new Set(facts.payees.map((p) => p.id)));
     const positions = payeePositions(facts);
     const income = releaseIncome({
       releases: rel.releases, items: rel.items, lines: rel.lines, royaltiesByLine: rel.royaltiesByLine, spend: rel.spend,

@@ -79,7 +79,7 @@ beforeEach(() => {
       ],
       advances: [advance(A_ARA, YARA, ARA, 'recoupable', 5000), advance(A_ARA2, YARA, ARA, 'non_recoupable', 700), advance(A_BO, YBO, BO, 'recoupable', 9000)],
       earnings_recoupments: [{ id: 'r1', org_id: L, advance_id: A_ARA, payee_id: YARA, amount_minor: 1200 }],
-      earnings_allocations: [{ id: 'al1', org_id: L, payee_id: YARA, payable_minor: 4000, import_id: 'i1', line_id: 'ln1' }, { id: 'al2', org_id: L, payee_id: YBO, payable_minor: 800, import_id: 'i1', line_id: 'ln2' }],
+      earnings_allocations: [{ id: 'al1', org_id: L, payee_id: YARA, payable_minor: 4000, import_id: 'i1', line_id: 'ln1' }, { id: 'al2', org_id: L, payee_id: YBO, payable_minor: 800, import_id: 'i1', line_id: 'ln2' }, { id: 'al3', org_id: L, payee_id: YBO, payable_minor: 2000, import_id: 'i1', line_id: 'ln1' }],
       earnings_imports: [{ id: 'i1', org_id: L, period_id: PER_OPEN, status: 'imported' }],
       earnings_lines: [
         { id: 'ln1', org_id: L, import_id: 'i1', upc: null, song_track_id: 's1', gross_minor: 8000, currency: 'USD' },
@@ -237,6 +237,7 @@ describe('GET /finance/dashboard', () => {
     const ara = body.positions.find((p: { payeeId: string }) => p.payeeId === YARA);
     expect(ara).toMatchObject({ recoupableAdvancedMinor: '5000', nonRecoupableAdvancedMinor: '700', unrecoupedMinor: '3800', earnedMinor: '4000', recoupedMinor: '1200', issuedMinor: '2800', paidMinor: '1000', owedMinor: '1800' });
     expect(body.releases.map((r: { releaseId: string }) => r.releaseId).sort()).toEqual(['rel-ara', 'rel-bo']);
+    expect(body.releases.find((r: { releaseId: string }) => r.releaseId === 'rel-ara').royaltiesMinor).toBe('6000');
     expect(body.summary.currencies[0].advances.unrecouped).toBe('12800');
     expect(body.periods).toHaveLength(2);
   });
@@ -246,6 +247,8 @@ describe('GET /finance/dashboard', () => {
     expect(body.scoped).toBe(true);
     expect(body.positions.map((p: { payeeId: string }) => p.payeeId)).toEqual([YARA]);
     expect(body.releases.map((r: { releaseId: string }) => r.releaseId)).toEqual(['rel-ara']);
+    // Bo's 20.00 share of Ara's release is another payee's number: only Ara's own payee's royalties are summed.
+    expect(body.releases[0].royaltiesMinor).toBe('4000');
     expect(body.periods).toBeNull();
     expect(body.unattributed).toEqual([]);
     expect(body.summary.currencies[0].advances.recoupable).toBe('5000');

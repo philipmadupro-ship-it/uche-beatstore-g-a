@@ -40,6 +40,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       'period close',
     );
     if (out.error === 'drafts_open') return json(409, { error: 'This period still has draft statements. Approve or void them first.', code: 'drafts_open' });
+    if (out.error === 'lines_waiting') return json(409, { error: 'Earnings lines in this period are still waiting for review. Resolve them first.', code: 'lines_waiting' });
     if (out.error === 'already_closed') return json(409, { error: 'This period is already closed.', code: 'already_closed' });
     if (out.error) return json(404, { error: 'Period not found' });
     return json(200, { closed: true });

@@ -162,7 +162,11 @@ export async function loadPositionFacts(admin: AdminClient, orgId: string, scope
 }
 
 /** The releases of the org (every one: attribution needs them all), their items, and their live earnings lines. */
-export async function loadReleaseFacts(admin: AdminClient, orgId: string): Promise<{ releases: ReleaseFact[]; items: ItemFact[]; lines: LineFact[]; royaltiesByLine: Map<string, bigint>; spend: SpendFact[] }> {
+/**
+ * `payeeIds` limits the royalties summed per line to those payees (a scoped reader sees their own payees' share only,
+ * never another payee's); null = every payee.
+ */
+export async function loadReleaseFacts(admin: AdminClient, orgId: string, payeeIds: ReadonlySet<string> | null = null): Promise<{ releases: ReleaseFact[]; items: ItemFact[]; lines: LineFact[]; royaltiesByLine: Map<string, bigint>; spend: SpendFact[] }> {
   try {
     const releases = await pageAll<ReleaseFact>(
       (from, to) => admin.from('releases').select('id, title, state, upc, release_date, contact_id').eq('org_id', orgId).order('id').range(from, to),
@@ -183,13 +187,13 @@ export async function loadReleaseFacts(admin: AdminClient, orgId: string): Promi
       (part, from, to) => admin.from('earnings_lines').select('id, upc, song_track_id, gross_minor, currency').eq('org_id', orgId).in('import_id', part).order('id').range(from, to),
       'earnings lines',
     );
-    const allocs = await inChunks<{ line_id: string; payable_minor: unknown }>(
+    const allocs = await inChunks<{ line_id: string; payee_id: string; payable_minor: unknown }>(
       importIds,
-      (part, from, to) => admin.from('earnings_allocations').select('line_id, payable_minor').eq('org_id', orgId).in('import_id', part).order('id').range(from, to),
+      (part, from, to) => admin.from('earnings_allocations').select('line_id, payee_id, payable_minor').eq('org_id', orgId).in('import_id', part).order('id').range(from, to),
       'allocations',
     );
     const royaltiesByLine = new Map<string, bigint>();
-    for (const a of allocs) royaltiesByLine.set(a.line_id, (royaltiesByLine.get(a.line_id) ?? ZERO) + minorFromDb(a.payable_minor));
+    for (const a of allocs.filter((x) => payeeIds === null || payeeIds.has(x.payee_id))) royaltiesByLine.set(a.line_id, (royaltiesByLine.get(a.line_id) ?? ZERO) + minorFromDb(a.payable_minor));
     return { releases, items, lines, royaltiesByLine, spend: await loadSpend(admin, orgId) };
   } catch (err) {
     return rethrow(err);
@@ -246,6 +250,16 @@ export async function loadPeriodOverviews(admin: AdminClient, orgId: string): Pr
       'statements',
     );
     const importPeriod = new Map(imports.map((i) => [i.id, i.period_id]));
+    const waiting = await inChunks<{ import_id: string }>(
+      imports.map((i) => i.id),
+      (part, from, to) => admin.from('earnings_lines').select('import_id').eq('org_id', orgId).not('review_reason', 'is', null).in('import_id', part).order('id').range(from, to),
+      'waiting lines',
+    );
+    const waitingBy = new Map<string, number>();
+    for (const w of waiting) {
+      const p = importPeriod.get(w.import_id);
+      if (p) waitingBy.set(p, (waitingBy.get(p) ?? 0) + 1);
+    }
     const allocs = await inChunks<{ payee_id: string; import_id: string }>(
       imports.map((i) => i.id),
       (part, from, to) => admin.from('earnings_allocations').select('payee_id, import_id').eq('org_id', orgId).in('import_id', part).order('id').range(from, to),
@@ -274,6 +288,7 @@ export async function loadPeriodOverviews(admin: AdminClient, orgId: string): Pr
       return {
         id: p.id, label: p.label, startsOn: p.starts_on, endsOn: p.ends_on, status: p.status, closedAt: p.closed_at,
         draftStatements: drafts.get(p.id) ?? 0,
+        linesWaiting: waitingBy.get(p.id) ?? 0,
         payeesWithoutStatement: [...payees].filter((x) => !have.has(x)).length,
         imports: imports.filter((i) => i.period_id === p.id).length,
       };
