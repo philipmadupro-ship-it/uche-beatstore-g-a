@@ -17,7 +17,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { mayCloseRole, mayReopenRole, periodOverviewView } from '@/lib/labelos/finance/period-close';
 import { payeePositions, positionView } from '@/lib/labelos/finance/position';
-import { releaseIncome, releaseIncomeView, unattributedView } from '@/lib/labelos/finance/release-income';
+import { releaseIncome, releaseIncomeView, unattributedView, type ReleaseIncomeView } from '@/lib/labelos/finance/release-income';
 import { financeSummary, financeSummaryView } from '@/lib/labelos/finance/summary';
 import { loadPeriodOverviews, loadPositionFacts, loadReleaseFacts, visibleReleaseIds } from '@/lib/labelos/finance-dashboard-store';
 import { json } from '@/lib/labelos/statement-route';
@@ -27,6 +27,20 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const log = createLogger('api.org.finance.dashboard');
+
+/**
+ * A reader limited to some artists gets a release's income and THEIR payees' royalties, never the label's marketing
+ * spend or a margin built from it: those fields are withheld, field by field (D2).
+ */
+function scopedRelease(v: ReleaseIncomeView, whole: boolean) {
+  if (whole) return v;
+  const { spentMinor: _s, committedMinor: _c, marginMinor: _m, ...rest } = v; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return rest;
+}
+function scopedSummary(v: ReturnType<typeof financeSummaryView>, whole: boolean) {
+  if (whole) return v;
+  return { ...v, currencies: v.currencies.map((c) => ({ ...c, earnings: { gross: c.earnings.gross, royalties: c.earnings.royalties } })) };
+}
 
 type Params = { params: Promise<{ orgId: string }> };
 
@@ -56,9 +70,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
       schemaReady: true,
       scoped: !whole,
       positions: positions.map(positionView),
-      releases: income.rows.map(releaseIncomeView),
+      releases: income.rows.map((row) => scopedRelease(releaseIncomeView(row), whole)),
       unattributed: whole ? income.unattributed.map(unattributedView) : [],
-      summary: financeSummaryView(summary),
+      summary: scopedSummary(financeSummaryView(summary), whole),
       periods: periods ? periods.map((p) => periodOverviewView(p, { canClose, canReopen })) : null,
     });
   } catch (err) {

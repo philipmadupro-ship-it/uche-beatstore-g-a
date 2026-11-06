@@ -231,6 +231,26 @@ SELECT public.check_eq('the owner reopens it', public.labelos_audit_period_reope
 SELECT public.check_eq('...and then the import is voided', public.labelos_audit_earnings_import_void(:L, :O, :'imp2', '{}'::jsonb) ->> 'voided', 'true');
 RESET ROLE;
 
+-- Issuing or voiding a statement of a closed period is refused. PER2 is open again after the reopen above: make Ara's
+-- statement there, approve it, close the period, then try.
+SET ROLE service_role;
+SELECT public.chk_import(repeat('8', 64), :PER2, NULL, NULL);
+SELECT (public.labelos_audit_statement_generate(:L, :F, :PY1, :PER2,
+  jsonb_build_array(jsonb_build_object('kind', 'earning', 'earnings_line_id', (SELECT a.line_id FROM public.earnings_allocations a JOIN public.earnings_imports i ON i.id = a.import_id WHERE a.payee_id = :PY1 AND i.period_id = :PER2 AND i.status = 'imported' LIMIT 1), 'track_id', :T1, 'description', 'x', 'share_units', 1000000, 'amount_minor', '1000', 'position', 1)),
+  '{}'::jsonb) ->> 'id') AS st2 \gset
+SELECT public.check_eq('approved by the owner', public.labelos_audit_statement_approve(:L, :O, :'st2', '{}'::jsonb) ->> 'approved', 'true');
+SELECT public.labelos_audit_period_close(:L, :O, :PER2, '{}'::jsonb);
+SELECT public.check_eq('a statement of a closed period is not issued', public.labelos_audit_statement_issue(:L, :O, :'st2', '{}'::jsonb) ->> 'error', 'period_closed');
+SELECT public.check_eq('...nor voided', public.labelos_audit_statement_void(:L, :O, :'st2', NULL, '{}'::jsonb) ->> 'error', 'period_closed');
+SELECT public.check_eq('the owner reopens', public.labelos_audit_period_reopen(:L, :O, :PER2, '{}'::jsonb) ->> 'reopened', 'true');
+SELECT public.check_eq('...then it is issued', public.labelos_audit_statement_issue(:L, :O, :'st2', '{}'::jsonb) ->> 'issued', 'true');
+SELECT public.check_eq('...and voided (no payment)', public.labelos_audit_statement_void(:L, :O, :'st2', NULL, '{}'::jsonb) ->> 'voided', 'true');
+RESET ROLE;
+-- A line of a VOID statement does not reference an advance (L2): the statement above recouped nothing, so make the
+-- check on the function itself with a synthetic id.
+SELECT public.check_eq('an advance only a void statement line names is not referenced',
+  (SELECT public.labelos_advance_referenced(:'adv2'::uuid)), false);
+
 -- ── A line waiting for review blocks the close (180 would refuse to allocate it afterwards) ──
 
 INSERT INTO public.finance_periods (id, org_id, label, starts_on, ends_on) VALUES (:PER4, :L, 'Q5', '2027-01-01', '2027-03-31');

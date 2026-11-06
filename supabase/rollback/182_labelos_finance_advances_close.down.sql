@@ -98,3 +98,58 @@ $$;
 ALTER FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) TO service_role;
+
+-- 181's statement issue and void (without the closed-period refusal).
+CREATE OR REPLACE FUNCTION public.labelos_audit_statement_issue(p_org uuid, p_actor uuid, p_statement uuid, p_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  s public.statements%ROWTYPE;
+BEGIN
+  SELECT * INTO s FROM public.statements WHERE id = p_statement AND org_id = p_org FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
+  IF s.status <> 'approved' THEN RETURN jsonb_build_object('error', 'not_approved', 'status', s.status); END IF;
+  UPDATE public.statements SET status = 'issued', issued_at = now() WHERE id = s.id;
+  PERFORM public.labelos_finance_event(p_org, p_actor, 'statement.issued', 'statement', s.id, s.artist_contact_id,
+    p_payload || jsonb_build_object('statementId', s.id));
+  RETURN jsonb_build_object('issued', true);
+END;
+$$;
+
+ALTER FUNCTION public.labelos_audit_statement_issue(uuid, uuid, uuid, jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_audit_statement_issue(uuid, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_audit_statement_issue(uuid, uuid, uuid, jsonb) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.labelos_audit_statement_void(p_org uuid, p_actor uuid, p_statement uuid, p_reason text, p_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  s public.statements%ROWTYPE;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('labelos.earnings:' || p_org::text, 0));
+  SELECT * INTO s FROM public.statements WHERE id = p_statement AND org_id = p_org FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
+  IF s.status = 'void' THEN RETURN jsonb_build_object('error', 'already_void'); END IF;
+  IF EXISTS (SELECT 1 FROM public.payments p WHERE p.statement_id = s.id AND p.voided_at IS NULL) THEN
+    RETURN jsonb_build_object('error', 'has_payments');
+  END IF;
+  UPDATE public.statements SET status = 'void', voided_at = now(), void_reason = nullif(p_reason, '') WHERE id = s.id;
+  PERFORM public.labelos_finance_event(p_org, p_actor, 'statement.voided', 'statement', s.id, s.artist_contact_id,
+    p_payload || jsonb_build_object('statementId', s.id, 'from', s.status));
+  RETURN jsonb_build_object('voided', true, 'from', s.status);
+END;
+$$;
+
+ALTER FUNCTION public.labelos_audit_statement_void(uuid, uuid, uuid, text, jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_audit_statement_void(uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_audit_statement_void(uuid, uuid, uuid, text, jsonb) TO service_role;
+
+NOTIFY pgrst, 'reload schema';

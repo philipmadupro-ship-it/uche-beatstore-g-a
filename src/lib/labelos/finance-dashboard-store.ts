@@ -33,7 +33,10 @@ function rethrow(err: unknown): never {
   throw err;
 }
 
-/** The ledger's table (179) and the close/advance functions (182) are probed before a write. */
+/**
+ * Probes the ledger's table (179) before a write. It does NOT detect a missing 182: the 182 functions are called
+ * through `auditRpc`, and a missing one answers PGRST202, which `rpcAnswer` turns into `StatementsNotReadyError` (503).
+ */
 export async function assertAdvancesSchema(admin: AdminClient): Promise<void> {
   const res = await admin.from('advances').select('id').limit(1);
   check('advances probe', res.error);
@@ -60,14 +63,26 @@ async function advanceFacts(admin: AdminClient, orgId: string, ids: readonly str
       f.referenced = true;
     }
   }
-  const lines = await inChunks<{ advance_id: string }>(
+  // A line of a VOID statement no longer references the advance (the database says the same: labelos_advance_referenced).
+  const lines = await inChunks<{ advance_id: string; statement_id: string }>(
     ids,
-    (part, from, to) => admin.from('statement_lines').select('advance_id').eq('org_id', orgId).in('advance_id', part).order('id').range(from, to),
+    (part, from, to) => admin.from('statement_lines').select('advance_id, statement_id').eq('org_id', orgId).in('advance_id', part).order('id').range(from, to),
     'statement lines',
+  );
+  const live = new Set(
+    (
+      await inChunks<{ id: string; status: string }>(
+        lines.map((l) => l.statement_id),
+        (part, from, to) => admin.from('statements').select('id, status').eq('org_id', orgId).in('id', part).order('id').range(from, to),
+        'statements',
+      )
+    )
+      .filter((s) => s.status !== 'void')
+      .map((s) => s.id),
   );
   for (const l of lines) {
     const f = out.get(l.advance_id);
-    if (f) f.referenced = true;
+    if (f && live.has(l.statement_id)) f.referenced = true;
   }
   return out;
 }

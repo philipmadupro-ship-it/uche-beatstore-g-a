@@ -60,7 +60,7 @@ export function FinanceDashboardView({ orgId }: { orgId: string }) {
           <Stat label={`Still to recover · ${c.currency}`} value={showMoney(c.advances.unrecouped, c.currency)} testid="sum-unrecouped" />
           <Stat label="Owed to payees now" value={showMoney(c.payouts.owed, c.currency)} testid="sum-owed" />
           <Stat label="Income on releases" value={showMoney(c.earnings.gross, c.currency)} testid="sum-gross" />
-          <Stat label="Margin after royalties and marketing" value={showMoney(c.earnings.margin, c.currency)} testid="sum-margin" />
+          {c.earnings.margin !== undefined && <Stat label="Margin after royalties and marketing" value={showMoney(c.earnings.margin, c.currency)} testid="sum-margin" />}
         </section>
       ))}
       {data.summary.currencies.length === 0 && <p className={NOTICE} data-testid="finance-empty">Nothing recorded yet. Import earnings, or record an advance.</p>}
@@ -102,10 +102,10 @@ export function FinanceDashboardView({ orgId }: { orgId: string }) {
                 <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
                   <Cell label="Income" value={showMoney(r.grossMinor, r.currency)} testid="rel-gross" />
                   <Cell label="Royalties" value={showMoney(r.royaltiesMinor, r.currency)} />
-                  <Cell label="Marketing spent" value={showMoney(r.spentMinor, r.currency)} />
-                  <Cell label="Margin" value={showMoney(r.marginMinor, r.currency)} testid="rel-margin" />
+                  {r.spentMinor !== undefined && <Cell label="Marketing spent" value={showMoney(r.spentMinor, r.currency)} />}
+                  {r.marginMinor !== undefined && <Cell label="Margin" value={showMoney(r.marginMinor, r.currency)} testid="rel-margin" />}
                 </dl>
-                {r.committedMinor !== '0' && <p className="mt-1 text-[11px] text-white/50">{showMoney(r.committedMinor, r.currency)} more is committed in the marketing plan.</p>}
+                {r.committedMinor !== undefined && r.committedMinor !== '0' && <p className="mt-1 text-[11px] text-white/50">{showMoney(r.committedMinor, r.currency)} more is committed in the marketing plan.</p>}
               </li>
             ))}
           </ul>

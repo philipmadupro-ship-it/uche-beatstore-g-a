@@ -86,15 +86,16 @@ beforeEach(() => {
         { id: 'ln1', org_id: L, import_id: IMP, upc: null, song_track_id: 's1', gross_minor: 8000, currency: 'USD' },
         { id: 'ln2', org_id: L, import_id: IMP, upc: null, song_track_id: 's2', gross_minor: 1600, currency: 'USD' },
       ],
-      statements: [{ id: 'st1', org_id: L, payee_id: YARA, period_id: PER_OPEN, status: 'issued', net_minor: 2800 }],
+      statements: [{ id: 'a0000000-0000-4000-8000-0000000000d1', org_id: L, payee_id: YARA, period_id: PER_OPEN, status: 'issued', net_minor: 2800, artist_contact_id: ARA }],
       statement_lines: [],
-      payments: [{ id: 'pay1', org_id: L, payee_id: YARA, statement_id: 'st1', amount_minor: 1000, voided_at: null }],
+      payments: [{ id: 'pay1', org_id: L, payee_id: YARA, statement_id: 'a0000000-0000-4000-8000-0000000000d1', amount_minor: 1000, voided_at: null }],
       releases: [
         { id: 'rel-ara', org_id: L, title: 'Ara EP', state: 'draft', upc: null, release_date: null, contact_id: ARA },
         { id: 'rel-bo', org_id: L, title: 'Bo EP', state: 'draft', upc: null, release_date: null, contact_id: BO },
       ],
       release_items: [{ id: 'it1', org_id: L, release_id: 'rel-ara', song_track_id: 's1' }, { id: 'it2', org_id: L, release_id: 'rel-bo', song_track_id: 's2' }],
-      marketing_plans: [],
+      marketing_plans: [{ id: 'mp1', org_id: L, release_id: 'rel-ara' }],
+      marketing_budget_lines: [{ id: 'bl1', org_id: L, plan_id: 'mp1', status: 'spent', amount_minor: 1500, currency: 'USD' }],
       finance_periods: [
         { id: PER_OPEN, org_id: L, label: 'Q3', starts_on: '2026-07-01', ends_on: '2026-09-30', status: 'open', closed_at: null },
         { id: PER_CLOSED, org_id: L, label: 'Q2', starts_on: '2026-04-01', ends_on: '2026-06-30', status: 'closed', closed_at: '2026-07-05' },
@@ -108,6 +109,8 @@ beforeEach(() => {
       labelos_audit_advance_void: rpc('void', { voided: true }),
       labelos_audit_period_close: rpc('close', { closed: true }),
       labelos_audit_period_reopen: rpc('reopen', { reopened: true }),
+      labelos_audit_statement_issue: rpc('issue', { issued: true }),
+      labelos_audit_statement_void: rpc('stVoid', { voided: true }),
       labelos_audit_earnings_import_void: rpc('importVoid', { voided: true, allocations: 1, recoupments: 0, drafts: 0 }),
     },
   };
@@ -121,6 +124,8 @@ const MODULES: Record<string, () => Promise<unknown>> = {
   dashboard: () => import('./dashboard/route'),
   close: () => import('./periods/[periodId]/close/route'),
   reopen: () => import('./periods/[periodId]/reopen/route'),
+  issue: () => import('./statements/[statementId]/issue/route'),
+  stVoid: () => import('./statements/[statementId]/void/route'),
   importVoid: () => import('./earnings/imports/[importId]/void/route'),
 };
 
@@ -240,7 +245,8 @@ describe('GET /finance/dashboard', () => {
     const ara = body.positions.find((p: { payeeId: string }) => p.payeeId === YARA);
     expect(ara).toMatchObject({ recoupableAdvancedMinor: '5000', nonRecoupableAdvancedMinor: '700', unrecoupedMinor: '3800', earnedMinor: '4000', recoupedMinor: '1200', issuedMinor: '2800', paidMinor: '1000', owedMinor: '1800' });
     expect(body.releases.map((r: { releaseId: string }) => r.releaseId).sort()).toEqual(['rel-ara', 'rel-bo']);
-    expect(body.releases.find((r: { releaseId: string }) => r.releaseId === 'rel-ara').royaltiesMinor).toBe('6000');
+    const araRel = body.releases.find((r: { releaseId: string }) => r.releaseId === 'rel-ara');
+    expect(araRel).toMatchObject({ royaltiesMinor: '6000', spentMinor: '1500', marginMinor: '500' });
     expect(body.summary.currencies[0].advances.unrecouped).toBe('12800');
     expect(body.periods).toHaveLength(2);
   });
@@ -252,6 +258,11 @@ describe('GET /finance/dashboard', () => {
     expect(body.releases.map((r: { releaseId: string }) => r.releaseId)).toEqual(['rel-ara']);
     // Bo's 20.00 share of Ara's release is another payee's number: only Ara's own payee's royalties are summed.
     expect(body.releases[0].royaltiesMinor).toBe('4000');
+    // The label's marketing spend and the margin built from it are withheld from a scoped reader.
+    expect(body.releases[0]).not.toHaveProperty('spentMinor');
+    expect(body.releases[0]).not.toHaveProperty('committedMinor');
+    expect(body.releases[0]).not.toHaveProperty('marginMinor');
+    expect(body.summary.currencies[0].earnings).toEqual({ gross: '8000', royalties: '4000' });
     expect(body.periods).toBeNull();
     expect(body.unattributed).toEqual([]);
     expect(body.summary.currencies[0].advances.recoupable).toBe('5000');
@@ -304,6 +315,19 @@ describe('closing and reopening a period', () => {
   it('a period of another organization is 404', async () => {
     expect((await call('close', 'POST', STR, L2, { periodId: PER_OPEN })).status).toBe(404);
     expect((await call('reopen', 'POST', STR, L2, { periodId: PER_CLOSED })).status).toBeGreaterThanOrEqual(403);
+  });
+});
+
+describe('a closed period is immutable: statements', () => {
+  const ST = 'a0000000-0000-4000-8000-0000000000d1';
+  it('issuing and voiding a statement of a closed period are 409 period_closed', async () => {
+    answers.issue = { error: 'period_closed' };
+    answers.stVoid = { error: 'period_closed' };
+    for (const which of ['issue', 'stVoid'] as const) {
+      const res = await call(which, 'POST', OWN, L, { statementId: ST });
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe('period_closed');
+    }
   });
 });
 

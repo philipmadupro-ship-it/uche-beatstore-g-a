@@ -53,9 +53,10 @@ export type ReleaseItem = {
   currency: string;
   grossMinor: string;
   royaltiesMinor: string;
-  spentMinor: string;
-  committedMinor: string;
-  marginMinor: string;
+  /** Withheld from a reader limited to some artists. */
+  spentMinor?: string;
+  committedMinor?: string;
+  marginMinor?: string;
   lines: number;
 };
 export type PeriodOverviewItem = {
@@ -77,7 +78,7 @@ export type PeriodOverviewItem = {
 export type SummaryCurrency = {
   currency: string;
   advances: { recoupable: string; nonRecoupable: string; recouped: string; unrecouped: string };
-  earnings: { gross: string; royalties: string; spent: string; committed: string; margin: string };
+  earnings: { gross: string; royalties: string; spent?: string; committed?: string; margin?: string };
   payouts: { issued: string; paid: string; owed: string; notOnStatement: string };
 };
 export type Dashboard = {

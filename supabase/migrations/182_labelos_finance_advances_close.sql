@@ -50,7 +50,8 @@
 --   Events: period.closed | period.reopened (audit, internal).
 --
 -- Functions 182 redefines: finance_periods_guard and the advances freeze (179, defined nowhere else) and
--- labelos_audit_earnings_import_void (181, defined nowhere else: it now refuses period_closed). Not redefined:
+-- labelos_audit_earnings_import_void, labelos_audit_statement_issue and labelos_audit_statement_void
+-- (181, defined nowhere else: each now refuses period_closed). Not redefined:
 -- labelos_finance_frozen (181), the 180 earnings functions, the other 181 functions.
 --
 -- Idempotent: CREATE OR REPLACE, DROP … IF EXISTS first.
@@ -66,7 +67,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT EXISTS (SELECT 1 FROM public.earnings_recoupments r WHERE r.advance_id = p_advance)
-      OR EXISTS (SELECT 1 FROM public.statement_lines l WHERE l.advance_id = p_advance);
+      OR EXISTS (SELECT 1 FROM public.statement_lines l JOIN public.statements s ON s.id = l.statement_id WHERE l.advance_id = p_advance AND s.status <> 'void');
 $$;
 
 ALTER FUNCTION public.labelos_advance_referenced(uuid) OWNER TO postgres;
@@ -428,5 +429,70 @@ $$;
 ALTER FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.labelos_audit_earnings_import_void(uuid, uuid, uuid, jsonb) TO service_role;
+
+-- ── 6. Issuing or voiding a statement of a closed period is refused ──────
+-- 181's two functions with one more check each (issue also takes the earnings lock now). No later migration defines them.
+
+CREATE OR REPLACE FUNCTION public.labelos_audit_statement_issue(p_org uuid, p_actor uuid, p_statement uuid, p_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  s public.statements%ROWTYPE;
+BEGIN
+  -- 182: under the lock the close takes (181's issue took none).
+  PERFORM pg_advisory_xact_lock(hashtextextended('labelos.earnings:' || p_org::text, 0));
+  SELECT * INTO s FROM public.statements WHERE id = p_statement AND org_id = p_org FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
+  -- 182 (LABEL-64): a closed period is immutable; reopen it first.
+  IF EXISTS (SELECT 1 FROM public.finance_periods fp WHERE fp.id = s.period_id AND fp.status <> 'open') THEN
+    RETURN jsonb_build_object('error', 'period_closed');
+  END IF;
+  IF s.status <> 'approved' THEN RETURN jsonb_build_object('error', 'not_approved', 'status', s.status); END IF;
+  UPDATE public.statements SET status = 'issued', issued_at = now() WHERE id = s.id;
+  PERFORM public.labelos_finance_event(p_org, p_actor, 'statement.issued', 'statement', s.id, s.artist_contact_id,
+    p_payload || jsonb_build_object('statementId', s.id));
+  RETURN jsonb_build_object('issued', true);
+END;
+$$;
+
+ALTER FUNCTION public.labelos_audit_statement_issue(uuid, uuid, uuid, jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_audit_statement_issue(uuid, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_audit_statement_issue(uuid, uuid, uuid, jsonb) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.labelos_audit_statement_void(p_org uuid, p_actor uuid, p_statement uuid, p_reason text, p_payload jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  s public.statements%ROWTYPE;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('labelos.earnings:' || p_org::text, 0));
+  SELECT * INTO s FROM public.statements WHERE id = p_statement AND org_id = p_org FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
+  IF s.status = 'void' THEN RETURN jsonb_build_object('error', 'already_void'); END IF;
+  -- 182 (LABEL-64): a closed period is immutable; reopen it first.
+  IF EXISTS (SELECT 1 FROM public.finance_periods fp WHERE fp.id = s.period_id AND fp.status <> 'open') THEN
+    RETURN jsonb_build_object('error', 'period_closed');
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.payments p WHERE p.statement_id = s.id AND p.voided_at IS NULL) THEN
+    RETURN jsonb_build_object('error', 'has_payments');
+  END IF;
+  UPDATE public.statements SET status = 'void', voided_at = now(), void_reason = nullif(p_reason, '') WHERE id = s.id;
+  PERFORM public.labelos_finance_event(p_org, p_actor, 'statement.voided', 'statement', s.id, s.artist_contact_id,
+    p_payload || jsonb_build_object('statementId', s.id, 'from', s.status));
+  RETURN jsonb_build_object('voided', true, 'from', s.status);
+END;
+$$;
+
+ALTER FUNCTION public.labelos_audit_statement_void(uuid, uuid, uuid, text, jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_audit_statement_void(uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_audit_statement_void(uuid, uuid, uuid, text, jsonb) TO service_role;
 
 NOTIFY pgrst, 'reload schema';
