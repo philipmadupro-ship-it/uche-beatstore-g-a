@@ -19,6 +19,18 @@
  */
 import { randomUUID } from 'node:crypto';
 
+/**
+ * The default `created_at` of an inserted row: strictly increasing within the process. Postgres stamps rows of
+ * separate statements apart (microseconds); `new Date()` stamps two inserts of one tick with the SAME millisecond,
+ * and every route that orders by `created_at` then breaks the tie on a random uuid, so a test asserting the order
+ * the rows were written in passed or failed by the clock. Rows given an explicit `created_at` are untouched.
+ */
+let lastStamp = 0;
+export function nextCreatedAt(): string {
+  lastStamp = Math.max(Date.now(), lastStamp + 1);
+  return new Date(lastStamp).toISOString();
+}
+
 type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
 type Err = { message: string; code?: string };
@@ -221,7 +233,7 @@ export function memoryAdmin(db: MemoryDb) {
               continue;
             }
           }
-          const row: Row = { id: randomUUID(), created_at: new Date().toISOString(), ...raw };
+          const row: Row = { id: randomUUID(), created_at: nextCreatedAt(), ...raw };
           if (violates(table, row, null)) {
             if (mode === 'upsert' && ignoreDuplicates) continue;
             return { data: null, error: { message: `duplicate key value violates unique constraint on ${table}`, code: '23505' } };
