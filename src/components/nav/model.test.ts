@@ -230,3 +230,19 @@ describe('the admin centre entry (doc 25, phase 3)', () => {
     expect(producer.items.map((i) => i.label)).not.toContain('Admin');
   });
 });
+
+describe('the artistic direction entry (LABEL-68)', () => {
+  const hrefs = (kind: string, caps: string[], modules?: string[]) =>
+    navGroupsFor(kind, new Set(caps), { slug: 'ns', viewerIsProducer: false, ...(modules ? { modules } : {}) }).find((g) => g.key === 'roster')?.items.map((i) => i.href) ?? [];
+
+  it('is drawn for creative.read in a label or artist org, in the Artists hub', () => {
+    expect(hrefs('label', ['catalog.read', 'creative.read'])).toContain('/o/ns/creative');
+    expect(hrefs('artist', ['catalog.read', 'creative.read'])).toContain('/o/ns/creative');
+  });
+  it('is not drawn without creative.read, or in an org without the artistic department, or in a producer org', () => {
+    expect(hrefs('label', ['catalog.read'])).not.toContain('/o/ns/creative');
+    expect(hrefs('label', ['catalog.read', 'creative.read'], ['store', 'contracts'])).not.toContain('/o/ns/creative');
+    expect(hrefs('label', ['catalog.read', 'creative.read'], ['artistic'])).toContain('/o/ns/creative');
+    expect(navGroupsFor('producer', new Set(['catalog.read', 'creative.read']), { slug: 'ns', viewerIsProducer: false }).some((g) => g.key === 'roster')).toBe(false);
+  });
+});

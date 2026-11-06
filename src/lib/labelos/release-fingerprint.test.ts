@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deliverExpectation, latestApprovalIds, releaseItemsKey, storeExpectation } from './release-fingerprint';
+import { deliverExpectation, latestApprovalIds, latestGateId, releaseItemsKey, storeExpectation } from './release-fingerprint';
 
 const U = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
 
@@ -36,5 +36,20 @@ describe('expectations', () => {
     expect(storeExpectation({ state: 'delivered', imported_released: false, release_date: null, store_listed: false }, 'a:b')).toEqual({
       state: 'delivered', imported_released: false, release_date: null, store_listed: false, items: 'a:b',
     });
+  });
+});
+
+describe('the creative gate in the fingerprint (LABEL-68)', () => {
+  const rows = [
+    { id: U(1), gate: 'creative', created_at: '2026-01-01T00:00:00Z' },
+    { id: U(2), gate: 'creative', created_at: '2026-01-02T00:00:00Z' },
+    { id: U(3), gate: 'legal', created_at: '2026-01-03T00:00:00Z' },
+  ];
+  it('latestGateId picks the newest row of one gate, and the empty string when there is none', () => {
+    expect(latestGateId(rows, 'creative')).toBe(U(2));
+    expect(latestGateId(rows, 'metadata')).toBe('');
+  });
+  it('latestApprovalIds still reports exactly the five gates, whatever rows exist', () => {
+    expect(Object.keys(latestApprovalIds(rows)).sort()).toEqual(['artwork', 'legal', 'marketing', 'master', 'metadata']);
   });
 });

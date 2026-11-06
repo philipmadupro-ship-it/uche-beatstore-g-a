@@ -17,6 +17,7 @@ const PERSONAS: Persona[] = [
   { name: 'label marketing', kind: 'label', role: 'member', fns: ['marketing'] },
   { name: 'label legal', kind: 'label', role: 'member', fns: ['legal'] },
   { name: 'label producer', kind: 'label', role: 'member', fns: ['producer'] },
+  { name: 'label artistic director', kind: 'label', role: 'member', fns: ['artistic_director'] },
   { name: 'label executive', kind: 'label', role: 'member', fns: ['executive'] },
   { name: 'roster artist', kind: 'label', role: 'artist' },
 ];
@@ -27,17 +28,18 @@ function input(p: Persona, modules?: string[]): ViewInput {
 
 /** What each persona may open. A page not listed is a 404. */
 const EXPECT: Record<string, string[]> = {
-  'independent owner': ['artists', 'music', 'releases', 'parties', 'contracts', 'earnings', 'statements', 'store_listings', 'connections'],
-  'independent admin': ['artists', 'music', 'releases', 'parties', 'contracts', 'earnings', 'statements', 'store_listings', 'connections'],
+  'independent owner': ['artists', 'music', 'releases', 'creative', 'parties', 'contracts', 'earnings', 'statements', 'store_listings', 'connections'],
+  'independent admin': ['artists', 'music', 'releases', 'creative', 'parties', 'contracts', 'earnings', 'statements', 'store_listings', 'connections'],
   'independent manager': ['artists', 'music', 'releases', 'parties', 'contracts', 'store_listings'],
-  'label owner': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'legal', 'earnings', 'statements', 'store_listings', 'connections'],
-  'label admin': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'legal', 'earnings', 'statements', 'store_listings', 'connections'],
+  'label owner': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'earnings', 'statements', 'store_listings', 'connections'],
+  'label admin': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'earnings', 'statements', 'store_listings', 'connections'],
   'label A&R': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'store_listings'],
   'label finance': ['artists', 'music', 'ar', 'releases', 'parties', 'earnings', 'statements', 'store_listings'],
   'label marketing': ['artists', 'music', 'ar', 'releases', 'store_listings'],
   'label legal': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'legal', 'store_listings'],
   'label producer': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'store_listings'],
-  'label executive': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'earnings', 'statements', 'store_listings'],
+  'label artistic director': ['artists', 'music', 'ar', 'releases', 'creative', 'store_listings'],
+  'label executive': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'earnings', 'statements', 'store_listings'],
   'roster artist': ['artists', 'music', 'releases', 'parties', 'contracts', 'statements', 'store_listings'],
 };
 
@@ -53,10 +55,13 @@ describe('persona matrix: pageAllowed (role × face)', () => {
   }
 
   it('a module the org is not licensed for closes its pages whatever the role', () => {
-    const owner = PERSONAS[3];
+    const owner = PERSONAS.find((p) => p.name === 'label owner')!;
     expect(pageAllowed('earnings', input(owner, ['catalog']))).toBe(false);
     expect(pageAllowed('contracts', input(owner, ['catalog']))).toBe(false);
     expect(pageAllowed('legal', input(owner, ['catalog']))).toBe(false);
+    // The artistic department switched off (or not licensed) closes the creative workspace (LABEL-68).
+    expect(pageAllowed('creative', input(owner, ['catalog']))).toBe(false);
+    expect(pageAllowed('creative', input(owner, ['artistic']))).toBe(true);
   });
 
   it('a producer org has none of the label pages; unknown kind or role opens nothing', () => {
@@ -83,7 +88,7 @@ describe('nav is a subset of the pages a persona may open', () => {
     const rest = href.replace(`/o/${slug}`, '');
     const map: Record<string, string> = {
       '/artists': 'artists', '/music': 'music', '/ar': 'ar', '/releases': 'releases', '/rights/parties': 'parties',
-      '/rights/contracts': 'contracts', '/rights/legal': 'legal', '/finance/earnings': 'earnings', '/finance/statements': 'statements', '/releases/store': 'store_listings',
+      '/rights/contracts': 'contracts', '/rights/legal': 'legal', '/finance/earnings': 'earnings', '/finance/statements': 'statements', '/releases/store': 'store_listings', '/creative': 'creative',
       '/settings/connections': 'connections',
     };
     return map[rest] ?? null;
@@ -102,7 +107,7 @@ describe('nav is a subset of the pages a persona may open', () => {
 
 describe('artist-org owners lose the label wording', () => {
   it('no A&R inbox, no Legal queue, no "Artists" roster group', () => {
-    const owner = PERSONAS[0];
+    const owner = PERSONAS.find((p) => p.name === 'independent owner')!;
     const i = input(owner);
     const groups = navGroupsFor('artist', i.capabilities, { slug: 's', viewerIsProducer: false, role: 'owner', isOwner: true });
     const labels = groups.flatMap((g) => g.items.map((x) => x.label));
@@ -111,13 +116,13 @@ describe('artist-org owners lose the label wording', () => {
     expect(groups.find((g) => g.key === 'roster')?.label).toBe('My music');
   });
   it('the label shell is unchanged', () => {
-    const i = input(PERSONAS[3]);
+    const i = input(PERSONAS.find((p) => p.name === 'label owner')!);
     const groups = navGroupsFor('label', i.capabilities, { slug: 's', viewerIsProducer: false, role: 'owner', isOwner: true });
     expect(groups.find((g) => g.key === 'roster')?.label).toBe('Artists');
     expect(groups.flatMap((g) => g.items.map((x) => x.label))).toEqual(expect.arrayContaining(['A&R inbox', 'Legal queue']));
   });
   it('a roster artist gets "My music"', () => {
-    const i = input(PERSONAS[11]);
+    const i = input(PERSONAS.find((p) => p.name === 'roster artist')!);
     const groups = navGroupsFor('label', i.capabilities, { slug: 's', viewerIsProducer: false, role: 'artist' });
     expect(groups.find((g) => g.key === 'roster')?.label).toBe('My music');
     expect(groups.flatMap((g) => g.items.map((x) => x.label))).not.toContain('A&R inbox');
@@ -132,10 +137,10 @@ describe('home tiles never point where the persona cannot go', () => {
     });
   }
   it('the independent home says my music / releases / money / contracts', () => {
-    expect(homeTiles('s', input(PERSONAS[0])).map((t) => t.label)).toEqual(['My music', 'My releases', 'My money', 'My contracts']);
+    expect(homeTiles('s', input(PERSONAS.find((p) => p.name === 'independent owner')!)).map((t) => t.label)).toEqual(['My music', 'My releases', 'My money', 'My contracts', 'Artistic direction']);
   });
   it('a roster artist home has the money tile (own statements) and a label has no tiles', () => {
-    expect(homeTiles('s', input(PERSONAS[11])).map((t) => t.label)).toEqual(['My music', 'My releases', 'My money', 'My contracts']);
-    expect(homeTiles('s', input(PERSONAS[3]))).toEqual([]);
+    expect(homeTiles('s', input(PERSONAS.find((p) => p.name === 'roster artist')!)).map((t) => t.label)).toEqual(['My music', 'My releases', 'My money', 'My contracts']);
+    expect(homeTiles('s', input(PERSONAS.find((p) => p.name === 'label owner')!))).toEqual([]);
   });
 });

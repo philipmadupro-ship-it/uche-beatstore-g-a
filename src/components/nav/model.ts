@@ -149,17 +149,17 @@ function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | 
  * producer's CRM, which the producer hubs already reach — and only for a
  * member who can see the catalogue (the page's own capability).
  */
-function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null, orgKind: string, role?: string): NavGroup {
+function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null, orgKind: string, role: string | undefined, artistic: boolean): NavGroup {
   // LABEL-37: Music is the org-wide list of songs with the structured filter bar and saved views; same capability as the roster.
   // LABEL-70: an independent artist's org and a label's roster artist have no roster to run: "My music" and their own artist page.
   if (orgKind === 'artist' || role === 'artist') {
-    return {
-      key: 'roster', label: 'My music', icon: Music2,
-      items: [
-        { label: 'My music', href: `/o/${slug}/music`, icon: Music2 },
-        { label: 'Artist profile', href: `/o/${slug}/artists`, icon: Mic2 },
-      ],
-    };
+    const own: NavGroup['items'] = [
+      { label: 'My music', href: `/o/${slug}/music`, icon: Music2 },
+      { label: 'Artist profile', href: `/o/${slug}/artists`, icon: Mic2 },
+    ];
+    // LABEL-68 / 70: an independent artist who holds the artistic department (`creative.read`) keeps its workspace.
+    if (artistic && caps?.has('creative.read')) own.push({ label: 'Artistic direction', href: `/o/${slug}/creative`, icon: Palette });
+    return { key: 'roster', label: 'My music', icon: Music2, items: own };
   }
   const items: NavGroup['items'] = [
     { label: 'Artists', href: `/o/${slug}/artists`, icon: Mic2 },
@@ -167,6 +167,8 @@ function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null
   ];
   // The A&R inbox (LABEL-25) is the reviewers' queue: only a member who can rate sees the entry. The page is a label staff tool (`pageAllowed('ar')`, LABEL-70): a roster artist reads the reviews of their songs on the song page.
   if (caps?.has('review.write')) items.push({ label: 'A&R inbox', href: `/o/${slug}/ar`, icon: Inbox });
+  // The artistic direction workspace (LABEL-68): `creative.read`, in an org that has the artistic department.
+  if (artistic && caps?.has('creative.read')) items.push({ label: 'Artistic direction', href: `/o/${slug}/creative`, icon: Palette });
   return { key: 'roster', label: 'Artists', icon: Mic2, items };
 }
 
@@ -235,7 +237,7 @@ export function navGroupsFor(
   if (!(ORG_KINDS as readonly string[]).includes(orgKind)) return [];
   if (!org) return orgKind === 'producer' ? NAV_GROUPS : [];
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
-  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps, orgKind, org.role)] : [];
+  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps, orgKind, org.role, licensed(org, 'artistic'))] : [];
   const releases = orgKind !== 'producer' && caps?.has('catalog.read') ? [releasesGroup(org.slug)] : [];
   // The legal queue belongs to the contracts module (LABEL-47); Parties is for anyone who reads a party.
   const rightsHub =

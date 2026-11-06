@@ -6,7 +6,7 @@
  * the song count the server already scoped to this viewer.
  */
 import Link from 'next/link';
-import { Coins, Disc3, FileText, Music2, type LucideIcon } from 'lucide-react';
+import { Coins, Disc3, FileText, Music2, Palette, type LucideIcon } from 'lucide-react';
 import type { HomeTile, OrgPage } from '@/lib/labelos/role-view';
 
 const ICONS: Partial<Record<OrgPage, LucideIcon>> = { music: Music2, releases: Disc3, statements: Coins, contracts: FileText };

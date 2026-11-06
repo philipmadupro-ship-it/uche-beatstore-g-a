@@ -28,7 +28,7 @@ export type ViewInput = {
 };
 
 export const ORG_PAGES = [
-  'overview', 'members', 'artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'legal', 'earnings', 'statements', 'store_listings', 'connections',
+  'overview', 'members', 'artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'earnings', 'statements', 'store_listings', 'connections',
 ] as const;
 export type OrgPage = (typeof ORG_PAGES)[number];
 
@@ -40,6 +40,7 @@ export const PAGE_PATH: Readonly<Record<OrgPage, string>> = {
   music: '/music',
   ar: '/ar',
   releases: '/releases',
+  creative: '/creative',
   parties: '/rights/parties',
   contracts: '/rights/contracts',
   legal: '/rights/legal',
@@ -98,6 +99,10 @@ export function pageAllowed(page: OrgPage, i: ViewInput): boolean {
     // LABEL-63: finance staff read all; a roster artist and an owner read the statements issued to them (the page's own rule), in orgs licensed for finance.
     case 'statements':
       return face && licensed(i.modules, 'finance') && ((caps.has('finance.read') && i.role !== 'artist') || i.role === 'artist' || i.role === 'owner');
+    // LABEL-68: the artistic direction workspace — `creative.read`, in an org that has the artistic department
+    // (`modules` already lacks it when the owner switched the department off).
+    case 'creative':
+      return face && caps.has('creative.read') && licensed(i.modules, 'artistic');
     case 'connections':
       return face && caps.has('org.manage');
   }
@@ -110,6 +115,7 @@ const TILES: ReadonlyArray<{ page: OrgPage; label: string; hint: string }> = [
   { page: 'releases', label: 'My releases', hint: 'What is out and what is coming' },
   { page: 'statements', label: 'My money', hint: 'Statements and what you are owed' },
   { page: 'contracts', label: 'My contracts', hint: 'What you have signed and what waits for you' },
+  { page: 'creative', label: 'Artistic direction', hint: 'Where your sound is heading and what needs a decision' },
 ];
 
 /**

@@ -92,12 +92,13 @@ for (const width of [1440, 390]) {
       const { ctx, page } = await as(browser, baseURL!, PRODUCER_ID, 'producer@local.test');
       await page.goto(`/o/${IND_SLUG}`);
       await expect(page.getByTestId('role-home')).toBeVisible({ timeout: 60_000 });
-      await expect(TILES(page)).toHaveText([/My music/, /My releases/, /My money/, /My contracts/]);
+      await expect(TILES(page)).toHaveText([/My music/, /My releases/, /My money/, /My contracts/, /Artistic direction/]);
       await expect(page.getByTestId('overview')).toHaveCount(0);
       await shot(page, `independent-home-${width}`);
       expect(await status(page, `/o/${IND_SLUG}/ar`)).toBe(404);
       expect(await status(page, `/o/${IND_SLUG}/rights/legal`)).toBe(404);
       expect(await status(page, `/o/${IND_SLUG}/music`)).toBe(200);
+      expect(await status(page, `/o/${IND_SLUG}/creative`)).toBe(200);
       await ctx.close();
     });
 
@@ -126,6 +127,7 @@ for (const width of [1440, 390]) {
     test('label marketing staff: no earnings, no legal queue', async ({ browser, baseURL }) => {
       const { ctx, page } = await as(browser, baseURL!, ARTIST_B_ID, 'artist-b@local.test');
       expect(await status(page, `/o/${LAB_SLUG}/finance/earnings`)).toBe(404);
+      expect(await status(page, `/o/${LAB_SLUG}/creative`)).toBe(404);
       expect(await status(page, `/o/${LAB_SLUG}/finance/statements`)).toBe(404);
       expect(await status(page, `/o/${LAB_SLUG}/rights/legal`)).toBe(404);
       expect(await status(page, `/o/${LAB_SLUG}/music`)).toBe(200);
@@ -140,6 +142,7 @@ for (const width of [1440, 390]) {
       await expect(page.getByTestId('home-tile-statements')).toBeVisible();
       await shot(page, `roster-artist-home-${width}`);
       expect(await status(page, `/o/${LAB_SLUG}/finance/statements`)).toBe(200);
+      expect(await status(page, `/o/${LAB_SLUG}/creative`)).toBe(404);
       expect(await status(page, `/o/${LAB_SLUG}/ar`)).toBe(404);
       expect(await status(page, `/o/${LAB_SLUG}/finance/earnings`)).toBe(404);
       expect(await status(page, `/o/${LAB_SLUG}/rights/legal`)).toBe(404);

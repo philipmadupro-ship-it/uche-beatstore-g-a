@@ -14,7 +14,7 @@ describe('RoleHomeTiles', () => {
     expect(screen.getByTestId('home-tile-music').getAttribute('href')).toBe('/o/nova/music');
     expect(screen.getByTestId('home-tile-statements').getAttribute('href')).toBe('/o/nova/finance/statements');
     expect(screen.getByTestId('home-tile-music-count').textContent).toBe('3 songs');
-    expect(screen.getAllByRole('link')).toHaveLength(4);
+    expect(screen.getAllByRole('link')).toHaveLength(5);
   });
   it('a roster artist money tile opens their own statements', () => {
     render(<RoleHomeTiles tiles={homeTiles('ns', roster)} songCount={1} />);
