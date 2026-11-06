@@ -551,7 +551,7 @@ export function TopBar() {
                   </p>
                   <div className="space-y-0.5">
                     {g.items.map((it) => {
-                      const active = isItemActive(it.href, pathname);
+                      const active = isItemActive(it.href, pathname, it.exact);
                       const Icon = it.icon;
                       return (
                         <Link
@@ -634,7 +634,7 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
            A labelled nav list keeps Tab working the way links already do. */
         <nav className="p-1" aria-label={`${group.label} pages`}>
           {group.items.map((it) => {
-            const itemActive = isItemActive(it.href, pathname);
+            const itemActive = isItemActive(it.href, pathname, it.exact);
             const ItemIcon = it.icon;
             return (
               <Link

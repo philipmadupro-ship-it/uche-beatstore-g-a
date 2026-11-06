@@ -44,6 +44,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       }),
       'statement void',
     );
+    if (out.error === 'period_closed') return json(409, { error: 'This statement belongs to a closed period. Ask an owner to reopen the period first.', code: 'period_closed' });
     if (out.error === 'has_payments') return json(409, { error: 'Void the payments recorded against this statement first.', code: 'has_payments' });
     if (out.error === 'already_void') return json(409, { error: 'This statement is already void.', code: 'already_void' });
     if (out.error) return json(404, { error: 'Statement not found' });

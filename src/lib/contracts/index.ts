@@ -2223,6 +2223,30 @@ export type OrgStatementGenerateBody = z.infer<typeof OrgStatementGenerateBodySc
 export const OrgStatementVoidBodySchema = z.object({ reason: z.string().trim().min(1).max(500).optional() }).strict();
 export type OrgStatementVoidBody = z.infer<typeof OrgStatementVoidBodySchema>;
 
+/** An advance paid to a payee (LABEL-64). Minor units as digits; the currency is the payee's. */
+export const OrgAdvanceCreateBodySchema = z
+  .object({
+    payee_id: z.string().uuid(),
+    kind: z.enum(['recoupable', 'non_recoupable']),
+    amount_minor: z.string().regex(/^[1-9]\d{0,17}$/, 'Enter an amount above zero'),
+    paid_on: FinanceDateSchema.optional(),
+    note: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+export type OrgAdvanceCreateBody = z.infer<typeof OrgAdvanceCreateBodySchema>;
+
+/** Change an advance: any of kind / amount / date (only while nothing references it) and the note. null clears the date or the note. */
+export const OrgAdvancePatchBodySchema = z
+  .object({
+    kind: z.enum(['recoupable', 'non_recoupable']).optional(),
+    amount_minor: z.string().regex(/^[1-9]\d{0,17}$/, 'Enter an amount above zero').optional(),
+    paid_on: FinanceDateSchema.nullable().optional(),
+    note: z.string().trim().min(1).max(500).nullable().optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type OrgAdvancePatchBody = z.infer<typeof OrgAdvancePatchBodySchema>;
+
 /** A payment somebody made elsewhere. The amount is minor units as digits (no float on the wire). A reference is never an account number. */
 export const OrgPaymentCreateBodySchema = z
   .object({

@@ -260,8 +260,10 @@ INSERT INTO public.advances (id, org_id, payee_id, kind, amount_minor, currency,
 SELECT public.check_raises('an advance is in the payee''s currency',
   format($$INSERT INTO public.advances (org_id, payee_id, kind, amount_minor, currency) VALUES (%L, %L, 'recoupable', 5, 'EUR')$$, 'b1790000-0000-4000-8000-000000000001', 'e2790000-0000-4000-8000-000000000001'),
   'payee''s currency');
-SELECT public.check_raises('an advance amount never changes',
-  format($$UPDATE public.advances SET amount_minor = 1 WHERE id = %L$$, 'e5790000-0000-4000-8000-000000000001'), 'fixed once written');
+-- 182 (LABEL-64) lets an advance that nothing references change its amount, kind and date (checked in 182's
+-- own file); its currency and payee never change, whatever references it.
+SELECT public.check_raises('an advance currency never changes',
+  format($$UPDATE public.advances SET currency = 'EUR' WHERE id = %L$$, 'e5790000-0000-4000-8000-000000000001'), 'never change');
 
 INSERT INTO public.payments (id, org_id, payee_id, statement_id, amount_minor, currency, paid_on, reference, recorded_by) VALUES
   ('e6790000-0000-4000-8000-000000000001', :L, :PY1, :ST1, 75000, 'USD', '2026-10-05', 'paid by finance', :F),

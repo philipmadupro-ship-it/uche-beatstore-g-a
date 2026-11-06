@@ -16,6 +16,7 @@
 #   2. each supabase/local/checks/*.sql in its own copy of the database, so
 #      checks cannot see each other's rows and deferred triggers really fire
 #      at COMMIT. A check fails by raising;
+#   2b. each supabase/local/races/*.sh (two-session races), in its own copy;
 #   3. capability parity: the real has_org_cap against capabilitiesFor() on
 #      generated fixtures (capability-parity.ts);
 #   4. every supabase/rollback/NNN_*.down.sql in one copy, newest first
@@ -93,6 +94,17 @@ for f in "$ROOT"/supabase/local/checks/*.sql; do
   psql_db "check_$n" -o /dev/null -f "$f" \
     || { echo "db:local:check: FAILED check $(basename "$f")" >&2; exit 1; }
   echo "db:local:check: check ok — $(basename "$f")"
+done
+
+# Two-session races (supabase/local/races/*.sh): a script needs a second connection, which a .sql
+# check cannot open. Each gets its own copy of the database; RACE_DB_URL names it and it fails by exiting non-zero.
+r=0
+for f in "$ROOT"/supabase/local/races/*.sh; do
+  r=$((r + 1))
+  copy_db "$DB" "race_$r"
+  RACE_DB_URL="postgresql://postgres@127.0.0.1:$PORT/race_$r" bash "$f" \
+    || { echo "db:local:check: FAILED race $(basename "$f")" >&2; exit 1; }
+  echo "db:local:check: race ok — $(basename "$f")"
 done
 
 org_core=("$ROOT"/supabase/migrations/*_labelos_org_core.sql)

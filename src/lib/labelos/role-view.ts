@@ -28,7 +28,7 @@ export type ViewInput = {
 };
 
 export const ORG_PAGES = [
-  'overview', 'members', 'artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'earnings', 'statements', 'store_listings', 'connections',
+  'overview', 'members', 'artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections',
 ] as const;
 export type OrgPage = (typeof ORG_PAGES)[number];
 
@@ -44,7 +44,9 @@ export const PAGE_PATH: Readonly<Record<OrgPage, string>> = {
   parties: '/rights/parties',
   contracts: '/rights/contracts',
   legal: '/rights/legal',
+  finance: '/finance',
   earnings: '/finance/earnings',
+  advances: '/finance/advances',
   statements: '/finance/statements',
   store_listings: '/releases/store',
   connections: '/settings/connections',
@@ -94,7 +96,10 @@ export function pageAllowed(page: OrgPage, i: ViewInput): boolean {
       return face && canSeeContracts(caps) && licensed(i.modules, 'contracts');
     case 'legal':
       return i.kind === 'label' && canSeeLegalQueue(caps) && licensed(i.modules, 'contracts');
+    // LABEL-64: the finance overview and the advances ledger are finance staff's, like earnings.
+    case 'finance':
     case 'earnings':
+    case 'advances':
       return face && i.role !== 'artist' && caps.has('finance.read') && licensed(i.modules, 'finance');
     // LABEL-63: finance staff read all; a roster artist and an owner read the statements issued to them (the page's own rule), in orgs licensed for finance.
     case 'statements':

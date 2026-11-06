@@ -28,18 +28,18 @@ function input(p: Persona, modules?: string[]): ViewInput {
 
 /** What each persona may open. A page not listed is a 404. */
 const EXPECT: Record<string, string[]> = {
-  'independent owner': ['artists', 'music', 'releases', 'creative', 'parties', 'contracts', 'earnings', 'statements', 'store_listings', 'connections'],
-  'independent admin': ['artists', 'music', 'releases', 'creative', 'parties', 'contracts', 'earnings', 'statements', 'store_listings', 'connections'],
+  'independent owner': ['artists', 'music', 'releases', 'creative', 'parties', 'contracts', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections'],
+  'independent admin': ['artists', 'music', 'releases', 'creative', 'parties', 'contracts', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections'],
   'independent manager': ['artists', 'music', 'releases', 'parties', 'contracts', 'store_listings'],
-  'label owner': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'earnings', 'statements', 'store_listings', 'connections'],
-  'label admin': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'earnings', 'statements', 'store_listings', 'connections'],
+  'label owner': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections'],
+  'label admin': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections'],
   'label A&R': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'store_listings'],
-  'label finance': ['artists', 'music', 'ar', 'releases', 'parties', 'earnings', 'statements', 'store_listings'],
+  'label finance': ['artists', 'music', 'ar', 'releases', 'parties', 'finance', 'earnings', 'advances', 'statements', 'store_listings'],
   'label marketing': ['artists', 'music', 'ar', 'releases', 'store_listings'],
   'label legal': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'legal', 'store_listings'],
   'label producer': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'store_listings'],
   'label artistic director': ['artists', 'music', 'ar', 'releases', 'creative', 'store_listings'],
-  'label executive': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'earnings', 'statements', 'store_listings'],
+  'label executive': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'finance', 'earnings', 'advances', 'statements', 'store_listings'],
   'roster artist': ['artists', 'music', 'releases', 'parties', 'contracts', 'statements', 'store_listings'],
 };
 
@@ -88,7 +88,7 @@ describe('nav is a subset of the pages a persona may open', () => {
     const rest = href.replace(`/o/${slug}`, '');
     const map: Record<string, string> = {
       '/artists': 'artists', '/music': 'music', '/ar': 'ar', '/releases': 'releases', '/rights/parties': 'parties',
-      '/rights/contracts': 'contracts', '/rights/legal': 'legal', '/finance/earnings': 'earnings', '/finance/statements': 'statements', '/releases/store': 'store_listings', '/creative': 'creative',
+      '/rights/contracts': 'contracts', '/rights/legal': 'legal', '/finance': 'finance', '/finance/earnings': 'earnings', '/finance/advances': 'advances', '/finance/statements': 'statements', '/releases/store': 'store_listings', '/creative': 'creative',
       '/settings/connections': 'connections',
     };
     return map[rest] ?? null;
