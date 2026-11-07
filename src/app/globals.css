@@ -1044,4 +1044,4 @@ input[type=range]::-webkit-slider-thumb {
 /* Signal colours written as literals on dark: darker steps of the same hues so they read on paper. */
 [data-theme="de-roche-archive"] .labelos-shell [class*="text-[#6DC6A4]"] { color: var(--labelos-ok); }
 [data-theme="de-roche-archive"] .labelos-shell [class*="text-[#c8a47a]"] { color: var(--labelos-accent); }
-[data-theme="de-roche-archive"] .labelos-shell :is([class*="text-[#ffb7a8]"], [class*="text-[#ff8b73]"]) { color: var(--labelos-bad); }
+[data-theme="de-roche-archive"] .labelos-shell :is([class*="text-[#ffb7a8]"], [class*="text-[#ff8b73]"], .text-red-400) { color: var(--labelos-bad); }

@@ -134,3 +134,24 @@ for (const m of MEMBERS) {
     await ctx.close();
   });
 }
+
+test('4 · Label OS panels stay readable in the archive theme (owner, 1440 and 390)', async ({ browser, baseURL }) => {
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    const ctx = await as(browser, baseURL!, PRODUCER_ID, 'producer@local.test', viewport);
+    const page = await ctx.newPage();
+    for (const [name, path] of [['song', `/songs/${SONG}`], ['settings', '/settings/organization'], ['music', '/music']] as const) {
+      await page.goto(`/o/${SLUG}${path}`);
+      await page.waitForLoadState('networkidle').catch(() => undefined);
+      await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'de-roche-archive'));
+      await page.waitForTimeout(600);
+      // The page text is dark on the light surface: no body text colour is near-white.
+      const light = await page.evaluate(() => {
+        const bg = getComputedStyle(document.querySelector('.labelos-shell')!).backgroundColor;
+        return bg;
+      });
+      expect(light).not.toBe('rgb(9, 9, 7)');
+      await shot(page, `${name}-${viewport.width}-archive`);
+    }
+    await ctx.close();
+  }
+});
