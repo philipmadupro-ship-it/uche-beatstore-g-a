@@ -33,6 +33,33 @@ export async function ownManagedAccount(admin: Pick<SupabaseClient, 'from'>, use
 }
 
 /**
+ * What the org's own record says about this signed-in person (review G12):
+ * still on the org-given password, and/or switched off. The org routes ask
+ * this on every request so a switched-off account is refused by the record
+ * itself and not only by the auth ban plus the session delete (which a
+ * database that will not let `labelos_revoke_auth_sessions` run leaves
+ * undone, and which never touches a token that is already issued). Any
+ * error reads as "neither": access is still the membership.
+ */
+export async function sessionAccountState(
+  userId: string | null,
+  admin: Pick<SupabaseClient, 'from'>,
+): Promise<{ mustChangePassword: boolean; disabled: boolean }> {
+  const none = { mustChangePassword: false, disabled: false };
+  if (!userId) return none;
+  try {
+    const own = await ownManagedAccount(admin, userId);
+    if (own.status !== 'managed') return none;
+    return {
+      mustChangePassword: own.account.mustChangePassword && !own.account.disabled,
+      disabled: own.account.disabled,
+    };
+  } catch {
+    return none;
+  }
+}
+
+/**
  * Must the signed-in person set their own password before using the org
  * shell? (A team account on its first password, or after a reset.) Read on
  * the server by the org layouts; any failure answers false — this is a
