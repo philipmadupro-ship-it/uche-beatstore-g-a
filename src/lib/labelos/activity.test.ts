@@ -49,6 +49,10 @@ describe('verb vocabulary', () => {
     expect(new Set(VERBS).size).toBe(VERBS.length);
   });
 
+  it('org.created is audit-class, so the retention prune never deletes it (LABEL-75)', () => {
+    expect(isAuditVerb('org.created')).toBe(true);
+  });
+
   it('every audit verb is a verb', () => {
     for (const v of AUDIT_VERBS) expect(VERBS).toContain(v);
   });

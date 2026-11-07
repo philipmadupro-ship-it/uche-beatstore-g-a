@@ -167,6 +167,7 @@ SELECT public.check_eq('the other org was not touched', (SELECT settings::text F
 
 -- ── The org's hard delete takes everything ──────────────────────────────
 
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('deleting the org deletes every marketing row',
   (SELECT (SELECT count(*) FROM public.marketing_plans) + (SELECT count(*) FROM public.marketing_plan_items) + (SELECT count(*) FROM public.marketing_platform_steps)

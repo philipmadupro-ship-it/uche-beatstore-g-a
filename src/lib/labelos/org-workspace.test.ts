@@ -165,16 +165,15 @@ describe('player', () => {
 });
 
 describe('releases tab titles', () => {
-  it('joins titles in position order and keeps a hidden song restricted, untitled', () => {
-    const titles = new Map([['a', 'One'], ['b', 'Two']]);
+  it('joins titles in position order and drops a hidden song, renumbering the rest', () => {
+    const titles = new Map([['a', 'One'], ['b', 'Two'], ['d', 'Four']]);
     expect(releaseItemTitles(
-      [{ position: 2, song_track_id: 'b' }, { position: 1, song_track_id: 'a' }, { position: 3, song_track_id: 'c' }],
+      [{ position: 4, song_track_id: 'd' }, { position: 2, song_track_id: 'b' }, { position: 1, song_track_id: 'a' }, { position: 3, song_track_id: 'c' }],
       titles,
       (id) => id !== 'b',
     )).toEqual([
-      { position: 1, songTrackId: 'a', title: 'One', restricted: false },
-      { position: 2, songTrackId: 'b', title: null, restricted: true },
-      { position: 3, songTrackId: 'c', title: null, restricted: true },
+      { position: 1, songTrackId: 'a', title: 'One' },
+      { position: 2, songTrackId: 'd', title: 'Four' },
     ]);
   });
 });

@@ -91,6 +91,7 @@ END $$;
 RESET ROLE;
 
 -- Cascade.
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('members cascade with the org', (SELECT count(*) FROM public.org_digest_members), 0::bigint);
 SELECT public.check_eq('the channel cascades with the org', (SELECT count(*) FROM public.org_digest_channels), 0::bigint);

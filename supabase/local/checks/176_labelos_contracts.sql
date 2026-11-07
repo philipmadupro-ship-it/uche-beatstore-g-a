@@ -260,5 +260,6 @@ RESET ROLE;
 -- ── 5. Cascade ───────────────────────────────────────────────────────────
 -- L2's contract names L2's contact, song and party (NO ACTION links): the org's one DELETE cascades through all of them.
 
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L2;
 DELETE FROM public.organizations WHERE id = :L2;
 SELECT public.check_eq('an org’s contracts and templates go with it', (SELECT count(*)::int FROM public.contracts WHERE org_id = :L2) + (SELECT count(*)::int FROM public.contract_templates WHERE org_id = :L2), 0);

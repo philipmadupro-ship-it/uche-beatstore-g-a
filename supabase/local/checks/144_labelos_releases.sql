@@ -500,6 +500,7 @@ SELECT public.check_ok('with the release gone, the master link can be removed',
 RESET ROLE;
 -- Deleting an org removes its releases, items, tracks and links in one go
 -- (the guards let a cascade through).
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = 'b1440000-0000-4000-8000-000000000002'; -- 195: only a past-grace org may be deleted
 SELECT public.check_ok('deleting L2 cascades through its release',
   $$DELETE FROM public.organizations WHERE id = 'b1440000-0000-4000-8000-000000000002'$$);
 SELECT public.check_eq('… which is gone', (SELECT count(*) FROM public.releases WHERE id = '91440000-0000-4000-8000-000000000003'), 0::bigint);

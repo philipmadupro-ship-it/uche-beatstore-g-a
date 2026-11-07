@@ -29,6 +29,7 @@ import {
   linkHost,
   nextReferencePosition,
   partitionReferences,
+  referencesAtCap,
   REFERENCES_PER_ARTIST_MAX,
   safeReferenceUrl,
 } from '@/lib/labelos/direction';
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   try {
     const existing = await listReferenceRows(access.admin, access.orgId, contactId);
-    if (existing.length >= REFERENCES_PER_ARTIST_MAX) return json(409, { error: `An artist holds at most ${REFERENCES_PER_ARTIST_MAX} references` });
+    if (referencesAtCap(access.role, existing)) return json(409, { error: `An artist holds at most ${REFERENCES_PER_ARTIST_MAX} references` });
 
     let title = body.title ?? '';
     let url: string | null = null;

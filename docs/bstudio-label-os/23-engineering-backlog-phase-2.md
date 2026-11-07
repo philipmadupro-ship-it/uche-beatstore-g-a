@@ -275,11 +275,11 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Implement `20-review-G7-atomic-deliver.md` with G10's amendments (raw `updated_at` string, fingerprint scope, one function family): `labelos_audit_release_deliver`, plus `release.imported`, `release.store_listed/unlisted`, org delete/restore/export, digest channel verbs. `AUDIT_RPCS` entry, `AuditRpcArgs` type, a check proving the four G7 cases, a rollback. Remove the compensating writes.
 
 ### LABEL-74 — Visibility decisions
-**Priority:** P2 · **Risk:** Low · **Deps:** 52 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** 52 · **Status:** In review — #182 (with LABEL-75)
 - Slack channel digest from the artist-visible, non-restricted view only (+ warning when sharing a saved view name); forbidden pages 404 except settings; `ensurePersonalOrg` gated on the flag; `references` cap no longer reveals internal references. **Added from LABEL-52:** `releaseItemTitles` (`org-workspace.ts`) keeps restricted placeholders in position, so a scoped viewer can count hidden songs on a release; drop them (or collapse them into one uncounted line) for anyone who does not get restricted counts.
 
 ### LABEL-75 — Lifecycle decisions
-**Priority:** P2 · **Risk:** Low · **Deps:** none · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 195 · **Status:** In review — #182 (with LABEL-74)
 - `org.created` becomes audit-class (never pruned); purge cron gets a 45–60 s budget; sole-owner account deletion blocked with "transfer ownership or delete the organization first"; throttle `/api/store/releases/*`; doc drift (`artist_org_id` is SET NULL; AGENTS.md `team_members`). **Added from LABEL-43's "Found, not fixed" (orchestrator, 2026-10-17):** column grant on `split_lines` so an own-line reader cannot read `signature_asset_id` / `signed_by`; a statement-level `BEFORE TRUNCATE` guard on `activity_events`; replace 147's per-row `has_org_cap` in `activity_events_member_read` with uncorrelated helpers (R-08); a trigger on `organizations` refusing DELETE unless `deleted_at` is older than the 30-day grace period (audit history can only be erased by the purge).
 
 ### LABEL-76 — UI polish

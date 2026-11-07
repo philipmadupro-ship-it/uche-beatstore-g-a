@@ -164,8 +164,8 @@ describe('GET …/artists/[contactId]/workspace', () => {
     expect(w.releasesReady).toBe(true);
     expect(w.releases).toHaveLength(1);
     expect(w.releases[0].items).toEqual([
-      { position: 1, songTrackId: S1, title: 'Midnight', restricted: false },
-      { position: 2, songTrackId: S3, title: 'Dawn', restricted: false },
+      { position: 1, songTrackId: S1, title: 'Midnight' },
+      { position: 2, songTrackId: S3, title: 'Dawn' },
     ]);
     expect(w.permissions).toEqual({ write: true, working: true, finished: true });
   });
@@ -212,7 +212,7 @@ describe('GET …/artists/[contactId]/workspace', () => {
     const { workspace: w } = await (await workspace(C1)).json();
     expect(w.songs.map((s: { id: string }) => s.id)).toEqual([S1, S3]);
     expect(w.restrictedSongs).toBe(0);
-    expect(w.releases[0].items[1]).toMatchObject({ songTrackId: S3, title: 'Dawn', restricted: false });
+    expect(w.releases[0].items[1]).toMatchObject({ songTrackId: S3, title: 'Dawn' });
     expect(w.permissions).toEqual({ write: false, working: false, finished: true });
   });
 
@@ -222,7 +222,7 @@ describe('GET …/artists/[contactId]/workspace', () => {
     const { workspace: w } = await (await workspace(C1)).json();
     expect(w.songs.map((s: { id: string }) => s.id)).toEqual([S1]);
     expect(w.restrictedSongs).toBe(1);
-    expect(w.releases[0].items[1]).toEqual({ position: 2, songTrackId: S3, title: null, restricted: true });
+    expect(w.releases[0].items).toHaveLength(1); // the hidden song is dropped, not shown as a placeholder (LABEL-74)
     expect(JSON.stringify(w)).not.toContain('Dawn');
   });
 
@@ -234,7 +234,7 @@ describe('GET …/artists/[contactId]/workspace', () => {
     const { workspace: w } = await (await workspace(C1)).json();
     expect(w.songs.map((s: { id: string }) => s.id)).toEqual([S1]);
     expect(w.restrictedSongs).toBe(0);
-    expect(w.releases[0].items[1]).toEqual({ position: 2, songTrackId: S3, title: null, restricted: true });
+    expect(w.releases[0].items).toHaveLength(1); // the hidden song is dropped, not shown as a placeholder (LABEL-74)
   });
 
   it('a member limited to Kilo gets 404 on Nova, and their own artist works', async () => {
