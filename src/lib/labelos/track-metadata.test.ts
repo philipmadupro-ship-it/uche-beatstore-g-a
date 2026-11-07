@@ -61,6 +61,9 @@ describe('planMetadataPatch', () => {
   it('language is tidied and checked', () => {
     expect(planMetadataPatch({ language: 'PT-br' }, EMPTY, WRITER)).toMatchObject({ ok: true, set: { language: 'pt-BR' } });
     expect(planMetadataPatch({ language: 'English' }, EMPTY, WRITER)).toMatchObject({ ok: false, field: 'language' });
+    // Case folding must not turn non-ASCII letters into a code: ı → I, the Kelvin sign → k (the ISRC rule, LABEL-16).
+    expect(planMetadataPatch({ language: 'en-\u0131\u0131' }, EMPTY, WRITER)).toMatchObject({ ok: false, field: 'language' });
+    expect(planMetadataPatch({ language: '\u212Aa' }, EMPTY, WRITER)).toMatchObject({ ok: false, field: 'language' });
   });
 
   it('recorded_on must be a real calendar date', () => {
