@@ -43,6 +43,10 @@ const json = (status: number, body: Record<string, unknown>) => NextResponse.jso
 const SAME_FILE_MESSAGE =
   'This file was imported before, so nothing changed. The original import stands with the options it was made with (service, currency, income class, rounding); a change to those options does not re-import it.';
 
+/** A voided import keeps its file hash (one import per file), so the same bytes cannot be imported again. Say so; the old text would claim an import stands that does not. */
+const VOIDED_FILE_MESSAGE =
+  'This file was imported and then voided, so it cannot be imported again as it is. If the import was voided because of a wrong option, change the file by one byte (for example, save it again with a trailing newline) and import that copy.';
+
 type Params = { params: Promise<{ orgId: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -93,10 +97,14 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   try {
     // Same file, same organization → the original import, nothing written, nothing recorded.
-    const existing = await access.admin.from('earnings_imports').select('id').eq('org_id', access.orgId).eq('file_sha256', sha).maybeSingle();
+    const existing = await access.admin.from('earnings_imports').select('id, status').eq('org_id', access.orgId).eq('file_sha256', sha).maybeSingle();
     if (existing.error && !['PGRST205', '42P01'].includes(existing.error.code ?? '')) throw new Error(existing.error.message);
     if (existing.error) throw new EarningsNotReadyError();
-    if (existing.data) return json(200, { created: false, import_id: (existing.data as { id: string }).id, message: SAME_FILE_MESSAGE });
+    if (existing.data) {
+      const row = existing.data as { id: string; status?: string };
+      if (row.status === 'void') return json(409, { error: VOIDED_FILE_MESSAGE, code: 'voided_file', import_id: row.id });
+      return json(200, { created: false, import_id: row.id, message: SAME_FILE_MESSAGE });
+    }
 
     const csv = parseCsv(new TextDecoder('utf-8').decode(bytes), bytes.byteLength);
     if (!csv.ok) return json(422, { error: CSV_FAILURE_MESSAGE[csv.code], code: csv.code, ...(csv.line ? { line: csv.line } : {}) });
