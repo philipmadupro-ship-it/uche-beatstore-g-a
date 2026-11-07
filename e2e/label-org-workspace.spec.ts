@@ -15,6 +15,7 @@
  */
 import { test, expect, type APIRequestContext, type Browser, type BrowserContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
+import { clickWhenHydrated } from './support/hydration';
 import { SERVICE_KEY, PRODUCER_ID, BUYER_ID, sessionCookie } from '../scripts/local-db/jwt.mjs';
 
 const REST = 'http://127.0.0.1:54321/rest/v1';
@@ -106,7 +107,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
 
     for (const name of ['Projects', 'Songs', 'Releases', 'Files', 'Overview']) {
       const tab = page.getByRole('tab', { name: new RegExp(`^${name}`) });
-      await tab.click();
+      // The tab bar is server-rendered: a click before it hydrates is swallowed and the next line would wait out its timeout.
+      await clickWhenHydrated(tab);
       await expect(tab).toHaveAttribute('aria-selected', 'true');
     }
     await page.getByRole('tab', { name: /^Songs/ }).click();

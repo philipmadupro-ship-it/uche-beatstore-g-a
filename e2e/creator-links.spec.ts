@@ -52,6 +52,10 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
         'hi@uche.example': 'mailto:hi@uche.example',
       };
       await expect(page.getByRole('link', { name: 'SoundCloud' })).toHaveCount(0);
+      // The popups open the real hosts. The test is about WHERE a link points, not about instagram.com being reachable
+      // (no network in a sandbox, a login redirect or a slow CDN anywhere else), so any request that is not ours gets a stub page.
+      await page.context().route((url) => !['localhost', '127.0.0.1'].includes(url.hostname), (route) =>
+        route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stub</title>' }));
       for (const [text, href] of Object.entries(expected)) {
         const link = page.getByRole('link', { name: text, exact: true });
         await expect(link, text).toHaveAttribute('href', href);
@@ -60,8 +64,9 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
         const popup = page.waitForEvent('popup');
         await link.click();
         const opened = await popup;
-        await opened.waitForLoadState('domcontentloaded');
-        expect(opened.url().replace(/\/$/, ''), text).toBe(href);
+        // A popup reports '' / about:blank until its first navigation commits, and waitForLoadState can resolve on that blank
+        // document, so wait for the URL itself instead of reading it once.
+        await expect.poll(() => opened.url().replace(/\/$/, ''), { message: text }).toBe(href);
         await opened.close();
       }
       // Nothing on the page carries a scripting scheme, and nothing ran.

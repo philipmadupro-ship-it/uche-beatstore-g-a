@@ -179,6 +179,18 @@ describe('the inbox', () => {
     expect(puts()).toHaveLength(0);
   });
 
+  it('a key pressed the moment the queue appears is not lost to the handler registered before the data arrived', async () => {
+    render(<OrgShellProvider value={shell('member', ['a_and_r'])}><ArInboxView orgId="o1" orgSlug="night-shift" /></OrgShellProvider>);
+    // waitFor's callback runs on the DOM mutation that shows the list, before React's passive effects re-register the
+    // document handler with the loaded inbox: the first handler still closes over "no inbox, cannot review".
+    await waitFor(() => {
+      if (!screen.queryByTestId('ar-list')) throw new Error('not yet');
+      key('c');
+    });
+    expect(await screen.findByTestId('ar-note')).toBeTruthy();
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
+
   it('X selects; the bulk bar moves the selected songs and reports what was refused', async () => {
     await open();
     key('x'); key('j'); key('j'); key('x');

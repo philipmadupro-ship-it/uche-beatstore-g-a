@@ -61,6 +61,8 @@ test.afterAll(async ({ request }) => {
   // The org's contacts, members and scopes go with it (FK cascades).
   await rest(request, 'DELETE', `organizations?id=eq.${ORG}`);
   await rest(request, 'DELETE', `contacts?id=eq.${CRM_CONTACT}`);
+  // The seeded users are shared by every spec: leave no display name behind.
+  await rest(request, 'DELETE', `user_profiles?user_id=eq.${BUYER_ID}`);
 });
 
 test('1 · the directory: producer adds people; the roster is its artists; the CRM never mixes in', async ({ browser, baseURL }) => {

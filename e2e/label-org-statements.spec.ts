@@ -3,8 +3,8 @@
  * Postgres + PostgREST + RLS, LABEL_OS_ENABLED=true, migrations 179–181).
  *
  * Driven through the pages and the real routes — nothing a finance person does is seeded with the
- * service key. Seeded with the service key: the cast, the song, its circulated split sheet and an
- * advance (advances have no screen until LABEL-64).
+ * service key. Seeded with the service key: the cast and the song. The split sheet and
+ * the advance are made through the splits and advances routes.
  *
  *   1 · the owner opens a period on the statements page; the CSV is imported into it through the
  *       earnings page's period dropdown;
@@ -21,6 +21,7 @@
 import { test, expect, type APIRequestContext, type Browser, type BrowserContext } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { circulateSplitSheet } from './support/real-flows';
 import { ANON_KEY, ARTIST_A_ID, ARTIST_B_ID, BUYER_ID, PRODUCER_ID, SERVICE_KEY, sessionCookie, userToken } from '../scripts/local-db/jwt.mjs';
 
 const REST = 'http://127.0.0.1:54321/rest/v1';
@@ -113,14 +114,13 @@ test('1 · the owner opens a period on the page and imports into it', async ({ b
   const post = (data: unknown) => ctx.request.post(`/api/org/${ORG}/finance/payees`, { data });
   expect((await post({ party_id: P_NOVA, artist_contact_id: NOVA })).status()).toBe(201);
   expect((await post({ party_id: P_PAT, artist_contact_id: null })).status()).toBe(201);
-  const [sheet] = (await rest(request, 'POST', 'split_sheets', { org_id: ORG, track_id: SONG, kind: 'master', version: 1 })) as Row[];
-  await rest(request, 'POST', 'split_lines', [
-    { split_sheet_id: sheet.id, party_id: P_NOVA, role: 'master_owner', share: 70, position: 0 },
-    { split_sheet_id: sheet.id, party_id: P_PAT, role: 'master_owner', share: 30, position: 1 },
+  await circulateSplitSheet(ctx.request, ORG, SONG, 'master', [
+    { party_id: P_NOVA, role: 'master_owner', share: 70 },
+    { party_id: P_PAT, role: 'master_owner', share: 30 },
   ]);
-  await rest(request, 'PATCH', `split_sheets?id=eq.${sheet.id}`, { status: 'circulated', circulated_at: new Date().toISOString() });
   const payees = (await rest(request, 'GET', `payees?select=id,party_id&org_id=eq.${ORG}`)) as Row[];
-  await rest(request, 'POST', 'advances', { org_id: ORG, payee_id: payees.find((p) => p.party_id === P_NOVA)!.id, kind: 'recoupable', amount_minor: 5000, currency: 'USD', note: 'signing' });
+  const adv = await ctx.request.post(`/api/org/${ORG}/finance/advances`, { data: { payee_id: payees.find((p) => p.party_id === P_NOVA)!.id, kind: 'recoupable', amount_minor: '5000', note: 'signing' } });
+  expect(adv.status(), await adv.text()).toBe(201);
 
   const page = await ctx.newPage();
   await page.setViewportSize({ width: 1440, height: 900 });

@@ -85,7 +85,7 @@ const releaseRow = async (request: APIRequestContext) =>
   ((await rest(request, 'GET', `releases?select=store_listed,store_playback&id=eq.${ids.release}`)) as { store_listed: boolean; store_playback: string }[])[0];
 const publicStatus = async (request: APIRequestContext) => (await request.get(`/api/store/releases/${ids.release}`)).status();
 
-test.beforeAll(async ({ request }) => {
+test.beforeAll(async ({ request, browser, baseURL }) => {
   fs.mkdirSync(SHOTS, { recursive: true });
   await rest(request, 'POST', 'organizations', [
     { id: LAB, name: `Night Shift ${run}`, slug: LAB_SLUG, kind: 'label', created_by: PRODUCER_ID },
@@ -100,10 +100,17 @@ test.beforeAll(async ({ request }) => {
   const contacts = (await rest(request, 'GET', `contacts?select=id&org_id=eq.${ART}`)) as { id: string }[];
   ids.contact = contacts[0].id;
   await rest(request, 'PATCH', `contacts?id=eq.${ids.contact}`, { name: `Ari ${run}`, category: 'artist' });
-  // The connection: asked, then accepted (a label roster contact stands for the artist).
-  const conn = (await rest(request, 'POST', 'org_connections', { label_org_id: LAB, artist_org_id: ART, initiated_by: 'label', requested_by: PRODUCER_ID })) as { id: string }[];
+  // The connection: the label asks and the artist accepts, through the connection routes (a label roster contact stands for the artist).
   await rest(request, 'POST', 'contacts', { id: LAB_CONTACT, org_id: LAB, user_id: null, name: `Ari ${run}`, category: 'artist' });
-  await rest(request, 'PATCH', `org_connections?id=eq.${conn[0].id}`, { status: 'active', label_contact_id: LAB_CONTACT, accepted_by: ARTIST_A_ID, accepted_at: new Date().toISOString() });
+  const labelCtx = await as(browser, baseURL!, { id: PRODUCER_ID, email: 'producer@local.test' });
+  const asked = await labelCtx.request.post(`/api/org/${LAB}/connections`, { data: { slug: ART_SLUG, contact_id: LAB_CONTACT } });
+  expect(asked.status(), await asked.text()).toBe(202);
+  await labelCtx.close();
+  const conn = (await rest(request, 'GET', `org_connections?select=id&label_org_id=eq.${LAB}&artist_org_id=eq.${ART}`)) as { id: string }[];
+  const artistCtx = await as(browser, baseURL!, { id: ARTIST_A_ID, email: 'artist-a@local.test' });
+  const accepted = await artistCtx.request.post(`/api/org/${ART}/connections/${conn[0].id}/accept`);
+  expect(accepted.ok(), await accepted.text()).toBeTruthy();
+  await artistCtx.close();
   await rest(request, 'POST', 'tracks', { id: SONG, org_id: ART, user_id: null, created_by: ARTIST_A_ID, title: `Song ${run}`, type: 'song', song_stage: 'selected', audio_url: '/uploads/none.wav', duration_seconds: 6 });
 });
 

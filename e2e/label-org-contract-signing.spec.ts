@@ -459,7 +459,8 @@ test('10 · 390 px: no sideways scroll anywhere; the producer dashboard and /sto
 test('H1 · a member who links their OWN account to a party cannot confirm it or sign as it (real database)', async ({ browser, baseURL }) => {
   const ctx = await as(browser, baseURL!, owner.id, owner.email);
   // One party per account: free the owner's account from the label party first.
-  await rest(ctx.request, 'PATCH', `parties?id=eq.${P_LABEL}`, { user_id: null });
+  const unlinked = await ctx.request.patch(`/api/org/${ORG}/parties/${P_LABEL}`, { data: { user_id: null } });
+  expect(unlinked.status(), await unlinked.text()).toBe(200);
   const patched = await ctx.request.patch(`/api/org/${ORG}/parties/${P_KILO}`, { data: { user_id: PRODUCER_ID } });
   expect(patched.status(), await patched.text()).toBe(200);
   // The route stamped who made the link; the database trigger keeps the stamp honest.

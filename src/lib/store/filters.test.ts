@@ -13,7 +13,8 @@ function makeTrack(overrides: Partial<StoreTrack> = {}): StoreTrack {
     key: 'C',
     scale: 'minor',
     stems_status: 'none',
-    created_at: new Date().toISOString(),
+    // Fixed: a default of "now" makes any newest-first tiebreak depend on which millisecond each fixture was built in.
+    created_at: '2026-01-01T00:00:00.000Z',
     lease_price_usd: 30,
     exclusive_price_usd: 300,
     free_download_enabled: false,

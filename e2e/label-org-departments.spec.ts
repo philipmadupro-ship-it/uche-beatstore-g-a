@@ -90,6 +90,8 @@ test.beforeAll(async ({ request }) => {
 
 test.afterAll(async ({ request }) => {
   await rest(request, 'DELETE', `organizations?id=eq.${ORG}`);
+  // The seeded users are shared by every spec: leave no display name behind.
+  await rest(request, 'DELETE', `user_profiles?user_id=in.(${BUYER_ID},${ARTIST_A_ID})`);
 });
 
 test.describe('at 1440 and 390', () => {

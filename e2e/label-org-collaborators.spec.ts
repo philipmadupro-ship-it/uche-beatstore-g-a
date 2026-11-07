@@ -17,6 +17,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import { circulateSplitSheet } from './support/real-flows';
 import { SERVICE_KEY, PRODUCER_ID, BUYER_ID, sessionCookie } from '../scripts/local-db/jwt.mjs';
 
 const REST = 'http://127.0.0.1:54321/rest/v1';
@@ -33,8 +34,8 @@ const S1 = randomUUID();
 const S2 = randomUUID();
 const S3 = randomUUID();
 const PARTY2 = randomUUID();
-const SHEET = randomUUID();
-const LINE = randomUUID();
+let SHEET = '';
+let LINE = '';
 const BUYER_EMAIL = 'buyer@local.test';
 const shots = 'e2e-artifacts/LABEL-69';
 
@@ -52,7 +53,7 @@ async function rest(request: APIRequestContext, method: string, p: string, body?
   return res.status() === 204 ? null : res.json();
 }
 
-test.beforeAll(async ({ request }) => {
+test.beforeAll(async ({ request, browser, baseURL }) => {
   fs.mkdirSync(shots, { recursive: true });
   await rest(request, 'DELETE', `org_members?user_id=eq.${BUYER_ID}`);
   await rest(request, 'DELETE', `project_members?user_id=eq.${BUYER_ID}`);
@@ -82,9 +83,13 @@ test.beforeAll(async ({ request }) => {
   // Org TWO: the collaborator is already on P3 with their own party and a circulated split line to acknowledge.
   await rest(request, 'POST', 'project_members', { org_id: ORG2, project_id: P3, user_id: BUYER_ID, role: 'contributor', allow_downloads: false, invited_by: PRODUCER_ID });
   await rest(request, 'POST', 'parties', { id: PARTY2, org_id: ORG2, kind: 'person', display_name: 'Rap Buyer', user_id: BUYER_ID, created_by: PRODUCER_ID });
-  await rest(request, 'POST', 'split_sheets', { id: SHEET, org_id: ORG2, track_id: S3, kind: 'master', version: 1, status: 'draft', created_by: PRODUCER_ID });
-  await rest(request, 'POST', 'split_lines', { id: LINE, split_sheet_id: SHEET, org_id: ORG2, track_id: S3, party_id: PARTY2, role: 'master_owner', share: 100, position: 0 });
-  await rest(request, 'PATCH', `split_sheets?id=eq.${SHEET}`, { status: 'circulated', circulated_by: PRODUCER_ID, circulated_at: new Date().toISOString() });
+  // The sheet is started and circulated through the splits routes, as the label's owner does it.
+  const ctx = await browser.newContext();
+  const oc = sessionCookie(PRODUCER_ID, 'producer@local.test');
+  await ctx.addCookies([{ name: oc.name, value: oc.value, url: baseURL! }]);
+  SHEET = await circulateSplitSheet(ctx.request, ORG2, S3, 'master', [{ party_id: PARTY2, role: 'master_owner', share: 100 }]);
+  await ctx.close();
+  LINE = String(((await rest(request, 'GET', `split_lines?select=id&split_sheet_id=eq.${SHEET}`)) as { id: string }[])[0].id);
 });
 
 test.afterAll(async ({ request }) => {

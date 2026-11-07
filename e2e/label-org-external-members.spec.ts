@@ -85,6 +85,8 @@ const members = async (request: APIRequestContext) =>
   }[];
 
 test.beforeAll(async ({ request }) => {
+  // The members panel names a person by display name when they have one and by email when not; this spec drives the latter.
+  await rest(request, 'DELETE', `user_profiles?user_id=eq.${BUYER_ID}`);
   await rest(request, 'DELETE', `org_members?user_id=eq.${BUYER_ID}`);
   await rest(request, 'DELETE', `project_members?user_id=eq.${BUYER_ID}`);
   fs.mkdirSync(uploadsDir, { recursive: true });
