@@ -201,6 +201,6 @@ export function buyerPlaylistMembership(
  * 80-character limit `buyer_playlists.name` enforces.
  */
 export function playlistNameFromTrack(title: string | null | undefined): string {
-  const base = title?.trim() || 'My playlist';
+  const base = title?.trim() || 'My project';
   return base.slice(0, 80);
 }

@@ -8,6 +8,8 @@ import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { emailShell, emailHeading, escapeHtml } from '@/lib/email/templates';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
+import { sessionBuyerEmail } from '@/lib/store/buyer-purchases';
+import { isMissingOfferVerifiedColumn, resolveOfferIdentity } from '@/lib/store/offer-identity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -53,6 +55,12 @@ export async function GET() {
  *
  * Body: { track_id, buyer_email, offered_price_usd, message? }
  *
+ * `buyer_email` is a claim, not proof. With a Supabase session the email comes
+ * from the session and the body's is ignored (the offer is stored verified);
+ * without one the claim is kept so the producer can reply, but the offer is
+ * stored unverified and never shows in anyone's "My beats" (mig 139,
+ * lib/store/offer-identity.ts).
+ *
  * Flow:
  *   1. Resolve the track + seller (service-role; the track must be store-listed).
  *   2. Insert a buyer_offers row (mig 068).
@@ -82,13 +90,18 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid offer' }, { status: 400 });
     }
-    const { track_id, buyer_email, offered_price_usd, message } = parsed.data;
+    const { track_id, offered_price_usd, message } = parsed.data;
 
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ ok: true, persisted: false });
     }
 
     const admin = createServiceClient();
+
+    // Who is really asking: the session's email when there is one.
+    const auth = await requireUser();
+    const sessionEmail = auth.ok ? await sessionBuyerEmail(admin, auth.userId) : null;
+    const { email: buyer_email, verified } = resolveOfferIdentity(sessionEmail, parsed.data.buyer_email);
 
     // Resolve track + seller. Must be store-listed to accept offers.
     const { data: track } = await admin
@@ -104,19 +117,26 @@ export async function POST(req: NextRequest) {
     const trackTitle = offerTrack.title;
 
     // 1. Persist the offer.
-    const { data: offer, error: offerErr } = await admin
+    const offerRow = {
+      seller_user_id: sellerId,
+      track_id,
+      track_title: trackTitle,
+      buyer_email,
+      offered_price_usd,
+      message: message?.trim() || null,
+    };
+    let { data: offer, error: offerErr } = await admin
       .from('buyer_offers')
-      .insert({
-        seller_user_id: sellerId,
-        track_id,
-        track_title: trackTitle,
-        buyer_email: buyer_email.trim().toLowerCase(),
-        offered_price_usd,
-        message: message?.trim() || null,
-      })
+      .insert({ ...offerRow, buyer_email_verified: verified })
       .select('id')
       .single();
-    if (offerErr) throw offerErr;
+    if (offerErr && isMissingOfferVerifiedColumn(offerErr)) {
+      // Migration 139 not applied: the offer still reaches the producer, and
+      // without the column "My beats" shows no offers at all (fail closed).
+      log.warn('buyer_offers.buyer_email_verified missing — apply migration 139');
+      ({ data: offer, error: offerErr } = await admin.from('buyer_offers').insert(offerRow).select('id').single());
+    }
+    if (offerErr || !offer) throw offerErr ?? new Error('offer insert returned no row');
 
     const priceLabel = `$${offered_price_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
@@ -125,8 +145,8 @@ export async function POST(req: NextRequest) {
       user_id: sellerId,
       kind: 'buyer_offer',
       title: `New offer — ${trackTitle} (${priceLabel})`,
-      body: `From ${buyer_email}${message ? ` · "${message.slice(0, 80)}"` : ''}`,
-      data: { offer_id: offer.id, track_id, buyer_email, offered_price_usd },
+      body: `From ${buyer_email}${verified ? '' : ' (unverified)'}${message ? ` · "${message.slice(0, 80)}"` : ''}`,
+      data: { offer_id: offer.id, track_id, buyer_email, buyer_email_verified: verified, offered_price_usd },
     }).then(({ error }) => { if (error) log.warn('offer notification insert failed', { error: error.message }); });
 
     // 3. Best-effort email to the producer so they can reply directly.
@@ -165,7 +185,7 @@ export async function POST(req: NextRequest) {
       log.warn('offer email failed', { error: errorMessage(mailErr) });
     }
 
-    return NextResponse.json({ ok: true, persisted: true });
+    return NextResponse.json({ ok: true, persisted: true, verified });
   } catch (err) {
     return publicError(err);
   }

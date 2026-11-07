@@ -163,3 +163,42 @@ export function isRetriableStatus(status: number): boolean {
   if (status === 408 || status === 429) return true;
   return status >= 500;
 }
+
+/**
+ * Part URLs are signed for 15 minutes (`lib/storage/multipart.ts`), and the
+ * whole file's parts are signed up front in one request. A long upload — a
+ * big WAV on a slow link, or one that sat in the queue — reaches its later
+ * parts after their URLs have died. Treat a cached URL as stale well before
+ * the bucket does, so a part never starts a PUT that expires mid-flight.
+ */
+export const PRESIGNED_PART_TTL_MS = 15 * 60 * 1000;
+export const PRESIGNED_PART_REUSE_MS = 10 * 60 * 1000;
+
+export function isPresignedUrlFresh(signedAt: number, now: number): boolean {
+  return now - signedAt < PRESIGNED_PART_REUSE_MS;
+}
+
+/**
+ * A direct PUT that failed against a URL taken from the up-front batch gets
+ * one immediate retry with a freshly signed URL. An expired signature answers
+ * 403, which `isRetriableStatus` rightly calls permanent — so without this a
+ * stale URL ended the whole upload instead of costing one signing request.
+ * A URL signed for this very attempt is not re-signed: its failure is real.
+ */
+export function shouldResignPart(opts: { fromBatch: boolean; status: number }): boolean {
+  if (!opts.fromBatch) return false;
+  return opts.status === 0 || (opts.status >= 400 && opts.status < 600);
+}
+
+/**
+ * What went wrong with a part, in words that identify the cause without
+ * leaking anything: the HTTP status, plus the `<Code>` an S3-compatible store
+ * puts in its XML error body (`BadDigest`, `SignatureDoesNotMatch`,
+ * `EntityTooLarge`...). Status 0 means the browser never saw a response (offline,
+ * or a response without CORS headers, which looks identical).
+ */
+export function describePartFailure(status: number, body?: string | null, fallback?: string): string {
+  const code = body ? /<Code>\s*([A-Za-z0-9]{1,64})\s*<\/Code>/.exec(body)?.[1] : undefined;
+  if (status === 0) return `no response (status 0)${fallback && fallback !== 'network error' ? `: ${fallback}` : ''}`;
+  return `HTTP ${status}${code ? ` ${code}` : ''}`;
+}
