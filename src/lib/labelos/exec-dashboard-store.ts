@@ -33,12 +33,16 @@ type SongRow = { id: string; title: string | null; type: string | null; song_sta
 
 async function readSongs(access: OrgAccessOk, scoped: string[] | null): Promise<{ all: SongRow[]; visible: SongRow[] }> {
   const { admin, orgId } = access;
-  if (scoped !== null && scoped.length === 0) return { all: [], visible: [] };
-  const projects = scoped ?? (await pageAll<{ id: string }>((from, to) => admin.from('projects').select('id').eq('org_id', orgId).order('id').range(from, to), 'project read')).map((p) => p.id);
-  if (projects.length === 0) return { all: [], visible: [] };
-  const placements = await inChunks<{ track_id: string }>(projects, (part, from, to) => admin.from('project_tracks').select('track_id').in('project_id', part).order('project_id').order('track_id').range(from, to), 'project track read');
-  const ids = [...new Set(placements.map((p) => p.track_id))];
-  const tracks = await inChunks<SongRow>(ids, (part, from, to) => admin.from('tracks').select('id, title, type, song_stage').in('id', part).eq('org_id', orgId).order('id').range(from, to), 'track read');
+  let tracks: SongRow[];
+  if (scoped === null) {
+    // A whole-organization reader counts every song of the org, including one that sits in no project yet.
+    tracks = await pageAll<SongRow>((from, to) => admin.from('tracks').select('id, title, type, song_stage').eq('org_id', orgId).eq('type', 'song').not('song_stage', 'is', null).order('id').range(from, to), 'track read');
+  } else {
+    if (scoped.length === 0) return { all: [], visible: [] };
+    const placements = await inChunks<{ track_id: string }>(scoped, (part, from, to) => admin.from('project_tracks').select('track_id').in('project_id', part).order('project_id').order('track_id').range(from, to), 'project track read');
+    const ids = [...new Set(placements.map((p) => p.track_id))];
+    tracks = await inChunks<SongRow>(ids, (part, from, to) => admin.from('tracks').select('id, title, type, song_stage').in('id', part).eq('org_id', orgId).order('id').range(from, to), 'track read');
+  }
   const songs = tracks.filter(isWorkspaceSong);
   const facts = new Map<string, OrgTrackFacts>();
   for (const part of await Promise.all(chunks(songs.map((t) => t.id)).map((c) => orgTrackFacts(admin, orgId, c)))) for (const [id, f] of part) facts.set(id, f);

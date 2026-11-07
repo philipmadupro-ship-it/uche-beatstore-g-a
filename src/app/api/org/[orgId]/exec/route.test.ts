@@ -14,6 +14,8 @@ import { memoryAdmin, type MemoryDb } from '@/lib/labelos/mocks/memory-db';
 
 const L = '10000000-0000-4000-8000-000000000001';
 const L2 = '10000000-0000-4000-8000-000000000002';
+const AO = '10000000-0000-4000-8000-0000000000a0'; // an artist-kind org
+const PO = '10000000-0000-4000-8000-0000000000b0'; // a producer-kind org
 const u = (n: number) => `20000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const OWN = u(1);
 const EXEC = u(2);
@@ -22,6 +24,8 @@ const FIN = u(4);
 const AR = u(5);
 const ART = u(6);
 const X = u(7);
+const AOWN = u(8);
+const POWN = u(9);
 const C1 = '30000000-0000-4000-8000-0000000000c1';
 const C2 = '30000000-0000-4000-8000-0000000000c2';
 const LP1 = '40000000-0000-4000-8000-0000000000a1';
@@ -30,6 +34,7 @@ const t = (n: number) => `50000000-0000-4000-8000-${String(n).padStart(12, '0')}
 const S1 = t(1);
 const S2 = t(2);
 const S3 = t(3);
+const S4 = t(4); // in no project
 const R1 = '60000000-0000-4000-8000-000000000001';
 const R2 = '60000000-0000-4000-8000-000000000002';
 
@@ -95,7 +100,7 @@ beforeEach(() => {
   auditFails = false;
   db = {
     tables: {
-      organizations: [{ id: L, kind: 'label', slug: 'label-one', deleted_at: null }, { id: L2, kind: 'label', slug: 'label-two', deleted_at: null }],
+      organizations: [{ id: L, kind: 'label', slug: 'label-one', deleted_at: null }, { id: L2, kind: 'label', slug: 'label-two', deleted_at: null }, { id: AO, kind: 'artist', slug: 'artist-org', deleted_at: null }, { id: PO, kind: 'producer', slug: 'prod-org', deleted_at: null }],
       org_members: [
         member(OWN, 'owner'),
         member(EXEC, 'member', ['executive']),
@@ -104,6 +109,8 @@ beforeEach(() => {
         member(AR, 'member', ['a_and_r']),
         member(ART, 'artist'),
         member(X, 'owner', [], 'org', L2),
+        member(AOWN, 'owner', [], 'org', AO),
+        member(POWN, 'owner', [], 'org', PO),
       ],
       member_artist_scopes: [{ org_id: L, user_id: EXN, contact_id: C1 }],
       contacts: [
@@ -120,7 +127,7 @@ beforeEach(() => {
         { project_id: LP1, track_id: S3, position: 1 },
         { project_id: LP2, track_id: S2, position: 0 },
       ],
-      tracks: [song(S1, 'Midnight', 'selected'), song(S3, 'Draft', 'inbox'), song(S2, 'Dawn', 'selected')],
+      tracks: [song(S1, 'Midnight', 'selected'), song(S3, 'Draft', 'inbox'), song(S2, 'Dawn', 'selected'), song(S4, 'Loose', 'inbox')],
       tasks: [
         { id: t(80), org_id: L, title: 'Secret plan', notes: 'do not leak', due_at: '2026-01-01T00:00:00Z', done_at: null, assignee_id: FIN, created_by: OWN },
         { id: t(81), org_id: L, title: 'Pitch', notes: null, due_at: '2999-01-01T00:00:00Z', done_at: null, assignee_id: AR, created_by: OWN },
@@ -152,8 +159,19 @@ describe('GET /api/org/[orgId]/exec', () => {
     expect((await get(OWN, { org: L2 })).status).toBeGreaterThanOrEqual(403);
   });
 
-  it('is closed to people without exec.read and to a roster artist', async () => {
-    for (const who of [FIN, AR, ART]) expect((await get(who)).status, who).toBeGreaterThanOrEqual(403);
+  it('is 404, like the page, for people without exec.read and for a roster artist (JSON and CSV)', async () => {
+    for (const who of [FIN, AR, ART]) {
+      expect((await get(who)).status, who).toBe(404);
+      expect((await get(who, { query: '?format=csv' })).status, who).toBe(404);
+    }
+  });
+
+  it('is 404 in an artist-kind or producer-kind org even for its owner (JSON and CSV), with no event', async () => {
+    for (const [who, org] of [[AOWN, AO], [POWN, PO]] as const) {
+      expect((await get(who, { org })).status, org).toBe(404);
+      expect((await get(who, { org, query: '?format=csv' })).status, org).toBe(404);
+    }
+    expect(events()).toHaveLength(0);
   });
 
   it('answers a whole-organization executive with every section', async () => {
@@ -161,9 +179,10 @@ describe('GET /api/org/[orgId]/exec', () => {
     expect(res.status).toBe(200);
     const v = await res.json();
     expect(v.scoped).toBe(false);
-    expect(Object.fromEntries(v.pipeline.map((p: { stage: string; count: number }) => [p.stage, p.count]))).toMatchObject({ inbox: 1, selected: 2 });
+    expect(Object.fromEntries(v.pipeline.map((p: { stage: string; count: number }) => [p.stage, p.count]))).toMatchObject({ inbox: 2, selected: 2 }); // S4 sits in no project and is still counted
     // Counts only: a finished-only executive gets the inbox count but no title of the demo anywhere.
     expect(JSON.stringify(v)).not.toContain('Draft');
+    expect(JSON.stringify(v)).not.toContain('Loose');
     expect(v).not.toHaveProperty('restricted');
     expect(v.months.map((m: { month: string; total: number }) => [m.month, m.total])).toEqual([['2026-04', 1], ['2026-05', 1]]);
     expect(v.blocked.map((b: { title: string }) => b.title)).toEqual(['Nova EP']);
@@ -225,7 +244,7 @@ describe('GET /api/org/[orgId]/exec', () => {
     });
 
     it('a viewer without exec.read gets no file and no event', async () => {
-      expect((await get(FIN, { query: '?format=csv' })).status).toBeGreaterThanOrEqual(403);
+      expect((await get(FIN, { query: '?format=csv' })).status).toBe(404);
       expect(events()).toHaveLength(0);
     });
 

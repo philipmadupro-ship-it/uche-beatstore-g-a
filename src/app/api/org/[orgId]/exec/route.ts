@@ -1,7 +1,7 @@
 /**
  * GET /api/org/[orgId]/exec[?format=csv] — the executive dashboard (LABEL-67).
- * `exec.read` in an org licensed for the executive module (otherwise 404, like any unlicensed module); a
- * roster artist never holds it. Read only, no audio. What is in the answer follows the caller: songs and
+ * `exec.read` in a LABEL org licensed for the executive module, never a roster artist: every other caller is 404,
+ * the same predicate as the page (`pageAllowed('exec')`). Read only, no audio. What is in the answer follows the caller: songs and
  * releases inside their artist scope and D4, and money / top songs / task load only for a whole-organization
  * reader (money also needs `finance.read`); a withheld section is named in `withheld`.
  *
@@ -16,6 +16,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
 import { execCsv, execFileName } from '@/lib/labelos/exec-dashboard';
+import { pageAllowed } from '@/lib/labelos/role-view';
 import { loadExecDashboard } from '@/lib/labelos/exec-dashboard-store';
 import { rateLimitDurable } from '@/lib/security/rate-limit';
 
@@ -32,9 +33,11 @@ const json = (status: number, body: Record<string, unknown>) => NextResponse.jso
 export async function GET(req: NextRequest, { params }: Params) {
   const { orgId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'The executive dashboard needs Supabase.' });
-  const access = await requireOrgModule(orgId, 'executive', 'exec.read');
+  const access = await requireOrgModule(orgId, 'executive');
   if (!access.ok) return access.res;
-  if (access.role === 'artist') return json(403, { error: 'Not allowed' });
+  // The page's own rule (label org, not a roster artist, exec.read, module licensed) — one 404 for every refusal: an owner of an artist or producer org
+  // holds exec.read too, and must not reach what the page 404s.
+  if (!pageAllowed('exec', { kind: access.orgKind, role: access.role, capabilities: access.capabilities, modules: access.entitlements?.modules })) return json(404, { error: 'Not found' });
 
   const format = req.nextUrl.searchParams.get('format') ?? 'json';
   if (format !== 'json' && format !== 'csv') return json(400, { error: 'format must be json or csv', field: 'format' });

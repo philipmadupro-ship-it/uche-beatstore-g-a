@@ -22,6 +22,7 @@ const NOVA = randomUUID();
 const NOVA_INBOX = randomUUID();
 const SONG_IN = randomUUID();
 const SONG_SEL = randomUUID();
+const SONG_LOOSE = randomUUID(); // in no project: a whole-org reader still counts it
 const RELEASE = randomUUID();
 const RELEASE_TITLE = `=Autumn ${run}`; // a leading "=" proves the CSV guard on a real row
 
@@ -72,6 +73,7 @@ test.beforeAll(async ({ request }) => {
   await rest(request, 'POST', 'projects', { id: NOVA_INBOX, org_id: ORG, user_id: null, name: `Inbox · Nova ${run}`, inbox_for_contact_id: NOVA });
   await rest(request, 'POST', 'tracks', [
     { id: SONG_IN, org_id: ORG, user_id: null, created_by: PRODUCER_ID, title: 'Midnight', type: 'song', song_stage: 'inbox', audio_url: `/uploads/labelos-e2e-${SONG_IN}.mp3` },
+    { id: SONG_LOOSE, org_id: ORG, user_id: null, created_by: PRODUCER_ID, title: 'Loose end', type: 'song', song_stage: 'inbox', audio_url: `/uploads/labelos-e2e-${SONG_LOOSE}.mp3` },
     { id: SONG_SEL, org_id: ORG, user_id: null, created_by: PRODUCER_ID, title: 'Dusk', type: 'song', song_stage: 'selected', audio_url: `/uploads/labelos-e2e-${SONG_SEL}.mp3` },
   ]);
   await rest(request, 'POST', 'project_tracks', [
@@ -103,8 +105,9 @@ for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', wid
     await expect(page.getByRole('heading', { name: 'Executive' })).toBeVisible();
     // Pipeline counts every song in scope; the inbox demo is a number here, never a title (D4 stays on top songs).
     await expect(page.locator('[data-stage="selected"] [data-testid="pipeline-count"]')).toHaveText('1');
-    await expect(page.locator('[data-stage="inbox"] [data-testid="pipeline-count"]')).toHaveText('1');
+    await expect(page.locator('[data-stage="inbox"] [data-testid="pipeline-count"]')).toHaveText('2');
     await expect(page.getByTestId('exec-dashboard')).not.toContainText('Midnight');
+    await expect(page.getByTestId('exec-dashboard')).not.toContainText('Loose end');
     // Releases by month and the blocked list carry the draft release (an unfinished release is blocked).
     await expect(page.locator('[data-month="2026-12"] [data-testid="month-total"]')).toHaveText('1');
     await expect(page.getByTestId('blocked-row').filter({ hasText: RELEASE_TITLE })).toBeVisible();
@@ -131,9 +134,9 @@ test('2 · people without exec.read get a 404 page and a refused route', async (
     const res = await page.goto(`/o/${SLUG}/exec`);
     expect(res?.status(), who.email).toBe(404);
     const api = await ctx.request.get(`/api/org/${ORG}/exec`);
-    expect(api.status(), who.email).toBeGreaterThanOrEqual(403);
+    expect(api.status(), who.email).toBe(404);
     const csv = await ctx.request.get(`/api/org/${ORG}/exec?format=csv`);
-    expect(csv.status(), who.email).toBeGreaterThanOrEqual(403);
+    expect(csv.status(), who.email).toBe(404);
     await ctx.close();
   }
   expect(await exportEvents(request)).toEqual([]);
@@ -163,6 +166,6 @@ test('4 · the owner reads it too', async ({ browser, baseURL }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/o/${SLUG}/exec`);
   await expect(page.getByTestId('exec-dashboard')).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator('[data-stage="inbox"] [data-testid="pipeline-count"]')).toHaveText('1');
+  await expect(page.locator('[data-stage="inbox"] [data-testid="pipeline-count"]')).toHaveText('2');
   await ctx.close();
 });
