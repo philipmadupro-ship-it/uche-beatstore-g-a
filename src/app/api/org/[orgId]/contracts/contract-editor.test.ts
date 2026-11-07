@@ -122,7 +122,7 @@ beforeEach(() => {
       project_contacts: [],
       releases: [],
       parties: [
-        { id: PL, org_id: L, display_name: 'Label L', legal_name: 'Label L Ltd', address: '1 Label Way', user_id: null, contact_id: null },
+        { id: PL, org_id: L, display_name: 'Label L', legal_name: 'Label L Ltd', address: '1 Label Way', user_id: null, contact_id: null, email: 'Legal@Label.test' },
         { id: PN, org_id: L, display_name: 'Nova', legal_name: 'Nova Okafor', address: '2 Road', user_id: ART, contact_id: C1, tax_id: 'SECRET-TAX', payment_instructions: 'SECRET-PAY' },
         { id: PX, org_id: L2, display_name: 'Outsider', legal_name: null, address: null, user_id: null, contact_id: null },
       ],
@@ -339,6 +339,8 @@ describe('POST send — the last edit', () => {
     const frozen = db.tables.contracts[0] as { sent_document_sha256: string; sent_document_ref: string; sent_snapshot: { title: string } };
     expect(frozen.sent_document_sha256).toBe(createHash('sha256').update(Buffer.from(storage.files.get(frozen.sent_document_ref)!)).digest('hex'));
     expect(frozen.sent_snapshot.title).toBe(c.title);
+    // Review G14: the address each signing link may go to is frozen with it (lower-cased; a party with none is absent).
+    expect((frozen.sent_snapshot as { signerEmails?: Record<string, string> }).signerEmails).toEqual({ [PL]: 'legal@label.test' });
     const ev = events('contract.sent')[0];
     expect(ev).toMatchObject({ audit: true, visibility: 'internal', subject_id: c.id });
     expect(ev.payload).toMatchObject({ version: 1, fields: ['advance', 'currency'], party_roles: ['label', 'artist'], clauses_changed: 0 });

@@ -33,7 +33,7 @@
  */
 import { test, expect, type APIRequestContext, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { ARTIST_A_ID, PRODUCER_ID, SERVICE_KEY, sessionCookie } from '../scripts/local-db/jwt.mjs';
 
 const REST = 'http://127.0.0.1:54321/rest/v1';
@@ -229,6 +229,16 @@ test('4 · Kilo, signed out, reads the contract and signs; the contract becomes 
   const text = await page.locator('body').innerText();
   expect(text).not.toContain('INTERNAL');
   await page.screenshot({ path: `${D}/sign-page-1440.png`, fullPage: true });
+
+  // Review G14: the signer can download the exact PDF whose fingerprint the page shows.
+  const href = await page.getByTestId('sign-download').getAttribute('href');
+  const pdf = await anon.request.get(`${baseURL}${href}`);
+  expect(pdf.status()).toBe(200);
+  expect(pdf.headers()['content-type']).toBe('application/pdf');
+  const bytes = await pdf.body();
+  expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+  const shown = (await page.locator('body').innerText()).match(/Document fingerprint \(SHA-256\):\s*([0-9a-f]{64})/)?.[1];
+  expect(createHash('sha256').update(bytes).digest('hex')).toBe(shown);
 
   await page.getByTestId('sign-name').fill(`Kilo Mensah ${run}`);
   await page.getByTestId('sign-draw-toggle').check();

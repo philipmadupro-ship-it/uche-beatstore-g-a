@@ -118,7 +118,8 @@ for (const width of [1440, 390]) {
       await field.press('Enter');
       await expect(page.getByRole('button', { name: new RegExp(`Organization: ${NAME} Records`) })).toBeVisible();
       await page.reload();
-      await expect(page.getByText(`${NAME} Records`).first()).toBeVisible();
+      // The switcher button, not getByText(): its visible name is `hidden lg:inline`, so a text match resolves to a span that is hidden at 390 px.
+      await expect(page.getByRole('button', { name: new RegExp(`Organization: ${NAME} Records`) })).toBeVisible();
       const [org] = await rest(page.request, 'GET', `organizations?id=eq.${ORG}&select=name,slug`);
       expect(org).toEqual({ name: `${NAME} Records`, slug: SLUG });
 

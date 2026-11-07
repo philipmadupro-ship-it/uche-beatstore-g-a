@@ -59,6 +59,13 @@ SELECT public.check_eq('moving org A leaves org B alone', (SELECT last_seen_at F
 SELECT public.check_eq('org A moved', (SELECT last_seen_at FROM public.org_overview_seen WHERE org_id = :LA AND user_id = :M), '2026-10-05T00:00:00Z'::timestamptz);
 RESET ROLE;
 
+-- A REPLAY of the backfill (db:migrate re-runs every file) after the member has visited must not move a mark
+-- backwards to the old user-level value: DO NOTHING, not DO UPDATE (review G11).
+-- The real file, not a copy of its statement, so a changed ON CONFLICT is caught.
+\ir ../../migrations/169_labelos_overview_seen_per_org.sql
+SELECT public.check_eq('a replayed backfill leaves a later mark where it is', (SELECT last_seen_at FROM public.org_overview_seen WHERE org_id = :LA AND user_id = :M), '2026-10-05T00:00:00Z'::timestamptz);
+SELECT public.check_eq('… and every other mark', (SELECT last_seen_at FROM public.org_overview_seen WHERE org_id = :LB AND user_id = :M), '2026-10-01T00:00:00Z'::timestamptz);
+
 -- The member M reads exactly their two rows, none of the owner's.
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claims', json_build_object('sub', 'a1690000-0000-4000-8000-000000000002', 'role', 'authenticated')::text, false);

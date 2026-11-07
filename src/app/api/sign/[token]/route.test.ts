@@ -210,6 +210,15 @@ describe('POST — signing through the link', () => {
     expect(stored).toHaveLength(0);
   });
 
+  it('a sign function that throws leaves no orphaned drawn image behind (review G14)', async () => {
+    const body = { version: 1, document_sha256: await shaOf(TOKEN_PN), name: 'Nova Okafor', drawing: PNG };
+    db.rpc = { ...db.rpc, labelos_audit_contract_sign: () => { throw new Error('network down'); } };
+    const res = await call('POST', TOKEN_PN, body);
+    expect(res.status).toBe(503);
+    expect(stored).toHaveLength(1);
+    expect(removed).toEqual(stored);
+  });
+
   it('renaming a party after the contract was sent changes nothing the signer sees or signed: the frozen text, the same hash, still valid', async () => {
     await sign(TOKEN_PN);
     db.tables.parties[1].legal_name = 'Nova Okafor-Smith';

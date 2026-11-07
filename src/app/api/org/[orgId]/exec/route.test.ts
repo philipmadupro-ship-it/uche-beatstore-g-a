@@ -42,6 +42,7 @@ let current: string | null = null;
 let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
 let auditFails = false;
+let boardMore = 0;
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({
@@ -72,7 +73,7 @@ vi.mock('@/lib/labelos/release-board-store', () => ({
       rel(R1, 'Nova EP', C1, 'Nova', '2026-04-10', [gate('masters', 'blocked'), gate('legal', 'awaiting_approval')]),
       rel(R2, '=Kilo Tape', C2, 'Kilo', '2026-05-02', [gate('artwork', 'awaiting_approval')]),
     ];
-    return { schemaReady: true, releases: access.artistScope === null ? all : all.filter((r) => access.artistScope!.has(r.artistId)), more: 0 };
+    return { schemaReady: true, releases: access.artistScope === null ? all : all.filter((r) => access.artistScope!.has(r.artistId)), more: boardMore };
   },
 }));
 vi.mock('@/lib/labelos/finance-dashboard-store', () => ({
@@ -98,6 +99,7 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'eyJtest';
   current = null;
   auditFails = false;
+  boardMore = 0;
   db = {
     tables: {
       organizations: [{ id: L, kind: 'label', slug: 'label-one', deleted_at: null }, { id: L2, kind: 'label', slug: 'label-two', deleted_at: null }, { id: AO, kind: 'artist', slug: 'artist-org', deleted_at: null }, { id: PO, kind: 'producer', slug: 'prod-org', deleted_at: null }],
@@ -191,6 +193,18 @@ describe('GET /api/org/[orgId]/exec', () => {
     expect(v.topSongs.map((s: { title: string }) => s.title)).toEqual(['Dawn', 'Midnight']); // 'Draft' is an inbox demo: D4 keeps it off the executive's list
     expect(v.withheld).toEqual([]);
     expect(v.tasks).toEqual([{ department: 'A&R', open: 1, overdue: 0 }, { department: 'Finance', open: 1, overdue: 1 }]);
+  });
+
+  it('says how many releases the board cut off instead of presenting the newest hundred as the whole roster', async () => {
+    boardMore = 7;
+    const v = await (await get(EXEC)).json();
+    expect(v.moreReleases).toBe(7);
+    const csv = await (await get(EXEC, { query: '?format=csv' })).text();
+    expect(csv).toContain('"releases_not_counted"');
+    expect(csv).toMatch(/"releases_not_counted",[^\r]*,"?7"?,/);
+    boardMore = 0;
+    expect((await (await get(EXEC)).json()).moreReleases).toBe(0);
+    expect(await (await get(EXEC, { query: '?format=csv' })).text()).not.toContain('releases_not_counted');
   });
 
   it('never carries a task title, note or person into the answer', async () => {

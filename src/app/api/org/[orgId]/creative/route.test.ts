@@ -200,6 +200,16 @@ describe('the optional creative gate', () => {
     expect(w.canApprove).toBe(true);
   });
 
+  it('says how many draft releases the workspace did not work out (it shows the newest fifty), never a silent undercount', async () => {
+    const extra = Array.from({ length: 60 }, (_, i) => release(`60000000-0000-4000-8000-${String(100 + i).padStart(12, '0')}`, LP1, C1, `Extra ${i}`, `2026-09-01T10:${String(i % 60).padStart(2, '0')}:00Z`));
+    db.tables.releases.push(...extra);
+    const w = await body(OWN);
+    expect(w.releases).toHaveLength(50);
+    expect(w.moreReleases).toBe(12); // 62 drafts of the label (Autumn, Sunrise, 60 extra) minus the 50 shown
+    db = seed();
+    expect((await body(OWN)).moreReleases).toBe(0);
+  });
+
   it('a malformed or misspelt setting reads as off', async () => {
     for (const v of [true, 'ON', 'yes', 1, null]) {
       db = seed({ creative_gate: v });

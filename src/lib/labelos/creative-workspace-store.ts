@@ -61,7 +61,7 @@ export async function loadCreativeWorkspace(access: OrgAccessOk): Promise<Creati
   ).filter((c) => isRosterContact(c, NO_WORKSPACE));
   const contactIds = contacts.map((c) => c.id);
   if (contactIds.length === 0) {
-    return { ...base, schemaReady: true, artists: [], releases: [], restricted: 0, totals: workspaceTotals([], []) };
+    return { ...base, schemaReady: true, artists: [], releases: [], moreReleases: 0, restricted: 0, totals: workspaceTotals([], []) };
   }
 
   // 2. Direction + references (migration 152; before it the workspace still shows songs and releases).
@@ -204,5 +204,5 @@ export async function loadCreativeWorkspace(access: OrgAccessOk): Promise<Creati
     };
   });
   const artists = buildArtistCards(inputs);
-  return { ...base, schemaReady, artists, releases: sortedReleases, restricted, totals: workspaceTotals(artists, sortedReleases) };
+  return { ...base, schemaReady, artists, releases: sortedReleases, moreReleases: Math.max(0, releaseRows.length - drafts.length), restricted, totals: workspaceTotals(artists, sortedReleases) };
 }

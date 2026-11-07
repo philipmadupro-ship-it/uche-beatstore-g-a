@@ -75,6 +75,11 @@ export function ExecDashboardView({ orgId, slug }: { orgId: string; slug: string
           <Download size={14} aria-hidden /> Export CSV
         </a>
       </div>
+      {data.moreReleases > 0 && (
+        <p className={NOTICE} data-testid="exec-more-releases">
+          {data.moreReleases} older {data.moreReleases === 1 ? 'release is' : 'releases are'} not in the release figures below: they cover the newest 100.
+        </p>
+      )}
       {!data.schemaReady && <p className={NOTICE} data-testid="exec-not-ready">Releases are not set up yet: the release database migrations are not applied.</p>}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

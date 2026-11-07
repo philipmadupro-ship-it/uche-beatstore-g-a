@@ -27,7 +27,7 @@ import { auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { scopeAllowsContact } from '@/lib/labelos/artist-scope';
 import { hashSignToken, newSignToken, signLinkExpiry, signLinkPath } from '@/lib/labelos/contract-signing';
 import { sendSignLinkEmail, signLinkUrl, usableEmail } from '@/lib/labelos/contract-signing-email';
-import { SIGNING_NOT_READY, SigningNotReadyError, assertSigningSchema, isMissingSigning } from '@/lib/labelos/contract-signing-store';
+import { SIGNING_NOT_READY, SigningNotReadyError, assertSigningSchema, isMissingSigning, readFrozen } from '@/lib/labelos/contract-signing-store';
 import { loadContractFor } from '@/lib/labelos/contracts-route';
 import { CONTRACTS_NOT_READY, ContractsNotReadyError } from '@/lib/labelos/contracts-store';
 
@@ -74,6 +74,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (partyRes.error) throw new Error(`party email: ${partyRes.error.message}`);
     const to = usableEmail((partyRes.data as { email: string | null } | null)?.email);
     if (!to) return json(409, { error: 'This party has no email address on file, so there is nowhere to send their signing link. Add one to the party first.', code: 'no_party_email' });
+    // The link goes only to the address that was on file when the contract was SENT (frozen with it). An address edited
+    // since then is refused: whoever edits a party's email must not be able to send its link to themselves.
+    const frozen = await readFrozen(access.admin, access.orgId, loaded.row.id);
+    const sentTo = frozen?.snapshot.signerEmails?.[partyId];
+    if (frozen?.snapshot.signerEmails && !sentTo) {
+      return json(409, { error: 'This party had no email address when the contract was sent, so a signing link cannot be sent to them. Supersede the contract with one that has it and send that.', code: 'party_email_changed' });
+    }
+    if (sentTo && sentTo !== to.toLowerCase()) {
+      return json(409, { error: 'This party’s email address has changed since the contract was sent. Supersede the contract and send the new one so every signer is checked against the address on file when it was sent.', code: 'party_email_changed' });
+    }
     const token = newSignToken();
     const expiresAt = signLinkExpiry();
     const { data, error } = await auditRpc(access.admin, 'contractLinkIssue', {
