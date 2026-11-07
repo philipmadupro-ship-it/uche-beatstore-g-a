@@ -116,7 +116,7 @@ export function artworkSizeProblems(info: ImageInfo | null, minPx: number = ARTW
   const size = `${info.width}×${info.height}`;
   if (info.width !== info.height) out.push({ code: 'artwork_not_square', message: `The artwork must be square; this one is ${size} px.` });
   if (Math.min(info.width, info.height) < minPx) out.push({ code: 'artwork_too_small', message: `The artwork must be at least ${minPx}×${minPx} px; this one is ${size} px.` });
-  if (info.color === 'rgba') out.push({ code: 'artwork_color', message: 'The artwork must not have transparency; export a PNG without an alpha channel, or a JPEG.' });
+  if (info.color === 'rgba') out.push({ code: 'artwork_color', message: 'The artwork must not have transparency. Flatten it onto a solid background and export a PNG without an alpha channel, or export a JPEG.' });
   else if (info.color !== 'rgb') out.push({ code: 'artwork_color', message: 'The artwork must be RGB (not greyscale, indexed or CMYK).' });
   return out;
 }

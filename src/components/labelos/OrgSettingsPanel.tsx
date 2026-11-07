@@ -77,7 +77,7 @@ function CreativeGateRow({ orgId }: { orgId: string }) {
 export function OrgSettingsPanel({ orgId }: { orgId: string }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [draft, setDraft] = useState<OrgSettingsView | null>(null);
-  const [days, setDays] = useState({ release: '', stalled: '' });
+  const [days, setDays] = useState({ release: '', stalled: '', px: '' });
   const [status, setStatus] = useState<'loading' | 'ready' | 'denied' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -85,7 +85,7 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
   const adopt = useCallback((body: Loaded) => {
     setLoaded(body);
     setDraft(body.settings);
-    setDays({ release: String(body.settings.attention_release_days), stalled: String(body.settings.attention_stalled_days) });
+    setDays({ release: String(body.settings.attention_release_days), stalled: String(body.settings.attention_stalled_days), px: String(body.settings.artwork_min_px) });
   }, []);
 
   useEffect(() => {
@@ -105,18 +105,20 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
   }, [orgId, adopt]);
 
   const daysValid = (v: string) => /^\d{1,3}$/.test(v) && Number(v) >= 1 && Number(v) <= 365;
+  const pxValid = (v: string) => /^\d{3,5}$/.test(v) && Number(v) >= 600 && Number(v) <= 10000;
   const next: OrgSettingsView | null = useMemo(() => {
     if (!draft) return null;
     return {
       ...draft,
       attention_release_days: daysValid(days.release) ? Number(days.release) : draft.attention_release_days,
       attention_stalled_days: daysValid(days.stalled) ? Number(days.stalled) : draft.attention_stalled_days,
+      artwork_min_px: pxValid(days.px) ? Number(days.px) : draft.artwork_min_px,
     };
   }, [draft, days]);
   const patch = loaded && next ? patchFromDraft(loaded.settings, next) : {};
   const dirty = Object.keys(patch).length > 0;
   const lockout = draft ? contractsLockout(draft) : false;
-  const invalid = !daysValid(days.release) || !daysValid(days.stalled) || lockout;
+  const invalid = !daysValid(days.release) || !daysValid(days.stalled) || !pxValid(days.px) || lockout;
 
   if (status === 'loading') return <p className="text-[11px] text-white/60" role="status">Loading settings…</p>;
   if (status === 'denied') return <p className="text-[11px] text-white/70" data-testid="settings-denied">Only the owner of this organization can change its settings.</p>;
@@ -192,6 +194,14 @@ export function OrgSettingsPanel({ orgId }: { orgId: string }) {
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Release target within (days)" inputMode="numeric" value={days.release} onChange={(e) => setDays({ ...days, release: e.target.value })} error={daysValid(days.release) ? undefined : 'Enter 1 to 365'} />
           <Field label="Song stalled for more than (days)" inputMode="numeric" value={days.stalled} onChange={(e) => setDays({ ...days, stalled: e.target.value })} error={daysValid(days.stalled) ? undefined : 'Enter 1 to 365'} />
+        </div>
+      </section>
+
+      <section className={CARD} aria-labelledby="artwork-h">
+        <h2 id="artwork-h" className={`${LABEL} mb-1`}>Cover art</h2>
+        <p className="mb-4 text-[11px] leading-relaxed text-white/60">The smallest side a release&apos;s artwork may have before its artwork gate passes. It must also be square, RGB and without transparency. Whole pixels, 600 to 10000; 3000 is the usual store minimum.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Minimum size (px)" inputMode="numeric" value={days.px} onChange={(e) => setDays({ ...days, px: e.target.value })} error={pxValid(days.px) ? undefined : 'Enter 600 to 10000'} />
         </div>
       </section>
 

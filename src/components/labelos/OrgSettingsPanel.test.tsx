@@ -13,7 +13,7 @@ const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const confirmToast = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/useToast', () => ({ toast, confirmToast }));
 
-const DEFAULTS = { legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, attention_release_days: 30, attention_stalled_days: 30, departments_off: [], contract_types: [] };
+const DEFAULTS = { legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, attention_release_days: 30, attention_stalled_days: 30, artwork_min_px: 3000, departments_off: [], contract_types: [] };
 let calls: { url: string; method: string; body: unknown }[];
 let getReply: { status: number; body: unknown };
 let patchReply: { status: number; body: unknown };
@@ -91,6 +91,17 @@ describe('OrgSettingsPanel', () => {
     fireEvent.click(save());
     await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
     expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ attention_release_days: 14 });
+  });
+
+  it('LABEL-76: the cover art minimum is a field; 599 blocks Save, 2400 sends only that key', async () => {
+    render(<OrgSettingsPanel orgId="o1" />);
+    await screen.findByTestId('org-settings');
+    fireEvent.change(screen.getByLabelText(/minimum size/i), { target: { value: '599' } });
+    expect((save() as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(/minimum size/i), { target: { value: '2400' } });
+    fireEvent.click(save());
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ artwork_min_px: 2400 });
   });
 
   it('shows the server’s words when the save is refused', async () => {
