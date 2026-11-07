@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { artworkSizeProblems, jpegHeaderMayFollow, readImageInfo, type ImageInfo } from './image-size';
 
-function png(width: number, height: number, colorType = 2): Uint8Array {
-  const b = new Uint8Array(33);
+/** A PNG chunk: length, type, data, (zeroed) CRC. */
+function chunk(type: string, data: number[] = []): number[] {
+  return [0, 0, 0, data.length, ...[...type].map((c) => c.charCodeAt(0)), ...data, 0, 0, 0, 0];
+}
+
+function png(width: number, height: number, colorType = 2, extra: number[] = []): Uint8Array {
+  const b = new Uint8Array(33 + extra.length);
+  b.set(extra, 33);
   b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
   new DataView(b.buffer).setUint32(16, width);
   new DataView(b.buffer).setUint32(20, height);
@@ -85,6 +91,21 @@ describe('LABEL-76 follow-ups', () => {
     expect(problems[0]).toMatchObject({ code: 'artwork_color' });
     expect(problems[0].message).toMatch(/transparency/i);
     expect(artworkSizeProblems(readImageInfo(png(3000, 3000, 2)))).toEqual([]);
+  });
+
+  it('a PNG with a tRNS chunk has transparency whatever its colour type (RGB, grey, palette)', () => {
+    for (const [type, data] of [[2, [0, 0, 0, 0, 0, 0]], [0, [0, 0]], [3, [0]]] as const) {
+      const info = readImageInfo(png(3000, 3000, type, [...chunk('gAMA', [0, 0, 0, 1]), ...chunk('tRNS', [...data])]));
+      const problems = artworkSizeProblems(info);
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toMatchObject({ code: 'artwork_color' });
+      expect(problems[0].message).toMatch(/transparency/i);
+    }
+  });
+
+  it('a tRNS after the image data is not a transparency chunk; other chunks leave a plain RGB PNG alone', () => {
+    expect(artworkSizeProblems(readImageInfo(png(3000, 3000, 2, [...chunk('gAMA', [0, 0, 0, 1]), ...chunk('IDAT', [1]), ...chunk('tRNS', [0, 0, 0, 0, 0, 0])])))).toEqual([]);
+    expect(artworkSizeProblems(readImageInfo(png(3000, 3000, 2, chunk('pHYs', [0, 0, 0, 0, 0, 0, 0, 0, 1]))))).toEqual([]);
   });
 
   it('a JPEG cut off inside a large segment asks for a longer read; a complete or non-JPEG head does not', () => {
