@@ -119,3 +119,18 @@ SELECT public.check_eq('an org past its grace is deleted', (SELECT count(*)::int
 SELECT public.check_eq('…and its events went with it', (SELECT count(*)::int FROM public.activity_events WHERE org_id = :L2), 0);
 UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
+
+-- ── 6. a console-created org's org.created is audit-class ────────────────
+
+\set OP '''a1950000-0000-4000-8000-0000000000f1'''
+INSERT INTO auth.users (id, email) VALUES (:OP, 'op195@local.test');
+INSERT INTO public.platform_admins (user_id, note) VALUES (:OP, 'check');
+SET ROLE service_role;
+SELECT public.labelos_platform_create_licensee(:OP, 'Console Label', 'console-label-195', 'label', '{}'::text[], NULL, NULL, '{"x":1}'::jsonb);
+RESET ROLE;
+SELECT public.check_eq('the console org’s org.created is an audit event',
+  (SELECT audit FROM public.activity_events WHERE verb = 'org.created' AND org_id = (SELECT id FROM public.organizations WHERE slug = 'console-label-195')), true);
+SELECT public.check_raises('…and refuses UPDATE',
+  $$UPDATE public.activity_events SET payload = '{}' WHERE verb = 'org.created' AND org_id = (SELECT id FROM public.organizations WHERE slug = 'console-label-195')$$, 'never changed');
+SELECT public.check_raises('…and DELETE while the org exists',
+  $$DELETE FROM public.activity_events WHERE verb = 'org.created' AND org_id = (SELECT id FROM public.organizations WHERE slug = 'console-label-195')$$, 'never deleted');

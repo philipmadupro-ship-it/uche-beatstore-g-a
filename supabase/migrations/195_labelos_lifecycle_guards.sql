@@ -21,6 +21,8 @@
 --     event row. The same two tests are now uncorrelated subqueries over the
 --     caller's own memberships, planned once (R-08). Same rows, same result;
 --     the scope disjuncts are 147's, unchanged.
+--  6. `labelos_platform_create_licensee` (170) inserts `org.created` with audit = true (the backlog makes it audit-class). Rows
+--     written before this stay non-audit (163 forbids promotion); the prune already skips them by verb.
 --  5. An organization row is deleted only when `deleted_at` is older than the
 --     30-day grace period (D10): audit history can then only be erased by the
 --     purge. Cascades from the organization's own children are unaffected (this
@@ -165,5 +167,65 @@ DROP TRIGGER IF EXISTS organizations_delete_after_grace ON public.organizations;
 CREATE TRIGGER organizations_delete_after_grace
   BEFORE DELETE ON public.organizations
   FOR EACH ROW EXECUTE FUNCTION public.organizations_delete_after_grace();
+
+-- ── 6. console-created orgs: org.created is audit-class ─────────────────
+-- Redefines 170's function (nothing after 170 defines it); only the org.created insert changes (audit = true).
+
+CREATE OR REPLACE FUNCTION public.labelos_platform_create_licensee(
+  p_actor uuid,
+  p_name text,
+  p_slug text,
+  p_kind text,
+  p_modules text[],
+  p_max_seats int,
+  p_max_artists int,
+  p_payload jsonb
+) RETURNS jsonb
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = public
+AS $fn$
+DECLARE
+  v_org public.organizations%ROWTYPE;
+BEGIN
+  IF p_actor IS NULL OR NOT EXISTS (SELECT 1 FROM public.platform_admins WHERE user_id = p_actor) THEN
+    RETURN jsonb_build_object('error', 'not_operator');
+  END IF;
+  IF p_kind IS NULL OR p_kind NOT IN ('artist', 'label') THEN
+    RAISE EXCEPTION 'a licensee is an artist or a label org' USING ERRCODE = '22023';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.organizations WHERE slug = p_slug) THEN
+    RETURN jsonb_build_object('error', 'slug_taken');
+  END IF;
+
+  -- created_by stays NULL: the operator is not a member, and 139's trigger
+  -- would otherwise give an artist org's own artist contact the operator's email.
+  BEGIN
+    INSERT INTO public.organizations (name, slug, kind, created_by)
+    VALUES (p_name, p_slug, p_kind, NULL)
+    RETURNING * INTO v_org;
+  EXCEPTION WHEN unique_violation THEN
+    RETURN jsonb_build_object('error', 'slug_taken');
+  END;
+
+  INSERT INTO public.org_entitlements (org_id, modules, max_seats, max_artists, setup_done, granted_by, granted_at)
+  VALUES (v_org.id, coalesce(p_modules, '{}'), p_max_seats, p_max_artists, false, p_actor, now());
+
+  -- org.created is audit-class since LABEL-75 (195): kept for the life of the org, never pruned.
+  INSERT INTO public.activity_events (org_id, actor_id, verb, subject_type, subject_id, payload, audit, visibility)
+  VALUES (v_org.id, p_actor, 'org.created', 'org', v_org.id,
+          jsonb_build_object('source', 'platform', 'kind', v_org.kind), true, 'internal');
+  PERFORM public.labelos_audit_insert(v_org.id, p_actor, 'org.entitlements_changed', 'org', v_org.id, p_payload);
+
+  RETURN jsonb_build_object('org', jsonb_build_object(
+    'id', v_org.id, 'name', v_org.name, 'slug', v_org.slug, 'kind', v_org.kind, 'created_at', v_org.created_at
+  ));
+END;
+$fn$;
+
+ALTER FUNCTION public.labelos_platform_create_licensee(uuid, text, text, text, text[], int, int, jsonb) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.labelos_platform_create_licensee(uuid, text, text, text, text[], int, int, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.labelos_platform_create_licensee(uuid, text, text, text, text[], int, int, jsonb) TO service_role;
 
 NOTIFY pgrst, 'reload schema';
