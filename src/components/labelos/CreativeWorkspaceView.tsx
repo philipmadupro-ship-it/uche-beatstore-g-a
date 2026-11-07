@@ -176,6 +176,11 @@ export function CreativeWorkspaceView({ orgId, orgSlug }: { orgId: string; orgSl
             ))}
           </ul>
         )}
+        {data.moreReleases > 0 && (
+          <p className="mt-3 text-[11px] text-white/40" data-testid="creative-more-releases">
+            {data.moreReleases} older draft {data.moreReleases === 1 ? 'release is' : 'releases are'} not counted here: the workspace covers the newest 50.
+          </p>
+        )}
         {data.restricted > 0 && (
           <p className="mt-3 text-[11px] text-white/40" data-testid="creative-restricted">
             {data.restricted} {data.restricted === 1 ? 'song is' : 'songs are'} still in development and not shown to your role.

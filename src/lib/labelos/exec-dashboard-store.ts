@@ -110,6 +110,7 @@ export async function loadExecDashboard(access: OrgAccessOk, now: Date = new Dat
   return {
     schemaReady: board.schemaReady,
     scoped: !whole,
+    moreReleases: board.more,
     pipeline: pipelineCounts(songs.all.map((s) => ({ stage: s.song_stage }))),
     months: releasesByMonth(board.releases),
     blocked: blockedReleases(board.releases),

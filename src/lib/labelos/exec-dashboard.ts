@@ -34,6 +34,8 @@ export type TopSong = { id: string; title: string; artistName: string | null; cu
 export type ExecView = {
   schemaReady: boolean;
   scoped: boolean;
+  /** Releases beyond the board's newest hundred: the release sections cover only those, and say so. */
+  moreReleases: number;
   pipeline: { stage: string; count: number }[];
   months: MonthRow[];
   blocked: BlockedRelease[];
@@ -157,6 +159,8 @@ export function topSongsByGross(
 /** One flat file: a `section` column tells the rows apart so a spreadsheet can filter. Every text cell is formula-guarded. */
 export function execCsv(v: ExecView): string {
   const rows: (string | number | null)[][] = [['section', 'name', 'detail', 'count', 'amount_minor', 'currency']];
+  // The release sections below cover the newest releases only; a file that hid that would read as the whole roster.
+  if (v.moreReleases > 0) rows.push(['releases_not_counted', 'Releases beyond the newest 100', 'not in the release sections', v.moreReleases, null, '']);
   for (const p of v.pipeline) rows.push(['pipeline', p.stage, '', p.count, null, '']);
   for (const m of v.months) rows.push(['releases_by_month', m.month, `ready ${m.ready}; in progress ${m.inProgress}; delivered ${m.delivered}`, m.total, null, '']);
   for (const b of v.blocked) rows.push(['blocked_release', b.title, [b.artistName, b.date, b.gates.join('/')].filter(Boolean).join(' · '), b.gates.length, null, '']);
