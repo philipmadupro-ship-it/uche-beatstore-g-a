@@ -1,6 +1,6 @@
 # Antigravity — Product Spec
 
-Single-producer beatstore. The product is two things in one app:
+Single-producer beatstore (plus, behind a switch and not yet live, a second product for labels and independent artists: see "Label OS" below). The beatstore is two things in one app:
 
 1. A **private dashboard** the producer uses to write, store, organise, and sell music.
 2. A **public storefront** buyers visit to discover, preview, and license that music — either one track at a time or as a whole project bundle.
@@ -81,6 +81,28 @@ Whatever the variant, the options the producer set are honoured on the page:
 - **Password / expiry / revocation** — enforced on the page, the stream and the download.
 - **Role** — commenters and editors get a "Leave feedback" / "Comment & edit" entry into the collaboration view (region-pinned comments, the editor); viewers do not.
 - **For sale** — Buy buttons on the client variant only when `sales_enabled`.
+
+### Label OS (`/o/<org>/…`, behind a switch, not live)
+
+A second product built on the same app, **off unless `LABEL_OS_ENABLED` is set** (off = the beatstore exactly as above; every `/o/…`, `/setup`, `/platform` and `/api/org/…` address answers "Not found"). Its database changes are **not applied to production**; they are applied at the final merge (see `docs/bstudio-label-os/28-migration-apply-order.md`). It lets a **label** or an **independent artist/producer** run their business in one place, so they need no other application. Detail: `docs/bstudio-label-os/` (decisions in 15 and 21, owner brief 22, report 27, owner test walkthrough 18).
+
+**Two kinds of customer.** An **independent artist/producer** (one person who is both) or a **label** (artists, beatmakers, producers, rappers, collaborators and staff). The platform operator (the owner) licenses the software to either, from a private console (`/platform`), and decides which modules each gets: contracts, finance, marketing, PR, executive, artistic direction, store, search, digest, export. With no restriction recorded, a customer gets everything their kind allows; paid plans come later. People can also sign up themselves, choose an account type and be walked through a setup wizard (`/setup`) that creates the organization, its choices (which contract types, which departments, which gates) and, optionally, logins for the team.
+
+**Who sees what.** The menu and home follow the kind of account, the person's role, their functions and the licensed modules. The roster **artist** sees their own music, releases, splits, contracts, statements and open asks, and never the label's internal notes, money or co-writers' contact details. Staff see the whole label or only the artists they were given. Outside collaborators (beatmaker, producer, rapper, feature, engineer) are invited to one song or project, confirm their credit and their split, see their own contract and statements, and list their sessions across labels at `/shared`. Working audio (demos, loops, stems) is separated from finished music: marketing and the executive hear finished music only. Any page a person may not open answers "Not found".
+
+**Departments, all actionable.** A&R (inbox, reviews, stages), legal (queue, contracts, approvals), finance, marketing, PR, executive ("the big boss"), artistic direction, producers, collaborators and operations.
+- **Songs, credits and splits.** Recording and song metadata (ISRC, ISWC, language, P-line…), parties with their rights details, credits that the credited person confirms or disputes, and split sheets that must add up to exactly 100 % (shares are exact integers, never floats).
+- **Releases.** A release is built from songs with a master chooser, then passes seven gates (tracklist, masters, credits and splits, legal, artwork, metadata, marketing) plus an optional creative gate. Approvals are append-only and become stale if the thing approved changes. Only an owner may deliver past an open gate, with a written reason, audited. A delivered release can be withdrawn.
+- **Contracts.** Every contract type has a template (placeholder wording to be replaced by counsel). A contract is filled in, turned into a PDF, sent, and signed **in the app** by each party (the page says this is not a qualified electronic signature). Splits and contracts are linked: a signed sheet that disagrees with its contract blocks signing.
+- **Finance.** Import a distributor earnings file (a re-import changes nothing), match lines to recordings, allocate by splits and contract terms, recoup advances, produce a statement per payee per period, approve, issue and mark it paid, export a payout file. A dashboard shows each payee's position and each release's income against cost; periods can be closed. **The app never moves money.** An artist sees only their own statements.
+- **Marketing and PR.** A plan per release (timeline, platform checklist, tasks, budget, asset requests to the artist) and a press kit with an embargo, shareable by link, plus an outreach tracker.
+- **Executive dashboard.** A read-only view across the whole roster: pipeline, releases by month, blocked releases, approvals waiting, income against cost, top songs, workload by department, with an export. It follows the same access rules as everything else.
+- **Artistic direction.** One workspace across each artist's direction, references, reviews, song stages and releases.
+- **Overview, search, filters.** A "since your last visit" feed per organization, a Needs-attention list, full-text search, saved views and a weekly digest by email or Slack.
+
+**The artist has the final say on the store.** A label can list a release (or ask for a showcase) on the beatstore's public store only if every credited artist has not said no; one artist's no withdraws it and it cannot come back without their yes. A listed release plays previews until its release date, then the full song as a lower-quality copy, never the master. (A showcase of past songs is not built yet.)
+
+**Safety rules the product keeps.** Account deletion is blocked for the only owner of an organization; an organization is deleted after a 30-day grace period and can be restored in that time; an owner can export everything the organization holds; audit records of sensitive changes are never altered or pruned.
 
 ---
 
@@ -326,7 +348,7 @@ Text and borders are **white at alpha**, never warm hexes — that is what keeps
 ## What we explicitly don't do
 
 - No *required* accounts for buyers — purchasing never demands sign-in, and email at checkout is still the only identifier a one-time buyer has to give. Persistent buyer accounts exist as an *opt-in* (see "Buyer accounts" above) for anyone who wants a saved library across devices, not as a purchase gate.
-- No multi-tenant producer model (yet). Single `creator_profiles` row drives the store.
+- No multi-tenant producer model for the beatstore. A single `creator_profiles` row drives the store. (Label OS organizations are multi-tenant, but separate from the store and off by default.)
 - No subscriptions. Every sale is a one-time payment.
 - No Radix / Headless UI / shadcn. Primitives are hand-rolled.
 - No CDN font imports. The three faces (Akira, Synkopy, Panchang) ship from `/public/fonts`.
