@@ -524,6 +524,29 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       event(tables, args, 'creative_gate.changed', 'org', args.p_org, { from: before ? 'on' : 'off', to: enabled ? 'on' : 'off' });
       return ok({ enabled, changed: true });
     },
+    // Migration 199 (review G16): a press-kit share link is made / revoked with its event.
+    labelos_audit_press_share_create: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const kit = (tables.press_kits ?? []).find((k) => k.id === args.p_kit && k.org_id === args.p_org);
+      if (!kit) return ok({ error: 'not_found' });
+      const shares = (tables.press_kit_shares ??= []);
+      if (shares.filter((x) => x.kit_id === kit.id && !x.revoked_at).length >= Number(args.p_max)) return ok({ error: 'full' });
+      const row = { id: randomUUID(), org_id: args.p_org, kit_id: kit.id, token_hash: args.p_token_hash, label: args.p_label, expires_at: args.p_expires_at ?? null, revoked_at: null, view_count: 0, last_viewed_at: null, created_by: args.p_actor, created_at: new Date().toISOString() };
+      shares.push(row);
+      event(tables, args, 'press_kit.shared', 'release', kit.release_id, { ...(args.p_payload as Row), shareId: row.id, expires: row.expires_at !== null });
+      return ok({ share: { id: row.id, label: row.label, expires_at: row.expires_at, revoked_at: null, view_count: 0, last_viewed_at: null, created_at: row.created_at } });
+    },
+    labelos_audit_press_share_revoke: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const kit = (tables.press_kits ?? []).find((k) => k.id === args.p_kit && k.org_id === args.p_org);
+      if (!kit) return ok({ error: 'not_found' });
+      const share = (tables.press_kit_shares ?? []).find((x) => x.id === args.p_share && x.kit_id === kit.id && !x.revoked_at);
+      if (!share) return ok({ error: 'not_found' });
+      share.revoked_at = new Date().toISOString();
+      share.revoked_by = args.p_actor;
+      event(tables, args, 'press_kit.share_revoked', 'release', kit.release_id, { ...(args.p_payload as Row), shareId: share.id });
+      return ok({ share: { id: share.id } });
+    },
     labelos_audit_invitation_revoke: (args, tables) => {
       if (opts.failAudit?.()) return failed();
       const inv = (tables.org_invitations ?? []).find((i) => i.org_id === args.p_org && i.id === args.p_id && !i.accepted_at && !i.revoked_at);
