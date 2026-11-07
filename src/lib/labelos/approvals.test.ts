@@ -357,6 +357,11 @@ describe('planDecide', () => {
       }
     });
 
+    it('no request addressed to you is answered first: no_request, not seen_required', () => {
+      const none = { ...base, seen: null, current: { ...base.current, pending: null } };
+      expect(planDecide(none)).toMatchObject({ ok: false, status: 403, code: 'no_request' });
+    });
+
     it('a key that no longer matches the facts: 409 changed_since_seen, nothing recorded', () => {
       expect(planDecide({ ...base, seen: 'k-before' })).toMatchObject({ ok: false, status: 409, code: 'changed_since_seen' });
     });
@@ -454,5 +459,15 @@ describe('the optional creative gate (LABEL-68)', () => {
     expect(planDecide({ ...decide, decision: 'changes_requested', actor: actor('owner') })).toMatchObject({ ok: false, code: 'note_required' });
     expect(planDecide({ ...decide, seen: null, actor: actor('owner') })).toMatchObject({ ok: false, code: 'seen_required' });
     expect(planDecide({ ...decide, current: NONE, actor: actor('member', ['artistic_director']) })).toMatchObject({ ok: false, code: 'no_request' });
+  });
+});
+
+describe('mayReadApprovals (LABEL-76)', () => {
+  it('needs release.write or a gate ability; a bare reader or artist does not', async () => {
+    const { mayReadApprovals } = await import('./approvals');
+    expect(mayReadApprovals(new Set(['catalog.read', 'review.comment']))).toBe(false);
+    expect(mayReadApprovals(new Set(['release.write']))).toBe(true);
+    expect(mayReadApprovals(new Set(['release.approve.legal']))).toBe(true);
+    expect(mayReadApprovals(new Set(['creative.approve']))).toBe(true);
   });
 });

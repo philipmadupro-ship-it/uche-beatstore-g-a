@@ -311,7 +311,7 @@ export function ContractEditor({ orgId, contractId }: { orgId: string; contractI
     <aside className="space-y-4" aria-label="Preview">
       {previewNote && <p className="text-[10px] text-[#c8a47a]" data-testid="preview-note">The preview is paused: {previewNote}</p>}
       {doc.missing.length > 0 && contract.status === 'draft' && <p className="text-[11px] text-white/60" data-testid="contract-missing">Still to fill in: {doc.missing.length} value{doc.missing.length === 1 ? '' : 's'}.</p>}
-      <div className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4 sm:p-5"><Preview doc={doc} /></div>
+      <div className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 sm:p-5"><Preview doc={doc} /></div>
     </aside>
   );
 

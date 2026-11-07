@@ -33,7 +33,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
   const initialFace = isSetupFace(asked) ? asked : faceFromMetadata(user.user_metadata);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#090907] px-4 py-10 text-white">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--background-primary)] px-4 py-10 text-white">
       <OrgSetupWizard userId={user.id} initialFace={initialFace} email={user.email ?? null} />
     </div>
   );

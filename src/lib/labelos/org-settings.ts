@@ -35,6 +35,7 @@ export const SETTING_KEYS = [
   'require_signed_master_split',
   'attention_release_days',
   'attention_stalled_days',
+  'artwork_min_px',
   'departments_off',
   'contract_types',
 ] as const;
@@ -46,6 +47,8 @@ export type OrgSettingsView = {
   require_signed_master_split: boolean;
   attention_release_days: number;
   attention_stalled_days: number;
+  /** The shorter side cover art must have, in pixels (LABEL-52 rule, LABEL-76 field). 600..10000, default 3000. */
+  artwork_min_px: number;
   departments_off: Module[];
   /** Which contract types the org works with (LABEL-48). Only the choice; templates are LABEL-57. */
   contract_types: ContractTypeId[];
@@ -67,6 +70,7 @@ export function parseOrgSettings(raw: unknown): OrgSettingsView {
     marketing_gate: readiness.marketing_gate,
     require_signed_master_split: readiness.require_signed_master_split,
     ...parseAttentionSettings(obj),
+    artwork_min_px: readiness.artwork_min_px,
     departments_off: parseDepartmentsOff(obj.departments_off),
     contract_types: parseContractTypes(obj.contract_types),
   };

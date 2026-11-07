@@ -22,7 +22,7 @@ const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] active:bg-white/[0.14] disabled:opacity-40';
 const FIELD =
-  'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none disabled:opacity-60';
+  'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none disabled:opacity-60';
 
 export const when = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC';
@@ -79,7 +79,7 @@ export function ContractSigningPanel({ orgId, contractId, onChanged }: { orgId: 
   }, [orgId, contractId]);
 
   if (failed) return <p role="alert" className="text-[11px] text-[#ff8b73]" data-testid="signing-failed">{failed}</p>;
-  if (notReady) return <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-3 text-[11px] text-white/60" data-testid="signing-not-ready">Signing is not set up yet: the database migration for it (178) is not applied.</p>;
+  if (notReady) return <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-3 text-[11px] text-white/60" data-testid="signing-not-ready">Signing is not set up yet: the database migration for it (178) is not applied.</p>;
   if (!view) return <p className="text-[11px] text-white/40" data-testid="signing-loading">Loading the signatures…</p>;
 
   const { contract } = view;
@@ -139,7 +139,7 @@ export function ContractSigningPanel({ orgId, contractId, onChanged }: { orgId: 
 
   const p = view.progress;
   return (
-    <section className="space-y-4 rounded-xl border border-white/10 bg-[#0D0D0A] p-4 sm:p-5" aria-label="Signatures" data-testid="signing-panel">
+    <section className="space-y-4 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 sm:p-5" aria-label="Signatures" data-testid="signing-panel">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className={LABEL}>Signatures</h2>

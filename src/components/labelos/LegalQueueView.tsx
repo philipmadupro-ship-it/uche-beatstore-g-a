@@ -19,7 +19,7 @@ import { fetchLegalQueue, legalPackHref, type LegalQueueResult } from '@/lib/lab
 import { cn } from '@/lib/utils';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
-const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/60';
+const NOTICE = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/60';
 const LINK = 'inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10]';
 
 /** "today", "1 day", "5 days", "3 weeks", "4 months": how long a request has waited. */
@@ -82,7 +82,7 @@ export function LegalQueueView({ orgId, orgSlug }: { orgId: string; orgSlug: str
 function Row({ item, orgId, orgSlug, mayExport }: { item: LegalQueueItem; orgId: string; orgSlug: string; mayExport: boolean }) {
   const title = item.title ?? (item.kind === 'song' ? 'Untitled song' : 'Untitled release');
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="legal-row" data-ready={item.ready ? 'true' : 'false'}>
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid="legal-row" data-ready={item.ready ? 'true' : 'false'}>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={LABEL}>{item.kind === 'song' ? 'Song' : 'Release'}</span>

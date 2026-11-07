@@ -94,7 +94,7 @@ export function ContractSplitsPanel({ orgId, contractId, trackId, version }: { o
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {data.plans.map((p) => (
-          <div key={p.kind} className="min-w-0 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid={`contract-split-plan-${p.kind}`}>
+          <div key={p.kind} className="min-w-0 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid={`contract-split-plan-${p.kind}`}>
             <p className="text-[11px] text-white/80">{SPLIT_KIND_LABEL[p.kind]}</p>
             {p.ok ? (
               <>

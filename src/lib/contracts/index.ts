@@ -1084,7 +1084,11 @@ export function parseAttentionSettings(raw: unknown): OrgAttentionSettings {
  * `planSettingsChange` (lib/labelos/org-settings), checked by the route;
  * here the names are only bounded to the switchable departments.
  */
-export const OrgSettingsPatchBodySchema = z.object(OrgSettingsPatchFields).partial().strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
+export const OrgSettingsPatchBodySchema = z.object({
+  ...OrgSettingsPatchFields,
+  /** LABEL-76 (migration 196): the cover-art minimum, whole pixels. Same range as `OrgReadinessSettingsSchema` and the SQL validator. Not a setup-wizard key. */
+  artwork_min_px: z.number().int().min(600).max(10000),
+}).partial().strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
 export type OrgSettingsPatchBody = z.infer<typeof OrgSettingsPatchBodySchema>;
 
 /**

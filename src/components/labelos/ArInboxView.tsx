@@ -272,7 +272,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
     await saveReview(focused, { note: next === '' ? null : next });
   };
 
-  if (failed && !inbox) return <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/60" data-testid="ar-failed">Could not load the inbox. Reload to try again.</p>;
+  if (failed && !inbox) return <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/60" data-testid="ar-failed">Could not load the inbox. Reload to try again.</p>;
   if (!inbox) return <p className="text-[11px] text-white/40" data-testid="ar-loading">Loading the inbox…</p>;
 
   const offered = focused ? offeredStageKeys(focused.stage, caps, role) : [];
@@ -287,11 +287,11 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
       </p>
 
       {songs.length === 0 ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/40" data-testid="ar-empty">
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/40" data-testid="ar-empty">
           Nothing is waiting for review.{inbox.restricted > 0 ? ` ${inbox.restricted} more ${inbox.restricted === 1 ? 'song is' : 'songs are'} restricted for your role.` : ''}
         </p>
       ) : (
-        <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[#0D0D0A]" aria-label="Songs to review" data-testid="ar-list">
+        <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[var(--surface-primary)]" aria-label="Songs to review" data-testid="ar-list">
           {songs.map((s) => {
             const on = s.id === cursor;
             const playing = currentId === s.id && isPlaying;
@@ -342,7 +342,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
       )}
 
       {focused && (
-        <section className="space-y-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" aria-label={`Reviews of ${focused.title ?? 'Untitled'}`} data-testid="ar-detail">
+        <section className="space-y-3 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4" aria-label={`Reviews of ${focused.title ?? 'Untitled'}`} data-testid="ar-detail">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-[13px] text-white/80">{focused.title ?? 'Untitled'}</h2>
             <Link href={`/o/${orgSlug}/songs/${focused.id}`} className="text-[11px] text-white/60 hover:text-white">Open song</Link>

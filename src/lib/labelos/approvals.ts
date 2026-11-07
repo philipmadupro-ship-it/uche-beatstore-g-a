@@ -81,6 +81,11 @@ export const isSubjectKind = (v: unknown): v is SubjectKind => typeof v === 'str
 /** `release.approve.<gate>`; the creative gate is decided by `creative.approve` (LABEL-68), a capability of the artistic department. */
 export const gateCapability = (gate: Gate): Capability => (gate === CREATIVE_GATE ? 'creative.approve' : (`release.approve.${gate}` as Capability));
 
+/** The abilities that let a member see approvals at all (the policy of migration 157). Pure, so the screen asks the same question the route does. */
+export function mayReadApprovals(caps: ReadonlySet<string>): boolean {
+  return caps.has('release.write') || ALL_GATES.some((g) => caps.has(gateCapability(g)));
+}
+
 /**
  * The gates a subject can be asked for. A release takes the five of 09 §2, and the creative one only when the org has
  * switched it on (`creative`); the default is off, so nothing changes for an org that never asked for it.
@@ -408,7 +413,7 @@ export type DecideInput = {
  *  - needs `release.approve.<gate>`;
  *  - "Changes requested" needs a note (what to change);
  *  - "Approved" must carry `seen`, the key of what the approver's screen showed
- *    (doc 21 #14): none is a 400, one that no longer matches the facts a 409
+ *    (doc 21 #14): none is a 400 (after the request check), one that no longer matches the facts a 409
  *    `changed_since_seen`, so an approval records what was looked at;
  *  - approving needs an open request addressed to the decider, and nobody
  *    answers their own — owner and admin are exempt from both (`approveBlocker`,
@@ -432,9 +437,10 @@ export function planDecide(input: DecideInput): Plan<{ gate: Gate; decision: Dec
 
   const pending = input.current.pending;
   if (input.decision === 'approved') {
-    if (!input.seen || input.seen.trim().length === 0) return refuse(400, 'seen_required', 'Open it and look before approving');
+    // The request is answered first: with none addressed to you, "open it and look" is not the next step.
     const blocked = approveBlocker(input.actor, pending);
     if (blocked) return refuse(403, blocked.code, blocked.message);
+    if (!input.seen || input.seen.trim().length === 0) return refuse(400, 'seen_required', 'Open it and look before approving');
     if (input.kind === 'song' && gate === 'legal' && input.songOnRelease) {
       return refuse(409, 'decided_on_release', 'This song is on a release. Legal is approved on the release.');
     }

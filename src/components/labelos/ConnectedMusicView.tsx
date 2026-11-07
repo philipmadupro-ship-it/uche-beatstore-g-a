@@ -66,7 +66,7 @@ export function ConnectedMusicView({ orgId, music }: { orgId: string; music: Con
   };
 
   if (music.projects.length === 0) {
-    return <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-5 text-center text-[11px] text-white/40">Nothing is shared with you yet.</p>;
+    return <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-5 text-center text-[11px] text-white/40">Nothing is shared with you yet.</p>;
   }
 
   return (
@@ -77,7 +77,7 @@ export function ConnectedMusicView({ orgId, music }: { orgId: string; music: Con
           {p.recordings.length === 0 ? (
             <p className="text-[11px] text-white/40">No recordings you can hear in this project.</p>
           ) : (
-            <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[#0D0D0A]">
+            <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[var(--surface-primary)]">
               {p.recordings.map((rec) => {
                 const active = currentId === rec.id;
                 return (

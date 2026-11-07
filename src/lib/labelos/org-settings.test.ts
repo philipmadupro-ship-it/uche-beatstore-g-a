@@ -29,7 +29,7 @@ describe('parseDepartmentsOff', () => {
 
 describe('parseOrgSettings', () => {
   it('reads defaults from nothing and from garbage', () => {
-    const d = { legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, attention_release_days: 30, attention_stalled_days: 30, departments_off: [], contract_types: [] };
+    const d = { legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, attention_release_days: 30, attention_stalled_days: 30, artwork_min_px: 3000, departments_off: [], contract_types: [] };
     expect(parseOrgSettings(null)).toEqual(d);
     expect(parseOrgSettings([])).toEqual(d);
     expect(parseOrgSettings({ legal_gate: 'OFF', attention_release_days: 0 })).toEqual(d);
@@ -91,6 +91,14 @@ describe('planSettingsChange', () => {
   it('lets an already-off department stay off after its licence is gone', () => {
     // Stored list still names pr; the owner sends the same list back unchanged: no change, no error.
     expect(plan({ departments_off: ['pr'] }, { departments_off: ['pr'] })).toMatchObject({ ok: true, keys: [] });
+  });
+
+  it('LABEL-76: artwork_min_px defaults to 3000, is a changed key only when it differs', () => {
+    expect(parseOrgSettings({}).artwork_min_px).toBe(3000);
+    expect(parseOrgSettings({ artwork_min_px: 2400 }).artwork_min_px).toBe(2400);
+    expect(parseOrgSettings({ artwork_min_px: 'x' }).artwork_min_px).toBe(3000);
+    expect(plan({}, { artwork_min_px: 3000 })).toMatchObject({ ok: true, keys: [] });
+    expect(plan({}, { artwork_min_px: 2400 })).toMatchObject({ ok: true, keys: ['artwork_min_px'] });
   });
 
   it('payload names keys and values of settings only; it carries no free text', () => {

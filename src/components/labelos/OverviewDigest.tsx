@@ -111,7 +111,7 @@ export function OverviewDigest({
         )}
       </div>
       {nothing || cleared ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/40" data-testid="digest-empty">
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-6 text-center text-[11px] text-white/40" data-testid="digest-empty">
           {cleared ? 'All seen.' : lastSeenAt ? 'Nothing new since your last visit.' : 'Nothing in the last 7 days.'}
         </p>
       ) : (

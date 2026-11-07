@@ -30,7 +30,7 @@ export function NeedsAttention({ items, restricted, releasesReady = true }: Need
         Needs attention <span className="ml-1.5 text-white/40" data-testid="needs-attention-count">{items.length}</span>
       </h2>
       {items.length === 0 ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/40" data-testid="needs-attention-empty">
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-6 text-center text-[11px] text-white/40" data-testid="needs-attention-empty">
           Nothing needs attention.
         </p>
       ) : (

@@ -18,7 +18,7 @@ import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
 import { cn } from '@/lib/utils';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/60';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4';
 
 function Stat({ label, value, note, warn, testId }: { label: string; value: string; note?: string; warn?: boolean; testId: string }) {
   return (
@@ -138,7 +138,7 @@ export default function AdminCentrePage() {
                   <Link
                     href={s.href}
                     data-testid={`admin-section-${s.key}`}
-                    className="group flex h-full items-start justify-between gap-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4 transition-colors hover:border-white/20 hover:bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                    className="group flex h-full items-start justify-between gap-3 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 transition-colors hover:border-white/20 hover:bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                   >
                     <span>
                       <span className="block text-[13px] text-white/80">{s.label}</span>

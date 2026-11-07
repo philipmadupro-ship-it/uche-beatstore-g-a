@@ -104,7 +104,7 @@ export function ActivityDigestView({ events, names, projectArtists, view, orgSlu
             {section.days.map((day) => (
               <div key={day.day}>
                 <p className={`${LABEL} mb-2 text-white/30`} data-testid={`digest-day-${day.day}`}>{dayLabel(day.day, now, zone)}</p>
-                <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[#0D0D0A]">
+                <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[var(--surface-primary)]">
                   {day.lines.map((line) => {
                     const { actor, text } = describeLine(line, names);
                     const who = viewerId && line.actorId === viewerId ? 'You' : actor;
