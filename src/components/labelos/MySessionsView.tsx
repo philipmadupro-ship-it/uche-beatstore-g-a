@@ -55,7 +55,7 @@ export function MySessionsView({ sessions }: { sessions: OrgSession[] }) {
 
   if (sessions.length === 0) {
     return (
-      <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/40" data-testid="shared-empty">
+      <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/40" data-testid="shared-empty">
         Nothing is shared with you right now.
       </p>
     );
@@ -69,7 +69,7 @@ export function MySessionsView({ sessions }: { sessions: OrgSession[] }) {
             {org.orgName}
             {org.askCount > 0 && <span className="rounded-lg border border-white/20 px-1.5 py-0.5 text-white/70">{org.askCount} waiting</span>}
           </h2>
-          <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]">
+          <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[var(--surface-primary)]">
             {org.projects.map((p) => (
               <li key={p.id} className="px-4 py-3" data-testid={`session-project-${p.id}`}>
                 <Link href={p.href} className="flex items-center gap-3 transition-colors hover:text-white">

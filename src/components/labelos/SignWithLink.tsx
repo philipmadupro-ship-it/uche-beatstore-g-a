@@ -50,14 +50,14 @@ export function SignWithLink({ token }: { token: string }) {
   }, [token]);
 
   const shell = (children: React.ReactNode) => (
-    <main className="min-h-screen bg-[#090907] px-4 py-8 text-white sm:px-6">
+    <main className="min-h-screen bg-[var(--background-primary)] px-4 py-8 text-white sm:px-6">
       <div className="mx-auto max-w-2xl space-y-6">{children}</div>
     </main>
   );
 
   if (gone) {
     return shell(
-      <div className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-10 text-center" data-testid="sign-gone">
+      <div className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-10 text-center" data-testid="sign-gone">
         <h1 className="font-heading text-[24px] text-white">This link does not work</h1>
         <p className="mt-2 text-[11px] text-white/60">It may have been replaced, revoked, or have expired, or the contract may have been withdrawn. Ask the person who sent it for a new one.</p>
       </div>,
@@ -93,7 +93,7 @@ export function SignWithLink({ token }: { token: string }) {
         )}
       </header>
 
-      <article className="space-y-4 rounded-xl border border-white/10 bg-[#0D0D0A] p-4 sm:p-5" data-testid="sign-document">
+      <article className="space-y-4 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 sm:p-5" data-testid="sign-document">
         {data.clauses.map((c, i) => (
           <section key={c.id} className="space-y-1">
             <h2 className="text-[11px] font-semibold text-white/80">{i + 1}. {c.heading}</h2>
@@ -103,20 +103,20 @@ export function SignWithLink({ token }: { token: string }) {
       </article>
 
       {data.state === 'signed' && data.receipt ? (
-        <section className="space-y-2 rounded-xl border border-[#6DC6A4]/30 bg-[#0D0D0A] p-4" data-testid="sign-receipt">
+        <section className="space-y-2 rounded-xl border border-[#6DC6A4]/30 bg-[var(--surface-primary)] p-4" data-testid="sign-receipt">
           <p className="inline-flex items-center gap-1.5 text-[11px] text-[#6DC6A4]"><Check size={13} aria-hidden="true" />You signed this contract</p>
           <p className="text-[11px] text-white/60">{data.receipt.signerName ?? data.you.name} · {when(data.receipt.signedAt)}</p>
           <p className="break-all font-mono text-[10px] text-white/40">Text fingerprint (SHA-256): {data.receipt.documentSha256}</p>
           <p className="text-[11px] text-white/60">{data.completed ? 'Every party has now signed.' : 'The contract is complete once every party has signed.'}</p>
         </section>
       ) : data.canSign ? (
-        <section className="space-y-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid="sign-form">
+        <section className="space-y-3 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4" data-testid="sign-form">
           {data.state === 'stale' && <p className="text-[11px] text-[#c8a47a]">You signed an earlier text. This contract changed since, so please read it again and sign again.</p>}
           <SignatureInput busy={busy} label={data.you.name} confirmLabel="Sign this contract" defaultName={data.you.name} onSign={(i) => void sign(i)} testId="sign" />
           {error && <p role="alert" className="text-[11px] text-[#ff8b73]" data-testid="sign-error">{error}</p>}
         </section>
       ) : (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-3 text-[11px] text-white/60" data-testid="sign-closed">This contract is not open for signing.</p>
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-3 text-[11px] text-white/60" data-testid="sign-closed">This contract is not open for signing.</p>
       )}
 
       <footer className="space-y-1.5 text-[10px] leading-relaxed text-white/40">

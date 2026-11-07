@@ -37,7 +37,7 @@ export function PressKitPage({ token }: { token: string }) {
   }, [token]);
 
   const shell = (children: React.ReactNode) => (
-    <main className="min-h-screen bg-[#090907] px-4 py-8 text-white sm:px-6 print:bg-white print:text-black">
+    <main className="min-h-screen bg-[var(--background-primary)] px-4 py-8 text-white sm:px-6 print:bg-white print:text-black">
       <div className="mx-auto max-w-3xl space-y-8">{children}</div>
     </main>
   );
@@ -45,7 +45,7 @@ export function PressKitPage({ token }: { token: string }) {
   if (load.state === 'loading') return shell(<p className="text-[11px] text-white/40">Loading…</p>);
   if (load.state === 'gone') {
     return shell(
-      <div className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-10 text-center" data-testid="press-gone">
+      <div className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-10 text-center" data-testid="press-gone">
         <h1 className="font-heading text-[24px] text-white">This link does not work</h1>
         <p className="mt-2 text-[11px] text-white/60">It may have been revoked or have expired. Ask the person who sent it for a new one.</p>
       </div>,
@@ -109,7 +109,7 @@ export function PressKitPage({ token }: { token: string }) {
           <h2 className={`mb-2 ${LABEL}`}>Listen</h2>
           <ul className="space-y-2">
             {v.listen.tracks.map((t) => (
-              <li key={t.id} className="rounded-xl border border-white/10 bg-[#0D0D0A] p-3">
+              <li key={t.id} className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3">
                 <p className="mb-2 text-[11px] text-white/80">{t.title}</p>
                 <audio controls preload="none" src={t.audioUrl} className="w-full" />
               </li>
@@ -121,7 +121,7 @@ export function PressKitPage({ token }: { token: string }) {
       {v.tracklist.length > 0 && (
         <section>
           <h2 className={`mb-2 ${LABEL}`}>Tracklist</h2>
-          <ol className="divide-y divide-white/10 rounded-xl border border-white/10 bg-[#0D0D0A]">
+          <ol className="divide-y divide-white/10 rounded-xl border border-white/10 bg-[var(--surface-primary)]">
             {v.tracklist.map((t) => (
               <li key={t.position} className="flex items-baseline gap-3 px-3 py-2 text-[11px] text-white/80">
                 <span className="w-5 font-mono text-[10px] text-white/40">{t.position}</span>
@@ -160,7 +160,7 @@ function Photos({ photos }: { photos: { id: string; url: string; caption: string
       <h2 className={`mb-2 ${LABEL}`}>Photos</h2>
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {photos.map((p) => (
-          <li key={p.id} className="overflow-hidden rounded-xl border border-white/10 bg-[#0D0D0A]">
+          <li key={p.id} className="overflow-hidden rounded-xl border border-white/10 bg-[var(--surface-primary)]">
             {/* eslint-disable-next-line @next/next/no-img-element -- streamed through the token-gated route; no optimiser may fetch it */}
             <img src={p.url} alt={p.caption ?? 'Press photo'} loading="lazy" className="aspect-square w-full object-cover" />
             <div className="flex items-center justify-between gap-2 px-2 py-1.5 print:hidden">

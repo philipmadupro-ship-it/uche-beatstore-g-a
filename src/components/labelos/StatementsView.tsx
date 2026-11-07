@@ -19,8 +19,8 @@ import {
 import { cn } from '@/lib/utils';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
-const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/60';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+const NOTICE = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-6 text-center text-[11px] text-white/60';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4';
 const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/[0.06]';
 const FIELD = 'w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-white/80 outline-none focus:border-white/30';
 
@@ -72,7 +72,7 @@ export function StatementsView({ orgId }: { orgId: string }) {
                   type="button"
                   onClick={() => setSelected(selected === s.id ? null : s.id)}
                   aria-expanded={selected === s.id}
-                  className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-white/10 bg-[#0D0D0A] p-3 text-left transition-colors hover:border-white/20"
+                  className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3 text-left transition-colors hover:border-white/20"
                   data-testid="statement-row"
                   data-status={s.status}
                 >
@@ -227,7 +227,7 @@ function Detail({ orgId, item, onChanged }: { orgId: string; item: StatementItem
   if (!detail) return <p className="mt-2 text-[11px] text-white/40">Loading…</p>;
   const a = detail.actions;
   return (
-    <div className="mt-2 space-y-4 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid="statement-detail">
+    <div className="mt-2 space-y-4 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4" data-testid="statement-detail">
       <div className="grid gap-1 text-[11px]">
         {detail.songs.map((s) => (
           <div key={s.trackId ?? s.title} className="flex justify-between gap-3" data-testid="statement-song">

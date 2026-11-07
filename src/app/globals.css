@@ -1017,3 +1017,31 @@ input[type=range]::-webkit-slider-thumb {
     grid-template-columns: var(--track-row-cols);
   }
 }
+
+/* ── Label OS in the light archive theme (LABEL-76) ───────────────────────
+ * The Label OS panels are written in white-at-alpha utilities (text-white/60,
+ * border-white/10, bg-white/[0.06]), which are invisible on the light
+ * `de-roche-archive` surfaces. Surfaces and the shell already go through the
+ * tokens; this block re-points the alpha steps to the semantic text / border
+ * tokens, scoped to `.labelos-shell` and to that theme only, so the dark
+ * theme and the producer dashboard are untouched. Attribute selectors match
+ * the class text, so a new `text-white/NN` is covered without an edit here.
+ * Unlayered on purpose: it must beat Tailwind's layered utilities. */
+[data-theme="de-roche-archive"] .labelos-shell {
+  --labelos-ok: #2F6B4F;
+  --labelos-accent: #7A5A32;
+  --labelos-bad: #8d3a2f;
+  color: var(--text-primary);
+}
+[data-theme="de-roche-archive"] .labelos-shell :is(.text-white, [class*="text-white/9"], [class*="text-white/8"], [class*="text-white/7"], [class*="hover:text-white"]:hover) { color: var(--text-primary); }
+[data-theme="de-roche-archive"] .labelos-shell :is([class*="text-white/6"], [class*="text-white/5"]) { color: var(--text-secondary); }
+[data-theme="de-roche-archive"] .labelos-shell :is([class*="text-white/4"], [class*="text-white/3"], [class*="text-white/2"]) { color: var(--text-tertiary); }
+[data-theme="de-roche-archive"] .labelos-shell :is([class*="border-white/1"], [class*="border-white/["], [class*="divide-white/1"] > *) { border-color: var(--border-default); }
+[data-theme="de-roche-archive"] .labelos-shell [class*="border-white/2"], 
+[data-theme="de-roche-archive"] .labelos-shell [class*="border-white/3"] { border-color: var(--border-strong); }
+[data-theme="de-roche-archive"] .labelos-shell [class*="bg-white/["] { background-color: color-mix(in srgb, var(--text-primary) 7%, transparent); }
+[data-theme="de-roche-archive"] .labelos-shell [class*="bg-white/["]:is(:hover, [class*="hover:bg-white"]:hover) { background-color: color-mix(in srgb, var(--text-primary) 12%, transparent); }
+/* Signal colours written as literals on dark: darker steps of the same hues so they read on paper. */
+[data-theme="de-roche-archive"] .labelos-shell [class*="text-[#6DC6A4]"] { color: var(--labelos-ok); }
+[data-theme="de-roche-archive"] .labelos-shell [class*="text-[#c8a47a]"] { color: var(--labelos-accent); }
+[data-theme="de-roche-archive"] .labelos-shell :is([class*="text-[#ffb7a8]"], [class*="text-[#ff8b73]"], .text-red-400) { color: var(--labelos-bad); }

@@ -46,7 +46,7 @@ import { defaultRoleFor, SPLIT_KIND_LABEL, SPLIT_KINDS, type SplitKind, type Spl
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:cursor-not-allowed disabled:opacity-40';
-const FIELD = 'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
+const FIELD = 'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
 
 const STATUS_TONE: Record<string, string> = {
   draft: 'text-white/60',
@@ -317,7 +317,7 @@ function DraftEditor({
     });
 
   return (
-    <div className="max-w-xl space-y-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="splits-draft" data-version={sheet.version}>
+    <div className="max-w-xl space-y-3 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid="splits-draft" data-version={sheet.version}>
       <p className="flex items-baseline gap-2 text-[11px] text-white/40">
         <span className="text-[13px] text-white/80">{SPLIT_KIND_LABEL[kind]} split · v{sheet.version}</span>
         <span className={cn('font-mono uppercase tracking-[0.1em]', STATUS_TONE.draft)}>Draft</span>
@@ -460,7 +460,7 @@ function SheetReadout({
   const full = sheet.total !== undefined;
 
   return (
-    <div className="max-w-xl space-y-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="splits-sheet" data-status={sheet.status} data-version={sheet.version}>
+    <div className="max-w-xl space-y-3 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid="splits-sheet" data-status={sheet.status} data-version={sheet.version}>
       <p className="flex flex-wrap items-baseline gap-x-2 text-[11px] text-white/40">
         <span className="text-[13px] text-white/80">{SPLIT_KIND_LABEL[sheet.kind as SplitKind] ?? sheet.kind} split · v{sheet.version}</span>
         <span className={cn('font-mono uppercase tracking-[0.1em]', STATUS_TONE[sheet.status])} data-testid="splits-status">{sheet.statusLabel}</span>

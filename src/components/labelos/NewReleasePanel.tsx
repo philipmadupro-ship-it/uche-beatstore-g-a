@@ -19,7 +19,7 @@ import { RELEASE_TYPES } from '@/lib/labelos/releases';
 
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
-const FIELD = 'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
+const FIELD = 'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 
 const EMPTY = { title: '', type: 'single', labelName: '', upc: '', cLine: '', pLine: '', genre: '', territories: '', language: '', distributor: '', targetDate: '' };
@@ -76,7 +76,7 @@ export function NewReleasePanel({ orgId, orgSlug, artists }: { orgId: string; or
   );
 
   return (
-    <form onSubmit={submit} className="w-full max-w-3xl space-y-4 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid="release-new">
+    <form onSubmit={submit} className="w-full max-w-3xl space-y-4 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4" data-testid="release-new">
       <p className="text-[11px] text-white/60">A new draft. Only the title and the artist are needed now; the rest can be filled in here or on the release page, and its gates show what is still open.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block sm:col-span-2">

@@ -138,7 +138,7 @@ function SamplesControl({ orgId, trackId, onSaved }: { orgId: string; trackId: s
   };
 
   return (
-    <div className="mb-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="org-samples">
+    <div className="mb-3 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid="org-samples">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className={LABEL}>Samples</p>
         {samples.canWrite ? (
@@ -172,7 +172,7 @@ function SamplesControl({ orgId, trackId, onSaved }: { orgId: string; trackId: s
                 maxLength={2000}
                 aria-label="Sample clearance note"
                 placeholder="Who cleared it, when, and where the paperwork is"
-                className="w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+                className="w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none"
                 data-testid="org-samples-note"
               />
               <button type="button" disabled={busy || note.trim() === (samples.note ?? '').trim()} onClick={() => void save('yes', note)} className={cn(CHIP, CHIP_REST, 'shrink-0')} data-testid="org-samples-save">
@@ -244,7 +244,7 @@ function ReadinessPanel({ view }: { view: ReadinessView }) {
 
 function RequirementTable({ view }: { view: FullReadiness }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#0D0D0A]">
+    <div className="overflow-x-auto rounded-xl border border-white/10 bg-[var(--surface-primary)]">
       <table className="w-full min-w-[520px] text-left" data-testid="org-legal-table">
         <caption className="sr-only">Legal requirements for this song</caption>
         <thead>

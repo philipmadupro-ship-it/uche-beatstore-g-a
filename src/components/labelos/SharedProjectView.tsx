@@ -84,9 +84,9 @@ export function SharedProjectView({ view }: { view: View }) {
       <section aria-labelledby="shared-recordings" className="space-y-3">
         <h2 id="shared-recordings" className={LABEL}>Recordings</h2>
         {recordings.length === 0 ? (
-          <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/40">Nothing has been added to this project yet.</p>
+          <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-6 text-center text-[11px] text-white/40">Nothing has been added to this project yet.</p>
         ) : (
-          <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]">
+          <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[var(--surface-primary)]">
             {recordings.map((r) => {
               const active = currentId === r.id;
               const playing = active && isPlaying;
@@ -145,7 +145,7 @@ export function SharedProjectView({ view }: { view: View }) {
 
       <section aria-labelledby="shared-comments" className="space-y-3">
         <h2 id="shared-comments" className="sr-only">Project comments</h2>
-        <div className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+        <div className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4">
           <OrgComments orgId={project.orgId} projectId={project.id} />
         </div>
       </section>
@@ -157,7 +157,7 @@ export function SharedProjectView({ view }: { view: View }) {
       )}
 
       {me.can.uploadVersions && (
-        <section aria-label="Add a version" className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+        <section aria-label="Add a version" className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4">
           <p className={`${LABEL} mb-3`}>Add a version</p>
           {uploadTargets.length === 0 ? (
             <p className="text-[11px] text-white/60">There is no song in this project to add a version to yet.</p>

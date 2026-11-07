@@ -40,7 +40,7 @@ export function OrgSetupDone({
   const failed = results.filter((r) => !r.ok);
 
   return (
-    <div className="w-full max-w-2xl space-y-6 rounded-[20px] border border-white/10 bg-[#0D0D0A] p-6 sm:p-8" data-testid="wizard-done">
+    <div className="w-full max-w-2xl space-y-6 rounded-[20px] border border-white/10 bg-[var(--surface-primary)] p-6 sm:p-8" data-testid="wizard-done">
       <header>
         <p className={`${LEGEND} mb-2`}>{existing ? 'Nothing was added' : 'Your account is ready'}</p>
         <h1 ref={heading} tabIndex={-1} className="font-heading text-[28px] font-bold leading-[1.05] tracking-tight text-white focus:outline-none sm:text-[32px]">

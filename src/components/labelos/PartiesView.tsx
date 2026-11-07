@@ -32,11 +32,11 @@ import {
 import { bodyFromForm, confirmationState, emptyForm, filterParties, formFromParty, partyFormError, type PartyForm } from '@/lib/labelos/parties-view';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
-const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/60';
+const NOTICE = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/60';
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] active:bg-white/[0.14] disabled:opacity-40';
 const FIELD =
-  'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none disabled:opacity-60';
+  'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none disabled:opacity-60';
 
 const KINDS: DropdownOption<'person' | 'company'>[] = [
   { value: 'person', label: 'Person' },
@@ -172,7 +172,7 @@ function PartyRow({ party, active, onOpen }: { party: PartyView; active: boolean
         data-party={party.id}
         className={cn(
           'flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors',
-          active ? 'border-white/30 bg-white/[0.10]' : 'border-white/10 bg-[#0D0D0A] hover:border-white/20 hover:bg-white/[0.06]',
+          active ? 'border-white/30 bg-white/[0.10]' : 'border-white/10 bg-[var(--surface-primary)] hover:border-white/20 hover:bg-white/[0.06]',
         )}
       >
         <span className="min-w-0 flex-1">
@@ -312,7 +312,7 @@ function PartyEditor({ orgId, data, party, onSaved, onDeleted, onClose }: {
   const state = party ? confirmationState(party) : 'unknown';
 
   return (
-    <div className="space-y-5 rounded-xl border border-white/10 bg-[#0D0D0A] p-4 sm:p-5" data-testid="party-editor">
+    <div className="space-y-5 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 sm:p-5" data-testid="party-editor">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-[16px] text-white/80">{isNew ? 'New party' : party.displayName}</h2>

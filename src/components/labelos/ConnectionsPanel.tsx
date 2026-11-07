@@ -203,7 +203,7 @@ export function ConnectionsPanel({ orgId, orgSlug, orgKind }: { orgId: string; o
           </p>
         )}
         {load.state === 'ready' && load.connections.length === 0 && (
-          <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-5 text-center text-[11px] text-white/40">
+          <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-5 text-center text-[11px] text-white/40">
             No connections yet.
           </p>
         )}

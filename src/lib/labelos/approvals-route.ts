@@ -29,6 +29,7 @@ import {
   currentDecision,
   gateAppliesTo,
   gateCapability,
+  mayReadApprovals,
   gatesFor,
   isOwnerOrAdmin,
   mayRequest,
@@ -47,9 +48,7 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 export const json = (status: number, body: Record<string, unknown>) => NextResponse.json(body, { status, headers: NO_STORE });
 
 /** The abilities that let a member see approvals at all (the policy of migration 157). */
-export function mayReadApprovals(caps: ReadonlySet<string>): boolean {
-  return caps.has('release.write') || ALL_GATES.some((g) => caps.has(gateCapability(g)));
-}
+export { mayReadApprovals };
 
 export type ResolvedSubject =
   | { ok: true; access: OrgAccessOk; subject: Subject; table: 'tracks' | 'releases'; title: string | null }

@@ -21,8 +21,8 @@ import { confirmToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
-const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/60';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+const NOTICE = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-6 text-center text-[11px] text-white/60';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4';
 const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/[0.06]';
 const FIELD = 'w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] text-white/80 outline-none focus:border-white/30';
 
@@ -93,7 +93,7 @@ export function EarningsView({ orgId }: { orgId: string }) {
         ) : (
           <ul className="space-y-2">
             {queue.map((l) => (
-              <li key={l.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="queue-line" data-reason={l.reason ?? ''}>
+              <li key={l.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid="queue-line" data-reason={l.reason ?? ''}>
                 <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
                   <p className="truncate text-[13px] text-white">{l.title ?? l.isrc ?? l.upc ?? `Line ${l.line_no}`}</p>
                   <p className="text-[11px] text-white/60">
@@ -144,7 +144,7 @@ function ImportRow({ orgId, item, canWrite, waiting, onDone }: { orgId: string; 
     else setNote(r.error);
   }
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="import-row" data-status={item.status ?? 'imported'}>
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid="import-row" data-status={item.status ?? 'imported'}>
       <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
         <p className="truncate text-[13px] text-white">{item.file_name ?? 'Earnings file'}</p>
         <p className="text-[11px] text-white/60">{item.source} · {item.row_count} lines · {new Date(item.created_at).toLocaleDateString('en-GB')}</p>

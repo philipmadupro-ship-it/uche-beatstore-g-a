@@ -18,7 +18,7 @@ import { confirmToast, toast } from '@/hooks/useToast';
 import { fetchDigest, removeSlackWebhook, saveSlackWebhook, setDigestEnabled, type DigestState } from '@/lib/labelos/digest-client';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-5 sm:p-6';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-5 sm:p-6';
 
 export function OrgDigestPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
   const [state, setState] = useState<DigestState | null>(null);

@@ -27,7 +27,7 @@ export function OrgProjectComments({ orgId, projectId }: { orgId: string; projec
         <h2 id="org-project-comments" className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">Comments</h2>
         {recordings.length > 0 && <Dropdown aria-label="Comments on" value={trackId} onChange={setTrackId} options={options} placeholder="Whole project" />}
       </div>
-      <div className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+      <div className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4">
         <OrgComments orgId={orgId} projectId={projectId} trackId={trackId || null} durationSeconds={duration} onRecordings={setRecordings} />
       </div>
     </section>

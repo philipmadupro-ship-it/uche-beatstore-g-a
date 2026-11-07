@@ -27,11 +27,11 @@ import { fetchParties } from '@/lib/labelos/credits-client';
 import { fetchOrgSearch } from '@/lib/labelos/org-search-client';
 
 export const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
-export const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/60';
+export const NOTICE = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/60';
 export const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] active:bg-white/[0.14] disabled:opacity-40';
 export const FIELD =
-  'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none disabled:opacity-60';
+  'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none disabled:opacity-60';
 
 export type Lookups = { parties: DropdownOption[]; artists: DropdownOption[]; releases: DropdownOption[] };
 const NONE = '';
@@ -77,7 +77,7 @@ function SongPicker({ orgId, title, onPick }: { orgId: string; title: string | n
     <div className="space-y-1.5">
       <input className={FIELD} value={q} onChange={(e) => setQ(e.target.value)} placeholder={title ? `Song: ${title} — search to change` : 'Search for a song'} aria-label="Search for a song" data-testid="contract-song-search" />
       {q.trim().length >= 2 && hits.length > 0 && (
-        <ul className="max-h-40 overflow-auto rounded-lg border border-white/10 bg-[#0D0D0A]">
+        <ul className="max-h-40 overflow-auto rounded-lg border border-white/10 bg-[var(--surface-primary)]">
           {hits.map((h) => (
             <li key={h.id}>
               <button type="button" className="w-full px-3 py-1.5 text-left text-[11px] text-white/80 hover:bg-white/[0.06]" onClick={() => { onPick(h.id, h.title); setQ(''); setHits([]); }}>
@@ -362,7 +362,7 @@ export function ContractsView({ orgId }: { orgId: string }) {
                   onClick={() => open(c.id)}
                   aria-current={selected === c.id}
                   data-testid={`contract-row-${c.id}`}
-                  className={cn('w-full rounded-xl border bg-[#0D0D0A] px-4 py-3 text-left transition-colors hover:border-white/20', selected === c.id ? 'border-white/30' : 'border-white/10')}
+                  className={cn('w-full rounded-xl border bg-[var(--surface-primary)] px-4 py-3 text-left transition-colors hover:border-white/20', selected === c.id ? 'border-white/30' : 'border-white/10')}
                 >
                   <span className="flex items-start justify-between gap-3">
                     <span className="min-w-0 truncate text-[11px] text-white/80">{c.title}</span>
@@ -388,7 +388,7 @@ export function ContractsView({ orgId }: { orgId: string }) {
         )}
       </section>
 
-      <section aria-label="Contract" className="min-w-0 rounded-xl border border-white/10 bg-[#0D0D0A] p-4 sm:p-5">
+      <section aria-label="Contract" className="min-w-0 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 sm:p-5">
         {selected === 'new' && (
           <div className="space-y-4" data-testid="contract-new-form">
             <h2 className="font-heading text-[20px] text-white">New contract</h2>

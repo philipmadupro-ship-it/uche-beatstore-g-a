@@ -32,7 +32,7 @@ import {
 import { canDeleteOrgKind } from '@/lib/labelos/org-lifecycle';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-5 sm:p-6';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-5 sm:p-6';
 
 type Org = { id: string; name: string; slug: string; kind: string };
 
@@ -200,7 +200,7 @@ export function OrgDataPanel({ org, isOwner, exportable = true }: { org: Org; is
         </div>
       </section>}
 
-      <section className="rounded-xl border border-[#5a241c] bg-[#0D0D0A] p-5 sm:p-6" aria-labelledby="org-danger-heading">
+      <section className="rounded-xl border border-[#5a241c] bg-[var(--surface-primary)] p-5 sm:p-6" aria-labelledby="org-danger-heading">
         <p id="org-danger-heading" className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--error-text)]">
           <AlertTriangle size={12} aria-hidden="true" />
           Danger zone

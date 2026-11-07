@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artworkSizeProblems, readImageInfo, type ImageInfo } from './image-size';
+import { artworkSizeProblems, jpegHeaderMayFollow, readImageInfo, type ImageInfo } from './image-size';
 
 function png(width: number, height: number, colorType = 2): Uint8Array {
   const b = new Uint8Array(33);
@@ -22,7 +22,7 @@ function jpeg(width: number, height: number, components = 3, marker = 0xc0): Uin
 describe('readImageInfo', () => {
   it('reads a PNG from its IHDR', () => {
     expect(readImageInfo(png(3000, 3000))).toEqual({ format: 'png', width: 3000, height: 3000, color: 'rgb' });
-    expect(readImageInfo(png(4000, 3000, 6))?.color).toBe('rgb');
+    expect(readImageInfo(png(4000, 3000, 6))?.color).toBe('rgba');
     expect(readImageInfo(png(10, 10, 0))?.color).toBe('grey');
     expect(readImageInfo(png(10, 10, 3))?.color).toBe('palette');
   });
@@ -74,5 +74,27 @@ describe('artworkSizeProblems (spec 09 §4: at least 3000×3000, square, RGB)', 
   it('the minimum is configurable', () => {
     expect(artworkSizeProblems({ ...ok, width: 1500, height: 1500 }, 1400)).toEqual([]);
     expect(artworkSizeProblems({ ...ok, width: 1500, height: 1500 }, 1600).map((p) => p.code)).toEqual(['artwork_too_small']);
+  });
+});
+
+describe('LABEL-76 follow-ups', () => {
+  it('a PNG with an alpha channel fails the colour rule, with a plain message', () => {
+    const info = readImageInfo(png(3000, 3000, 6));
+    const problems = artworkSizeProblems(info);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ code: 'artwork_color' });
+    expect(problems[0].message).toMatch(/transparency/i);
+    expect(artworkSizeProblems(readImageInfo(png(3000, 3000, 2)))).toEqual([]);
+  });
+
+  it('a JPEG cut off inside a large segment asks for a longer read; a complete or non-JPEG head does not', () => {
+    const big = new Uint8Array(1000);
+    big.set([0xff, 0xd8, 0xff, 0xe1, 0x10, 0x00]); // APP1 of 4096 bytes, longer than the head
+    expect(readImageInfo(big)).toBeNull();
+    expect(jpegHeaderMayFollow(big)).toBe(true);
+    expect(jpegHeaderMayFollow(jpeg(3000, 3000))).toBe(false);
+    expect(jpegHeaderMayFollow(png(10, 10))).toBe(false);
+    // Start of scan before any frame header: reading further cannot help.
+    expect(jpegHeaderMayFollow(new Uint8Array([0xff, 0xd8, 0xff, 0xda, 0x00, 0x04, 0, 0, 0, 0]))).toBe(false);
   });
 });

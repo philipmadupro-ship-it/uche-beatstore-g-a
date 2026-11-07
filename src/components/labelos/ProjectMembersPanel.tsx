@@ -154,7 +154,7 @@ export function ProjectMembersPanel({
   return (
     <section aria-labelledby="project-members" className="mb-10 space-y-3" data-testid="project-members">
       <h2 id="project-members" className={LABEL}>People outside {orgName}</h2>
-      <div className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+      <div className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4">
         <form onSubmit={invite} className="flex flex-wrap items-center gap-2" noValidate>
           <label htmlFor="project-invite-email" className="sr-only">Email address</label>
           <input
@@ -164,7 +164,7 @@ export function ProjectMembersPanel({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="producer@example.com"
-            className="min-h-9 w-full rounded-lg border border-white/10 bg-[#090907] px-3 text-[11px] text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none sm:w-64"
+            className="min-h-9 w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 text-[11px] text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none sm:w-64"
           />
           <Dropdown aria-label="Role" value={role} onChange={(v) => setRole(v as ExternalProjectRole)} options={roleOptions} />
           <label className={`flex items-center gap-2 text-[11px] ${downloadsApply ? 'text-white/70' : 'text-white/30'}`}>
@@ -201,15 +201,15 @@ export function ProjectMembersPanel({
       </div>
 
       {failed && !data ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-4 text-[11px] text-white/60" role="alert">
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-4 text-[11px] text-white/60" role="alert">
           Could not load the people on this project. Reload to try again.
         </p>
       ) : !data ? (
         <p className="px-1 text-[11px] text-white/40" role="status">Loading…</p>
       ) : data.members.length === 0 && data.invitations.length === 0 ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-5 text-center text-[11px] text-white/40">Nobody outside {orgName} is on this project yet.</p>
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-5 text-center text-[11px] text-white/40">Nobody outside {orgName} is on this project yet.</p>
       ) : (
-        <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]">
+        <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[var(--surface-primary)]">
           {data.members.map((m) => (
             <li key={m.user_id} className="flex flex-wrap items-center gap-3 px-3 py-3" data-testid={`project-member-${m.user_id}`}>
               <span className="min-w-0 flex-1">

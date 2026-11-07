@@ -144,8 +144,8 @@ export default function JoinPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#090907] p-4 text-white">
-      <div className="w-full max-w-sm rounded-[20px] border border-white/10 bg-[#0D0D0A] p-8">
+    <main className="flex min-h-screen items-center justify-center bg-[var(--background-primary)] p-4 text-white">
+      <div className="w-full max-w-sm rounded-[20px] border border-white/10 bg-[var(--surface-primary)] p-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Invitation</p>
         <JoinBody
           loaded={loaded}
@@ -174,7 +174,7 @@ export default function JoinPage() {
 }
 
 const PRIMARY =
-  'flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-medium text-[#090907] transition-colors hover:bg-white/90 disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0D0D0A]';
+  'flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-medium text-[var(--background-primary)] transition-colors hover:bg-white/90 disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-primary)]';
 const SECONDARY =
   'flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-4 text-sm text-white transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40';
 
@@ -334,7 +334,7 @@ function JoinBody(props: {
                   onChange={(e) => props.onEmail(e.target.value)}
                   disabled={busy}
                   placeholder="you@example.com"
-                  className="min-h-11 w-full rounded-lg border border-white/10 bg-[#090907] pl-9 pr-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none disabled:opacity-40"
+                  className="min-h-11 w-full rounded-lg border border-white/10 bg-[var(--background-primary)] pl-9 pr-3 text-sm text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none disabled:opacity-40"
                 />
               </div>
               <button type="submit" disabled={busy} className={PRIMARY}>

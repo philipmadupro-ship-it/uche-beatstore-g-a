@@ -22,7 +22,7 @@ export function RoleHomeTiles({ tiles, songCount }: { tiles: readonly HomeTile[]
             key={t.page}
             href={t.href}
             data-testid={`home-tile-${t.page}`}
-            className="group rounded-xl border border-white/10 bg-[#0D0D0A] p-4 transition-colors hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+            className="group rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 transition-colors hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
           >
             <Icon size={16} strokeWidth={1.5} className="mb-3 text-white/40 transition-colors group-hover:text-white/70" aria-hidden="true" />
             <p className="font-heading text-[16px] font-bold leading-tight text-white/80">{t.label}</p>
