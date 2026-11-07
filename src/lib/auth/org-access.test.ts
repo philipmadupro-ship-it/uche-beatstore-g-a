@@ -876,6 +876,20 @@ describe('a team account must choose its own password first (doc 25)', () => {
     expect((await requireOrgCapability(ORG_A, 'catalog.read')).ok).toBe(true);
   });
 
+  it('a switched-off team account is refused every org route even while its token still works (review G12)', async () => {
+    signedIn();
+    memberships({ [ORG_A]: member({ role: 'member' }) });
+    answers.org_managed_accounts = { data: { org_id: ORG_A, must_change_password: false, disabled_at: '2026-11-01T00:00:00Z' }, error: null };
+    const { requireOrgCapability, requireOrgMember } = await load();
+    for (const r of [await requireOrgCapability(ORG_A, 'catalog.read'), await requireOrgMember(ORG_A)]) {
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.res.status).toBe(403);
+        expect(await r.res.json()).toMatchObject({ accountDisabled: true });
+      }
+    }
+  });
+
   it('a non-member is still a non-member (403 Forbidden, no hint about the password)', async () => {
     signedIn();
     memberships({});
