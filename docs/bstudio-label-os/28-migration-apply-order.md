@@ -12,7 +12,7 @@
 
 Files on disk in 136–196: 59. **Not on disk, never to be bundled:** 177 (released, LABEL-59 needed none), 185 (released, LABEL-68 moved to 194), 188 (released, LABEL-74/75 took 195). The 096/097/098/099 and 117/118 pairs are outside this range.
 
-The execution log (2026-10-19 10:05 entry) says a go-live session on branch `release/label-os-into-main` builds `supabase/apply/labelos-go-live.sql` (130–135, 136–172, 189–190, with a verify table). **That file is not on the phase-2 branch** (`ls supabase/apply` shows only `editor/`, `pending.sql`, `verify.sql`). Reconcile with that branch's version before anyone pastes anything. Everything merged after 2026-10-19 (173+ except 189/190/192, and 191) is outside any bundle that existed at the time.
+The execution log (2026-10-19 10:05 entry) says a go-live session on branch `release/label-os-into-main` builds `supabase/apply/labelos-go-live.sql` (130–135, 136–172, 189–190, with a verify table). **That file lives on `main` (go-live branch), not on the phase-2 branch** (`ls supabase/apply` here shows only `editor/`, `pending.sql`, `verify.sql`). Reconcile with that branch's version before anyone pastes anything. Everything merged after 2026-10-19 (173+ except 189/190/192, and 191) is outside any bundle that existed at the time.
 
 ## 2. The rule
 
@@ -161,7 +161,7 @@ scripts/ops/bundle-migrations.sh $(seq 136 176) $(seq 178 184) 186 187 $(seq 189
 
 The same arguments split by §7 give the pastes. Two things the script does **not** do and a human must:
 
-1. Its closing check is `supabase/apply/verify.sql`, which lists only 112–135 rows. It does not verify 136–196. A verify table for the range (one `to_regclass` / `to_regprocedure` / column probe per migration) does not exist and would be a new file.
+1. Its closing check is `supabase/apply/verify.sql`, which lists only 112–135 rows. It does not verify 136–196. A verify table for the range (one `to_regclass` / `to_regprocedure` / column probe per migration) does not exist and would be a new file. **Open follow-up for the owner's paste**, listed in `27-phase-2-report.md` §3.5.
 2. It wraps everything in one `BEGIN; … COMMIT;`. That is fine for this range (§6) but means one failing file aborts the whole paste; fix the cause and run the whole part again.
 
 `supabase/apply/pending.sql` should stay as it is (130–135). Its generator is the same script, so no change is needed there either.

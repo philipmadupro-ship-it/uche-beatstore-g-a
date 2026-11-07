@@ -72,7 +72,7 @@
 |---|---|---|---|---|
 | 73 Atomic audit functions | #168 | 2ccf06da9 | 187 | Deliver / list / import / org delete / restore / export / digest channel verbs become one SQL function each; approval decide re-checks latest row, addressee, live release, `seen`; caps enforced under lock; `has_org_cap` subtracts `departments_off` |
 | 74 + 75 Visibility and lifecycle | #182 | 506654b90 | 195 | Slack digest from the artist-visible, non-restricted view; `org.created` audit-class; sole-owner delete guard; `split_lines` column grant; TRUNCATE guard; no per-row `has_org_cap` in the activity policy; `DELETE organizations` only after the 30-day grace; purge cron 60 s / 45 s budget |
-| 76 UI polish | #185 | ea51d609d | 196 | Merged as "draft, first slice": Overview at 390 px, org chrome (home link, sign out), tokens + scoped `de-roche-archive` layer, no UI-asks-server-refuses 403s, JPEG with a big header read further, PNG with alpha refused, `no_request` before `seen_required`, and the `artwork_min_px` settings field (196; present in `OrgSettingsPanel`). The PR body still lists "full CI, /code-review, final screenshot list" as to do |
+| 76 UI polish | #185 | ea51d609d | 196 | Merged complete (after CI and the orchestrator's preview check; the PR body's "draft, first slice" wording is stale): Overview at 390 px, org chrome (home link, sign out), tokens + scoped `de-roche-archive` layer, no UI-asks-server-refuses 403s, JPEG with a big header read further, PNG with alpha refused, `no_request` before `seen_required`, and the `artwork_min_px` settings field (196; present in `OrgSettingsPanel`) |
 | 77 Test infrastructure | #181 | 5aa1007ba | — | `e2e:real-db` expect 25 s / test 90 s; real-DB specs found by an `E2E_REAL_DB` marker (58 files); service-key seeds replaced by routes where a UI exists; 4 named flakes root-caused; CI e2e states `LABEL_OS_ENABLED: 'false'`; all 20 default specs kept |
 
 ### Also on the branch
@@ -185,6 +185,7 @@ Collected from the "Found, not fixed" / follow-up sections of the merged PR bodi
 | M | `label-org-store-bridge` test 5 expected `s-maxage=30` where LABEL-71 made the list `no-store` for a consent-governed release; updated in #162 | #160, #162 | fixed |
 | M | "Approve statements" switch outside the viewport and the Escape-in-A&R-note race were product bugs; fixed with `fitPanelTop` and a ref in #181. `ui/Popover` still fits only once at open (growth, resize or scroll are not refit) | #181 | partly fixed |
 | L | `clickWhenHydrated` relies on React 19's internal `__reactProps$` key; `memory-db` stamps can run ahead of wall clock under a burst | #181 | open |
+| M | No verify table exists for 136–196 (`verify.sql` checks 112–135 only); the owner's paste has no pass/fail check. Needs one probe per migration | doc 28 §8 | open follow-up |
 | L | The CI skip-count comment is prose only; nothing fails when it drifts | #181 | open |
 | L | Real-DB runs rewrite tracked screenshots under `e2e-artifacts/` and `data/db.json`; easy to commit by accident (`data/orgs/`, `e2e-artifacts/` are not fully in `.gitignore`) | #132, #143, #150, #181 | open |
 | L | 21 local check files + 137's rollback needed a `deleted_at` backdate for 195; any new check that deletes an org must do the same; other specs' `afterAll` still delete directly | #182, #184 | accepted |
@@ -206,6 +207,6 @@ Collected from the "Found, not fixed" / follow-up sections of the merged PR bodi
 
 ## 5. Status housekeeping
 
-- Doc 23 status lines for LABEL-67, 76, 77 were brought up to date in this PR at the orchestrator's request. LABEL-76 merged as a first slice; its PR body still lists CI, code review and the screenshot list as to do.
+- Doc 23 status lines for LABEL-67, 76, 77 were brought up to date in this PR at the orchestrator's request. LABEL-76's PR body says "first slice", which is stale: it merged complete.
 - Doc 23's LABEL-78 line names `25-phase-2-report.md`; the file is `27-phase-2-report.md`.
-- `go-live.md` and `supabase/apply/labelos-go-live.sql` (go-live session) are not on this branch.
+- `go-live.md` and `supabase/apply/labelos-go-live.sql` live on `main` (go-live session), not on this branch.

@@ -9642,7 +9642,7 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
 - 2026-11-07 — **LABEL-76 Done**: #185 squash `ea51d60`, migration 196 (not applied).
   - What it adds: Overview at 390 px and an aligned 1440 header; org bar with the org name, home link and Sign out; Label OS panels on tokens plus a scoped `de-roche-archive` override layer; no UI-asks-server-refuses 403s; artwork checks (large JPEG headers read further, `no_request` before `seen_required`); the `artwork_min_px` settings field (196 redefines 192's `labelos_validate_org_settings_patch`, 600 to 10000).
   - Decisions: a transparent PNG (alpha) fails the RGB rule; the archive theme is a scoped override layer, not a rewrite of the white-alpha utilities.
-  - Gate: merged as the PR's first slice; its body still lists full CI, code review and screenshots as to do.
+  - Gate: CI green and the orchestrator's preview check before merge; the PR body's "first slice" wording is stale, it merged complete.
 - 2026-11-07 — **LABEL-77 Done**: #181 squash `5aa1007`, no migration.
   - What it adds: `e2e:real-db` timeouts (expect 25 s, test 90 s) and marker-based discovery of the real-DB specs (58 files); service-key seeds replaced by the real routes where a UI exists; four named flakes root-caused (A&R note Escape race, `ui/Popover` top-edge clamp `fitPanelTop`, equal `created_at` ordering, check regexes); CI e2e states `LABEL_OS_ENABLED: 'false'`.
   - Decisions: producer orgs keep the releases page; org cleanup in e2e is header-gated (`x-e2e-org-cleanup: 1`, service role only) because migration 195 refuses early org deletes; all 20 default specs kept; the real-DB suite is verified in chunks because one dev server degrades late.

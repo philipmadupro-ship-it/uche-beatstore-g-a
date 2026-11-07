@@ -296,7 +296,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 
 ### LABEL-78 — Final integration and review
 **Priority:** P0 · **Risk:** Medium · **Deps:** all · **Status:** In Progress (this session: docs, PR #186; review fleet run by the orchestrator)
-- Migration apply-order document for 136…N (never applied until the owner says), update `18-test-roadmap.md` (new screens, both faces, departments), update `19-independent-review-prompt.md` with groups G11+ for phase 2, update CLAUDE.md/AGENTS.md product text, run the review fleet on phase 2 (4–5 tasks each) and a G10-style cross-cutting pass, write `docs/bstudio-label-os/25-phase-2-report.md`.
+- Migration apply-order document for 136…N (never applied until the owner says), update `18-test-roadmap.md` (new screens, both faces, departments), update `19-independent-review-prompt.md` with groups G11+ for phase 2, update CLAUDE.md/AGENTS.md product text, run the review fleet on phase 2 (4–5 tasks each) and a G10-style cross-cutting pass, write `docs/bstudio-label-os/27-phase-2-report.md` (the migration apply order is `28-migration-apply-order.md`; 25 and 26 were already taken).
 
 ### LABEL-79 — Link-only project access with upload (owner idea, PROPOSED)
 **Priority:** — · **Risk:** Medium · **Deps:** none · **Status:** Proposed — being planned in PR #135 (PORTAL-UP, another session, migration 191)
