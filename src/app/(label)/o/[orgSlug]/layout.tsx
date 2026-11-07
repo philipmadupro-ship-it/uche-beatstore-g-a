@@ -27,6 +27,7 @@ import { orgShellFor, ownedDeletedOrgFor, sessionIdentity } from '@/lib/auth/org
 import { createServiceClient } from '@/lib/auth/ownership';
 import { sessionMustChangePassword } from '@/lib/labelos/team-accounts-store';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
+import { SETUP_PATH, needsSetup } from '@/lib/labelos/setup';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +52,9 @@ export default async function OrgShellLayout({
   // Doc 25: a team account on the password its org gave it chooses its own before anything else.
   const session = await sessionIdentity();
   if (await sessionMustChangePassword(session?.userId ?? null, createServiceClient())) redirect('/account/password');
+
+  // LABEL-48: the owner of an operator-created org has not run the wizard yet; it adopts this org.
+  if (needsSetup(shell)) redirect(SETUP_PATH);
 
   const body = (
     <div className="labelos-shell min-h-screen bg-[var(--background-primary)] text-[var(--text-primary)]">

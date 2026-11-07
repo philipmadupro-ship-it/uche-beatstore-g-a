@@ -1,4 +1,4 @@
-# 28 — Migration apply order, 136 … 196
+# 28 — Migration apply order, 136 … 197
 
 **Written 2026-11-07 for LABEL-78. Documentation only; neither `supabase/apply/pending.sql` nor any migration file was touched.** **Update, same day: the owner has since applied everything below to PRODUCTION (§0). This file now records what was done and the order it followed.** The ledger of record stays `supabase/MIGRATIONS.md`; if the two disagree, the ledger wins and this file is stale.
 
@@ -124,6 +124,7 @@ Dependencies were derived by scanning each file for tables and functions created
 | 194 | LABEL-68 creative gate | 144, 146, 157, 171, 187 | sorts after 187 on purpose |
 | 195 | LABEL-74/75 lifecycle guards | 147, 155, 170 | refuses `DELETE organizations` until `deleted_at` is 30 days old, see §5 |
 | 196 | LABEL-76 `artwork_min_px` | 192 | |
+| 197 | Review G12 setup fixes | 170, 192, 195 | redefines 192's `labelos_setup_org`; **not applied** |
 
 ## 5. Things that change behaviour when a migration lands
 
@@ -156,6 +157,7 @@ Dependencies were derived by scanning each file for tables and functions created
 | 5 | 179–184 | Finance, marketing, press |
 | 6 | 187 | The atomic audit family; needs 186 and 176 |
 | 7 | 189, 190, 192, 193, 194, 195, 196 | Setup, team accounts, lifecycle, creative gate, guards, settings key |
+| 3rd (pending) | 197 | Review G12 fixes (`labelos_setup_org`: atomic `org.created`, adoption of an unfinished operator-created org). Not applied. Needs 170, 192, 195. Paste it BEFORE deploying the code that redirects an unfinished owner to `/setup` |
 | — | 191 | Independent; apply with the portal-upload code, any time after 129 |
 
 The ledger's own wording (186 "ships in a later paste than 130–173 and 189–192"; 193 "second paste after go-live") fits this split if a first go-live paste ended at 173 plus 189–192. If the go-live branch already did that, continue from paste 4 for what it did not carry, still in numeric order.
