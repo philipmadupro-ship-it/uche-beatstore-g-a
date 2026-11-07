@@ -81,6 +81,7 @@ describe('verb vocabulary', () => {
       'calendar_feed.issued',
       'calendar_feed.revoked',
       'release.legal_pack_exported',
+      'exec.exported',
       'release.store_listed',
       'release.store_unlisted',
       'release.imported',
