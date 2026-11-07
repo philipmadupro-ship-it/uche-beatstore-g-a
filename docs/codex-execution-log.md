@@ -9648,3 +9648,8 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Decisions: producer orgs keep the releases page; org cleanup in e2e is header-gated (`x-e2e-org-cleanup: 1`, service role only) because migration 195 refuses early org deletes; all 20 default specs kept; the real-DB suite is verified in chunks because one dev server degrades late.
   - Follow-ups: no chunked runner; `clickWhenHydrated` uses a React internal key; screenshot churn under `e2e-artifacts/`.
 - 2026-11-07 — LABEL-78 docs (#186): `27-phase-2-report.md`, `28-migration-apply-order.md`, roadmap 4b, review groups G11 to G19, CLAUDE.md and AGENTS.md phase-2 text.
+- 2026-11-07 — **Migrations 130–196 applied to PRODUCTION** (owner, SQL editor, reported via the orchestrator; two pastes, both 0 errors).
+  - Paste 1: main's `supabase/apply/labelos-go-live.sql` (130–135, 136–173, `139_buyer_offer_email_verified`, 189–192, the operator step); its verify table ran.
+  - Paste 2: a `scripts/ops/bundle-migrations.sh` bundle from `claude/happy-bardeen-rnosf3`: 174, 175, 176, 178, 186, 179, 180, 181, 182, 183, 184, 187, 193, 194, 195, 196. No verify table exists for that range; "0 errors" is the evidence.
+  - Recorded in `supabase/MIGRATIONS.md` (rows 130–196 applied; row 159 added, it was missing), `CLAUDE.md`, doc 27 and doc 28 §0. `pending.sql` untouched. Follow-up: a post-hoc verify table for 174–196.
+  - Also in #186: LABEL-67's pipeline counts changed before merge (every song in the reader's artist scope, numbers only); #184's PR body is stale.

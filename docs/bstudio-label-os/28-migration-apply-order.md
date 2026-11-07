@@ -1,8 +1,17 @@
 # 28 — Migration apply order, 136 … 196
 
-**Written 2026-11-07 for LABEL-78. Documentation only. Nothing here has been applied to any database, and neither `supabase/apply/pending.sql` nor any migration file was touched.** The ledger of record stays `supabase/MIGRATIONS.md`; if the two disagree, the ledger wins and this file is stale.
+**Written 2026-11-07 for LABEL-78. Documentation only; neither `supabase/apply/pending.sql` nor any migration file was touched.** **Update, same day: the owner has since applied everything below to PRODUCTION (§0). This file now records what was done and the order it followed.** The ledger of record stays `supabase/MIGRATIONS.md`; if the two disagree, the ledger wins and this file is stale.
 
-## 1. State today
+## 0. Applied on production, 2026-11-07
+
+Reported by the owner via the orchestrator. Two SQL-editor pastes, both with **0 errors**:
+
+1. `supabase/apply/labelos-go-live.sql` (from `main`): 130–135, 136–173, `139_buyer_offer_email_verified` (main-side, not on this branch), 189–192, plus the platform-operator step. **Its verify table ran.**
+2. A bundle built with `scripts/ops/bundle-migrations.sh` from `claude/happy-bardeen-rnosf3`: 174, 175, 176, 178, 186, 179, 180, 181, 182, 183, 184, 187, 193, 194, 195, 196 (the order of §7 paste 4–7, with 186 ahead of 179 as suggested). **No verify table exists for this range; "0 errors" is the only evidence.** A post-hoc check (one `to_regclass` / `to_regprocedure` / column probe per migration) remains an open follow-up.
+
+So 001–196 are in effect (177, 185, 188 never used). §1 to §8 below are kept as written, as the record of the order and dependencies; read their "not applied" wording as historical. Migrations added after today start as not applied again.
+
+## 1. State today (written before the apply; see §0)
 
 | Range | State | Source |
 |---|---|---|
@@ -136,7 +145,7 @@ Dependencies were derived by scanning each file for tables and functions created
 - None of 136–196 uses `CREATE TEMP`, `CONCURRENTLY` or `ALTER TYPE … ADD VALUE`, so the bundle's single `BEGIN; … COMMIT;` is valid, and no SQL-editor-form file under `supabase/apply/editor/` is needed for this range (the script refuses a TEMP-table migration without one; there is none here). The set is about 850 KB of SQL: paste in several parts (§7), each a prefix-closed chunk, rather than as one file.
 - Run `npm run db:local:check` on the final tree first; it replays every migration twice, runs `supabase/local/checks/*.sql` (59 files), the race scripts under `supabase/local/races/` and the 58 rollbacks in `supabase/rollback/`.
 
-## 7. Suggested pastes (prefix-closed)
+## 7. Suggested pastes (prefix-closed) — done, see §0
 
 | Paste | Numbers | Why a boundary here |
 |---|---|---|

@@ -1,6 +1,6 @@
 # 27 — Phase 2 report (LABEL-43 … LABEL-77)
 
-**Written 2026-11-07 for LABEL-78, from the merged PRs, `docs/codex-execution-log.md` and doc 23. Sources are named; severities are this author's reading, not the builders'.** Everything is on `claude/happy-bardeen-rnosf3`. Nothing is on `main`, and no migration from 136 up is applied anywhere. Apply order: `28-migration-apply-order.md`.
+**Written 2026-11-07 for LABEL-78, from the merged PRs, `docs/codex-execution-log.md` and doc 23. Sources are named; severities are this author's reading, not the builders'.** Everything is on `claude/happy-bardeen-rnosf3`. Nothing from phase 2 is on `main` yet. **Update 2026-11-07 (later): the owner applied migrations 130–196 to production** in two SQL-editor pastes, both with 0 errors (first `labelos-go-live.sql` from `main` for 130–173 and 189–192, with its verify table; then a bundle of 174–176, 178–184, 186, 187, 193–196 with no verify table). Apply order and record: `28-migration-apply-order.md` §0. "Not applied" in the statuses below is historical.
 
 > File number: the brief asked for `25-phase-2-report.md`, but 25 (team accounts) and 26 (artist consent) already exist, so this is 27. Rename if the orchestrator wants the original.
 
@@ -185,7 +185,7 @@ Collected from the "Found, not fixed" / follow-up sections of the merged PR bodi
 | M | `label-org-store-bridge` test 5 expected `s-maxage=30` where LABEL-71 made the list `no-store` for a consent-governed release; updated in #162 | #160, #162 | fixed |
 | M | "Approve statements" switch outside the viewport and the Escape-in-A&R-note race were product bugs; fixed with `fitPanelTop` and a ref in #181. `ui/Popover` still fits only once at open (growth, resize or scroll are not refit) | #181 | partly fixed |
 | L | `clickWhenHydrated` relies on React 19's internal `__reactProps$` key; `memory-db` stamps can run ahead of wall clock under a burst | #181 | open |
-| M | No verify table exists for 136–196 (`verify.sql` checks 112–135 only); the owner's paste has no pass/fail check. Needs one probe per migration | doc 28 §8 | open follow-up |
+| M | No verify table exists for 174–196 (the go-live paste had one for 130–173; `verify.sql` on this branch checks 112–135 only); the second paste's only evidence is "0 errors". Now a post-hoc check: one probe per migration | doc 28 §0, §8 | open follow-up |
 | L | The CI skip-count comment is prose only; nothing fails when it drifts | #181 | open |
 | L | Real-DB runs rewrite tracked screenshots under `e2e-artifacts/` and `data/db.json`; easy to commit by accident (`data/orgs/`, `e2e-artifacts/` are not fully in `.gitignore`) | #132, #143, #150, #181 | open |
 | L | 21 local check files + 137's rollback needed a `deleted_at` backdate for 195; any new check that deletes an org must do the same; other specs' `afterAll` still delete directly | #182, #184 | accepted |
