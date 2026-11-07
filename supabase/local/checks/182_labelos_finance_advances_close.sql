@@ -264,6 +264,7 @@ SELECT public.check_eq('...and stays open', (SELECT status FROM public.finance_p
 
 -- ── The org's hard delete takes everything ───────────────────────────────
 
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('hard delete: no advance of the org remains', (SELECT count(*)::int FROM public.advances WHERE org_id = :L), 0);
 SELECT public.check_eq('hard delete: the other organization''s advances are untouched', (SELECT count(*)::int FROM public.payees WHERE org_id = :L2), 1);

@@ -276,6 +276,24 @@ describe('review fixes (LABEL-42)', () => {
     expect(limited?.headers.get('retry-after')).toBe('60');
   });
 
+  it('the list, the detail and the cover are rate limited per caller too (LABEL-75)', async () => {
+    const cases: Array<[string, string, Record<string, string>, () => Promise<unknown>]> = [
+      [`/api/store/releases`, 'list', {}, () => import('./route')],
+      [`/api/store/releases/${RP}`, 'detail', { id: RP }, () => import('./[id]/route')],
+      [`/api/store/releases/${RP}/cover`, 'cover', { id: RP }, () => import('./[id]/cover/route')],
+    ];
+    for (const [path, name, params, mod] of cases) {
+      const m = (await mod()) as Record<string, Handler>;
+      let limited: Response | null = null;
+      for (let i = 0; i < 200 && !limited; i += 1) {
+        const res = await m.GET(new NextRequest(`https://app.test${path}`, { headers: { 'x-forwarded-for': `198.51.100.${name.length}` } }), { params: Promise.resolve(params) });
+        if (res.status === 429) limited = res;
+      }
+      expect(limited?.status, name).toBe(429);
+      expect(limited?.headers.get('retry-after'), name).toBe('60');
+    }
+  });
+
   it('a stale listing (an ended connection) does not crowd real ones out of the list', async () => {
     const artist = '10000000-0000-4000-8000-0000000000a2';
     db.tables.organizations.push({ id: artist, kind: 'artist', deleted_at: null, created_at: '2026-01-03T00:00:00Z' });

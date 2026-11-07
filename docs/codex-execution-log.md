@@ -9615,6 +9615,7 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Follow-ups:
     - saved-view filters cannot select the creative gate;
     - the real-db `label-org-departments` 1440 "Approve statements" switch timeout is pre-existing (→ LABEL-77).
+<<<<<<< HEAD
 - 2026-11-06 — LABEL-77 (session_019AUhHdvXtZepahKVJnTZZ9) started; also asked to root-cause the known flaky tests rather than hide them.
 - 2026-11-06 — **LABEL-70 Done**: #178 squash `3ab0215` (no migration).
   - What it adds: one role-view table (`lib/labelos/role-view.ts`, `pageAllowed`) behind the nav, the page guards and the artist-shaped home tiles; a creative-workspace entry for `creative.read` with the artistic department on and licensed; independent-artist orgs no longer get the legal queue.
@@ -9626,3 +9627,14 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Gate: CI green on `59c18e4`; preview checked; independent review (Sonnet) NOT BLOCKING. Fixed before merge: statement void/issue in a closed period, scoped dashboard readers no longer see spend/committed/margin, a voided statement no longer freezes an advance.
   - Follow-ups: general cost table; income of a song on several releases is "ambiguous"; the dashboard filters after reading the whole org (SQL aggregate at scale).
 - 2026-11-06 — LABEL-74 + LABEL-75 started as one PR (session_019AUhHeidKKga8RUEDpPiLK, migration 195). 188 released. Orchestration now runs at most two children, with Sonnet reviews for Medium/High risk only.
+=======
+- 2026-11-07 — LABEL-74 + LABEL-75 in one PR (#182, migration 195, not applied).
+  - LABEL-74: the Slack digest uses `channelContent` (owner/admin reach minus `business.read.internal`, `audio.working`, `rights.read`; no Needs-attention list); sharing a saved view warns that its name is shown to every member; `/o/<slug>/artists` (layout) and `/releases/store` 404 through `pageAllowed`; `ensurePersonalOrg` runs only with `LABEL_OS_ENABLED`; the references cap counts only what the member can read (`referencesAtCap`); `releaseItemTitles` drops hidden songs and renumbers (no "Restricted song" line, no gap).
+  - LABEL-75: `org.created` is an audit verb (the prune skips it by verb, so existing rows are kept too); purge cron `maxDuration` 60 with a 45 s budget; `/api/store/releases` list, detail and cover are rate limited per caller; migration 195 = sole-owner `auth.users` delete guard, `split_lines` column grant, `activity_events` TRUNCATE guard, uncorrelated `activity_events_member_read`, `organizations` DELETE only past the 30-day grace.
+  - Side effect of the `organizations` guard: 21 local check files that delete an org now first set `deleted_at` 31 days back, and 137's rollback does the same. 155's plan probe names granted `split_lines` columns.
+  - Doc drift fixed: `contacts.artist_org_id` is `ON DELETE SET NULL` (it is `label_contact_id` that is RESTRICT); AGENTS.md marks `invites` / `team_members` legacy.
+>>>>>>> origin/claude/happy-bardeen-rnosf3
+- 2026-11-07 — **LABEL-74 + LABEL-75 Done**: #182 squash `506654b`, migration 195 (not applied; second paste).
+  - What it adds: the Slack digest from the artist-visible, non-restricted view; a warning when sharing a saved view's name; `/artists` and `/releases/store` 404 through `pageAllowed`; `ensurePersonalOrg` behind the flag; the references cap counts only readable references; restricted songs dropped from release tracklists. `org.created` is audit-class (195 redefines 170's console function so its event is audit too); purge cron budget; `/api/store/releases/*` rate limited; sole-owner account deletion refused; `split_lines` column grant; `activity_events` TRUNCATE guard; 147's read policy without per-row `has_org_cap`; an `organizations` row is deleted only 30 days after `deleted_at`.
+  - Gate: CI green on `ce0e52b`; preview checked; Low risk, no independent review. Fixed before merge: the console-created `org.created` event, purge vs the delete guard's clock (a refusal is "kept, retry tomorrow").
+  - Follow-ups: `org.created` rows written before 195 stay non-audit (163 forbids promotion; the prune skips the verb); a new local check that deletes an org must backdate `deleted_at`.

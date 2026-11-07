@@ -76,7 +76,7 @@ export function FilterBar({
           hidden: !activeView?.canEdit || (!activeView.shared && !canShare),
           onSelect: async () => {
             const res = await filter.update(activeView!.id, { shared: !activeView!.shared });
-            if (res.ok) toast.success(activeView!.shared ? 'Only you can see this view now' : 'Shared with the organization');
+            if (res.ok) toast.success(activeView!.shared ? 'Only you can see this view now' : `Shared with the organization — every member can read its name, “${activeView!.name}”`);
             else toast.error(res.error);
           },
         },
@@ -232,6 +232,11 @@ function SaveViewDialog({
               <span className="mt-0.5 block text-[10px] text-white/40">Members see the rows their own role and artists allow — never more than they could open themselves.</span>
             </span>
           </label>
+        )}
+        {canShare && shared && (
+          <p role="note" className="text-[10px] text-white/50" data-testid="share-name-warning">
+            The name “{name.trim() || '…'}” is shown to every member, including those who cannot open the songs or artists it filters. Keep restricted names out of it.
+          </p>
         )}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={onClose}>Cancel</Button>

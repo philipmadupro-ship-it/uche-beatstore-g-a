@@ -204,6 +204,7 @@ RESET ROLE;
 
 -- ── The org's hard delete takes everything ──────────────────────────────
 
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('deleting the org deletes every press row',
   (SELECT (SELECT count(*) FROM public.press_kits) + (SELECT count(*) FROM public.press_kit_links) + (SELECT count(*) FROM public.press_kit_photos)

@@ -187,6 +187,16 @@ describe('purgeOrg', () => {
     expect(mem.writes).toEqual([]);
   });
 
+  it('treats the database grace guard (195) refusing a row as kept for tomorrow, not an error (clock skew at the cutoff)', async () => {
+    // The Node clock is a few seconds ahead of the database's: the row passes lte(cutoff) here but the trigger refuses it.
+    const chain: Record<string, unknown> = {};
+    for (const m of ['delete', 'eq', 'not', 'lte']) chain[m] = () => chain;
+    chain.select = async () => ({ data: null, error: { code: '42501', message: 'organization x is deleted only by the purge, 30 days after it was scheduled for deletion' } });
+    const out = await purgeOrg({ from: () => chain } as never, { id: A, name: 'x', deleted_at: daysAgo(30) }, async () => 3, NOW);
+    expect(out).toMatchObject({ status: 'kept', orgId: A });
+    expect((out as { reason: string }).reason).toMatch(/^rows:/);
+  });
+
   it('does not delete an org that was restored, or is not yet due, between listing and purging', async () => {
     db.tables.organizations[0].deleted_at = null; // restored
     expect(await purgeOrg(mem.client as never, { id: A, name: 'x', deleted_at: daysAgo(31) }, async () => 0, NOW)).toMatchObject({ status: 'kept', reason: 'no longer due' });

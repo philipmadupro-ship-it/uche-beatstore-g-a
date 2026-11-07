@@ -174,6 +174,7 @@ SELECT public.check_eq('soft-deleted org is hidden', (SELECT count(*) FROM publi
 SELECT public.check_eq('soft-deleted org grants nothing',
   public.has_org_cap('aaaaaaaa-0000-4000-8000-000000000000', 'catalog.read'), false);
 RESET ROLE;
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE slug = 'org-b';
 DELETE FROM public.organizations WHERE slug = 'org-b';
 SELECT public.check_eq('hard delete cascades past the owner trigger',
   (SELECT count(*) FROM public.org_members WHERE org_id = 'bbbbbbbb-0000-4000-8000-000000000000'), 0::bigint);

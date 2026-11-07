@@ -185,5 +185,6 @@ BEGIN
 END $$;
 
 -- Deleting the org removes its managed rows.
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :LA;
 DELETE FROM public.organizations WHERE id = :LA;
 SELECT public.check_eq('cascade', (SELECT count(*) FROM public.org_managed_accounts WHERE org_id = :LA), 0::bigint);

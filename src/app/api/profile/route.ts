@@ -8,6 +8,7 @@ import { isUUID, readBody } from '@/lib/validate';
 import { CreatorProfilePatchSchema } from '@/lib/contracts';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { ensurePersonalOrg } from '@/lib/labelos/personal-org';
+import { isLabelOsEnabled } from '@/lib/labelos/flag';
 
 export const dynamic = 'force-dynamic';
 
@@ -154,6 +155,8 @@ export async function POST(req: NextRequest) {
 async function ensureProducerOrg(profile: unknown) {
   const userId = (profile as { user_id?: unknown } | null)?.user_id;
   if (!isUUID(userId)) return; // local-store mode: no database
+  // LABEL-74: with Label OS off a profile save must not create org rows.
+  if (!isLabelOsEnabled()) return;
   try {
     await ensurePersonalOrg(createServiceClient(), userId);
   } catch (error) {

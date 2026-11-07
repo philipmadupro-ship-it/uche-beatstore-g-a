@@ -168,9 +168,9 @@ SELECT public.check_eq('no member yet, created_by left empty',
     + (SELECT count(*) FROM public.organizations WHERE slug = 'solo-act-170' AND created_by IS NOT NULL), 0::bigint);
 SELECT public.check_eq('its own artist contact does not carry the operator''s email',
   (SELECT count(*) FROM public.contacts c JOIN public.organizations o ON o.id = c.org_id WHERE o.slug = 'solo-act-170' AND c.category = 'artist' AND c.email IS NULL), 1::bigint);
-SELECT public.check_eq('org.created (everyday) and org.entitlements_changed (audit) in the new org',
+SELECT public.check_eq('org.created (audit since 195) and org.entitlements_changed (audit) in the new org',
   (SELECT string_agg(verb || ':' || audit::text, ',' ORDER BY verb) FROM public.activity_events e JOIN public.organizations o ON o.id = e.org_id WHERE o.slug = 'solo-act-170'),
-  'org.created:false,org.entitlements_changed:true');
+  'org.created:true,org.entitlements_changed:true');
 
 -- ── the owner invitation ─────────────────────────────────────────────────
 SET ROLE service_role;
@@ -223,5 +223,6 @@ RESET ROLE;
 RESET request.jwt.claims;
 
 -- ── deleting the org removes its licence ─────────────────────────────────
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L1;
 DELETE FROM public.organizations WHERE id = :L1;
 SELECT public.check_eq('cascade', (SELECT count(*) FROM public.org_entitlements WHERE org_id = :L1), 0::bigint);
