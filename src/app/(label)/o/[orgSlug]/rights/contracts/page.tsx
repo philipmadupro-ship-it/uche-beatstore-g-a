@@ -8,7 +8,7 @@ import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { ContractsView } from '@/components/labelos/ContractsView';
 import { orgShellFor } from '@/lib/auth/org-access';
-import { canSeeContracts } from '@/lib/labelos/contracts-nav';
+import { pageAllowed, viewInputOf } from '@/lib/labelos/role-view';
 import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 export default async function ContractsPage({ params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
   const shell = await orgShellFor(orgSlug);
-  if (!shell || shell.org.kind === 'producer' || !shell.modules.includes('contracts') || !canSeeContracts(new Set(shell.capabilities))) notFound();
+  if (!shell || !pageAllowed('contracts', viewInputOf(shell))) notFound();
   return (
     <PageContainer>
       <header className="mb-6 sm:mb-8">

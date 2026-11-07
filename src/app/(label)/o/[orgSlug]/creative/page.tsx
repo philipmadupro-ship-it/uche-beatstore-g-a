@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { CreativeWorkspaceView } from '@/components/labelos/CreativeWorkspaceView';
 import { orgShellFor } from '@/lib/auth/org-access';
+import { pageAllowed, viewInputOf } from '@/lib/labelos/role-view';
 import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
 export default async function CreativePage({ params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
   const shell = await orgShellFor(orgSlug);
-  if (!shell || shell.org.kind === 'producer' || !shell.capabilities.includes('creative.read')) notFound();
+  if (!shell || !pageAllowed('creative', viewInputOf(shell))) notFound();
   return (
     <PageContainer>
       <header className="mb-6 sm:mb-8">
