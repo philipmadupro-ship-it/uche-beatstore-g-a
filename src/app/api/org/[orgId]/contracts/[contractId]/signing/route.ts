@@ -164,7 +164,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       ipHash: ipHashOf(req),
     });
     if (!prepared.ok) return json(prepared.status, { error: prepared.error, ...(prepared.code ? { code: prepared.code } : {}) });
-    const result = await finishSign(prepared, await auditRpc(admin, 'contractSign', prepared.args));
+    // If the function call itself throws, the drawn image already stored would be orphaned: remove it (best effort).
+    const rpc = await auditRpc(admin, 'contractSign', prepared.args).catch(async (err: unknown) => {
+      await prepared.cleanup().catch(() => {});
+      throw err;
+    });
+    const result = await finishSign(prepared, rpc);
     if (!result.ok) return json(result.status, { error: result.error, ...(result.code ? { code: result.code } : {}) });
     return json(200, { ok: true, completed: result.completed, status: result.completed ? 'signed' : 'sent' });
   } catch (err) {
