@@ -8,6 +8,7 @@
 // Plus a fake Resend on :54400 that records emails (GET /emails lists, DELETE clears).
 import http from 'node:http';
 import { SERVICE_KEY, sign, verify } from './jwt.mjs';
+import { shouldAgeOrgDelete } from './org-cleanup.mjs';
 
 const PGRST = process.env.LOCAL_PGRST_URL ?? 'http://127.0.0.1:3000';
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*', 'access-control-expose-headers': '*' };
@@ -86,11 +87,9 @@ http.createServer(async (req, res) => {
       delete headers.host;
       delete headers['content-length'];
       const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await readBody(req);
-      // Migration 195 lets an organization row go only 30 days after it was scheduled for deletion (the purge). Specs
-      // clean up with the service key, so a service-role DELETE of organizations first backdates `deleted_at` past the
-      // grace period, which is what the purge sees: the same trigger runs, nothing is switched off. A user's own JWT is
-      // forwarded untouched, so a spec that proves the refusal still gets it.
-      if (req.method === 'DELETE' && url.pathname === '/rest/v1/organizations' && verify(String(req.headers.authorization ?? '').replace(/^Bearer /, ''))?.role === 'service_role') {
+      // Migration 195 refuses an organization DELETE before the 30-day grace period. A spec's cleanup (header set by
+      // playwright.config.ts, see org-cleanup.mjs) gets the grace period aged; the app's own requests never do.
+      if (shouldAgeOrgDelete({ method: req.method, pathname: url.pathname, headers: req.headers })) {
         const aged = new Date(Date.now() - 31 * 86_400_000).toISOString();
         const aging = await fetch(PGRST + '/organizations' + url.search, { method: 'PATCH', headers: { ...headers, 'content-type': 'application/json', prefer: 'return=minimal' }, body: JSON.stringify({ deleted_at: aged }) });
         if (!aging.ok) console.error('backdating deleted_at failed', aging.status, await aging.text());

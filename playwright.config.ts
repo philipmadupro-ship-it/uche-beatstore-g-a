@@ -46,6 +46,9 @@ export default defineConfig({
 
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3457',
+    // Real-database specs clean their orgs up with the service key; the local gateway ages `deleted_at` for a request that
+    // carries this header (scripts/local-db/org-cleanup.mjs) and for no other, so the app's own deletes still meet migration 195.
+    ...(realDb ? { extraHTTPHeaders: { 'x-e2e-org-cleanup': '1' } } : {}),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
