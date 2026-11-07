@@ -5,10 +5,8 @@
  *
  * The import is driven through the page, a file picker and the real routes —
  * nothing a finance person does is seeded with the service key. Seeded with the
- * service key: the cast, the songs and an advance (advances have no
- * screen until LABEL-64). The split sheets are started and circulated through the
- * splits routes, as a rights writer does it. The split sheets are made and
- * circulated through the splits routes, not seeded.
+ * service key: the cast and the songs. The split sheets and the advance are made
+ * through the splits and advances routes, as a rights writer and a finance person do it.
  *
  *   1 · the owner imports a DistroKid-style CSV on /o/<slug>/finance/earnings:
  *       fractional cents are refused until "round fractional cents" is ticked;
@@ -143,11 +141,12 @@ test('1 · the owner makes payees through the route, a sheet circulates, an adva
     { party_id: P_NOVA, role: 'master_owner', share: 70 },
     { party_id: P_PAT, role: 'master_owner', share: 30 },
   ]);
-  await ctx.close();
-  // Nova's recoupable advance: $50.00.
+  // Nova's recoupable advance: $50.00, through the advances route.
   const payees = (await rest(request, 'GET', `payees?select=id,party_id&org_id=eq.${ORG}`)) as Row[];
   const nova = String(payees.find((p) => p.party_id === P_NOVA)!.id);
-  await rest(request, 'POST', 'advances', { org_id: ORG, payee_id: nova, kind: 'recoupable', amount_minor: 5000, currency: 'USD', note: 'signing' });
+  const adv = await ctx.request.post(`/api/org/${ORG}/finance/advances`, { data: { payee_id: nova, kind: 'recoupable', amount_minor: '5000', note: 'signing' } });
+  expect(adv.status(), await adv.text()).toBe(201);
+  await ctx.close();
 });
 
 test('2 · import through the page: fractional cents are refused, then rounded on request', async ({ browser, baseURL }) => {

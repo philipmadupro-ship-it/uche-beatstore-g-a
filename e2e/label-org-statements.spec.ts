@@ -3,8 +3,8 @@
  * Postgres + PostgREST + RLS, LABEL_OS_ENABLED=true, migrations 179–181).
  *
  * Driven through the pages and the real routes — nothing a finance person does is seeded with the
- * service key. Seeded with the service key: the cast, the song and an
- * advance (advances have no screen until LABEL-64).
+ * service key. Seeded with the service key: the cast and the song. The split sheet and
+ * the advance are made through the splits and advances routes.
  *
  *   1 · the owner opens a period on the statements page; the CSV is imported into it through the
  *       earnings page's period dropdown;
@@ -119,7 +119,8 @@ test('1 · the owner opens a period on the page and imports into it', async ({ b
     { party_id: P_PAT, role: 'master_owner', share: 30 },
   ]);
   const payees = (await rest(request, 'GET', `payees?select=id,party_id&org_id=eq.${ORG}`)) as Row[];
-  await rest(request, 'POST', 'advances', { org_id: ORG, payee_id: payees.find((p) => p.party_id === P_NOVA)!.id, kind: 'recoupable', amount_minor: 5000, currency: 'USD', note: 'signing' });
+  const adv = await ctx.request.post(`/api/org/${ORG}/finance/advances`, { data: { payee_id: payees.find((p) => p.party_id === P_NOVA)!.id, kind: 'recoupable', amount_minor: '5000', note: 'signing' } });
+  expect(adv.status(), await adv.text()).toBe(201);
 
   const page = await ctx.newPage();
   await page.setViewportSize({ width: 1440, height: 900 });
