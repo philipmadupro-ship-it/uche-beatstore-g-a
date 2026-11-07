@@ -66,7 +66,7 @@ K Finish           78
 Task numbers continue from 42; the table keys above use LABEL-nn = nn.
 
 Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (D), 180–183 (E),
-184–185 (F), 186 (G), 187 (I), 188 (J). Unused numbers are simply skipped.
+184–185 (F), 186 (G), 187 (I), 188 (J). Unused numbers are simply skipped. 188 is released (2026-11-06): it would sort before 189–194, so LABEL-74/75 take 195.
 
 ---
 
@@ -206,7 +206,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: statement totals equal the sum of allocations (test); approval is append-only; artist sees only theirs.
 
 ### LABEL-64 — Finance dashboard and advances
-**Priority:** P2 · **Risk:** Low · **Deps:** 63 · **Migration:** 182 · **Status:** In Progress (session_019AUhHbQckpjX1sMdPkHon5)
+**Priority:** P2 · **Risk:** Low · **Deps:** 63 · **Migration:** 182 · **Status:** Done — #180, squash `9aaff9d4bc9ba3d6b7e77bc2c9cb17abdd1bdb6a` (2026-11-06)
 - Advances ledger (recoupable / non-recoupable), per-artist position, per-release income vs cost, period close; feeds the executive dashboard (LABEL-67).
 
 ---
@@ -244,7 +244,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Invite a collaborator to a song or project with a role (beatmaker, producer, rapper, feature, engineer); they accept their credit and their split, see their contract and statements (scoped), upload stems/versions (existing external-member rules), and ask for things through the closed notification kinds. "My sessions" list for a collaborator who has several labels.
 
 ### LABEL-70 — Role views
-**Priority:** P0 · **Risk:** Medium · **Deps:** 47, 49, 69 · **Status:** In Progress (session_019AUhHdnLXe7mLCoov8wmhq)
+**Priority:** P0 · **Risk:** Medium · **Deps:** 47, 49, 69 · **Status:** Done — #178, squash `3ab02150f972389de4f8ae1e24f38e9b90997ed1` (2026-11-06)
 - Navigation and home driven by `accountFace` + role + functions + entitlements (`navGroupsFor`): **independent artist/producer home** ("my music, my releases, my money, my contracts"), **label shell** (current, plus finance, marketing/PR, executive, artistic direction), **roster-artist "My music"** (own songs, releases, splits, contracts, statements, open asks), **collaborator home**. Artist-org owners no longer see A&R inbox / Legal queue / roster wording.
 - Acceptance: persona matrix like G10's for every role×face, at 1440 and 390 px; forbidden pages 404 (settings may explain).
 
@@ -275,11 +275,11 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Implement `20-review-G7-atomic-deliver.md` with G10's amendments (raw `updated_at` string, fingerprint scope, one function family): `labelos_audit_release_deliver`, plus `release.imported`, `release.store_listed/unlisted`, org delete/restore/export, digest channel verbs. `AUDIT_RPCS` entry, `AuditRpcArgs` type, a check proving the four G7 cases, a rollback. Remove the compensating writes.
 
 ### LABEL-74 — Visibility decisions
-**Priority:** P2 · **Risk:** Low · **Deps:** 52 · **Status:** In review — #182 (with LABEL-75)
+**Priority:** P2 · **Risk:** Low · **Deps:** 52 · **Migration:** 195 (shared with LABEL-75) · **Status:** Done — #182 (with LABEL-75), squash `506654b900df9c61c7d63700ad45ebb9ec767715` (2026-11-07)
 - Slack channel digest from the artist-visible, non-restricted view only (+ warning when sharing a saved view name); forbidden pages 404 except settings; `ensurePersonalOrg` gated on the flag; `references` cap no longer reveals internal references. **Added from LABEL-52:** `releaseItemTitles` (`org-workspace.ts`) keeps restricted placeholders in position, so a scoped viewer can count hidden songs on a release; drop them (or collapse them into one uncounted line) for anyone who does not get restricted counts.
 
 ### LABEL-75 — Lifecycle decisions
-**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 195 · **Status:** In review — #182 (with LABEL-74)
+**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 195 (shared with LABEL-74) · **Status:** Done — #182 (with LABEL-74), squash `506654b900df9c61c7d63700ad45ebb9ec767715` (2026-11-07)
 - `org.created` becomes audit-class (never pruned); purge cron gets a 45–60 s budget; sole-owner account deletion blocked with "transfer ownership or delete the organization first"; throttle `/api/store/releases/*`; doc drift (`artist_org_id` is SET NULL; AGENTS.md `team_members`). **Added from LABEL-43's "Found, not fixed" (orchestrator, 2026-10-17):** column grant on `split_lines` so an own-line reader cannot read `signature_asset_id` / `signed_by`; a statement-level `BEFORE TRUNCATE` guard on `activity_events`; replace 147's per-row `has_org_cap` in `activity_events_member_read` with uncorrelated helpers (R-08); a trigger on `organizations` refusing DELETE unless `deleted_at` is older than the 30-day grace period (audit history can only be erased by the purge).
 
 ### LABEL-76 — UI polish
@@ -287,7 +287,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Overview at 390 px (stage counts, next release) and the 1440 px header overlap; Label OS panels use tokens so `data-theme="de-roche-archive"` is readable; `/o` app chrome (logo/home/sign-out); stop UI-asks-server-refuses 403s in the console. **Added from LABEL-52:** a settings field for `artwork_min_px` (today JSON only); the artwork head read is 256 KB, so a JPEG with large APP/XMP/ICC segments before its SOF reads as "size could not be read" (read further or say so plainly); decide whether a PNG with alpha passes the RGB rule; answer `no_request` before `seen_required`.
 
 ### LABEL-77 — Test infrastructure
-**Priority:** P1 · **Risk:** Low · **Deps:** none · **Status:** Not Started
+**Priority:** P1 · **Risk:** Low · **Deps:** none · **Status:** In Progress (session_019AUhHdvXtZepahKVJnTZZ9)
 - `e2e:real-db` expect timeout 25 s; no e2e seeds a product field with the service key where a UI exists; decide and fix or delete the 47 stale default e2e specs; add `e2e` of the default suite flag-off to CI only if green.
 
 ---

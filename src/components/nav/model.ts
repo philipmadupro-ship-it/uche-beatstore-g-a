@@ -2,7 +2,7 @@ import {
   Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
   CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
   Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2, FileText,
-  SlidersHorizontal, ShieldCheck, Coins,
+  SlidersHorizontal, ShieldCheck, Coins, LayoutDashboard,
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
@@ -218,6 +218,11 @@ function financeGroup(slug: string): NavGroup {
   };
 }
 
+/** The executive overview (LABEL-67): one link, for the persons `pageAllowed('exec')` admits. */
+function execGroup(slug: string): NavGroup {
+  return { key: 'exec', label: 'Executive', icon: LayoutDashboard, items: [{ label: 'Overview', href: `/o/${slug}/exec`, icon: LayoutDashboard, exact: true }] };
+}
+
 /**
  * The hubs for an org context (07-information-architecture.md §1). One model,
  * one function, so the top bar and the org shell cannot drift.
@@ -258,5 +263,6 @@ export function navGroupsFor(
     pageAllowed('statements', { kind: orgKind, role: org.role ?? (org.isOwner ? 'owner' : ''), capabilities: caps, modules: org.modules })
       ? [{ key: 'finance', label: 'Finance', icon: Coins, items: [{ label: 'My statements', href: `/o/${org.slug}/finance/statements`, icon: Coins }] } as NavGroup]
       : [];
-  return [...producerHubs, ...roster, ...releases, ...rights, ...finance, ...ownStatements, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];
+  const exec = orgKind !== 'producer' && caps && pageAllowed('exec', { kind: orgKind, role: org.role ?? (org.isOwner ? 'owner' : ''), capabilities: caps, modules: org.modules }) ? [execGroup(org.slug)] : [];
+  return [...producerHubs, ...roster, ...releases, ...rights, ...finance, ...ownStatements, ...exec, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];
 }
