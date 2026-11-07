@@ -4,7 +4,8 @@
  * pure `exec-dashboard.ts`; this file only reads, and applies the member's scope and D4 first:
  *
  *   releases   LABEL-33's `loadReleaseBoard` (artist scope through the projects, gate statuses, no blocker text)
- *   pipeline   songs of the member's projects, D4-filtered (`partitionSongs`), counted by stage
+ *   pipeline   every song in the member's artist scope counted by stage, whatever its audio class (numbers only:
+ *              no title or link, so nothing D4 protects leaves); top songs stay D4-filtered (`partitionSongs`)
  *   money      LABEL-64's `financeSummary` + per-song gross: a WHOLE-organization reader holding `finance.read`
  *              in an org licensed for finance only (margins and royalties of a few artists would leak the rest)
  *   tasks      counts per department, whole-organization readers only; no title, assignee name or note leaves
@@ -25,24 +26,23 @@ import { isWorkspaceSong, partitionSongs, type OrgTrackFacts } from './org-works
 import { orgTrackFacts } from './org-workspace-store';
 import { chunks, inChunks, pageAll, ReadError } from './overview-store';
 import { loadReleaseBoard } from './release-board-store';
-import { restrictedCountFor } from './restricted-counts';
 
 type Admin = OrgAccessOk['admin'];
 
 type SongRow = { id: string; title: string | null; type: string | null; song_stage: string | null };
 
-async function readSongs(access: OrgAccessOk, scoped: string[] | null): Promise<{ visible: SongRow[]; hidden: number }> {
+async function readSongs(access: OrgAccessOk, scoped: string[] | null): Promise<{ all: SongRow[]; visible: SongRow[] }> {
   const { admin, orgId } = access;
-  if (scoped !== null && scoped.length === 0) return { visible: [], hidden: 0 };
+  if (scoped !== null && scoped.length === 0) return { all: [], visible: [] };
   const projects = scoped ?? (await pageAll<{ id: string }>((from, to) => admin.from('projects').select('id').eq('org_id', orgId).order('id').range(from, to), 'project read')).map((p) => p.id);
-  if (projects.length === 0) return { visible: [], hidden: 0 };
+  if (projects.length === 0) return { all: [], visible: [] };
   const placements = await inChunks<{ track_id: string }>(projects, (part, from, to) => admin.from('project_tracks').select('track_id').in('project_id', part).order('project_id').order('track_id').range(from, to), 'project track read');
   const ids = [...new Set(placements.map((p) => p.track_id))];
   const tracks = await inChunks<SongRow>(ids, (part, from, to) => admin.from('tracks').select('id, title, type, song_stage').in('id', part).eq('org_id', orgId).order('id').range(from, to), 'track read');
   const songs = tracks.filter(isWorkspaceSong);
   const facts = new Map<string, OrgTrackFacts>();
   for (const part of await Promise.all(chunks(songs.map((t) => t.id)).map((c) => orgTrackFacts(admin, orgId, c)))) for (const [id, f] of part) facts.set(id, f);
-  return partitionSongs(songs, facts, access.capabilities);
+  return { all: songs, visible: partitionSongs(songs, facts, access.capabilities).visible };
 }
 
 async function readMembers(admin: Admin, orgId: string): Promise<ExecMember[]> {
@@ -106,7 +106,7 @@ export async function loadExecDashboard(access: OrgAccessOk, now: Date = new Dat
   return {
     schemaReady: board.schemaReady,
     scoped: !whole,
-    pipeline: pipelineCounts(songs.visible.map((s) => ({ stage: s.song_stage }))),
+    pipeline: pipelineCounts(songs.all.map((s) => ({ stage: s.song_stage }))),
     months: releasesByMonth(board.releases),
     blocked: blockedReleases(board.releases),
     waiting: waitingApprovals(board.releases),
@@ -114,6 +114,5 @@ export async function loadExecDashboard(access: OrgAccessOk, now: Date = new Dat
     money,
     topSongs,
     withheld,
-    restricted: restrictedCountFor(songs.hidden, access),
   };
 }

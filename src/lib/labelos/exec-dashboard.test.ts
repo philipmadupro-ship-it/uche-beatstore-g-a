@@ -111,7 +111,7 @@ describe('topSongsByGross', () => {
 
 describe('execCsv', () => {
   const view: ExecView = {
-    schemaReady: true, scoped: false, restricted: 0, withheld: [],
+    schemaReady: true, scoped: false, withheld: [],
     pipeline: [{ stage: 'inbox', count: 2 }],
     months: [{ month: '2026-04', ready: 0, inProgress: 1, delivered: 0, total: 1 }],
     blocked: [{ id: 'r', title: '=cmd|"x"', artistName: '+evil', date: '2026-04-01', gates: ['masters'] }],

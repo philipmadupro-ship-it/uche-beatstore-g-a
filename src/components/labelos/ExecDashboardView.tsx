@@ -66,7 +66,6 @@ export function ExecDashboardView({ orgId, slug }: { orgId: string; slug: string
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[11px] text-white/50">
           {data.scoped ? 'You see the songs and releases of your artists only.' : 'Across the whole roster.'}
-          {data.restricted > 0 && <span data-testid="exec-restricted"> {data.restricted} restricted.</span>}
         </p>
         <a
           href={`/api/org/${orgId}/exec?format=csv`}

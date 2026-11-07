@@ -3,7 +3,7 @@
  * (artist scope and D4 already applied) and this folds it into the sections of the page and the CSV.
  * Nothing here is stored, so there is nothing to go stale, and no audio is involved.
  *
- *   pipeline    songs per A&R stage (songs the viewer may open only)
+ *   pipeline    songs per A&R stage, every song in the viewer's artist scope (counts only, so D4 hides nothing)
  *   months      releases per month and where each stands (the board's derived stage)
  *   blocked     draft releases with a blocked gate, nearest date first
  *   waiting     release gates waiting for somebody's approval
@@ -42,8 +42,6 @@ export type ExecView = {
   money: MoneyRow[] | null;
   topSongs: TopSong[] | null;
   withheld: ExecSection[];
-  /** Songs and releases the viewer cannot open, for whole-organization readers only (otherwise 0). */
-  restricted: number;
 };
 
 /** The stage order of the pipeline; an unknown stage is kept after the known ones rather than dropped. */

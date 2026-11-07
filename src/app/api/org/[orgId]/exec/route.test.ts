@@ -161,9 +161,10 @@ describe('GET /api/org/[orgId]/exec', () => {
     expect(res.status).toBe(200);
     const v = await res.json();
     expect(v.scoped).toBe(false);
-    expect(Object.fromEntries(v.pipeline.map((p: { stage: string; count: number }) => [p.stage, p.count]))).toMatchObject({ inbox: 0, selected: 2 });
-    // D4: the executive reads finished audio only, so the inbox demo is not theirs to count: it is restricted.
-    expect(v.restricted).toBe(1);
+    expect(Object.fromEntries(v.pipeline.map((p: { stage: string; count: number }) => [p.stage, p.count]))).toMatchObject({ inbox: 1, selected: 2 });
+    // Counts only: a finished-only executive gets the inbox count but no title of the demo anywhere.
+    expect(JSON.stringify(v)).not.toContain('Draft');
+    expect(v).not.toHaveProperty('restricted');
     expect(v.months.map((m: { month: string; total: number }) => [m.month, m.total])).toEqual([['2026-04', 1], ['2026-05', 1]]);
     expect(v.blocked.map((b: { title: string }) => b.title)).toEqual(['Nova EP']);
     expect(v.waiting.map((w: { title: string }) => w.title)).toEqual(['Nova EP', '=Kilo Tape']);
@@ -185,12 +186,11 @@ describe('GET /api/org/[orgId]/exec', () => {
     expect(v.scoped).toBe(true);
     expect(v.blocked.map((b: { title: string }) => b.title)).toEqual(['Nova EP']);
     expect(v.waiting.map((w: { title: string }) => w.title)).toEqual(['Nova EP']);
-    expect(Object.fromEntries(v.pipeline.map((p: { stage: string; count: number }) => [p.stage, p.count]))).toMatchObject({ inbox: 0, selected: 1 });
+    expect(Object.fromEntries(v.pipeline.map((p: { stage: string; count: number }) => [p.stage, p.count]))).toMatchObject({ inbox: 1, selected: 1 });
     expect(v.money).toBeNull();
     expect(v.topSongs).toBeNull();
     expect(v.tasks).toBeNull();
     expect(v.withheld).toEqual(['money', 'topSongs', 'tasks']);
-    expect(v.restricted).toBe(0);
   });
 
   it('is 404 when the executive module is not licensed', async () => {

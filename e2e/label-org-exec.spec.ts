@@ -94,17 +94,17 @@ test.afterAll(async ({ request }) => {
 });
 
 for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', width: 390, height: 844 }]) {
-  test(`1 · the executive sees every section at ${vp.name}px, D4 keeps the inbox demo restricted, nothing overflows`, async ({ browser, baseURL }) => {
+  test(`1 · the executive sees every section at ${vp.name}px, the inbox demo is counted but never named, nothing overflows`, async ({ browser, baseURL }) => {
     const ctx = await as(browser, baseURL!, exec.id, exec.email);
     const page = await ctx.newPage();
     await page.setViewportSize({ width: vp.width, height: vp.height });
     await page.goto(`/o/${SLUG}/exec`);
     await expect(page.getByTestId('exec-dashboard')).toBeVisible({ timeout: 60_000 });
     await expect(page.getByRole('heading', { name: 'Executive' })).toBeVisible();
-    // Pipeline: the finished-music reader counts the selected song; the inbox demo is restricted, not counted.
+    // Pipeline counts every song in scope; the inbox demo is a number here, never a title (D4 stays on top songs).
     await expect(page.locator('[data-stage="selected"] [data-testid="pipeline-count"]')).toHaveText('1');
-    await expect(page.locator('[data-stage="inbox"] [data-testid="pipeline-count"]')).toHaveText('0');
-    await expect(page.getByTestId('exec-restricted')).toContainText('1 restricted');
+    await expect(page.locator('[data-stage="inbox"] [data-testid="pipeline-count"]')).toHaveText('1');
+    await expect(page.getByTestId('exec-dashboard')).not.toContainText('Midnight');
     // Releases by month and the blocked list carry the draft release (an unfinished release is blocked).
     await expect(page.locator('[data-month="2026-12"] [data-testid="month-total"]')).toHaveText('1');
     await expect(page.getByTestId('blocked-row').filter({ hasText: RELEASE_TITLE })).toBeVisible();
@@ -163,7 +163,6 @@ test('4 · the owner reads it too', async ({ browser, baseURL }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/o/${SLUG}/exec`);
   await expect(page.getByTestId('exec-dashboard')).toBeVisible({ timeout: 60_000 });
-  // The owner holds audio.working, so the inbox demo is counted and nothing is restricted.
   await expect(page.locator('[data-stage="inbox"] [data-testid="pipeline-count"]')).toHaveText('1');
   await ctx.close();
 });
