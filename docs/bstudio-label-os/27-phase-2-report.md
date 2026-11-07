@@ -204,8 +204,8 @@ Collected from the "Found, not fixed" / follow-up sections of the merged PR bodi
 
 `.github/workflows/ci.yml` on `claude/happy-bardeen-rnosf3` **already has it**: the Type-check step runs `npx tsc --noEmit` with `env: NODE_OPTIONS: --max-old-space-size=4096` and a comment ("the whole-repo program is now ~2.3 GB (Label OS), over node's default ~2 GB heap"). `origin/main`'s workflow has the bare `npx tsc --noEmit`. **When the phase-2 branch is merged into main, take the branch's `ci.yml` for that step** or the type-check will die with "JavaScript heap out of memory". No PR into `main` was opened for this task.
 
-## 5. Status housekeeping the orchestrator owns
+## 5. Status housekeeping
 
-- Doc 23 still shows LABEL-67 and LABEL-76 "Not Started" and LABEL-77 "In Progress"; they are merged (#184, #185, #181). LABEL-76 merged as a first slice; its PR body still lists CI/code-review/screenshots as open. Not edited here (status lines are orchestrator-owned).
+- Doc 23 status lines for LABEL-67, 76, 77 were brought up to date in this PR at the orchestrator's request. LABEL-76 merged as a first slice; its PR body still lists CI, code review and the screenshot list as to do.
 - Doc 23's LABEL-78 line names `25-phase-2-report.md`; the file is `27-phase-2-report.md`.
 - `go-live.md` and `supabase/apply/labelos-go-live.sql` (go-live session) are not on this branch.
