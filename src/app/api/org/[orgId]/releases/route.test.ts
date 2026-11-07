@@ -814,7 +814,7 @@ describe('write errors as the member sees them', () => {
 
   it('167: the database refusing a tracklist change on a release that left draft is a plain 409, never the raw error', async () => {
     const { writeError } = await import('./access');
-    for (const state of ['delivered', 'cancelled']) {
+    for (const state of ['delivered', 'withdrawn', 'cancelled']) {
       const locked = writeError({ code: '23514', message: `release_items: a ${state} release keeps its tracklist` }, 'x');
       expect(locked.res.status, state).toBe(409);
       const body = await locked.res.json();

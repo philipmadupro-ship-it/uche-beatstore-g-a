@@ -112,7 +112,7 @@ export function writeError(error: { code?: string; message?: string }, fallback:
   if (error.code === '23514' && /^release_items: take the release off the store/.test(error.message ?? '')) {
     return fail(409, OFF_THE_STORE_FIRST, { field: 'store_listed' });
   }
-  const locked = error.code === '23514' ? /^release_items: a (delivered|cancelled) release keeps its tracklist/.exec(error.message ?? '') : null;
+  const locked = error.code === '23514' ? /^release_items: a (delivered|withdrawn|cancelled) release keeps its tracklist/.exec(error.message ?? '') : null;
   if (locked) return fail(409, keepsItsTracklist(locked[1]), { field: 'state' });
   // 144's other triggers and CHECKs: our own wording, naming no row.
   if (error.code === '23514') return fail(400, error.message ?? fallback);
