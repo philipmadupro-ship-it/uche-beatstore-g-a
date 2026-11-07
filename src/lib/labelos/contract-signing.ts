@@ -216,7 +216,14 @@ export const MAX_DRAWN_BYTES = 200 * 1024;
 
 export function cleanSignerName(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
-  const name = raw.normalize('NFC').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Line separators become spaces; bidi overrides/isolates and zero-width marks are dropped (they make a legal name read
+  // differently from what was typed). ZWNJ/ZWJ stay: Persian and Indic names need them.
+  const name = raw
+    .normalize('NFC')
+    .replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]/g, ' ')
+    .replace(/[\u200b\u2060\ufeff\u202a-\u202e\u2066-\u2069]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   return name.length >= 2 && name.length <= MAX_SIGNER_NAME ? name : null;
 }
 
