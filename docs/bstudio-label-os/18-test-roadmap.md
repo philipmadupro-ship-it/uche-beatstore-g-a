@@ -243,6 +243,60 @@ Trigger a scheduled job by hand: `curl -s -H "Authorization: Bearer local-cron" 
 - **A way for a returning label member to land on their label** after a plain sign-in (see section 2).
 - Producer-account deletion "from Settings" (the studio's data page promises it; Settings only has "erase a buyer's data").
 
+### Test accounts on production
+
+To sign in as each kind of person (email + password) without inviting anyone by hand, generate a SQL script and paste it into the **production** Supabase SQL editor. The generator only prints text; it never connects to a database, and the repository holds no password.
+
+**Generate** (choose your own password, at least 10 characters; the output file is gitignored):
+
+```bash
+mkdir -p scripts/ops/out
+node scripts/ops/seed-test-accounts.mjs --password '<your password>' > scripts/ops/out/test-accounts.sql
+# or one password per account from a JSON file kept OUTSIDE the repo: {"default": "…", "owner": "…"}
+node scripts/ops/seed-test-accounts.mjs --passwords ~/secrets/test-accounts.json > scripts/ops/out/test-accounts.sql
+```
+
+`--email-base` changes the plus-address base (default `philipmadupro@gmail.com`). The file **contains the passwords** (the database hashes them), and the SQL editor keeps query history: treat both as secret and change the passwords when you are done.
+
+**Paste** the file into the SQL editor with nothing selected and run it. It is idempotent: a second run adds nothing and resets the passwords. It ends with a read-only table of every test email, its organization, role, functions and scope. If an address already belongs to a user that this script did not create, the script stops with `refusing: …` and changes nothing; it never touches an existing account (the producer's own login is not affected).
+
+**Who you get** (every address is `philipmadupro+<tag>@gmail.com`):
+
+| Tag | Organization | Role / function |
+|---|---|---|
+| `owner` | BStudio Test Label (`test-label`) | owner |
+| `admin` | test-label | admin |
+| `ar` | test-label | member, A&R |
+| `projectmanager` | test-label | member, project manager |
+| `marketing` | test-label | member, marketing |
+| `legal` | test-label | member, legal |
+| `finance` | test-label | member, finance |
+| `artistmanager` | test-label | member, artist manager |
+| `producer` | test-label | member, producer |
+| `engineer` | test-label | member, engineer |
+| `operations` | test-label | member, operations |
+| `pr` | test-label | member, PR |
+| `executive` | test-label | member, executive |
+| `artdirector` | test-label | member, artistic director |
+| `contracts` | test-label | member, contracts |
+| `arlimited` | test-label | member, A&R limited to Test Artist One |
+| `artist1`, `artist2` | test-label | roster artists Test Artist One / Two, each scoped to themselves |
+| `artistowner` | Test Artist Solo (`test-artist-solo`) | owner of an independent artist org (its one artist is created as the app creates it) |
+| `stranger` | none | signed in, no organization |
+| `buyer` | none | a store buyer (sign in at `/store/account`) |
+
+Members join through the app's own invitation functions, so the activity feed shows `invitation.created` and `member.joined` like a real invite. **Not created:** external project members. Invite one from the UI (a project's Members panel, as `owner`) to a plus-address of your own; it needs a project, which the script does not make. Label OS must be switched on (`LABEL_OS_ENABLED=true`) for any of these to reach `/o/…`.
+
+**Remove everything it made** (the same way: generate, paste):
+
+```bash
+node scripts/ops/remove-test-accounts.mjs > scripts/ops/out/remove-test-accounts.sql
+```
+
+It deletes only users marked `raw_user_meta_data.seed = bstudio-test-accounts` whose email is one of the test addresses, and the organizations those users created (and nothing owned by anyone else). Because migration 195 deletes an organization only 30 days after `deleted_at`, it first sets `deleted_at` back 31 days on those two organizations, deletes them, then the users, so the sole-owner guard is satisfied. Pass the same `--email-base` you used to seed. Its last query must show `0` and `0`.
+
+Proved on the local stack (`npm run db:local:reset`, then the generated SQL, twice; sign-in through the gateway's password grant; each account read through its own JWT; then the remover leaving an unrelated user and organization untouched).
+
 ---
 
 ## 2. The people to log in as
