@@ -9615,3 +9615,14 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Follow-ups:
     - saved-view filters cannot select the creative gate;
     - the real-db `label-org-departments` 1440 "Approve statements" switch timeout is pre-existing (→ LABEL-77).
+- 2026-11-06 — LABEL-77 (session_019AUhHdvXtZepahKVJnTZZ9) started; also asked to root-cause the known flaky tests rather than hide them.
+- 2026-11-06 — **LABEL-70 Done**: #178 squash `3ab0215` (no migration).
+  - What it adds: one role-view table (`lib/labelos/role-view.ts`, `pageAllowed`) behind the nav, the page guards and the artist-shaped home tiles; a creative-workspace entry for `creative.read` with the artistic department on and licensed; independent-artist orgs no longer get the legal queue.
+  - Gate: CI green on `cb7b675`; preview checked; independent review (Sonnet) NOT BLOCKING. Fixed before merge: a dead `/ar` link on the creative workspace, six pages moved onto `pageAllowed` (statements skipped the finance licence; music/releases opened for a producer-kind org), nav "My statements" built from the same rule.
+  - Follow-ups: `/o/<slug>/artists` is a client page with no server guard; department staff still land on the label Overview; the org palette has no "My music" jump.
+- 2026-11-06 — **LABEL-64 Done**: #180 squash `9aaff9d`, migration 182 (not applied; second paste).
+  - What it adds: advances ledger (frozen once referenced), finance overview (per-payee position, per-release income vs cost), period close/reopen under the earnings lock; a closed period is immutable (import void, statement issue and void refuse `period_closed`; 182 redefines 181's three functions, defined by no later migration).
+  - Decisions: release cost = `spent` marketing budget lines (LABEL-65) until a general cost table exists; close refused with draft statements or review-waiting lines, payees without a statement only warn.
+  - Gate: CI green on `59c18e4`; preview checked; independent review (Sonnet) NOT BLOCKING. Fixed before merge: statement void/issue in a closed period, scoped dashboard readers no longer see spend/committed/margin, a voided statement no longer freezes an advance.
+  - Follow-ups: general cost table; income of a song on several releases is "ambiguous"; the dashboard filters after reading the whole org (SQL aggregate at scale).
+- 2026-11-06 — LABEL-74 + LABEL-75 started as one PR (session_019AUhHeidKKga8RUEDpPiLK, migration 195). 188 released. Orchestration now runs at most two children, with Sonnet reviews for Medium/High risk only.
