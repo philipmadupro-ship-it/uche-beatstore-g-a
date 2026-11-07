@@ -228,7 +228,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## G. Leadership and creative
 
 ### LABEL-67 — Executive (CEO) dashboard
-**Priority:** P1 · **Risk:** Medium · **Deps:** 64, 65 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 64, 65 · **Status:** Done — #184, squash `bee57da18fa52a8420be7d5b472c3c9e6d403b0d` (2026-11-07)
 - Read-only cross-roster view for `exec.read`: pipeline by stage, releases by month, blocked releases, approvals waiting, income vs cost, top songs, task load by department, exports (CSV). Respects entitlements and D4; no audio.
 
 ### LABEL-68 — Artistic direction workspace
@@ -283,11 +283,11 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - `org.created` becomes audit-class (never pruned); purge cron gets a 45–60 s budget; sole-owner account deletion blocked with "transfer ownership or delete the organization first"; throttle `/api/store/releases/*`; doc drift (`artist_org_id` is SET NULL; AGENTS.md `team_members`). **Added from LABEL-43's "Found, not fixed" (orchestrator, 2026-10-17):** column grant on `split_lines` so an own-line reader cannot read `signature_asset_id` / `signed_by`; a statement-level `BEFORE TRUNCATE` guard on `activity_events`; replace 147's per-row `has_org_cap` in `activity_events_member_read` with uncorrelated helpers (R-08); a trigger on `organizations` refusing DELETE unless `deleted_at` is older than the 30-day grace period (audit history can only be erased by the purge).
 
 ### LABEL-76 — UI polish
-**Priority:** P2 · **Risk:** Low · **Deps:** 70 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** 70 · **Migration:** 196 · **Status:** Done — #185, squash `ea51d609d9ca9b2ae2c433c2cb4aa7176d286c69`, migration 196 (2026-11-07)
 - Overview at 390 px (stage counts, next release) and the 1440 px header overlap; Label OS panels use tokens so `data-theme="de-roche-archive"` is readable; `/o` app chrome (logo/home/sign-out); stop UI-asks-server-refuses 403s in the console. **Added from LABEL-52:** a settings field for `artwork_min_px` (today JSON only); the artwork head read is 256 KB, so a JPEG with large APP/XMP/ICC segments before its SOF reads as "size could not be read" (read further or say so plainly); decide whether a PNG with alpha passes the RGB rule; answer `no_request` before `seen_required`.
 
 ### LABEL-77 — Test infrastructure
-**Priority:** P1 · **Risk:** Low · **Deps:** none · **Status:** In Progress (session_019AUhHdvXtZepahKVJnTZZ9)
+**Priority:** P1 · **Risk:** Low · **Deps:** none · **Status:** Done — #181, squash `5aa1007ba9ef22c46b24edff68e2bc1eca01f9f4` (2026-11-07)
 - `e2e:real-db` expect timeout 25 s; no e2e seeds a product field with the service key where a UI exists; decide and fix or delete the 47 stale default e2e specs; add `e2e` of the default suite flag-off to CI only if green.
 
 ---
@@ -295,8 +295,8 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## K. Finish
 
 ### LABEL-78 — Final integration and review
-**Priority:** P0 · **Risk:** Medium · **Deps:** all · **Status:** Not Started
-- Migration apply-order document for 136…N (never applied until the owner says), update `18-test-roadmap.md` (new screens, both faces, departments), update `19-independent-review-prompt.md` with groups G11+ for phase 2, update CLAUDE.md/AGENTS.md product text, run the review fleet on phase 2 (4–5 tasks each) and a G10-style cross-cutting pass, write `docs/bstudio-label-os/25-phase-2-report.md`.
+**Priority:** P0 · **Risk:** Medium · **Deps:** all · **Status:** In Progress (this session: docs, PR #186; review fleet run by the orchestrator)
+- Migration apply-order document for 136…N (never applied until the owner says), update `18-test-roadmap.md` (new screens, both faces, departments), update `19-independent-review-prompt.md` with groups G11+ for phase 2, update CLAUDE.md/AGENTS.md product text, run the review fleet on phase 2 (4–5 tasks each) and a G10-style cross-cutting pass, write `docs/bstudio-label-os/27-phase-2-report.md` (the migration apply order is `28-migration-apply-order.md`; 25 and 26 were already taken).
 
 ### LABEL-79 — Link-only project access with upload (owner idea, PROPOSED)
 **Priority:** — · **Risk:** Medium · **Deps:** none · **Status:** Proposed — being planned in PR #135 (PORTAL-UP, another session, migration 191)

@@ -19,9 +19,10 @@ How to use it:
 
 | Part | Status |
 |---|---|
-| All 42 backlog tasks (LABEL-01 to LABEL-42) | **Built and merged** into the one Label OS branch `claude/happy-bardeen-rnosf3`. Nothing needs a second branch any more. The last three squash commits: LABEL-38 weekly digest `d2148736` (#111), LABEL-37 filters and saved views `49fb03b4` (#113), LABEL-42 released → store `31c05b74` (#110). A docs-only change (#114, `75cc8f8b`) came after |
+| All 42 phase-1 backlog tasks (LABEL-01 to LABEL-42) | **Built and merged** into the one Label OS branch `claude/happy-bardeen-rnosf3`. Nothing needs a second branch any more. The last three squash commits: LABEL-38 weekly digest `d2148736` (#111), LABEL-37 filters and saved views `49fb03b4` (#113), LABEL-42 released → store `31c05b74` (#110). A docs-only change (#114, `75cc8f8b`) came after |
 | New since the last version of this file | **Music** page (`/o/<slug>/music`), the **filter bar and saved views** on Music and Releases (4.12), the **weekly digest** settings page (4.10), the **On the store** card and the public **Released** strip (4.16) |
-| Migrations | **136 to 161 all exist** on the Label OS branch (the last five: 157 approvals, 158 store playback, 159 org search, 160 weekly digest, 161 saved views). The ledger is `supabase/MIGRATIONS.md`. None of them is applied to production |
+| Phase 2 (LABEL-43 to LABEL-77, written 2026-11-07) | **Built and merged** into the same branch. New screens: `/platform`, `/setup`, finance (overview, earnings, statements, advances), contracts (store, editor, templates, certificate), parties, marketing plan and press kit on a release, `/exec`, `/creative`, store listings, `/shared` "My sessions", `/press/<token>`, `/sign/<token>`. Walkthroughs are in **4b** (4.19 to 4.30); the report is `27-phase-2-report.md` |
+| Migrations | **136 to 161 all exist (phase 1; phase 2 adds 162 to 196, see `28-migration-apply-order.md`)** on the Label OS branch (the last five: 157 approvals, 158 store playback, 159 org search, 160 weekly digest, 161 saved views). The ledger is `supabase/MIGRATIONS.md`. None of them is applied to production |
 | Daily cron | The weekly-digest job is now scheduled **every day at 07:20 UTC** (`vercel.json`). It is safe to run more than once in a week: a member gets one digest per week, later runs only pick up anyone missed |
 
 The backlog file (`14-engineering-backlog.md`) was out of date about LABEL-31 to 36 and, before the last merges, about 37, 38 and 42. Trust `git log` and this table over it.
@@ -32,7 +33,7 @@ The backlog file (`14-engineering-backlog.md`) was out of date about LABEL-31 to
 
 **Golden rules**
 
-1. Never apply migrations 136 and up to the **production** database. They are applied only at the final merge.
+1. *(Update 2026-11-07: migrations 130 to 196 were applied to production by the owner today; this rule below was written before. Do not apply any other migration to production unreviewed.)* Originally: never apply migrations 136 and up to the **production** database; they were applied only at the final merge.
 2. Always test the **Label OS branch** `claude/happy-bardeen-rnosf3`. It holds every Label OS task. **Not `main`**, which has no Label OS at all. There is no other branch to switch to.
 3. With `LABEL_OS_ENABLED` off (or unset) the app behaves like the old app and every `/o/…` and `/api/org/…` address answers "Not found". That is on purpose.
 
@@ -41,7 +42,7 @@ The backlog file (`14-engineering-backlog.md`) was out of date about LABEL-31 to
 You need: Node, Postgres with `psql`, and about 10 minutes of an engineer's time the first time. Everything runs on your machine. The "database" is a throwaway Postgres with the real security rules turned on.
 
 ```bash
-git checkout claude/happy-bardeen-rnosf3          # the only branch you need; it has all 42 tasks and migrations 136 to 161
+git checkout claude/happy-bardeen-rnosf3          # the only branch you need; it has all tasks to LABEL-77 and migrations 136 to 196
 npm install
 npm run db:local:reset                            # builds the database, applies every migration twice, seeds 4 accounts
 npm run db:local:up                               # starts the database API (:3000), the gateway (:54321) and a FAKE email service (:54400)
@@ -208,7 +209,7 @@ node -e "const f=+process.argv[1]||330,r=44100,n=r*8,b=Buffer.alloc(44+n*2);b.wr
 ### Option B. A Vercel preview / staging with its own Supabase (closest to real, needed for audio, R2, real email)
 
 1. Create a **second** Supabase project (call it `bstudio-staging`). Never reuse production.
-2. In a terminal, `SUPABASE_DB_URL='<the staging connection string>' npm run db:migrate`. This applies **every** migration file in `supabase/migrations/` (136 to 161 on the Label OS branch; confirm with `ls supabase/migrations | tail`). **Double-check the URL points at staging before pressing Enter.** Never run this against production from this branch.
+2. In a terminal, `SUPABASE_DB_URL='<the staging connection string>' npm run db:migrate`. This applies **every** migration file in `supabase/migrations/` (136 to 196 on the Label OS branch; confirm with `ls supabase/migrations | tail`). **Double-check the URL points at staging before pressing Enter.** Never run this against production from this branch.
 3. In Vercel → Settings → Environment Variables, set the **Preview** values only: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (all three from staging), and `LABEL_OS_ENABLED=true`. In staging Supabase set Auth → URL Configuration: Site URL = the preview URL, Redirect URLs include `/auth/callback`.
 4. Open the preview URL of the branch. Until step 3 is done the preview runs with Label OS **off** and looks like production.
 5. Real people sign in by email link. Use plus-addresses of your own (`you+ar@gmail.com`, `you+legal@gmail.com`…), one per person in the table in section 2. Create the label with the same SQL (change the emails and ids, or use the SQL editor and look the ids up in `auth.users`).
@@ -229,6 +230,8 @@ node -e "const f=+process.argv[1]||330,r=44100,n=r*8,b=Buffer.alloc(44+n*2);b.wr
 Trigger a scheduled job by hand: `curl -s -H "Authorization: Bearer local-cron" http://localhost:3457/api/cron/purge-deleted-orgs` (also `prune-org-events` and `weekly-digest`; the digest one is safe to run again, it sends nothing twice in the same week).
 
 ### Could not find in the app (the backlog or the plan says it should exist, I found no screen)
+
+> **Update 2026-11-07 (phase 2).** Written for the phase-1 build. These now exist: creating an org (`/setup` and the platform console), adding a roster artist and members (Team and roster window), creating a release and the approve buttons and the Parties page, the settings screen for gates and Needs-attention thresholds. Still absent: a paid plan or tier switch (decided: later), and producer-account deletion from Settings.
 
 - A button to **create a label, artist org or producer org**. Only the producer's studio is created automatically (when the producer profile is saved).
 - A button to **add an artist to a label's roster**. The Artists page says "People in this organization's directory with an artist role appear here", but nothing on the page adds one. (An artist org gets its one artist automatically.)
@@ -272,7 +275,7 @@ All logins below exist after the setup in section 1 (`as <name>`). Passwords do 
 |---|---|---|---|
 | Created how | By hand today | By hand today. Creates its one artist automatically | **Automatically** when the producer profile is saved |
 | Roles you can give | Owner, Admin, Member, **Artist** | Owner, Admin, Member | Owner, Admin, Member |
-| Functions you can give | All nine (A&R, PM, Marketing, Legal, Finance, Artist manager, Producer, Engineer, Operations) | Artist manager, Producer, Engineer, Marketing, Legal, Operations | Producer, Engineer, Artist manager, Operations |
+| Functions you can give | All of them: the nine of phase 1 (A&R, PM, Marketing, Legal, Finance, Artist manager, Producer, Engineer, Operations) plus PR, Executive, Artistic director and Contracts (phase 2) | Artist manager, Producer, Engineer, Marketing, Legal, Operations | Producer, Engineer, Artist manager, Operations |
 | Hubs in the top bar | Artists, Releases, Rights, Organization | Same as label | The old producer hubs (Catalog, Store, CRM) for the producer, plus Organization (Members). **No Artists / Releases / Rights hubs** |
 | Roster | Many artists | Exactly one (the owner) | None |
 | Connections (to another org) | Yes (needs `org.manage`) | Yes | No |
@@ -814,6 +817,196 @@ Set up once before section 4.3: as `uche` upload songs for Nova and Kilo (4.4) s
 
 ---
 
+## 4b. Phase 2 walkthroughs (LABEL-43 to LABEL-77, added 2026-11-07)
+
+Phase 2 added two kinds of customer (**faces**), the departments a label needs, contracts, finance, marketing/PR, an executive dashboard, artist consent on the store, and a lot of hardening. Same format as section 4. Anything marked **(needs real login)** cannot be done with the local `as` cookie alone.
+
+**Seeds.** The local seed does not create finance, contract or marketing data. Create it through the screens in each section (that is the point: a gate or field only counts if a human can fill it in). Phase 2 e2e specs `e2e/label-org-*.spec.ts` (run with `npm run e2e:real-db`) show the exact clicks for every section below.
+
+**New personas to add to section 2** (create with the Team and roster window, 4.19, or as members with these functions):
+
+| Login | Who | Should see | Should NOT see |
+|---|---|---|---|
+| `finance` | Member with function **Finance** | Finance (overview, earnings, statements, advances). Money for the whole org | Working audio, legal queue |
+| `exec` | Member with function **Executive** | `/o/<slug>/exec` only as a read-only cross-roster overview; finished audio | Working audio titles and files (pipeline counts include those songs, numbers only), any edit control |
+| `art-director` | Function **Artistic director** | `/o/<slug>/creative`, creative approval gate when it is on | Money, contracts |
+| `pr` | Function **PR** | Press kit and outreach tracker on a release | Marketing budget, finance |
+| `collab` | An outside **collaborator** (beatmaker, producer, rapper, feature, engineer) invited to one song | `/shared` ("My sessions") with the credit to confirm, split line to acknowledge, contract to sign | Anyone else's split line, any org page |
+| `operator` | Platform operator (a row in `platform_admins`, added by SQL) | `/platform` | Nothing special inside orgs unless a member |
+
+### 4.19 The two faces, the platform console and setup — LABEL-47/48/49/50/51 (#132, #130, #143, #134, #145, #137)
+
+**What changed.** An org is now an **independent artist/producer** (kind `artist`) or a **label** (kind `label`). The platform operator licenses each one and decides which modules it gets. A person who signs up chooses an account type and lands in `/setup`, a wizard that creates the org, its settings and optionally its team logins in one step. One window ("Team and roster") adds artists, members and collaborators. Owners get an Organization settings screen.
+
+**Where.** `/platform` (operator only), `/setup`, `/o/<slug>/settings/members`, `/o/<slug>/settings/organization`, `/account/password`.
+
+**Do this**
+1. As `operator`: create a licensee of each face, remove one module (for example Finance), set a seat cap. The licensee's owner invitation is an audited event.
+2. Sign in as a new person, choose each account type, walk the wizard at 1440 and 390 px. Leave halfway and return: it resumes and nothing half-built exists. On the last screen write down each team login's password: it is shown once.
+3. As an owner, open Organization settings and change a gate, then a department off/on. Check the event in the feed names keys, not note text.
+4. In a licensee without Finance, open `/o/<slug>/finance`: Not found, no nav entry.
+5. Sign in as a created team account: you are forced to change the password before anything else. Reset it from the admin centre (`/o/<slug>/settings`); the old sessions end.
+
+**Try to break it**
+- [ ] A signed-in non-operator opens `/platform` or `/api/platform/*`: Not found for everyone, org owners included.
+- [ ] A team account tries to create or join another org: refused.
+- [ ] Add members past the seat cap, and past the artist cap: a plain message, nothing created.
+- [ ] An admin tries to reset another admin's password: only an owner may.
+- [ ] Switch `LABEL_OS_ENABLED` off: `/setup`, `/account/password`, `/api/org/setup` answer Not found.
+
+**Looks wrong if…** a half-created org remains after leaving the wizard; a password is visible anywhere after the done screen; a roster `artist` can be given a department capability.
+
+### 4.20 Role views: what each person's home looks like — LABEL-70 (#178)
+
+**What changed.** Menu, page guards and home tiles are one table keyed by face, role, functions and licensed modules.
+
+**Do this.** Sign in as each persona (old and new) at 1440 and 390 px and compare with the table in section 2 and the list above.
+- Independent artist org owner: "My music", releases, money (own statements), contracts, artistic direction if held. No A&R inbox, no Legal queue, no roster wording ("Your collaborators", not "Roster").
+- Roster artist: same shape, and `/o/<slug>/ar` is Not found.
+- Label staff: the label shell, plus Finance, Marketing/PR, Executive and Creative where they hold the function.
+- A department member with role Member lands on the label Overview (no home tile of their own yet).
+
+**Try to break it**
+- [ ] Open a page you have no menu entry for by typing its address: Not found (settings pages explain instead).
+- [ ] Use ⌘K: no result links to a page you cannot open.
+
+**Looks wrong if…** a menu entry leads to Not found, or a page opens that has no menu entry.
+
+### 4.21 Recording metadata, parties and creating a release — LABEL-53/54/55/56 (#142, #148, #150, #156)
+
+**What changed.** The song page edits ISRC, ISWC, BPM, key, language, explicit, genre, recording date, P-line, master owner and notes. A Parties page holds legal name, address, country, tax id (restricted), PRO, IPI, publisher and payment instructions. A label can start a **New release** with UPC, distributor, territories, language and a master chooser. A delivered release can be **withdrawn** (not cancelled).
+
+**Do this**
+1. As `ar`, set an ISRC on a song: refused (needs release.write). As `admin`, set it: saved. Edit it in two tabs: the second save says it changed.
+2. Parties: add a person, invite them to confirm their details; as that person confirm. Try to type a bank number into payment instructions: refused.
+3. Create a draft release; add songs with the master chooser; walk the seven gates until a human can deliver without "Deliver anyway".
+4. Deliver, then Withdraw: the release leaves the store, the record stays; try Cancel: refused.
+
+**Try to break it**
+- [ ] A song on a *draft* release stays working audio (marketing cannot hear it) until the release is delivered.
+- [ ] A scoped member sees only the parties credited on their artists' songs; a roster artist sees names, roles and shares only (no co-writer contact data).
+- [ ] Lowercase or non-ASCII ISRC: refused.
+
+**Looks wrong if…** tax id or payment instructions reach a member without finance or rights access.
+
+### 4.22 Release gates v2 — LABEL-52 (#139, follow-up #140)
+
+**What changed.** Approving needs you to have *seen* the current state; you approve only a request addressed to you (owners and admins exempt); song-level legal approval is hidden once the song is on a live release (the release's own gate decides); artwork must be square, RGB and at least the minimum size.
+
+**Do this.** On a draft release: request an approval from one member; as someone else try to approve it (refused); as the addressee, open the item and approve. Upload a non-square image as artwork: the artwork gate fails with the reason.
+
+**Try to break it**
+- [ ] Approve without opening the item: refused.
+- [ ] Turn the legal gate off in settings: every draft release shows a banner saying it is skipped; the same banner appears on delivered releases.
+- [ ] Switch Contracts off while the legal approval is required: refused with a reason.
+
+### 4.23 Contracts, signing and the contract store — LABEL-57/58/59/60 (#154, #158, #160, #166)
+
+**What changed.** Every contract type has a template (14, placeholder wording marked "not legal advice, have counsel review"). A contract is created from a template, filled with merge fields, previewed, turned into a PDF (stored as a restricted file), sent, and signed in the app by each party. The contract store lists, searches and filters them.
+
+**Where.** `/o/<slug>/rights/contracts`, `…/contracts/<id>`, `…/contracts/templates`, `…/contracts/<id>/certificate`; signers outside the org use `/sign/<token>`.
+
+**Do this**
+1. Create a contract of each type: all render. Edit clauses, check the version increases. Send it: the document is now frozen.
+2. Rename a party, then reopen the sent contract: it still shows the text as sent.
+3. Sign as each party, one by one; the last signature makes it Signed. Open the certificate: it says it is an **in-app signature, not a qualified electronic signature**.
+4. Circulate a split sheet that disagrees with the contract: drift warning on both. Turn on the signed-master-split requirement: signing is refused until the sheet is signed.
+5. Void and supersede: a new draft copy, old signatures stay on the old one.
+
+**Try to break it**
+- [ ] Open `/sign/<token>` with a wrong token, an expired one and a revoked one: the same plain Not found each time.
+- [ ] Try to edit a signed or sent contract's text; download a contract file as a member without contracts access: refused and audited.
+- [ ] The signing link is emailed to the party's own address and never shown on screen.
+- [ ] A scoped member or artist sees only contracts of their own artists.
+
+**Looks wrong if…** a signature still counts after the document changed; a signature row can be edited or deleted.
+
+### 4.24 Finance: earnings, statements, advances, period close — LABEL-61/62/63/64 (#165, #169, #174, #180)
+
+**What changed.** The app **never moves money**; it records. Import a distributor CSV (file hash makes a re-import a no-op), lines match recordings by ISRC/UPC and are allocated by the song's splits and contract terms; advances are recouped; a statement per payee per period is generated, approved, issued, paid and exported as a payout CSV. A dashboard shows per-payee position and per-release income vs cost; a period can be closed.
+
+**Where.** `/o/<slug>/finance`, `…/finance/earnings`, `…/finance/statements`, `…/finance/advances`.
+
+**Do this**
+1. Import a CSV; import it again: nothing changes ("already imported"). Fix an unmatched line's ISRC and press Re-run.
+2. Record a recoupable advance; import earnings; confirm it recoups. Edit its amount after that: refused.
+3. Generate, approve (as someone other than the generator), issue and mark paid. Open the PDF and CSV: totals equal the sum of allocations.
+4. Close the period: refused while a draft statement exists or a line waits for review. After closing, try a new import, voiding an import, and voiding a statement: all refused. Reopen as owner only.
+
+**Try to break it**
+- [ ] As the payee's own artist: see only your statements. As a scoped finance member: gross and your payees' royalties only, no marketing spend or margin.
+- [ ] A roster artist cannot open Finance pages except their own statements.
+- [ ] Import after a statement was approved for that payee and period: refused.
+
+**Looks wrong if…** any total is off by a unit; a float appears; a 33.3333 x 3 split is accepted.
+
+### 4.25 Marketing plans and PR — LABEL-65/66 (#170, #172)
+
+**What changed.** Each release gets a marketing plan (timeline, platform checklist, tasks, budget, asks to the artist) and a press kit (headline, bio, photos, links, embargo) shareable by a link; outreach per press contact is tracked.
+
+**Do this.** On a draft release: add timeline items; send an asset request to the artist (the artist gets one notification); add budget lines. Turn on "plan required" as owner: the marketing gate now needs a plan. Create a press kit, share it, open `/press/<token>` signed out before and after the embargo.
+
+**Try to break it**
+- [ ] A role `artist` member: sees the plan and their asks, never the budget (the field is absent, not zero) and never the press tracker.
+- [ ] Before the embargo the public page shows only the "before" line and no audio.
+- [ ] Revoke the press link: it stops at once.
+- [ ] Marketing without audio access cannot hear working demos through the plan.
+
+### 4.26 Executive dashboard and creative workspace — LABEL-67/68 (#184, #176)
+
+**What changed.** `/o/<slug>/exec` shows pipeline by stage, releases by month, blocked releases, approvals waiting, income vs cost, top songs and task load by department, with an audited CSV export. `/o/<slug>/creative` collects direction, references, reviews, stages and releases for artistic direction, and can add an optional creative approval gate (off by default).
+
+**Do this.** As `exec`: every section renders at 1440 and 390 px; pipeline stage counts include every song in the reader's artist scope, numbers only, even demos the role cannot open (their titles never appear). Download the CSV and find one `exec.exported` audit event. As `art-director`: open Creative, approve a release's creative gate after the owner switches it on in settings.
+
+**Try to break it**
+- [ ] Marketing and a roster artist: `/exec` and `/api/org/<id>/exec` refused; no export event written.
+- [ ] A scoped reader sees money, top songs and task load as "withheld", never as zeros.
+- [ ] A task title or person never appears in task load.
+
+### 4.27 Collaborators and "My sessions" — LABEL-69 (#175)
+
+**What changed.** On a project's members panel an owner or admin invites someone as beatmaker, producer, rapper, feature or engineer on a song. On accept they get a proposed credit; `/shared` lists their sessions across labels with what is waiting (credit, split line, contract).
+
+**Do this.** Invite with a role, accept as that person, confirm the credit and acknowledge the split line from `/shared`. Open the same invitation link again later: nothing new is proposed.
+
+**Try to break it**
+- [ ] The collaborator cannot read other people's split lines or any org page.
+- [ ] Invite with a role but without rights-write: refused.
+
+### 4.28 Store listing consent and playback rules — LABEL-71/72 (#159, #162)
+
+**What changed.** Listing a release asks every credited artist. Any one artist's "no" takes it off the store and it cannot return without their yes. The store owner can Unlist a connected artist's release. A delivered release may be listed as **preview only** before its date; **full** only from the release date, as a lossy full-length copy (never the master).
+
+**Where.** `/o/<slug>/releases/store` ("Store listings"); a release's "On the store" card.
+
+**Do this.** List a release with two credited artists: each gets a notification. One says no: the public page and audio stop on the next request (the list may take up to about 90 seconds to show it on cached copies). Try Full songs before the release date: disabled with the reason.
+
+**Try to break it**
+- [ ] Re-list after a no without the artist's yes: refused.
+- [ ] Play a full-mode track: the audio is a derivative; ask for the master address: not reachable. Request the whole file with a Range header: you get at most 1 MiB.
+- [ ] Move the release date later: the public page falls back to preview.
+
+### 4.29 Lifecycle and visibility guards — LABEL-43/44/45/46/73/74/75 (#129, #131, #127, #128, #168, #182)
+
+**What changed.** The hardening pass: split-sheet notes unreadable on a member's own login, audit events cannot be changed even by the service role, a member of one org cannot see artists outside their scope in lists, tracklists of delivered releases are locked, search finds words inside file names, "since your last visit" is per org, delivery and listing are atomic, caps hold under concurrency, the Slack digest uses only the artist-visible view, an org cannot be hard-deleted inside its 30 days, the only owner of an org cannot delete their account.
+
+**Do this**
+1. Search `mix` and find a file called `final_mix.wav`; search `x com` for `a@x.com`.
+2. Visit org A's Overview, then org B: B's "since your last visit" is unchanged.
+3. Try to add a song to a delivered release: refused with a plain message.
+4. As the only owner try to delete your account: "transfer ownership or delete the organization first".
+5. Run the weekly digest and read the Slack text: no finance, no internal notes, no working-audio titles.
+
+**Looks wrong if…** any of these are only enforced by the UI.
+
+### 4.30 UI polish and test setup — LABEL-76/77 (#185, #181)
+
+**What changed.** Overview works at 390 px; the org bar names the org and has a home link and Sign out; Label OS panels follow the tokens (including the archive theme); no screen asks the server for something the role cannot have (no 403 in the console); the minimum artwork size is a settings field. The test suite runs with a longer timeout and no flaky clicks on the known four.
+
+**Do this.** Open Overview at 390 px; switch to the archive theme and read every Label OS panel; open the console while clicking through as `marketing` and `nova`: no red 403s. Set `artwork_min_px` in Organization settings (600 to 10000).
+
+---
+
 ## 5. Known weak spots to test on purpose
 
 These come from the independent reviews of the work, including the final reviews of LABEL-37, 38 and 42. Each is turned into one concrete test. All of them are on the one Label OS branch now; the tests that need real cloud storage say "staging with R2", the Slack test needs a throwaway Slack workspace.
@@ -839,6 +1032,14 @@ These come from the independent reviews of the work, including the final reviews
 | 17 | The weekly digest cron now runs **every day**. Every opted-in member must be reached over the days (a run that stops early leaves the rest for the next day) and nobody gets two in a week | Migration 160. With the 130 members from test 6, run the cron by hand (`/api/cron/weekly-digest`). Then simulate "missed" members: `UPDATE org_digest_members SET last_sent_week = '' WHERE user_id IN (SELECT id FROM auth.users WHERE email LIKE 'bulk1%@local.test')`, and run it again. Run it three more times | First run: every opted-in member gets one email (read them at `http://127.0.0.1:54400/emails`). Second run: only the members you reset get one; everyone else gets nothing more. The extra runs send nothing. Slack (if set) posts once per week per organization. The answer of each run (JSON) says how many were sent. I could not make the 45-second time budget run out locally, so "the run stopped early and tomorrow finishes it" is checked by the reset above, not by the clock |
 | 18 | A **failed or refused listing** must leave no public copies behind | Staging with R2. List a release in Preview mode where one song has no preview ready yet (a fresh upload, before it is processed), or race it: in two windows, press **Put on the store** while changing the release in the other. Look in the public bucket under `store-releases/<release id>/` | The failed listing says why (for example that a preview is not ready yet; try again in a few minutes) and `/store` shows nothing. No `store-releases/<release id>/…` objects remain unless the release was already publicly listed before |
 | 19 | **Taking a release off the store** puts playback back to **Preview clips** | Put a release on the store with **Full songs** (as owner/admin), take it off, then put it on again without touching the playback choice | The card says **Preview clips** after relisting, and the public audio address serves the 75 s clip, never the master. A release is never silently public as Full songs after a relist |
+| 20 | A signature must stop counting when the document changes (phase 2) | Sign a contract; the stored sent copy is frozen, so try to change a party name and re-open the certificate | The certificate still shows the text as sent; a replaced (superseded) contract needs new signatures |
+| 21 | A re-imported earnings file must change nothing | Import the same CSV twice, then once with one byte changed | First repeat: "already imported", totals unchanged. Changed file: a new import |
+| 22 | A closed finance period must be immutable | Close a period, then import, void an import and void a statement in it | All refused (409 `period_closed`); allowed again only after the owner reopens it |
+| 23 | One artist's "no" must stop a store listing at once | Two credited artists; one says no | Public detail and audio stop on the next uncached request (cached list up to about 90 s); re-listing refused |
+| 24 | The master must never be reachable from public routes | Full-playback release: read every public JSON and audio response | Only the lossy derivative is served; no `r2://` or master address anywhere; Range returns at most 1 MiB |
+| 25 | A forced password change cannot be skipped | Sign in as a new team account and call `/api/org/...` directly | Refused until the password is changed |
+| 26 | Two people at the cap at once | Two members added in parallel at seat cap minus one (console) | One succeeds, the other gets the plain cap message (migration 187 enforces it under a lock) |
+| 27 | An org cannot be hard-deleted inside its 30 days | `DELETE FROM organizations` in SQL for an org deleted yesterday | Refused (migration 195); the purge cron only deletes after 30 days |
 
 Bulk-member SQL for tests 6 and 17 (after the demo label exists; the last statement needs migration 160):
 
@@ -901,9 +1102,21 @@ For each one: what the app does **today**, where to see it, then your answer.
 - **Your decision (separate artist/producer/label experiences? paid tiers? default landing for members?): ____________________________________________**
 
 ### 6.8 Smaller questions I noticed
+
+*(Update 2026-11-07: the questions about a screen to create orgs and roster artists, buttons for the Masters, Artwork, Marketing and Metadata approvals, and an editor for the Needs-attention windows were answered by phase 2; see 4b. The rest stand.)*
 - Should the Needs-attention windows (30 days) be editable in a screen? **Decision: ______**
 - Should a screen exist to create a label/artist org and add roster artists, or stay manual until launch? **Decision: ______**
 - Should Masters, Artwork, Marketing and Metadata approvals get buttons on the release page (today only Legal has one)? **Decision: ______**
+
+### 6.9 Phase 2 questions still open (from `27-phase-2-report.md`)
+
+- **Showcase ("greatest moments")** is not built. Do you want it, and with what public page?
+- **Collaborator and producer self-view of statements** is not granted until a party's account link is proven by the party. Is the "someone else links, the party confirms" rule enough?
+- **Executive dashboard and audio class:** decided before merge: stage counts include every song in scope, numbers only; titles stay filtered by audio class. Nothing to answer.
+- **Statements:** a negative or zero net owes nothing and is not carried forward. Keep, or carry forward?
+- **Notify the artist** when a statement is issued (needs one new notification kind).
+- **Wizard contract types:** the wizard stores 8 of the 14 types. Widen it?
+- **Department staff home** (role Member with a department function): a home of their own, or the label Overview?
 
 ---
 
@@ -957,10 +1170,22 @@ Tick a line only when every "Do this" step and every "Try to break it" line in t
 - [ ] 4.16 Released → store bridge (1440 and 390)
 - [ ] 4.17 Export, deletion, retention
 - [ ] 4.18 Old team/invite flow retired
-- [ ] 5. All nineteen weak-spot tests run (list any skipped, and why)
+- [ ] 4.19 Two faces, platform console, setup
+- [ ] 4.20 Role views
+- [ ] 4.21 Recording metadata, parties, new release
+- [ ] 4.22 Release gates v2
+- [ ] 4.23 Contracts and signing
+- [ ] 4.24 Finance
+- [ ] 4.25 Marketing plans and PR
+- [ ] 4.26 Executive dashboard and creative workspace
+- [ ] 4.27 Collaborators
+- [ ] 4.28 Store consent and playback rules
+- [ ] 4.29 Lifecycle and visibility guards
+- [ ] 4.30 UI polish
+- [ ] 5. All twenty-seven weak-spot tests run (list any skipped, and why)
 - [ ] 6. Every open decision has your answer written in
 - [ ] Bugs filed: ____ URGENT, ____ High, ____ Normal, ____ Ideas
 
 **Not ready to merge into `main` until:** no URGENT bug is open, section 3 passes, and the decisions in section 6 that change behaviour (6.2, 6.4, 6.5, 6.7) are answered.
 
-*Reminder: apply migrations 136 to 161 to production only at the final merge, and only after this roadmap is signed off. They are all on `claude/happy-bardeen-rnosf3`; nothing else is waiting on another branch.*
+*Reminder: apply migrations 136 to 196 to production only at the final merge, and only after this roadmap is signed off. They are all on `claude/happy-bardeen-rnosf3`; nothing else is waiting on another branch.*
