@@ -12,7 +12,8 @@
  * and the component count (3 = YCbCr, i.e. RGB; 1 = grey; 4 = CMYK).
  */
 export type ImageColor = 'rgb' | 'rgba' | 'grey' | 'palette' | 'cmyk' | 'other';
-export type ImageInfo = { format: 'png' | 'jpeg'; width: number; height: number; color: ImageColor };
+/** `transparent`: a PNG carries a `tRNS` chunk (colour-key or palette transparency); set only when true. */
+export type ImageInfo = { format: 'png' | 'jpeg'; width: number; height: number; color: ImageColor; transparent?: true };
 
 /** How much of the file the store reads first: JPEG puts its frame header after EXIF / ICC segments, which are rarely beyond this. */
 export const IMAGE_HEAD_BYTES = 262144;
@@ -56,7 +57,22 @@ function readPng(b: Uint8Array): ImageInfo | null {
   if (width === 0 || height === 0) return null;
   const type = b[25];
   const color: ImageColor = type === 2 ? 'rgb' : type === 6 ? 'rgba' : type === 0 || type === 4 ? 'grey' : type === 3 ? 'palette' : 'other';
-  return { format: 'png', width, height, color };
+  const info: ImageInfo = { format: 'png', width, height, color };
+  if (pngHasTransparencyChunk(b)) info.transparent = true;
+  return info;
+}
+
+/** Walks the chunks after IHDR for a `tRNS` (it must come before the image data, so stop at IDAT / IEND / the end of the head). */
+function pngHasTransparencyChunk(b: Uint8Array): boolean {
+  let i = 33; // signature (8) + IHDR chunk (4 + 4 + 13 + 4)
+  while (i + 8 <= b.length) {
+    const length = u32(b, i);
+    const type = String.fromCharCode(b[i + 4], b[i + 5], b[i + 6], b[i + 7]);
+    if (type === 'tRNS') return true;
+    if (type === 'IDAT' || type === 'IEND') return false;
+    i += 12 + length;
+  }
+  return false;
 }
 
 function readJpeg(b: Uint8Array): ImageInfo | null {
@@ -116,7 +132,7 @@ export function artworkSizeProblems(info: ImageInfo | null, minPx: number = ARTW
   const size = `${info.width}×${info.height}`;
   if (info.width !== info.height) out.push({ code: 'artwork_not_square', message: `The artwork must be square; this one is ${size} px.` });
   if (Math.min(info.width, info.height) < minPx) out.push({ code: 'artwork_too_small', message: `The artwork must be at least ${minPx}×${minPx} px; this one is ${size} px.` });
-  if (info.color === 'rgba') out.push({ code: 'artwork_color', message: 'The artwork must not have transparency. Flatten it onto a solid background and export a PNG without an alpha channel, or export a JPEG.' });
+  if (info.color === 'rgba' || info.transparent) out.push({ code: 'artwork_color', message: 'The artwork must not have transparency. Flatten it onto a solid background and export a PNG without an alpha channel, or export a JPEG.' });
   else if (info.color !== 'rgb') out.push({ code: 'artwork_color', message: 'The artwork must be RGB (not greyscale, indexed or CMYK).' });
   return out;
 }
