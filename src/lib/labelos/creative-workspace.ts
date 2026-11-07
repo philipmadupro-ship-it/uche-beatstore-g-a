@@ -184,6 +184,8 @@ export type CreativeWorkspace = {
   canWrite: boolean;
   artists: ArtistCard[];
   releases: CreativeRelease[];
+  /** Draft releases beyond the newest fifty, which this view does not work out: the totals above cover the rest. */
+  moreReleases: number;
   /** Songs the member may not read (D4), counted for a viewer allowed to see such counts; 0 otherwise. Never named. */
   restricted: number;
   /** Totals over what the member can see. */

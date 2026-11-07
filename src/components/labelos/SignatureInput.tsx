@@ -134,7 +134,7 @@ export function SignatureInput({ busy, label, confirmLabel, defaultName = '', on
         )}
       </div>
       <p className="text-[10px] leading-relaxed text-white/40">
-        By signing you agree to this contract as written above. This is an in-app signature recorded with the time and a fingerprint of this exact text.
+        By signing you agree to this contract as written above. This is an in-app signature recorded with the time and a fingerprint of the exact document you are shown.
       </p>
       <button type="button" className={BTN} disabled={busy || name.trim().length < 2} onClick={submit} data-testid={`${testId}-submit`}>
         {busy ? 'Signing…' : confirmLabel}

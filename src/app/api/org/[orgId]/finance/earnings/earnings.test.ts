@@ -196,6 +196,19 @@ describe('POST /imports', () => {
     expect(db.tables.activity_events.filter((e) => e.verb === 'earnings.imported')).toHaveLength(1);
   });
 
+  it('the same file after its import was voided is not "the original stands": it says the import was voided (409), nothing written', async () => {
+    await importsPost(FIN);
+    rpcCalls = [];
+    db.tables.earnings_imports[0].status = 'void';
+    const again = await importsPost(FIN);
+    expect(again.status).toBe(409);
+    const body = await again.json();
+    expect(body).toMatchObject({ code: 'voided_file' });
+    expect(body.error).toMatch(/voided/i);
+    expect(body.error).not.toMatch(/original import stands/i);
+    expect(rpcCalls).toHaveLength(0);
+  });
+
   it('refuses a file with a bad row, naming the line, and writes nothing', async () => {
     const res = await importsPost(FIN, 'ISRC,Amount\nUS-ABC-26-00001,ten\n');
     expect(res.status).toBe(422);

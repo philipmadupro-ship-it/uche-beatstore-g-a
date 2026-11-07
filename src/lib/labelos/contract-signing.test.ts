@@ -177,6 +177,12 @@ describe('maySignAs', () => {
 describe('signature input', () => {
   it('cleans a typed name and refuses an empty or absurd one', () => {
     expect(cleanSignerName('  Nova   Example\u0007 ')).toBe('Nova Example');
+    // Review G14: bidi overrides / isolates, zero-width and line-separator characters never reach the certificate.
+    expect(cleanSignerName('Ann\u202Egnirts')).toBe('Anngnirts');
+    expect(cleanSignerName('\u2066Nova\u2069 Ex\u200Bample\uFEFF')).toBe('Nova Example');
+    expect(cleanSignerName('Nova\u2028Example\u0085Okafor')).toBe('Nova Example Okafor');
+    // Joiners that real names need stay (Persian ZWNJ, Indic ZWJ).
+    expect(cleanSignerName('می\u200Cخواهم')).toBe('می\u200Cخواهم');
     expect(cleanSignerName('x')).toBeNull();
     expect(cleanSignerName('a'.repeat(201))).toBeNull();
     expect(cleanSignerName(42)).toBeNull();

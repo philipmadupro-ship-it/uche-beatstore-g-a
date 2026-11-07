@@ -29,6 +29,7 @@ import { storeContractPdf } from '@/lib/labelos/contracts-document';
 import { documentInputOf, documentOf, loadContractFor } from '@/lib/labelos/contracts-route';
 import { renderContractDocumentPdf } from '@/lib/labelos/contracts/document';
 import { bytesSha256, sentSnapshotOf, type SentSnapshot } from '@/lib/labelos/contract-signing';
+import { usableEmail } from '@/lib/labelos/contract-signing-email';
 import { removeSignatureImage, signingReady, storeSentPdf } from '@/lib/labelos/contract-signing-store';
 import { CONTRACTS_NOT_READY, ContractsNotReadyError, claimSend, templateBase } from '@/lib/labelos/contracts-store';
 
@@ -96,7 +97,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
         return null;
       });
       if (!ref) return json(500, { error: 'The sent copy could not be stored, so the contract was not sent. Try again.' });
-      frozen = { sha: bytesSha256(pdf), ref, snapshot: sentSnapshotOf(input), pdf };
+      // The address each party's signing link may go to is frozen with the document: editing a party's email afterwards
+      // cannot redirect a link (review G14).
+      const emailRes = await admin.from('parties').select('id, email').eq('org_id', org).in('id', [...new Set(links.map((l) => l.party_id))]);
+      if (emailRes.error) throw new Error(`party emails: ${emailRes.error.message}`);
+      const signerEmails: Record<string, string> = {};
+      for (const p of (emailRes.data ?? []) as { id: string; email: string | null }[]) {
+        const e = usableEmail(p.email);
+        if (e) signerEmails[p.id] = e.toLowerCase();
+      }
+      frozen = { sha: bytesSha256(pdf), ref, snapshot: sentSnapshotOf(input, signerEmails), pdf };
     }
     if (!(await claimSend(admin, org, row.id, row.version, frozen && { sha: frozen.sha, ref: frozen.ref, snapshot: frozen.snapshot }))) {
       if (frozen) await removeSignatureImage(frozen.ref);

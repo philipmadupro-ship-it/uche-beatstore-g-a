@@ -104,8 +104,8 @@ describe('the join exception (LABEL-08)', () => {
   });
 
   it('the external signer’s entrance is exactly /api/sign/<token> and /sign/<token> (LABEL-60)', () => {
-    for (const p of ['/api/sign/abc', '/api/sign/abc/']) expect(isLabelOsSignApiPath(p), p).toBe(true);
-    for (const p of ['/api/sign', '/api/sign/', '/api/sign/abc/def', '/api/signer/abc', '/api/org/sign/abc', '/api/signx/abc', '/api/store/sign/abc']) {
+    for (const p of ['/api/sign/abc', '/api/sign/abc/', '/api/sign/abc/document', '/api/sign/abc/document/']) expect(isLabelOsSignApiPath(p), p).toBe(true);
+    for (const p of ['/api/sign', '/api/sign/', '/api/sign/abc/def', '/api/sign/abc/document/x', '/api/sign/abc/documents', '/api/signer/abc', '/api/org/sign/abc', '/api/signx/abc', '/api/store/sign/abc']) {
       expect(isLabelOsSignApiPath(p), p).toBe(false);
     }
     for (const p of ['/sign/abc', '/sign/abc/']) expect(isLabelOsSignPagePath(p), p).toBe(true);

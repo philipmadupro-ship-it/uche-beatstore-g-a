@@ -22,7 +22,7 @@ const releases = sortCreativeReleases([
   { id: 'r1', title: 'Autumn', state: 'draft', artistId: 'c1', artistName: 'Nova', targetDate: '2026-12-01', releaseDate: null, createdAt: '2026-10-05T00:00:00Z', creative: { status: 'awaiting_approval', stale: false } },
 ]);
 const workspace = (over: Partial<CreativeWorkspace> = {}): CreativeWorkspace => ({
-  schemaReady: true, gate: true, canApprove: true, canWrite: true, artists, releases, restricted: 0, totals: workspaceTotals(artists, releases), ...over,
+  schemaReady: true, gate: true, canApprove: true, canWrite: true, artists, releases, moreReleases: 0, restricted: 0, totals: workspaceTotals(artists, releases), ...over,
 });
 
 let reply: { status: number; body: unknown };
