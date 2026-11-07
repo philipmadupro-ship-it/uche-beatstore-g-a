@@ -22,12 +22,11 @@
  * A signed contract's link stays readable for the receipt until it expires.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { PublicContractSignBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { clientIp, rateLimitDurable } from '@/lib/security/rate-limit';
+import { SIGN_PRIVATE_HEADERS, resolveSignLink, signNotFound } from '@/lib/labelos/sign-link-resolve';
 import { readBody } from '@/lib/validate';
 import { auditRpc } from '@/lib/labelos/audit-rpc';
 import { cleanSignerName, hashSignToken, isWellFormedSignToken, linkReadable, parseDrawnSignature } from '@/lib/labelos/contract-signing';
@@ -42,39 +41,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const log = createLogger('api.sign');
-const PRIVATE = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex' };
-const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404, headers: PRIVATE });
-const json = (status: number, body: Record<string, unknown>) => NextResponse.json(body, { status, headers: PRIVATE });
+const json = (status: number, body: Record<string, unknown>) => NextResponse.json(body, { status, headers: SIGN_PRIVATE_HEADERS });
+const notFound = signNotFound;
+const resolve = resolveSignLink;
 
 type Params = { params: Promise<{ token: string }> };
-
-async function resolve(req: NextRequest, rawToken: string) {
-  if (!isWellFormedSignToken(rawToken)) return { res: notFound() } as const;
-  if (!(await rateLimitDurable(`sign-ip:${clientIp(req)}`, 300, 60 * 60 * 1000))) {
-    return { res: json(429, { error: 'Too many requests. Try again later.' }) } as const;
-  }
-  const admin = createServiceClient();
-  let ref;
-  try {
-    ref = await signerByTokenHash(admin, hashSignToken(rawToken));
-  } catch (err) {
-    if (err instanceof SigningNotReadyError) return { res: notFound() } as const;
-    throw err;
-  }
-  if (!ref) return { res: notFound() } as const;
-  const row = await readContractRow(admin, ref.orgId, ref.contractId);
-  if (!row) return { res: notFound() } as const;
-  const live = { contractStatus: row.status, tokenRevoked: false, expiresAt: ref.expiresAt };
-  // A signed contract's link still opens (the receipt); signing it is refused by planSign (409), not hidden.
-  if (!linkReadable(live) || !(await orgAllowsSigning(admin, ref.orgId))) return { res: notFound() } as const;
-  if (!(await rateLimitDurable(`sign-link:${hashSignToken(rawToken).slice(0, 16)}`, 60, 60 * 60 * 1000))) {
-    return { res: json(429, { error: 'Too many requests. Try again later.' }) } as const;
-  }
-  const links = (await linksOf(admin, ref.orgId, [row.id])).get(row.id) ?? [];
-  if (!links.some((l) => l.party_id === ref.partyId)) return { res: notFound() } as const;
-  const identities = await identitiesOf(admin, ref.orgId, links.map((l) => l.party_id));
-  return { admin, ref, row, links, identities } as const;
-}
 
 const failed = (err: unknown, what: string) => {
   if (err instanceof SigningNotReadyError || err instanceof ContractsNotReadyError) return notFound();
@@ -149,7 +120,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       ipHash: ipHashOf(req),
     });
     if (!prepared.ok) return json(prepared.status, { error: prepared.error, ...(prepared.code ? { code: prepared.code } : {}) });
-    const result = await finishSign(prepared, await auditRpc(admin, 'contractSign', prepared.args));
+    // If the function call itself throws, the drawn image already stored would be orphaned: remove it (best effort).
+    const rpc = await auditRpc(admin, 'contractSign', prepared.args).catch(async (err: unknown) => {
+      await prepared.cleanup().catch(() => {});
+      throw err;
+    });
+    const result = await finishSign(prepared, rpc);
     if (!result.ok) return json(result.status, { error: result.error, ...(result.code ? { code: result.code } : {}) });
     return json(200, { ok: true, completed: result.completed });
   } catch (err) {

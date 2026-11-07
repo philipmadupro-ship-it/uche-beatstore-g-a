@@ -149,10 +149,10 @@ export function isLabelOsPagePath(pathname: string): boolean {
  * `/sign/<token>`. Behind LABEL_OS_ENABLED like the rest of Label OS, but open
  * to anyone — signed in or not, member or not — because the signing link is the
  * credential and the route checks it (and answers one 404 for every failure).
- * Exactly one segment after the prefix: nothing below it, nothing beside it.
+ * One segment after the prefix, plus `/document` (the frozen sent PDF): nothing else below it, nothing beside it.
  */
 export function isLabelOsSignApiPath(pathname: string): boolean {
-  return /^\/api\/sign\/[^/]+\/?$/.test(pathname);
+  return /^\/api\/sign\/[^/]+(\/document)?\/?$/.test(pathname);
 }
 
 export function isLabelOsSignPagePath(pathname: string): boolean {

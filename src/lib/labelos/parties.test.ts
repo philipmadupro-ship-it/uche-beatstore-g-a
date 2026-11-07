@@ -110,12 +110,12 @@ describe('partyLockViolation', () => {
 
 describe('clearsConfirmation', () => {
   it('is true for a field the person can correct, and for re-linking the account', () => {
-    for (const key of ['legal_name', 'ipi', 'isni', 'pro', 'pro_affiliation', 'publisher_name', 'publisher_ipi', 'address', 'country', 'user_id']) {
+    for (const key of ['legal_name', 'ipi', 'isni', 'pro', 'pro_affiliation', 'publisher_name', 'publisher_ipi', 'address', 'country', 'user_id', 'email']) {
       expect(clearsConfirmation({ [key]: 'x' }), key).toBe(true);
     }
   });
-  it('is false for the display name, the kind, the contact link, the email and payee data', () => {
-    expect(clearsConfirmation({ display_name: 'x', kind: 'company', contact_id: 'c', email: 'e', tax_id: 't', payment_instructions: 'p' })).toBe(false);
+  it('is false for the display name, the kind, the contact link and payee data', () => {
+    expect(clearsConfirmation({ display_name: 'x', kind: 'company', contact_id: 'c', tax_id: 't', payment_instructions: 'p' })).toBe(false);
     expect(clearsConfirmation({})).toBe(false);
   });
 });

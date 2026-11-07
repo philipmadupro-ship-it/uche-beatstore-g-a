@@ -476,6 +476,28 @@ describe('signing links', () => {
     expect(emails).toHaveLength(0);
   });
 
+  it('review G14: the link goes only to the address on file when the contract was SENT — an email edited since is refused (409), nothing issued or sent', async () => {
+    db.tables.contracts[0].sent_snapshot = { ...(db.tables.contracts[0].sent_snapshot as object), signerEmails: { [PN]: 'nova@example.com' } };
+    db.tables.parties[1].email = 'attacker@evil.test'; // a rights writer edits the party's address, then asks for the link
+    const res = await call('POST', LEG, 'links', { party_id: PN });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('party_email_changed');
+    expect(db.tables.contract_signers).toHaveLength(0);
+    expect(emails).toHaveLength(0);
+    // Changing it back, or only its letter case, is the same address.
+    db.tables.parties[1].email = 'Nova@Example.com';
+    expect((await call('POST', LEG, 'links', { party_id: PN })).status).toBe(200);
+    expect(emails[0].to.toLowerCase()).toBe('nova@example.com');
+  });
+
+  it('review G14: a party that had no address when the contract was sent cannot be given one afterwards', async () => {
+    db.tables.contracts[0].sent_snapshot = { ...(db.tables.contracts[0].sent_snapshot as object), signerEmails: {} };
+    const res = await call('POST', LEG, 'links', { party_id: PN });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('party_email_changed');
+    expect(emails).toHaveLength(0);
+  });
+
   it('when the email cannot be sent the link is not left live (502, revoked)', async () => {
     emailFails = true;
     expect((await call('POST', LEG, 'links', { party_id: PN })).status).toBe(502);

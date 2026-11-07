@@ -49,10 +49,16 @@ export type SentSnapshot = {
   version: number;
   parties: { roleLabel: string; name: string }[];
   clauses: { id: string; heading: string; body: string }[];
+  /**
+   * The address each party's signing link may go to: the one on file when the contract was SENT (party id → lower-cased
+   * address). Never shown to a signer. Absent on a contract sent before review G14.
+   */
+  signerEmails?: Record<string, string>;
 };
 
-export function sentSnapshotOf(input: Pick<ContractDocumentInput, 'title' | 'typeLabel' | 'version' | 'parties' | 'clauses'>): SentSnapshot {
+export function sentSnapshotOf(input: Pick<ContractDocumentInput, 'title' | 'typeLabel' | 'version' | 'parties' | 'clauses'>, signerEmails?: Record<string, string>): SentSnapshot {
   return {
+    ...(signerEmails ? { signerEmails } : {}),
     title: input.title,
     typeLabel: input.typeLabel,
     version: input.version,
@@ -69,7 +75,11 @@ export function parseSentSnapshot(raw: unknown): SentSnapshot | null {
   if (!str(r.title) || !str(r.typeLabel) || typeof r.version !== 'number' || !Array.isArray(r.parties) || !Array.isArray(r.clauses)) return null;
   const parties = r.parties.filter((p): p is { roleLabel: string; name: string } => !!p && str((p as Record<string, unknown>).roleLabel) && str((p as Record<string, unknown>).name));
   const clauses = r.clauses.filter((c): c is { id: string; heading: string; body: string } => !!c && str((c as Record<string, unknown>).id) && str((c as Record<string, unknown>).heading) && str((c as Record<string, unknown>).body));
-  return { title: r.title, typeLabel: r.typeLabel, version: r.version, parties, clauses };
+  const emails =
+    r.signerEmails && typeof r.signerEmails === 'object' && !Array.isArray(r.signerEmails)
+      ? Object.fromEntries(Object.entries(r.signerEmails as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === 'string'))
+      : null;
+  return { title: r.title, typeLabel: r.typeLabel, version: r.version, parties, clauses, ...(emails ? { signerEmails: emails } : {}) };
 }
 
 /** SHA-256 (hex) of the stored BYTES of the sent PDF. This is what a signature is recorded against. */

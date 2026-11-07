@@ -106,7 +106,7 @@ export function SignWithLink({ token }: { token: string }) {
         <section className="space-y-2 rounded-xl border border-[#6DC6A4]/30 bg-[var(--surface-primary)] p-4" data-testid="sign-receipt">
           <p className="inline-flex items-center gap-1.5 text-[11px] text-[#6DC6A4]"><Check size={13} aria-hidden="true" />You signed this contract</p>
           <p className="text-[11px] text-white/60">{data.receipt.signerName ?? data.you.name} · {when(data.receipt.signedAt)}</p>
-          <p className="break-all font-mono text-[10px] text-white/40">Text fingerprint (SHA-256): {data.receipt.documentSha256}</p>
+          <p className="break-all font-mono text-[10px] text-white/40">Document fingerprint (SHA-256): {data.receipt.documentSha256}</p>
           <p className="text-[11px] text-white/60">{data.completed ? 'Every party has now signed.' : 'The contract is complete once every party has signed.'}</p>
         </section>
       ) : data.canSign ? (
@@ -121,7 +121,11 @@ export function SignWithLink({ token }: { token: string }) {
 
       <footer className="space-y-1.5 text-[10px] leading-relaxed text-white/40">
         <p data-testid="sign-statement">{data.statement}</p>
-        <p className="break-all font-mono">Text fingerprint (SHA-256): {data.documentSha256}</p>
+        <p className="break-all font-mono">Document fingerprint (SHA-256): {data.documentSha256}</p>
+        <p>
+          The fingerprint is of the exact PDF this contract was sent as.{' '}
+          <a className="underline" href={`/api/sign/${token}/document`} data-testid="sign-download">Download that PDF</a> to keep or check it.
+        </p>
         {data.providerUrl && <p>The label also lists an external e-signature for this contract: <a className="underline" href={data.providerUrl} target="_blank" rel="noopener noreferrer">{data.providerUrl}</a></p>}
       </footer>
     </>,
