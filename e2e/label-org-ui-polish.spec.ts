@@ -141,7 +141,8 @@ test('4 · Label OS panels stay readable in the archive theme (owner, 1440 and 3
     const page = await ctx.newPage();
     for (const [name, path] of [['song', `/songs/${SONG}`], ['settings', '/settings/organization'], ['music', '/music']] as const) {
       await page.goto(`/o/${SLUG}${path}`);
-      await page.waitForLoadState('networkidle').catch(() => undefined);
+      // The org shell is what the check reads. `networkidle` never settles here (the shell keeps polling), so it burned its full 30 s per page and the test its whole 180 s.
+      await page.locator('.labelos-shell').waitFor();
       await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'de-roche-archive'));
       await page.waitForTimeout(600);
       // The page text is dark on the light surface: no body text colour is near-white.
