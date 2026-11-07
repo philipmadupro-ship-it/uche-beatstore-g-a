@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — plain ESM helper of the local verification stack
 import { shouldAgeOrgDelete, ORG_CLEANUP_HEADER } from '../../../scripts/local-db/org-cleanup.mjs';
-// @ts-expect-error — plain ESM helper of the local verification stack
 import { SERVICE_KEY, ANON_KEY } from '../../../scripts/local-db/jwt.mjs';
 
 const base = { method: 'DELETE', pathname: '/rest/v1/organizations' };
