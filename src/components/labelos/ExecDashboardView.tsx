@@ -25,7 +25,7 @@ function monthLabel(m: string): string {
 
 function Section({ id, title, children, testid }: { id: string; title: string; children: React.ReactNode; testid: string }) {
   return (
-    <section aria-labelledby={id} className={CARD} data-testid={testid}>
+    <section aria-labelledby={id} className={`${CARD} min-w-0`} data-testid={testid}>
       <h2 id={id} className={`${LABEL} mb-3`}>{title}</h2>
       {children}
     </section>
@@ -62,7 +62,7 @@ export function ExecDashboardView({ orgId, slug }: { orgId: string; slug: string
 
   const maxMonth = Math.max(1, ...data.months.map((m) => m.total));
   return (
-    <div className="space-y-6" data-testid="exec-dashboard" data-scoped={data.scoped ? 'true' : 'false'}>
+    <div className="min-w-0 space-y-6" data-testid="exec-dashboard" data-scoped={data.scoped ? 'true' : 'false'}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[11px] text-white/50">
           {data.scoped ? 'You see the songs and releases of your artists only.' : 'Across the whole roster.'}
@@ -78,7 +78,7 @@ export function ExecDashboardView({ orgId, slug }: { orgId: string; slug: string
       </div>
       {!data.schemaReady && <p className={NOTICE} data-testid="exec-not-ready">Releases are not set up yet: the release database migrations are not applied.</p>}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section id="ex-pipe" title="Pipeline by stage" testid="exec-pipeline">
           <ul className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
             {data.pipeline.map((p) => (
@@ -94,11 +94,11 @@ export function ExecDashboardView({ orgId, slug }: { orgId: string; slug: string
           {data.months.length === 0 ? <Empty>No dated releases yet.</Empty> : (
             <ul className="space-y-2">
               {data.months.map((m) => (
-                <li key={m.month} className="flex items-center gap-3" data-month={m.month}>
+                <li key={m.month} className="flex flex-wrap items-center gap-x-3 gap-y-1" data-month={m.month}>
                   <span className="w-20 shrink-0 text-[11px] text-white/60">{monthLabel(m.month)}</span>
                   <span className="h-2 rounded bg-white/30" style={{ width: `${(m.total / maxMonth) * 100}%`, minWidth: 8 }} aria-hidden />
                   <span className="text-[11px] text-white/80" data-testid="month-total">{m.total}</span>
-                  <span className="truncate text-[10px] text-white/40">{m.delivered} out · {m.ready} ready · {m.inProgress} in progress</span>
+                  <span className="text-[10px] text-white/40">{m.delivered} out · {m.ready} ready · {m.inProgress} in progress</span>
                 </li>
               ))}
             </ul>
@@ -109,9 +109,9 @@ export function ExecDashboardView({ orgId, slug }: { orgId: string; slug: string
           {data.blocked.length === 0 ? <Empty>Nothing is blocked.</Empty> : (
             <ul className="space-y-2">
               {data.blocked.map((b) => (
-                <li key={b.id} className="text-[12px] text-white/80" data-testid="blocked-row">
+                <li key={b.id} className="break-words text-[11px] text-white/80" data-testid="blocked-row">
                   <Link href={`/o/${slug}/releases/${b.id}`} className="text-white underline-offset-2 hover:underline">{b.title}</Link>
-                  <span className="text-white/40"> · {[b.artistName, b.date].filter(Boolean).join(' · ')} · blocked on {b.gates.join(', ')}</span>
+                  <span className="text-white/40"> · {[b.artistName, b.date].filter(Boolean).join(' · ')} · blocked on {b.gates.map((x) => x.replace(/_/g, " ")).join(', ')}</span>
                 </li>
               ))}
             </ul>
@@ -122,9 +122,9 @@ export function ExecDashboardView({ orgId, slug }: { orgId: string; slug: string
           {data.waiting.length === 0 ? <Empty>No approval is waiting.</Empty> : (
             <ul className="space-y-2">
               {data.waiting.map((w) => (
-                <li key={w.releaseId} className="text-[12px] text-white/80" data-testid="waiting-row">
+                <li key={w.releaseId} className="break-words text-[11px] text-white/80" data-testid="waiting-row">
                   <Link href={`/o/${slug}/releases/${w.releaseId}`} className="text-white underline-offset-2 hover:underline">{w.title}</Link>
-                  <span className="text-white/40"> · {[w.artistName, w.gates.join(', ')].filter(Boolean).join(' · ')}</span>
+                  <span className="text-white/40"> · {[w.artistName, w.gates.map((x) => x.replace(/_/g, " ")).join(', ')].filter(Boolean).join(' · ')}</span>
                 </li>
               ))}
             </ul>
@@ -150,8 +150,8 @@ export function ExecDashboardView({ orgId, slug }: { orgId: string; slug: string
           {data.topSongs === null ? <Withheld what="Shown with the money." /> : data.topSongs.length === 0 ? <Empty>No income is attributed to a song yet.</Empty> : (
             <ol className="space-y-1.5">
               {data.topSongs.map((s) => (
-                <li key={`${s.currency}-${s.id}`} className="flex justify-between gap-3 text-[12px] text-white/80" data-testid="top-song">
-                  <span className="truncate">{s.title}{s.artistName && <span className="text-white/40"> · {s.artistName}</span>}</span>
+                <li key={`${s.currency}-${s.id}`} className="flex flex-wrap justify-between gap-x-3 text-[11px] text-white/80" data-testid="top-song">
+                  <span className="min-w-0 break-words">{s.title}{s.artistName && <span className="text-white/40"> · {s.artistName}</span>}</span>
                   <span className="shrink-0 text-white/60">{showMoney(s.gross, s.currency)}</span>
                 </li>
               ))}
@@ -163,7 +163,7 @@ export function ExecDashboardView({ orgId, slug }: { orgId: string; slug: string
           {data.tasks === null ? <Withheld what="Task load is shown across the whole roster only." /> : data.tasks.length === 0 ? <Empty>No open task.</Empty> : (
             <ul className="space-y-1.5">
               {data.tasks.map((t) => (
-                <li key={t.department} className="flex justify-between text-[12px] text-white/80" data-testid="task-dept" data-department={t.department}>
+                <li key={t.department} className="flex flex-wrap justify-between gap-x-3 text-[11px] text-white/80" data-testid="task-dept" data-department={t.department}>
                   <span>{t.department}</span>
                   <span className="text-white/60">{t.open} open{t.overdue > 0 && <span className="text-red-400"> · {t.overdue} overdue</span>}</span>
                 </li>
