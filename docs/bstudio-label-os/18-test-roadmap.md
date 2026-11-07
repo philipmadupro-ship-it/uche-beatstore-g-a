@@ -33,7 +33,7 @@ The backlog file (`14-engineering-backlog.md`) was out of date about LABEL-31 to
 
 **Golden rules**
 
-1. Never apply migrations 136 and up to the **production** database. They are applied only at the final merge.
+1. *(Update 2026-11-07: migrations 130 to 196 were applied to production by the owner today; this rule below was written before. Do not apply any other migration to production unreviewed.)* Originally: never apply migrations 136 and up to the **production** database; they were applied only at the final merge.
 2. Always test the **Label OS branch** `claude/happy-bardeen-rnosf3`. It holds every Label OS task. **Not `main`**, which has no Label OS at all. There is no other branch to switch to.
 3. With `LABEL_OS_ENABLED` off (or unset) the app behaves like the old app and every `/o/…` and `/api/org/…` address answers "Not found". That is on purpose.
 

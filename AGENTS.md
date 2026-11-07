@@ -1,6 +1,6 @@
 # Antigravity — Product Spec
 
-Single-producer beatstore (plus, behind a switch and not yet live, a second product for labels and independent artists: see "Label OS" below). The beatstore is two things in one app:
+Single-producer beatstore (plus, behind a switch, a second product for labels and independent artists: see "Label OS" below). The beatstore is two things in one app:
 
 1. A **private dashboard** the producer uses to write, store, organise, and sell music.
 2. A **public storefront** buyers visit to discover, preview, and license that music — either one track at a time or as a whole project bundle.
@@ -82,9 +82,9 @@ Whatever the variant, the options the producer set are honoured on the page:
 - **Role** — commenters and editors get a "Leave feedback" / "Comment & edit" entry into the collaboration view (region-pinned comments, the editor); viewers do not.
 - **For sale** — Buy buttons on the client variant only when `sales_enabled`.
 
-### Label OS (`/o/<org>/…`, behind a switch, not live)
+### Label OS (`/o/<org>/…`, behind a switch)
 
-A second product built on the same app, **off unless `LABEL_OS_ENABLED` is set** (off = the beatstore exactly as above; every `/o/…`, `/setup`, `/platform` and `/api/org/…` address answers "Not found"). Its database changes are **not applied to production**; they are applied at the final merge (see `docs/bstudio-label-os/28-migration-apply-order.md`). It lets a **label** or an **independent artist/producer** run their business in one place, so they need no other application. Detail: `docs/bstudio-label-os/` (decisions in 15 and 21, owner brief 22, report 27, owner test walkthrough 18).
+A second product built on the same app, **off unless `LABEL_OS_ENABLED` is set** (off = the beatstore exactly as above; every `/o/…`, `/setup`, `/platform` and `/api/org/…` address answers "Not found"). Its database changes (migrations 130–196) were applied to production on 2026-11-07 (see `docs/bstudio-label-os/28-migration-apply-order.md` §0); the switch stays off until the owner turns it on. It lets a **label** or an **independent artist/producer** run their business in one place, so they need no other application. Detail: `docs/bstudio-label-os/` (decisions in 15 and 21, owner brief 22, report 27, owner test walkthrough 18).
 
 **Two kinds of customer.** An **independent artist/producer** (one person who is both) or a **label** (artists, beatmakers, producers, rappers, collaborators and staff). The platform operator (the owner) licenses the software to either, from a private console (`/platform`), and decides which modules each gets: contracts, finance, marketing, PR, executive, artistic direction, store, search, digest, export. With no restriction recorded, a customer gets everything their kind allows; paid plans come later. People can also sign up themselves, choose an account type and be walked through a setup wizard (`/setup`) that creates the organization, its choices (which contract types, which departments, which gates) and, optionally, logins for the team.
 
