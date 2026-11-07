@@ -20,6 +20,12 @@
 --    operator-created org that is ALREADY set up gets that org back (created false),
 --    never a second one.
 --
+-- DEPLOY ORDER: apply 197 BEFORE the code that ships with it. If the code runs
+-- against the old function, (a) org.created is silently not written at all (the
+-- route no longer writes it and 192's function does not either), and (b) the
+-- redirect of an unfinished owner to /setup plus the old function creates a
+-- SECOND org for them.
+--
 -- Same four-argument signature, owner and grants as 192; only the body differs.
 -- Idempotent: CREATE OR REPLACE.
 
@@ -43,7 +49,6 @@ DECLARE
   v_kind     text;
   v_base     text;
   v_try      int := 1;
-  v_keys     jsonb;
 BEGIN
   IF p_user IS NULL THEN
     RAISE EXCEPTION 'labelos_setup_org: user required' USING ERRCODE = '22023';
@@ -71,6 +76,8 @@ BEGIN
     RETURN jsonb_build_object('org_id', v_org, 'slug', v_slug, 'kind', v_kind, 'created', false);
   END IF;
 
+  -- ORDER MATTERS: the self-served check above comes first, so a user who already has a self-served org is
+  -- answered with that org and an unfinished operator org they also own is not adopted (accepted edge case).
   -- An operator-created licensee the caller owns and has not set up yet: adopt it, do not make a second org.
   SELECT o.id, o.slug, o.kind INTO v_org, v_slug, v_kind
   FROM public.organizations o
