@@ -153,7 +153,8 @@ test('1–3 · create a label licensee in the console, its owner joins, modules 
   // Every console action is recorded in the org it acted on, by the operator.
   const events = await rest(page.request, 'GET', `activity_events?org_id=eq.${orgId}&actor_id=eq.${PRODUCER_ID}&select=verb,audit&order=created_at,verb`); // one transaction shares a timestamp: verb breaks the tie
   expect(events).toEqual([
-    { verb: 'org.created', audit: false },
+    // Migration 195 (LABEL-75): a console-created licensee's `org.created` is audit-class.
+    { verb: 'org.created', audit: true },
     { verb: 'org.entitlements_changed', audit: true },
     { verb: 'invitation.created', audit: true },
     { verb: 'org.entitlements_changed', audit: true },
