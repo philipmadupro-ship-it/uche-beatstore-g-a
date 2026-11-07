@@ -828,7 +828,7 @@ Phase 2 added two kinds of customer (**faces**), the departments a label needs, 
 | Login | Who | Should see | Should NOT see |
 |---|---|---|---|
 | `finance` | Member with function **Finance** | Finance (overview, earnings, statements, advances). Money for the whole org | Working audio, legal queue |
-| `exec` | Member with function **Executive** | `/o/<slug>/exec` only as a read-only cross-roster overview; finished audio | Working audio (counted as "restricted"), any edit control |
+| `exec` | Member with function **Executive** | `/o/<slug>/exec` only as a read-only cross-roster overview; finished audio | Working audio titles and files (pipeline counts include those songs, numbers only), any edit control |
 | `art-director` | Function **Artistic director** | `/o/<slug>/creative`, creative approval gate when it is on | Money, contracts |
 | `pr` | Function **PR** | Press kit and outreach tracker on a release | Marketing budget, finance |
 | `collab` | An outside **collaborator** (beatmaker, producer, rapper, feature, engineer) invited to one song | `/shared` ("My sessions") with the credit to confirm, split line to acknowledge, contract to sign | Anyone else's split line, any org page |
@@ -956,7 +956,7 @@ Phase 2 added two kinds of customer (**faces**), the departments a label needs, 
 
 **What changed.** `/o/<slug>/exec` shows pipeline by stage, releases by month, blocked releases, approvals waiting, income vs cost, top songs and task load by department, with an audited CSV export. `/o/<slug>/creative` collects direction, references, reviews, stages and releases for artistic direction, and can add an optional creative approval gate (off by default).
 
-**Do this.** As `exec`: every section renders at 1440 and 390 px; the number of songs you may not open is shown as "restricted". Download the CSV and find one `exec.exported` audit event. As `art-director`: open Creative, approve a release's creative gate after the owner switches it on in settings.
+**Do this.** As `exec`: every section renders at 1440 and 390 px; pipeline stage counts include every song in the reader's artist scope, numbers only, even demos the role cannot open (their titles never appear). Download the CSV and find one `exec.exported` audit event. As `art-director`: open Creative, approve a release's creative gate after the owner switches it on in settings.
 
 **Try to break it**
 - [ ] Marketing and a roster artist: `/exec` and `/api/org/<id>/exec` refused; no export event written.
@@ -1112,7 +1112,7 @@ For each one: what the app does **today**, where to see it, then your answer.
 
 - **Showcase ("greatest moments")** is not built. Do you want it, and with what public page?
 - **Collaborator and producer self-view of statements** is not granted until a party's account link is proven by the party. Is the "someone else links, the party confirms" rule enough?
-- **Executive dashboard and audio class:** the executive sees demo stages as "restricted". Should stage counts show regardless of audio access (counts only, never audio)?
+- **Executive dashboard and audio class:** decided before merge: stage counts include every song in scope, numbers only; titles stay filtered by audio class. Nothing to answer.
 - **Statements:** a negative or zero net owes nothing and is not carried forward. Keep, or carry forward?
 - **Notify the artist** when a statement is issued (needs one new notification kind).
 - **Wizard contract types:** the wizard stores 8 of the 14 types. Widen it?
