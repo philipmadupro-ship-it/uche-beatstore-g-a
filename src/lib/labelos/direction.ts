@@ -146,6 +146,15 @@ export function referenceReadableBy(role: string, visibility: string): boolean {
 }
 
 /**
+ * Is this member at the references cap? Counts only what THEY may read
+ * (LABEL-74): counting an `internal` reference for a role that cannot see it
+ * would let the refusal reveal that one exists.
+ */
+export function referencesAtCap(role: string, existing: ReadonlyArray<{ visibility: string }>): boolean {
+  return existing.filter((r) => referenceReadableBy(role, r.visibility)).length >= REFERENCES_PER_ARTIST_MAX;
+}
+
+/**
  * https links only (the column's CHECK too): no `javascript:`, `data:`,
  * `http:` or credentials in the address. Returns the normalised URL or null.
  */

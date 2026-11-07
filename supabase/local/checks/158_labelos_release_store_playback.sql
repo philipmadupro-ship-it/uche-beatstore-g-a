@@ -93,6 +93,7 @@ INSERT INTO public.release_items (id, release_id, org_id, position, song_track_i
 UPDATE public.releases SET store_listed = true, store_listed_at = now() WHERE id = :R1;
 DO $$
 BEGIN
+  UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = 'b1580000-0000-4000-8000-000000000001';
   DELETE FROM public.organizations WHERE id = 'b1580000-0000-4000-8000-000000000001';
   IF EXISTS (SELECT 1 FROM public.release_items WHERE org_id = 'b1580000-0000-4000-8000-000000000001')
      OR EXISTS (SELECT 1 FROM public.releases WHERE org_id = 'b1580000-0000-4000-8000-000000000001') THEN

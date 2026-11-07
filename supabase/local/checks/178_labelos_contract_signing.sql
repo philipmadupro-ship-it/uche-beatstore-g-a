@@ -224,6 +224,7 @@ UPDATE public.parties SET user_id = NULL WHERE id = :PB;
 -- ── 7. The org's own deletion cascades through the immutable table ───────
 -- (labelos_org_hard_delete.sql proves it for every table; here, the signature rows of THIS org.)
 
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('the org’s delete removed its signatures', (SELECT count(*)::int FROM public.contract_signatures WHERE org_id = :L), 0);
 SELECT public.check_eq('… and its signer links', (SELECT count(*)::int FROM public.contract_signers WHERE org_id = :L), 0);

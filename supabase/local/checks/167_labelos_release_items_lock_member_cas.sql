@@ -308,6 +308,7 @@ SELECT dblink_disconnect('s2');
 -- Purging the org with a delivered release and its items is not blocked.
 DO $$
 BEGIN
+  UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = 'b1670000-0000-4000-8000-000000000001';
   DELETE FROM public.organizations WHERE id = 'b1670000-0000-4000-8000-000000000001';
   IF EXISTS (SELECT 1 FROM public.release_items WHERE org_id = 'b1670000-0000-4000-8000-000000000001') THEN
     RAISE EXCEPTION 'CHECK FAILED: purging an organization with a delivered release left items behind';

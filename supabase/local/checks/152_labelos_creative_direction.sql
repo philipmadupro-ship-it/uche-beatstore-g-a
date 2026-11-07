@@ -324,6 +324,7 @@ SELECT public.check_eq('deleting a file deletes the references to it',
 DELETE FROM public.contacts WHERE id = :C1;
 SELECT public.check_eq('deleting the artist deletes their direction and references',
   (SELECT count(*) FROM public.artist_references WHERE contact_id = 'c1520000-0000-4000-8000-0000000000c1') + (SELECT count(*) FROM public.artist_direction WHERE contact_id = 'c1520000-0000-4000-8000-0000000000c1'), 0::bigint);
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L2;
 DELETE FROM public.organizations WHERE id = :L2;
 SELECT public.check_eq('deleting an org deletes its direction and references',
   (SELECT count(*) FROM public.artist_references WHERE title = 'xen_open') + (SELECT count(*) FROM public.artist_direction WHERE contact_id = 'c1520000-0000-4000-8000-0000000000c3'), 0::bigint);

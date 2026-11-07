@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
     if (result.status === 'failed') throw new Error(result.error);
 
     if (result.status === 'created') {
-      // Everyday event, best effort: the org exists either way.
+      // Audit-class since LABEL-75 (kept for the life of the org); still best effort here: the org exists either way.
       try {
         await recordEvent(
           admin,

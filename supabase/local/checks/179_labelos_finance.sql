@@ -453,6 +453,7 @@ SELECT public.check_raises('a party named by a payee cannot be deleted',
   format($$DELETE FROM public.parties WHERE id = %L$$, 'd1790000-0000-4000-8000-000000000001'), 'foreign key|violates');
 
 -- ── The org's hard delete takes it all, even issued statements and payments ──
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('hard delete: nothing of the org is left',
   (SELECT (SELECT count(*) FROM public.payees WHERE org_id = 'b1790000-0000-4000-8000-000000000001')

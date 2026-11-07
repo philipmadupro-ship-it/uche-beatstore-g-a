@@ -340,6 +340,7 @@ SELECT public.check_eq('events: one import_voided per void', (SELECT count(*)::i
 
 -- ── The org's hard delete takes it all ───────────────────────────────────
 
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('hard delete: nothing of the org is left',
   (SELECT (SELECT count(*) FROM public.statements WHERE org_id = 'b1810000-0000-4000-8000-000000000001')

@@ -274,8 +274,8 @@ track_collaborators(track_id, name, role, source, contact_id)
 stems(track_id, job_id, status, vocals_url, drums_url, bass_url, other_url)
 calendar_events(id, user_id, title, date, end_date, type, track_ids[],
                 notes, color)
-invites(email, role, token, expires_at, used_at)
-team_members(user_id, role[owner|admin|collaborator], email, name)
+invites(email, role, token, expires_at, used_at)      -- legacy (migration 001), no code reads it
+team_members(user_id, role[owner|admin|collaborator], email, name)  -- legacy (001), no code reads it; teams are org_members (Label OS)
 rating_history(track_id, user_id, rating, rated_at)
 
 buyer_favorites(email, track_id, created_at)

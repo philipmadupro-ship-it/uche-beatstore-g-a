@@ -150,6 +150,7 @@ SELECT public.check_eq('the rows are all still there after the refused attempts'
 DELETE FROM auth.users WHERE id = :M;
 SELECT public.check_eq('a deleted person takes their own views with them',
   (SELECT count(*)::int FROM public.org_saved_views WHERE org_id = :L), 2);
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('purging an organization deletes its views',
   (SELECT count(*)::int FROM public.org_saved_views WHERE org_id = :L), 0);

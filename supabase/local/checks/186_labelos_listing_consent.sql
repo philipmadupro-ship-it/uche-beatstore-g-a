@@ -187,9 +187,11 @@ SELECT public.check_eq('the rows survived the refused attempts',
 DELETE FROM public.store_listing_vetoes WHERE release_id = :REL;
 SELECT public.check_eq('the service role lifts a veto', (SELECT count(*)::int FROM public.store_listing_vetoes), 0);
 INSERT INTO public.store_listing_vetoes (release_id, org_id) VALUES (:REL, :L);
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('purging the label deletes its veto', (SELECT count(*)::int FROM public.store_listing_vetoes), 0);
 SELECT public.check_eq('…and leaves the artist org’s consents', (SELECT count(*)::int FROM public.listing_consents WHERE org_id = :AR), 2);
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :AR;
 DELETE FROM public.organizations WHERE id = :AR;
 SELECT public.check_eq('purging the artist org deletes its consents', (SELECT count(*)::int FROM public.listing_consents), 0);
 
