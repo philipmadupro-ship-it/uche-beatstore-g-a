@@ -86,6 +86,15 @@ http.createServer(async (req, res) => {
       delete headers.host;
       delete headers['content-length'];
       const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await readBody(req);
+      // Migration 195 lets an organization row go only 30 days after it was scheduled for deletion (the purge). Specs
+      // clean up with the service key, so a service-role DELETE of organizations first backdates `deleted_at` past the
+      // grace period, which is what the purge sees: the same trigger runs, nothing is switched off. A user's own JWT is
+      // forwarded untouched, so a spec that proves the refusal still gets it.
+      if (req.method === 'DELETE' && url.pathname === '/rest/v1/organizations' && verify(String(req.headers.authorization ?? '').replace(/^Bearer /, ''))?.role === 'service_role') {
+        const aged = new Date(Date.now() - 31 * 86_400_000).toISOString();
+        const aging = await fetch(PGRST + '/organizations' + url.search, { method: 'PATCH', headers: { ...headers, 'content-type': 'application/json', prefer: 'return=minimal' }, body: JSON.stringify({ deleted_at: aged }) });
+        if (!aging.ok) console.error('backdating deleted_at failed', aging.status, await aging.text());
+      }
       const r = await fetch(PGRST + url.pathname.slice('/rest/v1'.length) + url.search, { method: req.method, headers, body });
       const out = Buffer.from(await r.arrayBuffer());
       const h = { ...cors };

@@ -64,9 +64,12 @@ describe('persona matrix: pageAllowed (role × face)', () => {
     expect(pageAllowed('creative', input(owner, ['artistic']))).toBe(true);
   });
 
-  it('a producer org has none of the label pages; unknown kind or role opens nothing', () => {
+  it('a producer org has none of the label pages except its releases; unknown kind or role opens nothing', () => {
     const caps = new Set(capabilitiesFor('producer', 'owner', []));
-    for (const pg of ORG_PAGES) if (!['members', 'overview', 'store_listings'].includes(pg)) expect(pageAllowed(pg, { kind: 'producer', role: 'owner', capabilities: caps })).toBe(false);
+    // LABEL-42: the store owner's releases are listed from the studio org, so it keeps the releases page (and only that).
+    expect(pageAllowed('releases', { kind: 'producer', role: 'owner', capabilities: caps })).toBe(true);
+    expect(pageAllowed('releases', { kind: 'producer', role: 'owner', capabilities: new Set() })).toBe(false);
+    for (const pg of ORG_PAGES) if (!['members', 'overview', 'store_listings', 'releases'].includes(pg)) expect(pageAllowed(pg, { kind: 'producer', role: 'owner', capabilities: caps })).toBe(false);
     for (const pg of ORG_PAGES) if (pg !== 'overview' && pg !== 'members') expect(pageAllowed(pg, { kind: 'nope', role: 'owner', capabilities: new Set() })).toBe(false);
   });
 });

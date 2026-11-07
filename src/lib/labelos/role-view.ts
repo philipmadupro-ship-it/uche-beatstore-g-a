@@ -84,8 +84,10 @@ export function pageAllowed(page: OrgPage, i: ViewInput): boolean {
       return licensed(i.modules, 'store');
     case 'artists':
     case 'music':
-    case 'releases':
       return face && caps.has('catalog.read');
+    // The studio's own producer org lists its releases too (LABEL-42: the store owner's releases are listed from here).
+    case 'releases':
+      return (face || i.kind === 'producer') && caps.has('catalog.read');
     // The reviewers' queue is a label's tool: an independent artist has no roster to triage.
     // A roster artist reads the reviews of their own songs on the song page (doc 21 §5.2 #18: pages are 404).
     case 'ar':
