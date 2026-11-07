@@ -22,7 +22,7 @@ import { fetchCreativeGate, putCreativeGate } from '@/lib/labelos/creative-clien
 import { CONTRACTS_NEED_LEGAL_OFF, SWITCHABLE_MODULES, contractsLockout, parseDepartmentsOff, patchFromDraft, type OrgSettingsView } from '@/lib/labelos/org-settings';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-5 sm:p-6';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-5 sm:p-6';
 
 type Loaded = { settings: OrgSettingsView; licensed: Module[]; switchable: Module[] };
 

@@ -57,19 +57,19 @@ export function ContractCertificate({ orgId, contractId }: { orgId: string; cont
         <p className="text-[10px] text-white/40">{contract.typeLabel} · version {contract.version}</p>
       </header>
 
-      <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-3 text-[11px] leading-relaxed text-white/70" data-testid="certificate-statement">{view.statement}</p>
+      <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-3 text-[11px] leading-relaxed text-white/70" data-testid="certificate-statement">{view.statement}</p>
 
       <section className="space-y-1.5" aria-label="Document">
         <h2 className={LABEL}>The text that was signed</h2>
         <p className="text-[10px] text-white/40">SHA-256 of the contract as it reads now</p>
-        <p className="break-all rounded-lg border border-white/10 bg-[#090907] px-3 py-2 font-mono text-[10px] text-white/70" data-testid="certificate-hash">{view.documentSha256}</p>
+        <p className="break-all rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 font-mono text-[10px] text-white/70" data-testid="certificate-hash">{view.documentSha256}</p>
       </section>
 
       <section className="space-y-3" aria-label="Signers">
         <h2 className={LABEL}>Signers · {signed} of {view.signers.length}</h2>
         <ul className="space-y-3">
           {view.signers.map((s) => (
-            <li key={s.partyId} className="space-y-1.5 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid={`certificate-signer-${s.partyId}`}>
+            <li key={s.partyId} className="space-y-1.5 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4" data-testid={`certificate-signer-${s.partyId}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[11px] text-white/80">{s.name} <span className="text-white/40">· {s.roleLabel}</span></p>
                 <StateChip status={s.status} />

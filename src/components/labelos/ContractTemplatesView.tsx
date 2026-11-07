@@ -21,11 +21,11 @@ import { TEMPLATE_TYPES, type TemplateTypeId } from '@/lib/labelos/contracts/typ
 import { loadTemplates, saveTemplate, type TemplatesPayload } from '@/lib/labelos/contracts-client';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
-const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/60';
+const NOTICE = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/60';
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] active:bg-white/[0.14] disabled:opacity-40';
 const FIELD =
-  'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none disabled:opacity-60';
+  'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none disabled:opacity-60';
 
 type Draft = { name: string; clauses: TemplateClause[] };
 
@@ -125,7 +125,7 @@ export function ContractTemplatesView({ orgId }: { orgId: string }) {
                   onClick={() => pick(t.id)}
                   aria-current={type === t.id}
                   data-testid={`template-type-${t.id}`}
-                  className={cn('flex w-full items-center justify-between gap-3 rounded-lg border bg-[#0D0D0A] px-3 py-2 text-left text-[11px] transition-colors hover:border-white/20', type === t.id ? 'border-white/30 text-white' : 'border-white/10 text-white/70')}
+                  className={cn('flex w-full items-center justify-between gap-3 rounded-lg border bg-[var(--surface-primary)] px-3 py-2 text-left text-[11px] transition-colors hover:border-white/20', type === t.id ? 'border-white/30 text-white' : 'border-white/10 text-white/70')}
                 >
                   <span className="truncate">{t.label}</span>
                   <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.15em] text-white/40">{own ? `Yours v${own}` : 'Platform'}</span>
@@ -136,7 +136,7 @@ export function ContractTemplatesView({ orgId }: { orgId: string }) {
         </ul>
       </section>
 
-      <section aria-label="Template" className="min-w-0 space-y-4 rounded-xl border border-white/10 bg-[#0D0D0A] p-4 sm:p-5">
+      <section aria-label="Template" className="min-w-0 space-y-4 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 sm:p-5">
         <header className="space-y-1">
           <p className="text-[11px] text-white/60">{platform.summary}</p>
           <p className="text-[10px] text-white/40" data-testid="template-source">

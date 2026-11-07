@@ -7,6 +7,7 @@
  */
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { MemberChrome } from '@/components/labelos/MemberChrome';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { myExternalProjects, myOrganizations } from '@/lib/auth/org-access';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
@@ -23,17 +24,19 @@ export default async function OrgIndexPage() {
   if (orgs.length === 0 && shared.ok && shared.projects.length) redirect('/shared');
 
   return (
+    <div className="labelos-shell min-h-screen bg-[var(--background-primary)] text-[var(--text-primary)]">
+    <MemberChrome />
     <PageContainer>
       <header className="mb-6 sm:mb-8">
         <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Your organizations</p>
         <h1 className="font-heading text-[28px] font-bold leading-[1.05] tracking-tight text-white sm:text-[32px] md:text-[40px]">Open a workspace</h1>
       </header>
       {orgs.length === 0 ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/40" data-testid="org-index-empty">
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/40" data-testid="org-index-empty">
           You are not a member of any organization yet. Open the invitation link you were sent to join one.
         </p>
       ) : (
-        <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]" data-testid="org-index-list">
+        <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[var(--surface-primary)]" data-testid="org-index-list">
           {orgs.map((o) => (
             <li key={o.id}>
               <Link href={o.home} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/[0.04]">
@@ -52,5 +55,6 @@ export default async function OrgIndexPage() {
         </ul>
       )}
     </PageContainer>
+    </div>
   );
 }

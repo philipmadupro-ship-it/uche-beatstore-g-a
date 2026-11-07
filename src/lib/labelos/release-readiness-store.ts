@@ -19,7 +19,7 @@ import { currentDecision, GATES, type CoreGate } from './approvals';
 import { readProjectAssetHead } from '@/lib/storage/project-assets';
 import { evaluateLegalReadiness, type LegalReadiness } from './legal-readiness';
 import { LegalReadinessNotReadyError, loadLegalFacts, readReadinessSong } from './legal-readiness-store';
-import { IMAGE_HEAD_BYTES, readImageInfo, type ImageInfo } from './image-size';
+import { IMAGE_HEAD_BYTES, IMAGE_HEAD_BYTES_MAX, jpegHeaderMayFollow, readImageInfo, type ImageInfo } from './image-size';
 import { ARTWORK_MIME, type MasterRelation, type ReadinessApproval, type ReadinessItem, type ReleaseReadinessFacts } from './release-readiness';
 import { orgHasMarketing, readPlanPhases } from './marketing-plan-store';
 import { creativeGateEffective, orgHasArtistic } from './creative-store';
@@ -57,7 +57,12 @@ export async function readArtworkInfo(ref: string | null | undefined): Promise<I
   if (!ref) return null;
   try {
     const head = await readProjectAssetHead(ref, IMAGE_HEAD_BYTES);
-    return head ? readImageInfo(head) : null;
+    if (!head) return null;
+    const info = readImageInfo(head);
+    if (info || !jpegHeaderMayFollow(head)) return info;
+    // A JPEG whose frame header lies beyond the first read (big XMP / ICC): read further once.
+    const more = await readProjectAssetHead(ref, IMAGE_HEAD_BYTES_MAX);
+    return more ? readImageInfo(more) : null;
   } catch {
     return null;
   }

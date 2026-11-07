@@ -20,7 +20,7 @@ import { MODULES, MODULE_LABELS, type Module } from '@/lib/labelos/entitlements'
 import { parseCapInput, usageLabel, type LicenseeView } from '@/lib/labelos/platform';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-5 sm:p-6';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-5 sm:p-6';
 const INPUT =
   'min-h-11 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 text-[11px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none';
 const CHIP = 'min-h-9 rounded-lg border px-3 text-[11px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40';

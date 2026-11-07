@@ -68,7 +68,7 @@ export function MusicView() {
           </p>
           <ul className="space-y-2">
             {songs.rows.map((s) => (
-              <li key={s.id} className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4 transition-colors hover:border-white/20" data-testid={`music-row-${s.id}`}>
+              <li key={s.id} className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 transition-colors hover:border-white/20" data-testid={`music-row-${s.id}`}>
                 <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
                   <div className="min-w-0">
                     <Link href={`/o/${shell.org.slug}/songs/${s.id}`} className="text-[13px] text-white hover:underline">

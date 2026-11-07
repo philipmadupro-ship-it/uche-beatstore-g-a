@@ -11,7 +11,7 @@ import type { OrgOverview } from '@/lib/labelos/overview-store';
 import type { NextRelease } from '@/lib/labelos/overview';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
-const NUM = 'w-16 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/80';
+const NUM = 'w-24 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/80';
 
 function releaseText(r: NextRelease): string {
   return r.targetDate ? `${r.title} · ${r.targetDate}` : r.title;
@@ -21,7 +21,7 @@ export function OrgOverviewView({ orgSlug, overview, limited }: { orgSlug: strin
   const { artists, totals } = overview;
   if (artists.length === 0) {
     return (
-      <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/40" data-testid="overview-empty">
+      <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/40" data-testid="overview-empty">
         {limited ? 'You have not been given any artists in this organization yet.' : 'No artists yet. People in this organization’s directory with an artist role appear here.'}
       </p>
     );
@@ -34,11 +34,14 @@ export function OrgOverviewView({ orgSlug, overview, limited }: { orgSlug: strin
       <ListContainer
         header={
           <>
-            <span className={`${LABEL} flex-1`}>Artist</span>
-            <span className={`${LABEL} ${NUM} text-white/40`}>Demos</span>
-            <span className={`${LABEL} ${NUM} text-white/40`}>Dev</span>
-            <span className={`${LABEL} ${NUM} text-white/40`}>Selected</span>
-            <span className={`${LABEL} w-56 shrink-0`}>Next release</span>
+            <span className={`${LABEL} min-w-0 flex-1`}>Artist</span>
+            {/* The same gap-4 the rows' column cluster uses, so each heading sits over its numbers. */}
+            <span className="flex shrink-0 items-center gap-4">
+              <span className={`${LABEL} ${NUM} text-white/40`}>Demos</span>
+              <span className={`${LABEL} ${NUM} text-white/40`}>Dev</span>
+              <span className={`${LABEL} ${NUM} text-white/40`}>Selected</span>
+              <span className={`${LABEL} w-56 shrink-0`}>Next release</span>
+            </span>
           </>
         }
       >
@@ -49,12 +52,20 @@ export function OrgOverviewView({ orgSlug, overview, limited }: { orgSlug: strin
             label={`Open ${a.name}`}
             title={<span data-testid={`overview-artist-${a.id}`}>{a.name}</span>}
             meta={
-              a.restricted > 0 ? (
-                <span className="inline-flex items-center gap-1.5 text-white/40" data-testid={`overview-restricted-${a.id}`}>
-                  <Lock size={10} aria-hidden="true" />
-                  {a.restricted} {a.restricted === 1 ? 'song' : 'songs'} restricted
+              <>
+                {/* ListRow hides its columns below md, so at phone width the stage counts and the next release live here. */}
+                <span className="block whitespace-normal md:hidden" data-testid={`overview-summary-${a.id}`}>
+                  {a.columns.demos} demos · {a.columns.development} dev · {a.columns.selected} selected
+                  {' · '}
+                  {a.nextRelease ? releaseText(a.nextRelease) : overview.releasesReady ? 'no release' : 'releases not available yet'}
                 </span>
-              ) : undefined
+                {a.restricted > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-white/40" data-testid={`overview-restricted-${a.id}`}>
+                    <Lock size={10} aria-hidden="true" />
+                    {a.restricted} {a.restricted === 1 ? 'song' : 'songs'} restricted
+                  </span>
+                )}
+              </>
             }
             columns={
               <>

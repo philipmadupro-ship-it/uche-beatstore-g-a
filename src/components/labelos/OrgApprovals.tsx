@@ -23,12 +23,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Dropdown, type DropdownOption } from '@/components/ui/Dropdown';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
+import { useOrgShell } from '@/components/labelos/OrgShellContext';
+import { mayReadApprovals } from '@/lib/labelos/approvals';
 import { decideApproval, fetchApprovals, requestApproval, type ApprovalSubject, type ApprovalsPayload, type GateStateView } from '@/lib/labelos/approvals-client';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
-const FIELD = 'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
+const FIELD = 'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
 
 const TONE: Record<GateStateView['chip']['tone'], string> = {
   neutral: 'border-white/10 text-white/60',
@@ -61,9 +63,13 @@ export function OrgApprovals({ orgId, trackId, subject: given, onChanged }: { or
   const [hidden, setHidden] = useState(false);
   const subject: ApprovalSubject = given ?? { kind: 'song', id: trackId ?? '' };
   const { kind, id } = subject;
+  // The route answers 403 to a member with no approval ability at all; do not ask (LABEL-76).
+  const shell = useOrgShell();
+  const mayRead = !shell || mayReadApprovals(new Set(shell.capabilities));
 
   // A different song or release remounts this (the caller keys it by subject).
   useEffect(() => {
+    if (!mayRead) return;
     let live = true;
     void fetchApprovals(orgId, { kind, id }).then((res) => {
       if (!live) return;
@@ -73,7 +79,7 @@ export function OrgApprovals({ orgId, trackId, subject: given, onChanged }: { or
     return () => {
       live = false;
     };
-  }, [orgId, kind, id]);
+  }, [orgId, kind, id, mayRead]);
 
   /** Look again: the facts moved under an approver, so the screen they were deciding from is out of date. */
   const reload = useCallback(() => {
@@ -82,7 +88,7 @@ export function OrgApprovals({ orgId, trackId, subject: given, onChanged }: { or
     });
   }, [orgId, kind, id]);
 
-  if (hidden) return null;
+  if (hidden || !mayRead) return null;
   if (!data) return <div className="h-8" aria-hidden="true" data-testid="org-approvals-loading" />;
 
   return (
@@ -157,7 +163,7 @@ function GateRow({ orgId, subject, gate, onChange, onStale }: { orgId: string; s
   const showAsk = gate.canRequest && !open && options.length > 0;
 
   return (
-    <li className="rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid={`org-approval-${gate.gate}`}>
+    <li className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid={`org-approval-${gate.gate}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="text-[13px] text-white">{gate.label}</span>
         <span

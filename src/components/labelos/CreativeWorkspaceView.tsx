@@ -21,7 +21,7 @@ import { SONG_STAGES, SONG_STAGE_LABEL } from '@/lib/labelos/song-stage';
 import { cn } from '@/lib/utils';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4 sm:p-5';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 sm:p-5';
 const LINK = 'inline-flex items-center gap-1 text-[11px] text-white/60 underline decoration-white/20 underline-offset-2 transition-colors hover:text-white hover:decoration-white/60';
 const CHIP = 'rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em]';
 
@@ -153,7 +153,7 @@ export function CreativeWorkspaceView({ orgId, orgSlug }: { orgId: string; orgSl
   return (
     <div className="space-y-8" data-testid="creative-workspace">
       {!data.schemaReady && (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-3 text-[11px] text-white/60" data-testid="creative-not-ready">
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-3 text-[11px] text-white/60" data-testid="creative-not-ready">
           Artist direction and references are not set up yet, so they are empty here. Songs and releases are shown as usual.
         </p>
       )}

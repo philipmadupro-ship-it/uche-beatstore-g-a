@@ -28,7 +28,7 @@ import { decideCredit, fetchCredits, fetchParties, proposeCredit, withdrawCredit
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
-const FIELD = 'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
+const FIELD = 'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
 
 const STATUS_TONE: Record<string, string> = {
   proposed: 'text-[#c8a47a]',
@@ -293,7 +293,7 @@ function AddCreditForm({ orgId, trackId, payload, onAdded, onClose }: { orgId: s
   };
 
   return (
-    <form onSubmit={submit} className="mt-3 max-w-sm space-y-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-3" aria-label="Propose a credit" data-testid="credit-form">
+    <form onSubmit={submit} className="mt-3 max-w-sm space-y-3 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" aria-label="Propose a credit" data-testid="credit-form">
       {writer ? (
         <>
           <div>

@@ -14,8 +14,8 @@ import { closePeriod, fetchDashboard, reopenPeriod, type Dashboard, type PeriodO
 import { cn } from '@/lib/utils';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
-const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/60';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+const NOTICE = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-6 text-center text-[11px] text-white/60';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4';
 const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/[0.06]';
 
 export function FinanceDashboardView({ orgId }: { orgId: string }) {
@@ -72,7 +72,7 @@ export function FinanceDashboardView({ orgId }: { orgId: string }) {
         ) : (
           <ul className="space-y-2">
             {data.positions.map((p) => (
-              <li key={p.payeeId} className="rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="position-row" data-payee={p.payeeId}>
+              <li key={p.payeeId} className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid="position-row" data-payee={p.payeeId}>
                 <p className="text-[13px] text-white">{p.name ?? 'Payee'} <span className="text-white/40">· {p.currency}{p.active ? '' : ' · inactive'}</span></p>
                 <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-6">
                   <Cell label="Recoupable advance" value={showMoney(p.recoupableAdvancedMinor, p.currency)} />
@@ -97,7 +97,7 @@ export function FinanceDashboardView({ orgId }: { orgId: string }) {
         ) : (
           <ul className="space-y-2">
             {data.releases.map((r) => (
-              <li key={`${r.releaseId}-${r.currency}`} className="rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="release-row" data-release={r.releaseId}>
+              <li key={`${r.releaseId}-${r.currency}`} className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid="release-row" data-release={r.releaseId}>
                 <p className="text-[13px] text-white">{r.title} <span className="text-white/40">· {r.currency}</span></p>
                 <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
                   <Cell label="Income" value={showMoney(r.grossMinor, r.currency)} testid="rel-gross" />
@@ -187,7 +187,7 @@ function PeriodRow({ orgId, period: p, onDone }: { orgId: string; period: Period
   }
 
   return (
-    <li className="rounded-xl border border-white/10 bg-[#0D0D0A] p-3" data-testid="period-row" data-status={p.status}>
+    <li className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-3" data-testid="period-row" data-status={p.status}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
           <p className="truncate text-[13px] text-white">{p.label}</p>

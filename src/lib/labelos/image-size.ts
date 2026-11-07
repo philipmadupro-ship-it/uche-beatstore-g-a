@@ -11,11 +11,35 @@
  * (SOF0-SOF15 except DHT / JPG / DAC), which holds precision, height, width
  * and the component count (3 = YCbCr, i.e. RGB; 1 = grey; 4 = CMYK).
  */
-export type ImageColor = 'rgb' | 'grey' | 'palette' | 'cmyk' | 'other';
+export type ImageColor = 'rgb' | 'rgba' | 'grey' | 'palette' | 'cmyk' | 'other';
 export type ImageInfo = { format: 'png' | 'jpeg'; width: number; height: number; color: ImageColor };
 
-/** How much of the file the store reads: JPEG puts its frame header after EXIF / ICC segments, which are rarely beyond this. */
+/** How much of the file the store reads first: JPEG puts its frame header after EXIF / ICC segments, which are rarely beyond this. */
 export const IMAGE_HEAD_BYTES = 262144;
+/** The second, larger read for a JPEG whose frame header was not inside the first (large XMP / ICC / thumbnail segments). */
+export const IMAGE_HEAD_BYTES_MAX = 4194304;
+
+/** True when the bytes are a JPEG that simply ended before its frame header, so reading further could answer. */
+export function jpegHeaderMayFollow(bytes: Uint8Array): boolean {
+  return bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8 && readJpeg(bytes) === null && !jpegScanReached(bytes);
+}
+
+/** Walks the segments; true when it met the start of scan (no frame header will ever follow) or a malformed segment. */
+function jpegScanReached(b: Uint8Array): boolean {
+  let i = 2;
+  while (i + 4 <= b.length) {
+    if (b[i] !== 0xff) return true;
+    while (i < b.length && b[i] === 0xff) i += 1;
+    const marker = b[i];
+    i += 1;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) continue;
+    if (i + 2 > b.length) return false;
+    const length = u16(b, i);
+    if (length < 2 || marker === 0xda) return true;
+    i += length;
+  }
+  return false;
+}
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -31,7 +55,7 @@ function readPng(b: Uint8Array): ImageInfo | null {
   const height = u32(b, 20);
   if (width === 0 || height === 0) return null;
   const type = b[25];
-  const color: ImageColor = type === 2 || type === 6 ? 'rgb' : type === 0 || type === 4 ? 'grey' : type === 3 ? 'palette' : 'other';
+  const color: ImageColor = type === 2 ? 'rgb' : type === 6 ? 'rgba' : type === 0 || type === 4 ? 'grey' : type === 3 ? 'palette' : 'other';
   return { format: 'png', width, height, color };
 }
 
@@ -87,11 +111,12 @@ export type ArtworkSizeProblem = { code: 'artwork_unreadable' | 'artwork_not_squ
  * does not pass.
  */
 export function artworkSizeProblems(info: ImageInfo | null, minPx: number = ARTWORK_MIN_PX_DEFAULT): ArtworkSizeProblem[] {
-  if (!info) return [{ code: 'artwork_unreadable', message: 'The artwork’s size could not be read. Use a JPEG or PNG that opens normally.' }];
+  if (!info) return [{ code: 'artwork_unreadable', message: 'The artwork’s size could not be read. Use a JPEG or PNG that opens normally; a JPEG with very large embedded data before the picture can also fail.' }];
   const out: ArtworkSizeProblem[] = [];
   const size = `${info.width}×${info.height}`;
   if (info.width !== info.height) out.push({ code: 'artwork_not_square', message: `The artwork must be square; this one is ${size} px.` });
   if (Math.min(info.width, info.height) < minPx) out.push({ code: 'artwork_too_small', message: `The artwork must be at least ${minPx}×${minPx} px; this one is ${size} px.` });
-  if (info.color !== 'rgb') out.push({ code: 'artwork_color', message: 'The artwork must be RGB (not greyscale, indexed or CMYK).' });
+  if (info.color === 'rgba') out.push({ code: 'artwork_color', message: 'The artwork must not have transparency; export a PNG without an alpha channel, or a JPEG.' });
+  else if (info.color !== 'rgb') out.push({ code: 'artwork_color', message: 'The artwork must be RGB (not greyscale, indexed or CMYK).' });
   return out;
 }

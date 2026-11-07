@@ -185,7 +185,7 @@ export function OrgSetupWizard({ userId, initialFace, email }: { userId: string;
   }
 
   return (
-    <div className="w-full max-w-2xl space-y-6 rounded-[20px] border border-white/10 bg-[#0D0D0A] p-6 sm:p-8" data-testid="org-setup-wizard">
+    <div className="w-full max-w-2xl space-y-6 rounded-[20px] border border-white/10 bg-[var(--surface-primary)] p-6 sm:p-8" data-testid="org-setup-wizard">
       <header>
         <p className={cn(LEGEND, 'mb-2')}>Set up your account · Step {index + 1} of {WIZARD_STEPS.length}</p>
         <h1 ref={heading} tabIndex={-1} className="font-heading text-[28px] font-bold leading-[1.05] tracking-tight text-white focus:outline-none sm:text-[32px]">
@@ -221,7 +221,7 @@ export function OrgSetupWizard({ userId, initialFace, email }: { userId: string;
               maxLength={SETUP_NAME_MAX}
               onChange={(e) => update({ ...draft, name: e.target.value })}
               placeholder={copy?.namePlaceholder ?? ''}
-              className="w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[13px] text-white placeholder-white/30 transition-colors focus:border-white/30 focus:outline-none disabled:opacity-40"
+              className="w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[13px] text-white placeholder-white/30 transition-colors focus:border-white/30 focus:outline-none disabled:opacity-40"
             />
             <p className="mt-1.5 text-[11px] text-white/60">
               {face === 'label'

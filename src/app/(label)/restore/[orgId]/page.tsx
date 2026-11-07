@@ -25,7 +25,7 @@ type State =
   | { kind: 'error'; message: string };
 
 const PRIMARY =
-  'flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-medium text-[#090907] transition-colors hover:bg-white/90 disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0D0D0A]';
+  'flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-medium text-[var(--background-primary)] transition-colors hover:bg-white/90 disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-primary)]';
 
 export default function RestoreOrgPage() {
   const params = useParams<{ orgId: string }>();
@@ -71,8 +71,8 @@ export default function RestoreOrgPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#090907] p-4 text-white">
-      <div className="w-full max-w-sm rounded-[20px] border border-white/10 bg-[#0D0D0A] p-8">
+    <main className="flex min-h-screen items-center justify-center bg-[var(--background-primary)] p-4 text-white">
+      <div className="w-full max-w-sm rounded-[20px] border border-white/10 bg-[var(--surface-primary)] p-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Scheduled for deletion</p>
         {state.kind === 'loading' && (
           <p role="status" className="mt-4 flex items-center gap-2 text-sm text-white/70">

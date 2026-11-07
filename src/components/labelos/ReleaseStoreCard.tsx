@@ -29,7 +29,7 @@ import { consentSentence, consentStateLabel, unreachableSentence } from '@/lib/l
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4';
 
 const PLAYBACKS = [
   { value: 'preview', label: 'Preview clips', hint: 'Visitors hear a 75 second clip of each song.' },

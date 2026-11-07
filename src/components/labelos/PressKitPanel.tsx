@@ -21,7 +21,7 @@ import {
 import { PRESS_LIMITS, embargoState } from '@/lib/labelos/press';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4';
 const FIELD = 'h-8 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 text-[11px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none';
 const BTN = 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-[11px] text-white/70 transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white disabled:opacity-40';
 const ICON_BTN = 'grid size-7 shrink-0 place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/[0.10] hover:text-white disabled:opacity-30';

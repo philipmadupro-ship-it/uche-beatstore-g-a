@@ -10,7 +10,7 @@ import { AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { PASSWORD_MIN, passwordProblem } from '@/lib/labelos/team-accounts';
 
 const INPUT =
-  'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[13px] text-white placeholder-white/30 transition-colors focus:border-white/30 focus:outline-none disabled:opacity-40';
+  'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[13px] text-white placeholder-white/30 transition-colors focus:border-white/30 focus:outline-none disabled:opacity-40';
 const LABEL = 'mb-1 block font-mono text-[10px] uppercase tracking-[0.2em] text-white/60';
 
 export function AccountPasswordForm({ email, required }: { email: string | null; required: boolean }) {
@@ -52,7 +52,7 @@ export function AccountPasswordForm({ email, required }: { email: string | null;
   };
 
   return (
-    <form onSubmit={submit} noValidate className="w-full max-w-sm space-y-6 rounded-[20px] border border-white/10 bg-[#0D0D0A] p-6 sm:p-8" data-testid="account-password-form">
+    <form onSubmit={submit} noValidate className="w-full max-w-sm space-y-6 rounded-[20px] border border-white/10 bg-[var(--surface-primary)] p-6 sm:p-8" data-testid="account-password-form">
       <header>
         <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">{required ? 'Before you start' : 'Your account'}</p>
         <h1 className="font-heading text-[28px] font-bold leading-[1.05] tracking-tight text-white">Choose your password</h1>

@@ -56,8 +56,8 @@ const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
 const ICON_BTN = 'grid size-7 place-items-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.10] hover:text-white disabled:opacity-30';
-const FIELD = 'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+const FIELD = 'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4';
 
 const day = (iso: string | null) =>
   iso ? new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null;
@@ -414,7 +414,7 @@ function PositionField({ value, max, label, disabled, onCommit }: { value: numbe
         if (e.key === 'Enter') e.currentTarget.blur();
         if (e.key === 'Escape') setDraft(String(value));
       }}
-      className="w-10 rounded-lg border border-white/10 bg-[#090907] px-1 py-1 text-center font-mono text-[10px] text-white/80 focus:border-white/30 focus:outline-none disabled:opacity-40"
+      className="w-10 rounded-lg border border-white/10 bg-[var(--background-primary)] px-1 py-1 text-center font-mono text-[10px] text-white/80 focus:border-white/30 focus:outline-none disabled:opacity-40"
     />
   );
 }
@@ -431,7 +431,7 @@ function Artwork({ orgId, detail, editable, busy, act }: { orgId: string; detail
     <section aria-labelledby="release-artwork" className={CARD} data-testid="release-artwork">
       <h2 id="release-artwork" className={`${LABEL} mb-3`}>Artwork</h2>
       <div className="flex flex-wrap items-center gap-4">
-        <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-[#090907]">
+        <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-[var(--background-primary)]">
           {artwork.current ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img

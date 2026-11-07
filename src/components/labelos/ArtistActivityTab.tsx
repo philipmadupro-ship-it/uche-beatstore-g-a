@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { appendPage, fetchActivityPage, type FeedPage } from '@/lib/labelos/activity-client';
 import { ActivityDigestView } from './ActivityDigestView';
 
-const EMPTY = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/40';
+const EMPTY = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/40';
 
 export function ArtistActivityTab({ orgId, orgSlug, contactId, viewerId }: { orgId: string; orgSlug: string; contactId: string; viewerId?: string }) {
   const [feed, setFeed] = useState<FeedPage | null>(null);

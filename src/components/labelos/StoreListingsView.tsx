@@ -19,7 +19,7 @@ import { connectedStatus, consentStateLabel, myConsentStatus } from '@/lib/label
 import { cn } from '@/lib/utils';
 
 const LABEL = 'font-mono text-[10px] uppercase tracking-[0.2em] text-white/40';
-const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/60';
+const NOTICE = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-6 text-center text-[11px] text-white/60';
 const BTN =
   'inline-flex min-h-9 items-center rounded-lg border border-white/10 bg-white/[0.06] px-3 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
 const ROW = 'flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4';
@@ -87,7 +87,7 @@ export function StoreListingsView({ orgId, showConnected }: { orgId: string; sho
           <p className={NOTICE} data-testid="store-asked-empty">Nothing is waiting for your answer. When a release you are credited on is put on the store, you are asked here first.</p>
         )}
         {mine.state === 'ready' && mine.consents.length > 0 && (
-          <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-[#0D0D0A]">
+          <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-[var(--surface-primary)]">
             {mine.consents.map((c) => (
               <li key={c.releaseId} className={ROW} data-testid="store-asked-row" data-state={c.state}>
                 <div className="min-w-0 flex-1">
@@ -128,7 +128,7 @@ export function StoreListingsView({ orgId, showConnected }: { orgId: string; sho
             <p className={NOTICE} data-testid="store-connected-empty">No connected artist has put music on your store.</p>
           )}
           {connected.state === 'ready' && connected.releases.length > 0 && (
-            <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-[#0D0D0A]">
+            <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-[var(--surface-primary)]">
               {connected.releases.map((r) => (
                 <li key={r.releaseId} className={ROW} data-testid="store-connected-row" data-serving={r.serving ? 'true' : 'false'}>
                   <div className="min-w-0 flex-1">

@@ -13,8 +13,8 @@ import type { ExecView } from '@/lib/labelos/exec-dashboard';
 import { SONG_STAGE_LABEL, type SongStage } from '@/lib/labelos/song-stage';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
-const NOTICE = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/60';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+const NOTICE = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-6 text-center text-[11px] text-white/60';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4';
 
 const stageLabel = (s: string) => SONG_STAGE_LABEL[s as SongStage] ?? s;
 

@@ -43,7 +43,7 @@ import {
 import type { FileChoice, TrackChoice } from '@/lib/labelos/direction-store';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
-const EMPTY = 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/40';
+const EMPTY = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/40';
 const FIELD =
   'w-full resize-none rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] text-white/80 placeholder:text-white/30 transition-colors hover:border-white/20 focus:border-white/30 focus:outline-none disabled:opacity-40';
 const BUTTON =
@@ -278,7 +278,7 @@ function References({ orgId, contactId, references, restricted, permissions, onC
           {permissions.write ? 'No references yet. Add a track, a link, a file or a note that shows where this artist is heading.' : 'No references yet.'}
         </p>
       ) : (
-        <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]" data-testid="direction-refs">
+        <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[var(--surface-primary)]" data-testid="direction-refs">
           {references.map((ref) => (
             <ReferenceRow key={ref.id} reference={ref} permissions={permissions} onFlip={() => void flip(ref)} onRemove={() => void remove(ref)} />
           ))}
@@ -390,7 +390,7 @@ function AddReference({ orgId, contactId, canInternal, onAdded }: {
 
   return (
     <form
-      className="space-y-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4"
+      className="space-y-3 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4"
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
