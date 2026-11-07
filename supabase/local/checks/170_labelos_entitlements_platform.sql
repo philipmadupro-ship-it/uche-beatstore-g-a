@@ -223,5 +223,6 @@ RESET ROLE;
 RESET request.jwt.claims;
 
 -- ── deleting the org removes its licence ─────────────────────────────────
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L1;
 DELETE FROM public.organizations WHERE id = :L1;
 SELECT public.check_eq('cascade', (SELECT count(*) FROM public.org_entitlements WHERE org_id = :L1), 0::bigint);

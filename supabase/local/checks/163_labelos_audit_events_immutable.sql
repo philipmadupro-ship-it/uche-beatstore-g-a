@@ -167,6 +167,7 @@ SET ROLE service_role;
 SELECT public.check_raises('a soft-deleted org is not a purge: its audit events still cannot be deleted directly',
   $$DELETE FROM public.activity_events WHERE org_id = 'b1630000-0000-4000-8000-000000000001'$$,
   'audit event is never deleted');
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = 'b1630000-0000-4000-8000-000000000001'; -- 195: only a past-grace org may be deleted
 SELECT public.check_eq('deleting the organization row (the purge) deletes it',
   public.rows_changed($$DELETE FROM public.organizations WHERE id = 'b1630000-0000-4000-8000-000000000001'$$), 1);
 SELECT public.check_eq('… with every one of its events, audit included; L2''s audit event survives', public.events_left(), '7:a');

@@ -366,6 +366,7 @@ DELETE FROM public.releases WHERE id = :R2;
 SELECT public.check_eq('deleting a release takes its approvals with it',
   (SELECT count(*) FROM public.approvals WHERE release_id = :R2), 0::bigint);
 SELECT public.check_eq('… and not the others', (SELECT count(*) FROM public.approvals WHERE release_id = :R1), 1::bigint);
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('deleting an organization deletes its approvals, decisions included',
   (SELECT count(*) FROM public.approvals), 0::bigint);

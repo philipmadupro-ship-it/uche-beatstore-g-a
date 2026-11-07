@@ -344,6 +344,7 @@ RESET ROLE;
 DELETE FROM public.tracks WHERE id = :S1;
 SELECT public.check_eq('deleting a song deletes its tasks',
   (SELECT count(*) FROM public.tasks WHERE title IN ('t_mk_song', 't_art_nova_song')), 0::bigint);
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L2;
 DELETE FROM public.organizations WHERE id = :L2;
 SELECT public.check_eq('deleting an org deletes its tasks and org notifications',
   (SELECT count(*) FROM public.tasks WHERE title = 't_x') + (SELECT count(*) FROM public.notifications WHERE title IN ('n_x_task', 'n_ar_in_l2')), 0::bigint);

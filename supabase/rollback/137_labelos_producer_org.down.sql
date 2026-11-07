@@ -10,6 +10,12 @@
 -- second member is kept: removing it would take someone else's access with
 -- it. Then the two functions 137 added are dropped.
 
+-- 195 refuses to delete an organization row before its 30-day grace is over; a rollback is the operator's own
+-- decision, so the rows are marked past it first (harmless where 195 is not applied).
+UPDATE public.organizations o SET deleted_at = now() - interval '31 days'
+WHERE o.kind = 'producer'
+  AND (SELECT count(*) FROM public.org_members om WHERE om.org_id = o.id) <= 1;
+
 DELETE FROM public.organizations o
 WHERE o.kind = 'producer'
   AND (SELECT count(*) FROM public.org_members om WHERE om.org_id = o.id) <= 1;

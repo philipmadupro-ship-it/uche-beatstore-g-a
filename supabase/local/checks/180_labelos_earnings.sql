@@ -314,6 +314,7 @@ SELECT public.check_raises('a song with allocations cannot be deleted (the alloc
 
 -- ── The org's hard delete takes it all ──────────────────────────────────
 
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :L;
 DELETE FROM public.organizations WHERE id = :L;
 SELECT public.check_eq('hard delete: nothing of the org is left',
   (SELECT (SELECT count(*) FROM public.earnings_allocations WHERE org_id = 'b1800000-0000-4000-8000-000000000001')

@@ -119,6 +119,7 @@ BEGIN
 END $$;
 
 -- Cascade: org A goes, org B's marks stay.
+UPDATE public.organizations SET deleted_at = now() - interval '31 days' WHERE id = :LA;
 DELETE FROM public.organizations WHERE id = :LA;
 SELECT public.check_eq('deleting org A removes its marks', (SELECT count(*) FROM public.org_overview_seen WHERE org_id = :LA), 0::bigint);
 SELECT public.check_eq('and only its marks', (SELECT count(*) FROM public.org_overview_seen WHERE org_id = :LB), 1::bigint);

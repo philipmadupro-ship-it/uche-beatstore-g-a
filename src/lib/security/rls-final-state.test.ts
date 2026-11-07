@@ -320,8 +320,9 @@ describe('final RLS policy state', () => {
       expect(onTable('activity_events').map(([k]) => k)).toEqual(['activity_events.activity_events_member_read']);
       const body = policies.get('activity_events.activity_events_member_read') ?? '';
       expect(body).toMatch(/^\s*FOR SELECT\b/i);
-      expect(body).toMatch(/has_org_cap\(org_id, 'catalog\.read'\)/);
-      expect(body).toMatch(/visibility = 'artist' OR[\s\S]*has_org_cap\(org_id, 'business\.read\.internal'\)/);
+      // 195 (LABEL-75, R-08): the two capability tests run over the caller's own memberships, once, not per event row.
+      expect(body).toMatch(/has_org_cap\(cm\.org_id, 'catalog\.read'\)/);
+      expect(body).toMatch(/visibility = 'artist' OR[\s\S]*has_org_cap\(im\.org_id, 'business\.read\.internal'\)/);
       // Without these a member limited to some artists (or a roster artist) reads every artist's events with their own JWT.
       expect(body).toMatch(/\(org_id, artist_id\) IN \(\s*SELECT s\.org_id, s\.contact_id FROM public\.member_artist_scopes s WHERE s\.user_id = \(SELECT auth\.uid\(\)\)/);
       expect(body).toMatch(/artist_id IS NULL AND project_id IS NOT NULL AND \(org_id, project_id\) IN \(SELECT sp\.org_id, sp\.project_id FROM public\.labelos_scoped_projects\(\) sp\)/);
@@ -331,8 +332,9 @@ describe('final RLS policy state', () => {
     it('activity_events scope makes no per-row SECURITY DEFINER call: every scope disjunct is an uncorrelated subquery (R-08)', () => {
       const body = policies.get('activity_events.activity_events_member_read') ?? '';
       expect(body).toMatch(/org_id IN \(\s*SELECT om\.org_id FROM public\.org_members om WHERE om\.user_id = \(SELECT auth\.uid\(\)\)/);
-      // The only has_org_cap calls are 136's two capability tests; scope adds no helper call keyed on the row.
+      // The only has_org_cap calls are the two capability tests, and none is keyed on the event row's own org_id.
       expect([...body.matchAll(/has_org_cap\(/g)]).toHaveLength(2);
+      expect(body).not.toMatch(/has_org_cap\(org_id\b/);
       expect(body).not.toMatch(/can_see_artist\(|can_see_org_project\(|can_see_org_track\(/);
     });
 
@@ -628,7 +630,9 @@ describe('final RLS policy state', () => {
     it('changes exactly one policy: the parties read, which now excludes role artist from the capability branch', () => {
       const before = replay(realMigrations().filter((m) => m.name < '174')).policies;
       // A policy that did not exist at 173 is a new table's (176's contracts, 186's deny-all pair), not a change to an old one.
-      const changed = [...policies.keys()].filter((k) => before.has(k) && policies.get(k) !== before.get(k)).sort();
+      // Up to 194: 195 (LABEL-75) rewrites the activity_events read on its own account.
+      const after = replay(realMigrations().filter((m) => m.name < '195')).policies;
+      const changed = [...after.keys()].filter((k) => before.has(k) && after.get(k) !== before.get(k)).sort();
       expect(changed).toEqual(['parties.parties_member_read']);
       const body = policies.get('parties.parties_member_read') ?? '';
       expect(body).toMatch(/cm\.role <> 'artist'/);
@@ -764,7 +768,9 @@ describe('final RLS policy state', () => {
 
     it('changes no activity_events policy', () => {
       const before = replay(realMigrations().filter((m) => m.name < '163')).policies;
-      expect(policies.get('activity_events.activity_events_member_read')).toBe(before.get('activity_events.activity_events_member_read'));
+      // 195 (LABEL-75) rewrites the policy on purpose; compare with the state just before it.
+      const after = replay(realMigrations().filter((m) => m.name < '195')).policies;
+      expect(after.get('activity_events.activity_events_member_read')).toBe(before.get('activity_events.activity_events_member_read'));
     });
   });
 
