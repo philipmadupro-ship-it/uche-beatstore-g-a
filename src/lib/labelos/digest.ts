@@ -480,6 +480,7 @@ export const VERB_PHRASES: Readonly<Record<Verb, { one: string; many: string }>>
   'calendar_feed.issued': { one: 'issued a release calendar link', many: 'issued {n} release calendar links' },
   'calendar_feed.revoked': { one: 'revoked a release calendar link', many: 'revoked {n} release calendar links' },
   'release.legal_pack_exported': { one: 'exported a legal pack', many: 'exported {n} legal packs' },
+  'exec.exported': { one: 'exported the executive overview', many: 'exported the executive overview {n} times' },
   'release.store_listed': { one: 'put a release on the store', many: 'put {n} releases on the store' },
   'release.store_unlisted': { one: 'took a release off the store', many: 'took {n} releases off the store' },
   'release.imported': { one: 'entered a release as already out', many: 'entered {n} releases as already out' },

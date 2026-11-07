@@ -173,6 +173,8 @@ export const VERBS = [
   'calendar_feed.revoked',
   // The legal pack left the building (LABEL-31): who took the contracts and rights data of a release
   'release.legal_pack_exported',
+  // The executive dashboard's CSV left the building (LABEL-67): who took the cross-roster numbers
+  'exec.exported',
   // The store bridge (LABEL-42): a release put on / taken off the public store, and one entered as already out
   'release.store_listed',
   'release.store_unlisted',
@@ -279,6 +281,7 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'calendar_feed.issued',
   'calendar_feed.revoked',
   'release.legal_pack_exported',
+  'exec.exported',
   'release.store_listed',
   'release.store_unlisted',
   'release.imported',
@@ -440,6 +443,7 @@ export const DEFAULT_VISIBILITY: Readonly<Record<Verb, EventVisibility>> = {
   'calendar_feed.revoked': 'internal',
   // Contracts and legal names: the business side only.
   'release.legal_pack_exported': 'internal',
+  'exec.exported': 'internal',
   // Putting the artist's record on the public store (or taking it off) is part of its story: the artist side reads it.
   'release.store_listed': 'artist',
   'release.store_unlisted': 'artist',

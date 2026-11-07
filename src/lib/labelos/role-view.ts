@@ -28,7 +28,7 @@ export type ViewInput = {
 };
 
 export const ORG_PAGES = [
-  'overview', 'members', 'artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections',
+  'overview', 'members', 'exec', 'artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections',
 ] as const;
 export type OrgPage = (typeof ORG_PAGES)[number];
 
@@ -36,6 +36,7 @@ export type OrgPage = (typeof ORG_PAGES)[number];
 export const PAGE_PATH: Readonly<Record<OrgPage, string>> = {
   overview: '',
   members: '/settings/members',
+  exec: '/exec',
   artists: '/artists',
   music: '/music',
   ar: '/ar',
@@ -108,6 +109,9 @@ export function pageAllowed(page: OrgPage, i: ViewInput): boolean {
     // (`modules` already lacks it when the owner switched the department off).
     case 'creative':
       return face && caps.has('creative.read') && licensed(i.modules, 'artistic');
+    // LABEL-67: the executive overview — `exec.read` in an org licensed for the executive module, never a roster artist.
+    case 'exec':
+      return i.kind === 'label' && i.role !== 'artist' && caps.has('exec.read') && licensed(i.modules, 'executive');
     case 'connections':
       return face && caps.has('org.manage');
   }

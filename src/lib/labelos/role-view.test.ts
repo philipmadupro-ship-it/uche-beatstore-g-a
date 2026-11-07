@@ -31,15 +31,15 @@ const EXPECT: Record<string, string[]> = {
   'independent owner': ['artists', 'music', 'releases', 'creative', 'parties', 'contracts', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections'],
   'independent admin': ['artists', 'music', 'releases', 'creative', 'parties', 'contracts', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections'],
   'independent manager': ['artists', 'music', 'releases', 'parties', 'contracts', 'store_listings'],
-  'label owner': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections'],
-  'label admin': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections'],
+  'label owner': ['exec', 'artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections'],
+  'label admin': ['exec', 'artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'legal', 'finance', 'earnings', 'advances', 'statements', 'store_listings', 'connections'],
   'label A&R': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'store_listings'],
   'label finance': ['artists', 'music', 'ar', 'releases', 'parties', 'finance', 'earnings', 'advances', 'statements', 'store_listings'],
   'label marketing': ['artists', 'music', 'ar', 'releases', 'store_listings'],
   'label legal': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'legal', 'store_listings'],
   'label producer': ['artists', 'music', 'ar', 'releases', 'parties', 'contracts', 'store_listings'],
   'label artistic director': ['artists', 'music', 'ar', 'releases', 'creative', 'store_listings'],
-  'label executive': ['artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'finance', 'earnings', 'advances', 'statements', 'store_listings'],
+  'label executive': ['exec', 'artists', 'music', 'ar', 'releases', 'creative', 'parties', 'contracts', 'finance', 'earnings', 'advances', 'statements', 'store_listings'],
   'roster artist': ['artists', 'music', 'releases', 'parties', 'contracts', 'statements', 'store_listings'],
 };
 
@@ -53,6 +53,14 @@ describe('persona matrix: pageAllowed (role × face)', () => {
       if (p.kind === 'artist') expect(open).not.toContain('ar');
     });
   }
+
+  it('the executive overview: label owner/admin/executive only, closed without the module, never a roster artist or an artist org', () => {
+    const open = (name: string, modules?: string[]) => pageAllowed('exec', input(PERSONAS.find((p) => p.name === name)!, modules));
+    for (const n of ['label owner', 'label admin', 'label executive']) expect(open(n), n).toBe(true);
+    for (const n of ['label finance', 'label A&R', 'label marketing', 'label legal', 'roster artist', 'independent owner']) expect(open(n), n).toBe(false);
+    expect(open('label owner', ['catalog', 'finance'])).toBe(false);
+    expect(open('label executive', ['executive'])).toBe(true);
+  });
 
   it('a module the org is not licensed for closes its pages whatever the role', () => {
     const owner = PERSONAS.find((p) => p.name === 'label owner')!;
