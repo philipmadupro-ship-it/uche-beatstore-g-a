@@ -5,6 +5,7 @@ import {
   allowedActions,
   externalAudioAction,
   externalAudioIsAudited,
+  externalHearsDerivative,
   externalMayAny,
   membershipLive,
   planExternalUpload,
@@ -181,5 +182,29 @@ describe('summaries', () => {
       { name: 'a', orgName: 'y' },
       { name: 'b', orgName: 'z' },
     ]);
+  });
+});
+
+describe('externalHearsDerivative (LABEL-72)', () => {
+  const full = parseOrgAudioVariant('full')!;
+  const preview = parseOrgAudioVariant('preview')!;
+  const m = (role: 'viewer' | 'commenter' | 'contributor' | 'editor', allowDownloads = false) => ({
+    projectId: 'p', role, allowDownloads, expiresAt: null,
+  }) as never;
+  it('a listen-only member (viewer / commenter without downloads) streaming the full variant hears the derivative', () => {
+    expect(externalHearsDerivative(full, false, [m('viewer')])).toBe(true);
+    expect(externalHearsDerivative(full, false, [m('commenter')])).toBe(true);
+  });
+  it('whoever may download keeps the master for listening, and a download request is never a derivative', () => {
+    expect(externalHearsDerivative(full, false, [m('viewer', true)])).toBe(false);
+    expect(externalHearsDerivative(full, false, [m('contributor')])).toBe(false);
+    expect(externalHearsDerivative(full, false, [m('editor')])).toBe(false);
+    expect(externalHearsDerivative(full, true, [m('viewer')])).toBe(false);
+  });
+  it('a viewer in one project and an editor in another: the editor’s right counts', () => {
+    expect(externalHearsDerivative(full, false, [m('viewer'), m('editor')])).toBe(false);
+  });
+  it('only the full variant is ever replaced', () => {
+    expect(externalHearsDerivative(preview, false, [m('viewer')])).toBe(false);
   });
 });

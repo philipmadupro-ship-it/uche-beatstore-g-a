@@ -52,9 +52,9 @@ export default async function OrgProjectPage({ params }: { params: Promise<{ org
       <section aria-labelledby="org-project-songs" className="mb-10 space-y-3">
         <h2 id="org-project-songs" className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">Songs</h2>
         {detail.songs.length === 0 && detail.restrictedSongs === 0 ? (
-          <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/40">No songs in this project yet.</p>
+          <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-6 text-center text-[11px] text-white/40">No songs in this project yet.</p>
         ) : detail.songs.length > 0 ? (
-          <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]">
+          <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[var(--surface-primary)]">
             {detail.songs.map((s) => (
               <li key={s.id} className="flex items-center gap-3 px-3 py-3">
                 <Music size={14} className="shrink-0 text-white/40" aria-hidden="true" />
@@ -74,7 +74,13 @@ export default async function OrgProjectPage({ params }: { params: Promise<{ org
 
       {/* LABEL-21: people from outside the org, for members who may share externally. */}
       {shell.capabilities.includes('share.external') && (
-        <ProjectMembersPanel orgId={shell.org.id} orgName={shell.org.name} projectId={detail.project.id} />
+        <ProjectMembersPanel
+          orgId={shell.org.id}
+          orgName={shell.org.name}
+          projectId={detail.project.id}
+          songs={detail.songs.map((s) => ({ id: s.id, title: s.title ?? 'Untitled' }))}
+          canProposeCredit={shell.capabilities.includes('rights.write')}
+        />
       )}
 
       <ProjectFilesSection projectId={detail.project.id} org={{ orgId: shell.org.id }} />

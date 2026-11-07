@@ -18,7 +18,15 @@
  * LABEL-39's deletion), so a delivery with no record cannot stand. An
  * overridden delivery's event is `internal`: its note and open gates are
  * business, not the artist's creative record.
+ *
+ * Migration 187 (LABEL-73): `labelos_audit_release_deliver` does the claim and
+ * the event in ONE transaction under the release's row lock, and compares the
+ * fingerprint read BEFORE the readiness evaluation (release `updated_at`, the
+ * tracklist, the latest approval per gate) with the same facts under the lock:
+ * a gate that moved meanwhile is 409 `changed` and nothing is written. When the
+ * function is not there (187 not applied) the route takes the path above.
  */
+import { mayReadRightsDetail } from '@/lib/labelos/credits';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireObjectAccess } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -27,8 +35,11 @@ import { OrgReleaseDeliverBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
-import { planDelivery } from '@/lib/labelos/release-delivery';
+import { auditRpc, isMissingAtomicRpc } from '@/lib/labelos/audit-rpc';
+import { deliverExpectation, readFingerprint } from '@/lib/labelos/release-fingerprint';
+import { planDelivery, type OpenGate } from '@/lib/labelos/release-delivery';
 import { evaluateReleaseReadiness, RELEASE_GATES, releaseReadinessView } from '@/lib/labelos/release-readiness';
+import { readCreativeGate } from '@/lib/labelos/creative-store';
 import { loadReleaseReadinessFacts, ReleaseReadinessNotReadyError } from '@/lib/labelos/release-readiness-store';
 import { RELEASE_COLUMNS, releaseEventSubject, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
 import { notReady, releaseRow, schemaAware, writeError } from '../../access';
@@ -56,6 +67,19 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { release } = found;
   const org = access.object.orgId;
 
+  // Read BEFORE the readiness facts: whatever changes after this is caught under the lock.
+  let fingerprint: Awaited<ReturnType<typeof readFingerprint>> = null;
+  try {
+    // LABEL-68: with the creative gate on, a creative decision that lands between this read and the claim is caught too.
+    const creative = await readCreativeGate(access.admin, org);
+    fingerprint = await readFingerprint(access.admin, org, release.id, { creative });
+  } catch (err) {
+    // A failed read is a failure, not a downgrade to the weaker path.
+    log.error('fingerprint read failed', { releaseId, error: errorMessage(err) });
+    return json(500, { error: 'Could not deliver the release' });
+  }
+  if (!fingerprint) return json(404, { error: 'Not found' });
+
   let readiness;
   try {
     const facts = await loadReleaseReadinessFacts(access.admin, org, release.id);
@@ -67,7 +91,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     return json(500, { error: 'Could not work out whether the release is ready' });
   }
 
-  const openGates = RELEASE_GATES.filter((g) => !['approved', 'satisfied', 'not_required'].includes(readiness.gates[g].status));
+  const isOpen = (status: string) => !['approved', 'satisfied', 'not_required'].includes(status);
+  const openGates: OpenGate[] = [
+    ...RELEASE_GATES.filter((g) => isOpen(readiness.gates[g].status)),
+    ...(readiness.creative && isOpen(readiness.creative.status) ? (['creative'] as const) : []),
+  ];
   const plan = planDelivery(
     { state: release.state, readyToDeliver: readiness.readyToDeliver, openGates },
     { distributor: body.distributor, deliveredOn: body.delivered_on ?? null, override: body.override === true, note: body.override_note ?? null },
@@ -77,10 +105,46 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!plan.ok) {
     if (plan.status === 422) {
       // The gates, as this caller may read them (rights detail only with rights.read).
-      const view = releaseReadinessView(readiness, access.capabilities.has('rights.read'));
+      const view = releaseReadinessView(readiness, mayReadRightsDetail(access.capabilities, access.role));
       return json(422, { error: plan.error, field: plan.field, readiness: view });
     }
     return json(plan.status, { error: plan.error, ...(plan.field ? { field: plan.field } : {}) });
+  }
+
+  const eventPayload = {
+    distributor: body.distributor,
+    deliveredAt: plan.deliveredAt,
+    override: plan.override,
+    ...(plan.override ? { overrideNote: plan.note, openGates: [...plan.openGates] } : {}),
+  };
+  const visibility = plan.override ? ('internal' as const) : ('artist' as const);
+
+  // 187: one function, one transaction.
+  {
+    const { data, error } = await auditRpc(access.admin, 'releaseDeliver', {
+      p_org: org,
+      p_actor: access.userId,
+      p_release: release.id,
+      p_distributor: body.distributor,
+      p_delivered_at: plan.deliveredAt,
+      p_expect: deliverExpectation(fingerprint),
+      p_ctx: { artist_id: release.contact_id, project_id: release.project_id },
+      p_payload: eventPayload,
+      p_visibility: visibility,
+    });
+    if (!error) {
+      if (data?.error === 'not_found') return json(404, { error: 'Not found' });
+      if (data?.error === 'not_draft') return json(409, { error: 'This release was already delivered', field: 'state' });
+      if (data?.error === 'changed') return json(409, { error: 'The release changed while it was being delivered; check it again', code: 'changed' });
+      const row = data?.release as unknown as ReleaseRow | undefined;
+      if (!row) return json(500, { error: 'Could not deliver the release' });
+      return json(200, { release: toReleaseView(row), override: plan.override });
+    }
+    if (!isMissingAtomicRpc(error)) {
+      log.error('deliver failed', { releaseId, error: error.message });
+      return json(500, { error: 'Could not deliver the release' });
+    }
+    // 187 is not applied: the path below.
   }
 
   // Claim the draft → delivered change; only one request can.

@@ -22,6 +22,28 @@ CREATE TABLE IF NOT EXISTS auth.users (
   created_at timestamptz DEFAULT now()
 );
 ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS email_confirmed_at timestamptz DEFAULT now();
+-- The columns and identities table GoTrue keeps, so scripts/ops/seed-test-accounts.mjs (written for
+-- Supabase) runs unchanged here. Nothing in the app reads them.
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS instance_id uuid;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS aud text;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS role text;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS updated_at timestamptz;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS confirmation_token text;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS email_change text;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS email_change_token_new text;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS recovery_token text;
+CREATE TABLE IF NOT EXISTS auth.identities (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  provider_id text NOT NULL,
+  identity_data jsonb NOT NULL,
+  provider text NOT NULL,
+  last_sign_in_at timestamptz,
+  created_at timestamptz,
+  updated_at timestamptz,
+  email text GENERATED ALWAYS AS (lower(identity_data ->> 'email')) STORED,
+  UNIQUE (provider_id, provider)
+);
 -- Supabase's sign-in sessions (refresh tokens hang off them). Only the columns
 -- a migration touches: 190 revokes a team account's sessions on reset / switch-off.
 CREATE TABLE IF NOT EXISTS auth.sessions (

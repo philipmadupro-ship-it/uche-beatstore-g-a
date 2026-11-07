@@ -116,6 +116,15 @@ export function externalAudioAction(variant: OrgAudioVariant, download: boolean)
   return variant.kind === 'wav' || variant.kind === 'stem' ? 'download_masters' : 'listen';
 }
 
+/**
+ * Does this external request hear the lossy full-length DERIVATIVE instead of the master (LABEL-72)? A player
+ * streaming `full` is "listen"; a member whose role (or `allow_downloads`) cannot download is listen-only, and a
+ * Range stream of the master would be a download in all but name. Whoever may download keeps the master.
+ */
+export function externalHearsDerivative(variant: OrgAudioVariant, download: boolean, memberships: readonly ExternalMembership[]): boolean {
+  return variant.kind === 'full' && !download && !externalMayAny(memberships, 'download_masters');
+}
+
 /** Only handing the file over is audited; listening is not. */
 export function externalAudioIsAudited(action: ExternalAction): boolean {
   return action === 'download_masters';

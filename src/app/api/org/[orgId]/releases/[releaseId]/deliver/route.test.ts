@@ -37,6 +37,9 @@ let db: MemoryDb;
 let mem: ReturnType<typeof memoryAdmin>;
 let ready = false;
 let notReadySchema = false;
+/** LABEL-68: the org switched the creative approval gate on, and where that gate stands. */
+let creativeOn = false;
+let creativeStatus: GateState['status'] = 'approved';
 /** Make the audit insert fail, as a database that lost the event write would. */
 let failEvents = false;
 /** Runs while readiness is being worked out, i.e. after the release row was read and before the claim. */
@@ -63,10 +66,13 @@ vi.mock('@supabase/supabase-js', () => ({
   }),
 }));
 vi.mock('@/lib/log', () => ({ createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }) }));
+// LABEL-68: whether the creative gate is IN FORCE (set on AND the department present) is `readCreativeGate`'s own tested rule.
+vi.mock('@/lib/labelos/creative-store', () => ({ readCreativeGate: async () => creativeOn }));
 vi.mock('@/lib/labelos/release-readiness-store', async () => {
   class ReleaseReadinessNotReadyError extends Error {}
   return {
     ReleaseReadinessNotReadyError,
+    readReadinessSettings: async () => ({ legal_gate: 'on', marketing_gate: 'on', require_signed_master_split: false, marketing_plan_required: false, artwork_min_px: 3000, creative_gate: creativeOn ? 'on' : 'off' }),
     loadReleaseReadinessFacts: async () => {
       if (notReadySchema) throw new ReleaseReadinessNotReadyError();
       return { stub: true };
@@ -90,7 +96,9 @@ vi.mock('@/lib/labelos/release-readiness', async (importOriginal) => {
         gates.artwork = gate('blocked');
         gates.credits_splits = gate('blocked', true);
       }
-      return { releaseState: 'draft', gates, readyToDeliver: ready };
+      const creative = creativeOn ? gate(creativeStatus) : undefined;
+      const creativeOk = !creative || ['approved', 'satisfied', 'not_required'].includes(creative.status);
+      return { releaseState: 'draft', gates, ...(creative ? { creative } : {}), readyToDeliver: ready && creativeOk };
     },
   };
 });
@@ -113,6 +121,8 @@ beforeEach(() => {
   current = null;
   ready = false;
   notReadySchema = false;
+  creativeOn = false;
+  creativeStatus = 'approved';
   failEvents = false;
   duringReadiness = null;
   db = {
@@ -314,5 +324,87 @@ describe('failure modes', () => {
     // …and it can be delivered once the record can be written.
     expect((await deliver(OWN, L, R1)).status).toBe(200);
     expect(events()).toHaveLength(1);
+  });
+});
+
+describe('with migration 187 applied (labelos_audit_release_deliver)', () => {
+  const calls: Record<string, unknown>[] = [];
+  beforeEach(() => {
+    ready = true;
+    calls.length = 0;
+  });
+  const withRpc = (answer: (args: Record<string, unknown>) => unknown) => {
+    db.rpc = {
+      labelos_audit_release_deliver: (args) => {
+        calls.push(args);
+        return { data: answer(args), error: null };
+      },
+    };
+  };
+
+  it('delivers through the function with the fingerprint read before readiness, and writes no event itself', async () => {
+    withRpc(() => ({ release: { ...release(R1, L, LP1, C1), state: 'delivered', delivered_to: 'DistroKid', delivered_at: '2026-10-12T12:00:00.000Z' } }));
+    const res = await deliver(AR, L, R1);
+    expect(res.status).toBe(200);
+    expect((await res.json()).release).toMatchObject({ state: 'delivered', deliveredTo: 'DistroKid' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ p_org: L, p_release: R1, p_visibility: 'artist', p_ctx: { artist_id: C1, project_id: LP1 } });
+    expect(calls[0].p_expect).toMatchObject({ release_updated_at: '2026-10-01T00:00:00Z', items: '' });
+    // The function owns the claim and the event: the route did neither.
+    expect(row(R1).state).toBe('draft');
+    expect(events()).toHaveLength(0);
+  });
+
+  it('LABEL-68: with the creative gate OFF the fingerprint names exactly the five gates', async () => {
+    withRpc(() => ({ release: { ...release(R1, L, LP1, C1), state: 'delivered', delivered_at: '2026-10-12T12:00:00.000Z' } }));
+    expect((await deliver(AR, L, R1)).status).toBe(200);
+    expect(Object.keys((calls[0].p_expect as { approvals: Record<string, string> }).approvals).sort()).toEqual(['artwork', 'legal', 'marketing', 'master', 'metadata']);
+  });
+
+  it('LABEL-68: with the creative gate ON and approved, delivery goes through and the fingerprint also names the creative gate', async () => {
+    creativeOn = true;
+    db.tables.approvals = [{ id: '90000000-0000-4000-8000-000000000001', release_id: R1, org_id: L, gate: 'creative', created_at: '2026-10-02T00:00:00Z' }];
+    withRpc(() => ({ release: { ...release(R1, L, LP1, C1), state: 'delivered', delivered_at: '2026-10-12T12:00:00.000Z' } }));
+    expect((await deliver(AR, L, R1)).status).toBe(200);
+    expect((calls[0].p_expect as { approvals: Record<string, string> }).approvals.creative).toBe('90000000-0000-4000-8000-000000000001');
+  });
+
+  it('LABEL-68: with the creative gate ON and still open, the release is not ready: 422 with the gate in the answer, nothing delivered', async () => {
+    creativeOn = true;
+    creativeStatus = 'awaiting_approval';
+    withRpc(() => ({ release: { ...release(R1, L, LP1, C1), state: 'delivered' } }));
+    const res = await deliver(AR, L, R1);
+    expect(res.status).toBe(422);
+    expect((await res.json()).readiness.creative.status).toBe('awaiting_approval');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('LABEL-68: the owner may override an open creative gate, and the event lists it among the open gates', async () => {
+    creativeOn = true;
+    creativeStatus = 'not_started';
+    withRpc(() => ({ release: { ...release(R1, L, LP1, C1), state: 'delivered', delivered_at: '2026-10-12T12:00:00.000Z' } }));
+    const res = await deliver(OWN, L, R1, { distributor: 'D', override: true, override_note: 'Artist signed it off by phone' });
+    expect(res.status).toBe(200);
+    expect((calls[0].p_payload as { openGates: string[] }).openGates).toEqual(['creative']);
+  });
+
+  it('changed → 409 and the route does not fall back to its own claim', async () => {
+    withRpc(() => ({ error: 'changed' }));
+    const res = await deliver(OWN, L, R1);
+    expect(res.status).toBe(409);
+    expect(row(R1).state).toBe('draft');
+  });
+
+  it('not_draft → 409', async () => {
+    withRpc(() => ({ error: 'not_draft', state: 'delivered' }));
+    expect((await deliver(OWN, L, R1)).status).toBe(409);
+  });
+
+  it('an overridden delivery is filed internal', async () => {
+    ready = false;
+    withRpc(() => ({ release: { ...release(R1, L, LP1, C1), state: 'delivered', delivered_at: '2026-10-12T12:00:00.000Z' } }));
+    const res = await deliver(OWN, L, R1, { distributor: 'D', override: true, override_note: 'Owner signed it off' });
+    expect(res.status).toBe(200);
+    expect(calls[0]).toMatchObject({ p_visibility: 'internal' });
   });
 });

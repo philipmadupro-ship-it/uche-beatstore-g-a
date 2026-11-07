@@ -21,6 +21,7 @@ import { requireOrgOwner } from '@/lib/auth/org-access';
 import { loadEntitlements } from '@/lib/labelos/entitlements-store';
 import { errorMessage } from '@/lib/errors';
 import { recordEvent } from '@/lib/labelos/activity';
+import { auditRpc, isMissingAtomicRpc } from '@/lib/labelos/audit-rpc';
 import { buildManifest, exportFileName, toCsv, type StoredObject } from '@/lib/labelos/org-export';
 import { gatherOrgExport } from '@/lib/labelos/org-lifecycle-store';
 import { createLogger } from '@/lib/log';
@@ -69,14 +70,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ orgI
     }
     const manifest = buildManifest({ orgId: org.id, generatedAt, tables, stored, storedError });
 
-    await recordEvent(
-      admin,
-      { orgId: org.id, userId: owner.userId },
-      'org.exported',
-      { type: 'org', id: org.id },
-      { format, rows: Object.values(manifest.tables).reduce((a, b) => a + b, 0), objects: manifest.stored?.length ?? null },
-      { audit: true },
-    );
+    // Written BEFORE any data is returned: an export that cannot be audited does not happen.
+    const exportPayload = { format, rows: Object.values(manifest.tables).reduce((a, b) => a + b, 0), objects: manifest.stored?.length ?? null };
+    const recorded = await auditRpc(admin, 'orgExport', { p_org: org.id, p_actor: owner.userId, p_payload: exportPayload });
+    if (!recorded.error) {
+      if (recorded.data?.error) return NextResponse.json({ error: 'Not found' }, { status: recorded.data.error === 'not_owner' ? 403 : 404 });
+    } else if (isMissingAtomicRpc(recorded.error)) {
+      await recordEvent(admin, { orgId: org.id, userId: owner.userId }, 'org.exported', { type: 'org', id: org.id }, exportPayload, { audit: true });
+    } else {
+      throw new Error(recorded.error.message);
+    }
 
     const fileName = exportFileName(org.slug, format, generatedAt);
     const headers = {

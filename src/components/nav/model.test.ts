@@ -79,7 +79,7 @@ describe('navGroupsFor', () => {
     const groups = navGroupsFor('producer', new Set(ALL_CAPABILITIES), { slug: 'uche', viewerIsProducer: true });
     expect(shape(groups.slice(0, 3))).toEqual(PRODUCER_HUBS);
     expect(shape(groups.slice(3))).toEqual([
-      { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/uche/settings/members', icon: 'UsersRound' }] },
+      { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/uche/settings/members', icon: 'UsersRound' }, { label: 'Store listings', href: '/o/uche/releases/store', icon: 'Store' }] },
     ]);
   });
 
@@ -94,7 +94,7 @@ describe('navGroupsFor', () => {
     expect(shape(groups)).toEqual([
       { key: 'roster', label: 'Artists', icon: 'MicVocal', items: [{ label: 'Artists', href: '/o/night-shift/artists', icon: 'MicVocal' }, { label: 'Music', href: '/o/night-shift/music', icon: 'Music2' }] },
       { key: 'releases', label: 'Releases', icon: 'Disc3', items: [{ label: 'Releases', href: '/o/night-shift/releases', icon: 'Disc3' }] },
-      { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/night-shift/settings/members', icon: 'UsersRound' }] },
+      { key: 'org', label: 'Organization', icon: 'Building2', items: [{ label: 'Members', href: '/o/night-shift/settings/members', icon: 'UsersRound' }, { label: 'Store listings', href: '/o/night-shift/releases/store', icon: 'Store' }] },
     ]);
   });
 
@@ -145,11 +145,11 @@ describe('navGroupsFor', () => {
     expect(navGroupsFor('producer', null)).toBe(NAV_GROUPS);
   });
 
-  it('the Rights hub (legal queue, LABEL-31) is for members who work the queue, in label and artist orgs only', () => {
+  it('the Rights hub (legal queue, LABEL-31) is for members who work the queue, in label orgs only (LABEL-70: an independent artist has no legal queue)', () => {
     const keys = (kind: string, caps: string[]) => navGroupsFor(kind, new Set(caps), { slug: 'ns', viewerIsProducer: false }).map((g) => g.key);
     expect(keys('label', ['catalog.read', 'release.approve.legal'])).toEqual(['roster', 'releases', 'rights', 'org']);
     expect(keys('label', ['catalog.read', 'release.write', 'contracts.read'])).toEqual(['roster', 'releases', 'rights', 'org']);
-    expect(keys('artist', ['catalog.read', 'release.approve.legal'])).toContain('rights');
+    expect(keys('artist', ['catalog.read', 'release.approve.legal'])).not.toContain('rights');
     // The catalogue ability alone, a reviewer, a producer function: no entry.
     expect(keys('label', ['catalog.read'])).not.toContain('rights');
     expect(keys('label', ['catalog.read', 'review.write'])).not.toContain('rights');
@@ -159,12 +159,48 @@ describe('navGroupsFor', () => {
     expect(hub?.items.map((i) => i.href)).toEqual(['/o/ns/rights/legal']);
   });
 
+  it('the Contracts page (LABEL-57) is for contracts staff, rights readers and own-line members, in orgs licensed for contracts', () => {
+    const hrefs = (caps: string[], modules?: string[]) =>
+      navGroupsFor('label', new Set(caps), { slug: 'ns', viewerIsProducer: false, modules }).find((g) => g.key === 'rights')?.items.map((i) => i.href) ?? [];
+    expect(hrefs(['catalog.read', 'contracts.read'])).toEqual(['/o/ns/rights/contracts']);
+    expect(hrefs(['catalog.read', 'rights.read.own_line'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/contracts']);
+    expect(hrefs(['catalog.read', 'rights.read'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/contracts']);
+    expect(hrefs(['catalog.read', 'contracts.read'], ['export'])).toEqual([]);
+    expect(hrefs(['catalog.read'])).toEqual([]);
+    expect(navGroupsFor('producer', new Set(['contracts.read']), { slug: 'ns', viewerIsProducer: false }).some((g) => g.key === 'rights')).toBe(false);
+  });
+
+  it('Parties (LABEL-54) is in the Rights hub for anyone who reads a party; the legal queue stays for those who work it', () => {
+    const hub = (kind: string, caps: string[], modules?: string[]) =>
+      navGroupsFor(kind, new Set(caps), { slug: 'ns', viewerIsProducer: false, ...(modules ? { modules: new Set(modules) } : {}) }).find((g) => g.key === 'rights')?.items.map((i) => i.href);
+    // An own-line producer, a rights reader (a roster artist holds it) and finance each get Parties.
+    // (LABEL-57: a rights reader or own-line member also gets Contracts, their own, once sent.)
+    expect(hub('label', ['catalog.read', 'rights.read.own_line'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/contracts']);
+    expect(hub('label', ['catalog.read', 'rights.read'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/contracts']);
+    expect(hub('label', ['finance.read'])).toEqual(['/o/ns/rights/parties']);
+    // Legal gets both, queue second; without the contracts module the queue goes and Parties stays.
+    expect(hub('label', ['catalog.read', 'rights.read', 'rights.read.own_line', 'release.approve.legal'])).toEqual(['/o/ns/rights/parties', '/o/ns/rights/contracts', '/o/ns/rights/legal']);
+    expect(hub('label', ['catalog.read', 'rights.read', 'release.approve.legal'], ['store'])).toEqual(['/o/ns/rights/parties']);
+    // Neither a reviewer nor marketing, and never a producer org.
+    expect(hub('label', ['catalog.read', 'review.write'])).toBeUndefined();
+    expect(hub('label', ['catalog.read', 'rights.write'])).toBeUndefined();
+    expect(hub('producer', ['catalog.read', 'rights.read'])).toBeUndefined();
+  });
+
   it('Connections (LABEL-41) is for label and artist orgs, for whoever holds org.manage', () => {
+    // Store listings (LABEL-71) sits between Members and Connections for every kind that is licensed for the store.
     const items = (kind: string, caps: string[]) => navGroupsFor(kind, new Set(caps), { slug: 's', viewerIsProducer: false }).find((g) => g.key === 'org')?.items.map((i) => i.href);
-    expect(items('label', ['org.manage', 'catalog.read'])).toEqual(['/o/s/settings/members', '/o/s/settings/connections']);
-    expect(items('artist', ['org.manage'])).toEqual(['/o/s/settings/members', '/o/s/settings/connections']);
-    expect(items('label', ['catalog.read'])).toEqual(['/o/s/settings/members']);
-    expect(items('producer', ['org.manage'])).toEqual(['/o/s/settings/members']);
+    const STORE = '/o/s/releases/store';
+    expect(items('label', ['org.manage', 'catalog.read'])).toEqual(['/o/s/settings/members', STORE, '/o/s/settings/connections']);
+    expect(items('artist', ['org.manage'])).toEqual(['/o/s/settings/members', STORE, '/o/s/settings/connections']);
+    expect(items('label', ['catalog.read'])).toEqual(['/o/s/settings/members', STORE]);
+    expect(items('producer', ['org.manage'])).toEqual(['/o/s/settings/members', STORE]);
+  });
+
+  it('Store listings (LABEL-71) is drawn only for an org licensed for the store', () => {
+    const items = (modules: string[]) => navGroupsFor('label', new Set(['catalog.read']), { slug: 's', viewerIsProducer: false, modules }).find((g) => g.key === 'org')?.items.map((i) => i.label);
+    expect(items(['store'])).toContain('Store listings');
+    expect(items(['finance'])).not.toContain('Store listings');
   });
 
   it('an org without its slug, or of an unknown kind, has nothing to link to', () => {
@@ -192,5 +228,21 @@ describe('the admin centre entry (doc 25, phase 3)', () => {
     expect(member.items.map((i) => i.label)).not.toContain('Admin');
     const producer = navGroupsFor('producer', new Set(['members.manage']), { slug: 's', viewerIsProducer: true }).find((g) => g.key === 'org')!;
     expect(producer.items.map((i) => i.label)).not.toContain('Admin');
+  });
+});
+
+describe('the artistic direction entry (LABEL-68)', () => {
+  const hrefs = (kind: string, caps: string[], modules?: string[]) =>
+    navGroupsFor(kind, new Set(caps), { slug: 'ns', viewerIsProducer: false, ...(modules ? { modules } : {}) }).find((g) => g.key === 'roster')?.items.map((i) => i.href) ?? [];
+
+  it('is drawn for creative.read in a label or artist org, in the Artists hub', () => {
+    expect(hrefs('label', ['catalog.read', 'creative.read'])).toContain('/o/ns/creative');
+    expect(hrefs('artist', ['catalog.read', 'creative.read'])).toContain('/o/ns/creative');
+  });
+  it('is not drawn without creative.read, or in an org without the artistic department, or in a producer org', () => {
+    expect(hrefs('label', ['catalog.read'])).not.toContain('/o/ns/creative');
+    expect(hrefs('label', ['catalog.read', 'creative.read'], ['store', 'contracts'])).not.toContain('/o/ns/creative');
+    expect(hrefs('label', ['catalog.read', 'creative.read'], ['artistic'])).toContain('/o/ns/creative');
+    expect(navGroupsFor('producer', new Set(['catalog.read', 'creative.read']), { slug: 'ns', viewerIsProducer: false }).some((g) => g.key === 'roster')).toBe(false);
   });
 });

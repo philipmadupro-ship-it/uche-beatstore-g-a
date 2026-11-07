@@ -27,7 +27,7 @@ export const CONTRACT_TYPE_LABELS: Readonly<Record<ContractTypeId, string>> = Ob
   CONTRACT_TYPES.map((t) => [t.id, t.label]),
 ) as Record<ContractTypeId, string>;
 
-export const TEMPLATES_LATER = 'Templates for these come later. Picking a type now only records what you work with.';
+export const TEMPLATES_LATER = 'Every kind of agreement has a starting template under Contracts. Picking a type here records what you work with.';
 
 /** Total over any stored value: known ids, once each, in vocabulary order. */
 export function parseContractTypes(raw: unknown): ContractTypeId[] {

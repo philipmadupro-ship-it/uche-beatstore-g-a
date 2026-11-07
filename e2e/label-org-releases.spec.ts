@@ -143,24 +143,33 @@ test('3 · the tracklist: add, refuse a demo as master, reorder, remove — posi
   await ctx.close();
 });
 
-test('4 · on a release, the song’s own mix is finished: marketing passes the audio check', async ({ browser, baseURL, request }) => {
-  // Midnight is still `inbox`; only the release makes its mix finished (06 §2.3).
+test('4 · on a release that went out, the song’s own mix is finished: marketing passes the audio check — a draft or cancelled release finishes nothing (LABEL-56)', async ({ browser, baseURL, request }) => {
+  // Midnight is still `inbox`; only a release that went out makes its mix finished (06 §2.3, 21 §5 row 11).
   const ctx = await as(browser, baseURL!, BUYER_ID, 'buyer@local.test');
   // `wav` of an mp3-only song has no file: past D4 the answer is 404, before it 403.
   const audio = `/api/org/${ORG}/audio/${SONG}?variant=wav`;
-  // On the release: past D4 to the file lookup.
-  expect((await ctx.request.get(audio)).status()).toBe(404);
-  await rest(request, 'PATCH', `releases?id=eq.${ids.release}`, { state: 'cancelled' });
-  expect((await ctx.request.get(audio)).status()).toBe(403);
-  // The database's row rule moves with it: marketing reads the song row only while it is on a live release.
   const row = async () =>
     (await (await request.get(`${REST}/tracks?select=id&id=eq.${SONG}`, {
       headers: { apikey: SERVICE_KEY, authorization: `Bearer ${userToken(BUYER_ID, 'buyer@local.test')}` },
     })).json()) as unknown[];
+  const setState = (state: string, extra: Record<string, unknown> = {}) => rest(request, 'PATCH', `releases?id=eq.${ids.release}`, { state, ...extra });
+  // Still a draft: working, in the route and in the database's row rule.
+  expect((await ctx.request.get(audio)).status()).toBe(403);
   expect(await row()).toEqual([]);
-  await rest(request, 'PATCH', `releases?id=eq.${ids.release}`, { state: 'draft' });
-  expect(await row()).toEqual([{ id: SONG }]);
+  // Delivered: past D4 to the file lookup, and the row is readable by marketing's own JWT.
+  await setState('delivered', { delivered_at: new Date().toISOString() });
   expect((await ctx.request.get(audio)).status()).toBe(404);
+  expect(await row()).toEqual([{ id: SONG }]);
+  // Withdrawn after delivery: it went out, so it keeps the class (migration 193).
+  await setState('withdrawn');
+  expect((await ctx.request.get(audio)).status()).toBe(404);
+  expect(await row()).toEqual([{ id: SONG }]);
+  await setState('cancelled');
+  expect((await ctx.request.get(audio)).status()).toBe(403);
+  expect(await row()).toEqual([]);
+  await setState('draft');
+  expect((await ctx.request.get(audio)).status()).toBe(403);
+  expect(await row()).toEqual([]);
   await ctx.close();
 });
 

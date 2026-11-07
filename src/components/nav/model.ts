@@ -1,11 +1,14 @@
 import {
   Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
   CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
-  Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2,
-  SlidersHorizontal, ShieldCheck,
+  Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2, FileText,
+  SlidersHorizontal, ShieldCheck, Coins, LayoutDashboard,
 } from 'lucide-react';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
+import { canSeeParties } from '@/lib/labelos/parties-view';
+import { pageAllowed } from '@/lib/labelos/role-view';
+import { canSeeContracts } from '@/lib/labelos/contracts-nav';
 import { ADMIN_CENTRE_CAPABILITY } from '@/lib/labelos/admin-centre';
 
 /**
@@ -24,6 +27,8 @@ export interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+  /** Active on this exact path only: the item's href is also the prefix of its siblings' (Finance → Overview). */
+  exact?: boolean;
 }
 
 export interface NavGroup {
@@ -76,8 +81,8 @@ export const ACCOUNT_GROUP: NavGroup = {
 
 export const ALL_GROUPS = [...NAV_GROUPS, ACCOUNT_GROUP];
 
-export function isItemActive(href: string, pathname: string): boolean {
-  return pathname === href || pathname.startsWith(href + '/');
+export function isItemActive(href: string, pathname: string, exact = false): boolean {
+  return pathname === href || (!exact && pathname.startsWith(href + '/'));
 }
 
 export function activeGroupFor(pathname: string): NavGroup {
@@ -86,7 +91,7 @@ export function activeGroupFor(pathname: string): NavGroup {
 
 /** The group of the current page among `groups`, else the first (undefined when empty). */
 export function activeGroupIn(groups: readonly NavGroup[], pathname: string): NavGroup | undefined {
-  return groups.find((g) => g.items.some((it) => isItemActive(it.href, pathname))) ?? groups[0];
+  return groups.find((g) => g.items.some((it) => isItemActive(it.href, pathname, it.exact))) ?? groups[0];
 }
 
 // ── Label OS (LABEL-09) ─────────────────────────────────────────────────
@@ -108,6 +113,8 @@ export interface OrgNavContext {
   modules?: ReadonlySet<string> | readonly string[];
   /** The viewer's role is `owner` (LABEL-51): the owner-only settings entry is drawn. */
   isOwner?: boolean;
+  /** The viewer's role in the org (LABEL-70): a label's roster artist gets "My music", not the label's roster wording. */
+  role?: string;
 }
 
 /** Is the module in the org's licence? No list = the default (yes). */
@@ -120,9 +127,12 @@ function licensed(org: OrgNavContext, module: string): boolean {
  * The pages every org has, under its slug. Every member can see who is in
  * their org (136's RLS lets them read co-members), so Members is not gated.
  */
-function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | string> | null, isOwner = false): NavGroup {
+function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | string> | null, isOwner = false, storeLicensed = true): NavGroup {
   const base = `/o/${slug}`;
   const items: NavGroup['items'] = [{ label: 'Members', href: `${base}/settings/members`, icon: UsersRound }];
+  // LABEL-71: the page where a credited artist answers "may this go on the store?" (the bell links to it) and where the
+  // store owner sees the music of connected artists. Every member can open it; it shows each of them only what is theirs.
+  if (storeLicensed) items.push({ label: 'Store listings', href: `${base}/releases/store`, icon: Store });
   // Doc 25 phase 3: the admin centre, first, for whoever runs the team of a label or artist org (lib/labelos/admin-centre's rule).
   if ((orgKind === 'label' || orgKind === 'artist') && caps?.has(ADMIN_CENTRE_CAPABILITY)) {
     items.unshift({ label: 'Admin', href: `${base}/settings`, icon: ShieldCheck });
@@ -142,14 +152,26 @@ function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | 
  * producer's CRM, which the producer hubs already reach — and only for a
  * member who can see the catalogue (the page's own capability).
  */
-function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null): NavGroup {
+function rosterGroup(slug: string, caps: ReadonlySet<Capability | string> | null, orgKind: string, role: string | undefined, artistic: boolean): NavGroup {
   // LABEL-37: Music is the org-wide list of songs with the structured filter bar and saved views; same capability as the roster.
+  // LABEL-70: an independent artist's org and a label's roster artist have no roster to run: "My music" and their own artist page.
+  if (orgKind === 'artist' || role === 'artist') {
+    const own: NavGroup['items'] = [
+      { label: 'My music', href: `/o/${slug}/music`, icon: Music2 },
+      { label: 'Artist profile', href: `/o/${slug}/artists`, icon: Mic2 },
+    ];
+    // LABEL-68 / 70: an independent artist who holds the artistic department (`creative.read`) keeps its workspace.
+    if (artistic && caps?.has('creative.read')) own.push({ label: 'Artistic direction', href: `/o/${slug}/creative`, icon: Palette });
+    return { key: 'roster', label: 'My music', icon: Music2, items: own };
+  }
   const items: NavGroup['items'] = [
     { label: 'Artists', href: `/o/${slug}/artists`, icon: Mic2 },
     { label: 'Music', href: `/o/${slug}/music`, icon: Music2 },
   ];
-  // The A&R inbox (LABEL-25) is the reviewers' queue: only a member who can rate sees the entry. The page itself stays open to the catalogue, so an artist reads the reviews of their songs by link.
+  // The A&R inbox (LABEL-25) is the reviewers' queue: only a member who can rate sees the entry. The page is a label staff tool (`pageAllowed('ar')`, LABEL-70): a roster artist reads the reviews of their songs on the song page.
   if (caps?.has('review.write')) items.push({ label: 'A&R inbox', href: `/o/${slug}/ar`, icon: Inbox });
+  // The artistic direction workspace (LABEL-68): `creative.read`, in an org that has the artistic department.
+  if (artistic && caps?.has('creative.read')) items.push({ label: 'Artistic direction', href: `/o/${slug}/creative`, icon: Palette });
   return { key: 'roster', label: 'Artists', icon: Mic2, items };
 }
 
@@ -163,14 +185,42 @@ function releasesGroup(slug: string): NavGroup {
 }
 
 /**
- * The rights hub (LABEL-31): the legal queue, for the members who work it —
- * the legal gate or the contracts, plus the catalogue (`canSeeLegalQueue`, the
- * page's own check). Label and artist orgs only. The IA's wider Rights hub
- * (splits overview, parties) grows here; a link to a page not built would be
- * a dead link.
+ * The rights hub: Parties (LABEL-54) — the rights holders and their payee data,
+ * for anyone who reads a party at all (`canSeeParties`; what they are shown is
+ * the server's call) — and the legal queue (LABEL-31), for the members who work
+ * it: the legal gate or the contracts, plus the catalogue (`canSeeLegalQueue`,
+ * the page's own check), in orgs licensed for the contracts module. Label and
+ * artist orgs only. The IA's wider Rights hub (splits overview) grows here; a
+ * link to a page not built would be a dead link.
  */
-function rightsGroup(slug: string): NavGroup {
-  return { key: 'rights', label: 'Rights', icon: Scale, items: [{ label: 'Legal queue', href: `/o/${slug}/rights/legal`, icon: Scale }] };
+function rightsGroup(slug: string, items: { parties: boolean; legal: boolean; contracts: boolean }): NavGroup | null {
+  const links = [
+    ...(items.parties ? [{ label: 'Parties', href: `/o/${slug}/rights/parties`, icon: UsersRound }] : []),
+    ...(items.contracts ? [{ label: 'Contracts', href: `/o/${slug}/rights/contracts`, icon: FileText }] : []),
+    ...(items.legal ? [{ label: 'Legal queue', href: `/o/${slug}/rights/legal`, icon: Scale }] : []),
+  ];
+  return links.length === 0 ? null : { key: 'rights', label: 'Rights', icon: Scale, items: links };
+}
+
+/**
+ * The finance hub (LABEL-62): Earnings — the imported distributor files and the
+ * needs-review queue. For anyone who reads finance, in orgs licensed for the
+ * finance module (the page's own check). Statements (LABEL-63) and the overview and advances
+ * ledger (LABEL-64) live here too.
+ */
+function financeGroup(slug: string): NavGroup {
+  return { key: 'finance', label: 'Finance', icon: Coins, items: [
+      { label: 'Overview', href: `/o/${slug}/finance`, icon: Coins, exact: true },
+      { label: 'Earnings', href: `/o/${slug}/finance/earnings`, icon: Coins },
+      { label: 'Advances', href: `/o/${slug}/finance/advances`, icon: Coins },
+      { label: 'Statements', href: `/o/${slug}/finance/statements`, icon: Coins },
+    ],
+  };
+}
+
+/** The executive overview (LABEL-67): one link, for the persons `pageAllowed('exec')` admits. */
+function execGroup(slug: string): NavGroup {
+  return { key: 'exec', label: 'Executive', icon: LayoutDashboard, items: [{ label: 'Overview', href: `/o/${slug}/exec`, icon: LayoutDashboard, exact: true }] };
 }
 
 /**
@@ -197,9 +247,22 @@ export function navGroupsFor(
   if (!(ORG_KINDS as readonly string[]).includes(orgKind)) return [];
   if (!org) return orgKind === 'producer' ? NAV_GROUPS : [];
   const producerHubs = orgKind === 'producer' && org.viewerIsProducer ? NAV_GROUPS : [];
-  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps)] : [];
+  const roster = orgKind !== 'producer' && caps?.has('catalog.read') ? [rosterGroup(org.slug, caps, orgKind, org.role, licensed(org, 'artistic'))] : [];
   const releases = orgKind !== 'producer' && caps?.has('catalog.read') ? [releasesGroup(org.slug)] : [];
-  // The legal queue belongs to the contracts module (LABEL-47).
-  const rights = orgKind !== 'producer' && caps && canSeeLegalQueue(caps) && licensed(org, 'contracts') ? [rightsGroup(org.slug)] : [];
-  return [...producerHubs, ...roster, ...releases, ...rights, orgGroup(org.slug, orgKind, caps, org.isOwner === true)];
+  // The legal queue belongs to the contracts module (LABEL-47); Parties is for anyone who reads a party.
+  const rightsHub =
+    orgKind !== 'producer' && caps
+      ? rightsGroup(org.slug, { parties: canSeeParties(caps), legal: orgKind === 'label' && canSeeLegalQueue(caps) && licensed(org, 'contracts'), contracts: canSeeContracts(caps) && licensed(org, 'contracts') })
+      : null;
+  const rights = rightsHub ? [rightsHub] : [];
+  const finance = orgKind !== 'producer' && caps?.has('finance.read') && licensed(org, 'finance') ? [financeGroup(org.slug)] : [];
+  // LABEL-63: the payee's own artist (a roster artist, or the owner of an artist org) reads the statements issued to them.
+  // Finance staff already have the Finance hub (with Statements); everyone else who may open the page (`pageAllowed('statements')`: a roster artist, or the owner of an artist org) gets their own.
+  const ownStatements =
+    orgKind !== 'producer' && caps && !caps.has('finance.read') &&
+    pageAllowed('statements', { kind: orgKind, role: org.role ?? (org.isOwner ? 'owner' : ''), capabilities: caps, modules: org.modules })
+      ? [{ key: 'finance', label: 'Finance', icon: Coins, items: [{ label: 'My statements', href: `/o/${org.slug}/finance/statements`, icon: Coins }] } as NavGroup]
+      : [];
+  const exec = orgKind !== 'producer' && caps && pageAllowed('exec', { kind: orgKind, role: org.role ?? (org.isOwner ? 'owner' : ''), capabilities: caps, modules: org.modules }) ? [execGroup(org.slug)] : [];
+  return [...producerHubs, ...roster, ...releases, ...rights, ...finance, ...ownStatements, ...exec, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];
 }

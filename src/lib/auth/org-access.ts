@@ -68,7 +68,7 @@
  */
 import { NextResponse } from 'next/server';
 import { MUST_CHANGE_PASSWORD, sessionIdOf } from '@/lib/labelos/team-accounts';
-import { sessionMustChangePassword } from '@/lib/labelos/team-accounts-store';
+import { sessionAccountState } from '@/lib/labelos/team-accounts-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createServiceClient, type AdminClient, type OwnershipFail } from '@/lib/auth/ownership';
 import {
@@ -254,21 +254,25 @@ async function memberContext(
 ): Promise<OrgAccessResult> {
   const admin = createServiceClient();
   let membership: Awaited<ReturnType<typeof readMembership>>;
-  let mustChangePassword: boolean;
+  let account: Awaited<ReturnType<typeof sessionAccountState>>;
   try {
     // Doc 25: a team account still on its org-given password reaches no org
     // route until it chooses its own (src/proxy.ts refuses first; this holds
     // without the proxy). Read alongside the membership; any error reads as false.
-    [membership, mustChangePassword] = await Promise.all([
+    [membership, account] = await Promise.all([
       readMembership(admin, orgId, userId),
-      sessionMustChangePassword(userId, admin),
+      sessionAccountState(userId, admin),
     ]);
   } catch (err) {
     log.error('membership read failed', { orgId, error: err instanceof Error ? err.message : String(err) });
     return fail(500, 'Could not check organization access');
   }
   if (!membership) return missing();
-  if (mustChangePassword) {
+  // Review G12: a team account the org switched off reaches nothing, whatever its token still says.
+  if (account.disabled) {
+    return { ok: false, res: NextResponse.json({ error: 'This account has been switched off', accountDisabled: true }, { status: 403 }) };
+  }
+  if (account.mustChangePassword) {
     return { ok: false, res: NextResponse.json({ error: MUST_CHANGE_PASSWORD, mustChangePassword: true }, { status: 403 }) };
   }
   let artistScope: ArtistScope;

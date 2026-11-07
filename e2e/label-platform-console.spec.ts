@@ -113,7 +113,11 @@ test('1–3 · create a label licensee in the console, its owner joins, modules 
   // Without contracts: no Legal queue entry, page and route 404 — for the org's own OWNER.
   await op2.goto(`/o/${SLUG}`);
   await expect(op2.getByRole('navigation').getByRole('button', { name: 'Organization' })).toBeVisible();
-  await expect(op2.getByRole('navigation').getByRole('button', { name: 'Rights' })).toHaveCount(0);
+  // The Rights hub stays (Parties is not part of the contracts module) but it holds no Legal queue entry.
+  await op2.getByRole('navigation').getByRole('button', { name: 'Rights' }).click();
+  await expect(op2.getByRole('link', { name: 'Parties' })).toBeVisible();
+  await expect(op2.getByRole('link', { name: 'Legal queue' })).toHaveCount(0);
+  await op2.keyboard.press('Escape');
   expect((await op2.goto(`/o/${SLUG}/rights/legal`))!.status()).toBe(404);
   expect((await op2.request.get(`/api/org/${orgId}/legal/queue`)).status()).toBe(404);
 
@@ -149,7 +153,8 @@ test('1–3 · create a label licensee in the console, its owner joins, modules 
   // Every console action is recorded in the org it acted on, by the operator.
   const events = await rest(page.request, 'GET', `activity_events?org_id=eq.${orgId}&actor_id=eq.${PRODUCER_ID}&select=verb,audit&order=created_at,verb`); // one transaction shares a timestamp: verb breaks the tie
   expect(events).toEqual([
-    { verb: 'org.created', audit: false },
+    // Migration 195 (LABEL-75): a console-created licensee's `org.created` is audit-class.
+    { verb: 'org.created', audit: true },
     { verb: 'org.entitlements_changed', audit: true },
     { verb: 'invitation.created', audit: true },
     { verb: 'org.entitlements_changed', audit: true },

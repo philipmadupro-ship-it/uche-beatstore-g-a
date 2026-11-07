@@ -65,7 +65,7 @@ describe('the seven 08 §A2 queries, run by the owner', () => {
     expect(await songsOf(OWN, Q['involving'])).toEqual(want(S1, S3, S4));
   });
   it('6. unreleased songs featuring Bea', async () => {
-    expect(await songsOf(OWN, Q['unreleased-featuring'])).toEqual(want(S1)); // S3 is on a release
+    expect(await songsOf(OWN, Q['unreleased-featuring'])).toEqual(want(S1, S3)); // S3 is only on a DRAFT release (LABEL-56): not released until it is delivered
   });
   it('7. songs where splits are not complete', async () => {
     expect(await songsOf(OWN, Q['splits-incomplete'])).toEqual(want(S2, S4));

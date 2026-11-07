@@ -32,7 +32,17 @@ import { isLive } from './splits';
 // ── Vocabulary ──────────────────────────────────────────────────────────
 
 export const GATES = ['master', 'artwork', 'legal', 'marketing', 'metadata'] as const;
-export type Gate = (typeof GATES)[number];
+export type CoreGate = (typeof GATES)[number];
+
+/**
+ * LABEL-68: the OPTIONAL sixth gate, creative approval (decided by `creative.approve`). It exists for an org only
+ * while `organizations.settings.creative_gate` is exactly `on`; `GATES` stays the five of 09 §2 so every place that
+ * loops them is unchanged for an org that never turns it on.
+ */
+export const CREATIVE_GATE = 'creative' as const;
+export type Gate = CoreGate | typeof CREATIVE_GATE;
+/** Every gate the database accepts on a release (migration 194's `approvals_gate_check`). */
+export const ALL_GATES = ['master', 'artwork', 'legal', 'marketing', 'metadata', 'creative'] as const satisfies readonly Gate[];
 
 /** The decisions a person records. Frame.io vocabulary (09 §6). */
 export const DECISIONS = ['approved', 'changes_requested'] as const;
@@ -54,6 +64,7 @@ export const GATE_LABEL: Record<Gate, string> = {
   legal: 'Legal',
   marketing: 'Marketing',
   metadata: 'Metadata',
+  creative: 'Creative',
 };
 
 export const DECISION_LABEL: Record<Decision, string> = {
@@ -63,15 +74,26 @@ export const DECISION_LABEL: Record<Decision, string> = {
 
 export const NOTE_MAX = 2000;
 
-export const isGate = (v: unknown): v is Gate => typeof v === 'string' && (GATES as readonly string[]).includes(v);
+export const isGate = (v: unknown): v is Gate => typeof v === 'string' && (ALL_GATES as readonly string[]).includes(v);
 export const isDecision = (v: unknown): v is Decision => typeof v === 'string' && (DECISIONS as readonly string[]).includes(v);
 export const isSubjectKind = (v: unknown): v is SubjectKind => typeof v === 'string' && (SUBJECT_KINDS as readonly string[]).includes(v);
 
-/** `release.approve.<gate>`. */
-export const gateCapability = (gate: Gate): Capability => `release.approve.${gate}` as Capability;
+/** `release.approve.<gate>`; the creative gate is decided by `creative.approve` (LABEL-68), a capability of the artistic department. */
+export const gateCapability = (gate: Gate): Capability => (gate === CREATIVE_GATE ? 'creative.approve' : (`release.approve.${gate}` as Capability));
 
-export const gatesFor = (kind: SubjectKind): readonly Gate[] => (kind === 'song' ? SONG_GATES : GATES);
-export const gateAppliesTo = (kind: SubjectKind, gate: Gate): boolean => gatesFor(kind).includes(gate);
+/** The abilities that let a member see approvals at all (the policy of migration 157). Pure, so the screen asks the same question the route does. */
+export function mayReadApprovals(caps: ReadonlySet<string>): boolean {
+  return caps.has('release.write') || ALL_GATES.some((g) => caps.has(gateCapability(g)));
+}
+
+/**
+ * The gates a subject can be asked for. A release takes the five of 09 §2, and the creative one only when the org has
+ * switched it on (`creative`); the default is off, so nothing changes for an org that never asked for it.
+ */
+export const gatesFor = (kind: SubjectKind, opts: { creative?: boolean } = {}): readonly Gate[] =>
+  kind === 'song' ? SONG_GATES : opts.creative ? ALL_GATES : GATES;
+/** Whether the gate exists on this kind of subject at all (the setting is judged separately by the route). */
+export const gateAppliesTo = (kind: SubjectKind, gate: Gate): boolean => (kind === 'song' ? SONG_GATES : ALL_GATES).includes(gate);
 
 /** Owner and admin may do what the rules deny to everyone else (D4 note): approve their own request. */
 export const isOwnerOrAdmin = (role: string): boolean => role === 'owner' || role === 'admin';
@@ -190,6 +212,8 @@ export const SNAPSHOT_PARTS: Readonly<Record<Gate, readonly PartName[]>> = {
   master: ['items'],
   metadata: ['items', 'release', 'details'],
   marketing: [],
+  // LABEL-68: the creative sign-off covers what the audience will see and hear: the artwork and the running order.
+  creative: ['artwork', 'items'],
 };
 
 export type Snapshot = { v: typeof SNAPSHOT_VERSION; gate: Gate; parts: Partial<Record<PartName, unknown>> };
@@ -389,7 +413,7 @@ export type DecideInput = {
  *  - needs `release.approve.<gate>`;
  *  - "Changes requested" needs a note (what to change);
  *  - "Approved" must carry `seen`, the key of what the approver's screen showed
- *    (doc 21 #14): none is a 400, one that no longer matches the facts a 409
+ *    (doc 21 #14): none is a 400 (after the request check), one that no longer matches the facts a 409
  *    `changed_since_seen`, so an approval records what was looked at;
  *  - approving needs an open request addressed to the decider, and nobody
  *    answers their own — owner and admin are exempt from both (`approveBlocker`,
@@ -413,9 +437,10 @@ export function planDecide(input: DecideInput): Plan<{ gate: Gate; decision: Dec
 
   const pending = input.current.pending;
   if (input.decision === 'approved') {
-    if (!input.seen || input.seen.trim().length === 0) return refuse(400, 'seen_required', 'Open it and look before approving');
+    // The request is answered first: with none addressed to you, "open it and look" is not the next step.
     const blocked = approveBlocker(input.actor, pending);
     if (blocked) return refuse(403, blocked.code, blocked.message);
+    if (!input.seen || input.seen.trim().length === 0) return refuse(400, 'seen_required', 'Open it and look before approving');
     if (input.kind === 'song' && gate === 'legal' && input.songOnRelease) {
       return refuse(409, 'decided_on_release', 'This song is on a release. Legal is approved on the release.');
     }

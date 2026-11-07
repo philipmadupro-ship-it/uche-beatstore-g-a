@@ -136,6 +136,20 @@ describe('GET /api/cron/purge-deleted-orgs', () => {
     expect(ids().filter((id) => String(id).startsWith('x'))).toHaveLength(3);
   });
 
+  it('stops starting purges once the 45 s budget is spent (LABEL-75)', async () => {
+    const real = Date.now;
+    let calls = 0;
+    // The first purge starts at once; every later read of the clock is 46 s on.
+    vi.spyOn(Date, 'now').mockImplementation(() => (calls++ < 2 ? real() : real() + 46_000));
+    try {
+      const body = await (await GET(request('cron-secret'))).json();
+      expect(body.purged).toBeLessThan(2);
+      expect(ids().length).toBeGreaterThan(2); // one due org left for tomorrow
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it('a stuck org does not starve the ones behind it', async () => {
     for (let i = 0; i < 8; i += 1) db.tables.organizations.push({ id: `y${i}`, name: 'y', slug: `y${i}`, kind: 'label', deleted_at: daysAgo(200 + i) });
     deleteOrgObjects.mockImplementation(async (id: string) => {

@@ -43,8 +43,12 @@ jobs:
 
       # Type-check standalone first — gives a fast, focused error
       # message before the slower `next build` runs.
+      # The whole-repo program is now ~2.3 GB (Label OS), over node's default ~2 GB heap:
+      # `tsc` died with "JavaScript heap out of memory" on the integration branch itself.
       - name: Type-check
         run: npx tsc --noEmit
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       # ESLint — errors block, warnings don't (87 pre-existing warnings as of
       # 2026-09-17). Catches hook-rule and unused-import mistakes tsc misses.
@@ -98,6 +102,13 @@ jobs:
   # project-and-playlist and the 6 scale specs, which only run under
   # `npm run e2e:scale`. If it ever reports more skips than that, something
   # broke — do not treat a green-with-skips run as a pass.
+  #
+  # Label OS is OFF here on purpose (LABEL_OS_ENABLED=false, stated rather than
+  # left unset): this job is the proof that the producer dashboard, the store
+  # and checkout behave exactly as before with the switch off. The 55 specs
+  # that drive Label OS and the artist workspace need a real database
+  # (scripts/local-db) and run under `npm run e2e:real-db`; playwright.config.ts
+  # finds them by their E2E_REAL_DB marker and leaves them out of this run.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -122,6 +133,7 @@ jobs:
         env:
           CI: 'true'
           ENABLE_LOCAL_STORE: 'true'
+          LABEL_OS_ENABLED: 'false'
           # Public values the browser Supabase client needs in order to
           # construct at all. The server still uses the local store, because
           # there's no service-role key.

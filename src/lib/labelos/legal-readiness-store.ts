@@ -12,6 +12,7 @@
  * The sample declaration is migration 156's `tracks.samples_declared` (+ a
  * clearance note / file). Without 156 it reads `unknown`, a blocker by the spec.
  */
+import { RELEASE_STATES_NOT_GOING_OUT } from './releases';
 import type { AdminClient } from '@/lib/auth/ownership';
 import { CreditsNotReadyError, listCredits, partiesByIds } from './credits-store';
 import { isCreditScope } from './credit-roles';
@@ -91,7 +92,7 @@ export async function releaseFacts(admin: AdminClient, org: string, trackId: str
   if (rows.length === 0) return { onRelease: false, masterTrackId: null };
   const releases = await admin.from('releases').select('id, state').eq('org_id', org).in('id', rows.map((r) => r.release_id));
   if (releases.error) fail('releases read', releases.error);
-  const live = new Set(((releases.data ?? []) as { id: string; state: string }[]).filter((r) => r.state !== 'cancelled').map((r) => r.id));
+  const live = new Set(((releases.data ?? []) as { id: string; state: string }[]).filter((r) => !RELEASE_STATES_NOT_GOING_OUT.includes(r.state)).map((r) => r.id));
   const item = rows.find((r) => live.has(r.release_id));
   return item ? { onRelease: true, masterTrackId: item.master_track_id } : { onRelease: false, masterTrackId: null };
 }

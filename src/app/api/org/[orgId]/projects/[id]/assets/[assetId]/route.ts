@@ -18,7 +18,7 @@ import { OrgAssetPatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { fileEventVisibility, recordEvent } from '@/lib/labelos/activity';
 import { createLogger } from '@/lib/log';
-import { canWriteOrgAsset, ORG_ASSET_COLUMNS, resolveSensitivity, toOrgAssetView, type AssetSensitivity, type OrgAssetRow } from '@/lib/labelos/org-assets';
+import { canWriteOrgAsset, declassifyRefusal, ORG_ASSET_COLUMNS, resolveSensitivity, toOrgAssetView, type AssetSensitivity, type OrgAssetRow } from '@/lib/labelos/org-assets';
 import { deleteProjectAssetObject } from '@/lib/storage/project-assets';
 import { orgAssetRow } from '../access';
 
@@ -45,6 +45,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!canWriteOrgAsset(access.capabilities, { kind, sensitivity })) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  const declassify = declassifyRefusal(current, { kind, sensitivity });
+  if (declassify) return NextResponse.json({ error: declassify }, { status: 409 });
 
   try {
     const patch: Record<string, unknown> = { ...parsed.data, sensitivity, updated_at: new Date().toISOString() };

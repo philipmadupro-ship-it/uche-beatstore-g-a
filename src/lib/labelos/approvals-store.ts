@@ -12,6 +12,7 @@
  * `ApprovalsNotReadyError`, which the routes answer as "not set up yet" (GET:
  * `schemaReady: false`; writes: 503), never a raw 500.
  */
+import { RELEASE_STATES_NOT_GOING_OUT } from './releases';
 import { capabilitiesFor } from './capabilities';
 import { objectAccessFor } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
@@ -80,16 +81,18 @@ type ReleaseFacts = {
 };
 
 const RELEASE_FIELDS = ['title', 'type', 'upc', 'label_name', 'c_line', 'p_line', 'primary_genre', 'target_date', 'release_date'] as const;
+/** Migration 175's details: part of what the metadata approval covers, so changing one stales it. `territories` is held as one comma-joined string. */
+const RELEASE_DETAIL_FIELDS = ['distributor', 'language', 'territories'] as const;
 
 /** One release and its tracklist in order. Null when it is not a release of `org`. */
 export async function readReleaseFacts(admin: AdminClient, org: string, releaseId: string): Promise<ReleaseFacts | null> {
   if (!isUUID(releaseId)) return null;
-  const rel = await admin
-    .from('releases')
-    .select(`id, contact_id, project_id, artwork_asset_id, ${RELEASE_FIELDS.join(', ')}`)
-    .eq('id', releaseId)
-    .eq('org_id', org)
-    .maybeSingle();
+  const read = (fields: readonly string[]) =>
+    admin.from('releases').select(`id, contact_id, project_id, artwork_asset_id, ${fields.join(', ')}`).eq('id', releaseId).eq('org_id', org).maybeSingle();
+  let rel = await read([...RELEASE_FIELDS, ...RELEASE_DETAIL_FIELDS]);
+  // Before 175 the three details do not exist: the snapshot is taken without them, as before.
+  const withoutDetails = !!rel.error && /\b(distributor|territories|language)\b/.test(rel.error.message ?? '');
+  if (withoutDetails) rel = await read(RELEASE_FIELDS);
   if (rel.error) throw new Error(`release read: ${rel.error.message}`);
   const row = rel.data as unknown as Record<string, string | null> | null;
   if (!row) return null;
@@ -100,7 +103,16 @@ export async function readReleaseFacts(admin: AdminClient, org: string, releaseI
     contactId: String(row.contact_id),
     projectId: String(row.project_id),
     artworkAssetId: row.artwork_asset_id ?? null,
-    fields: Object.fromEntries(RELEASE_FIELDS.map((f) => [f, row[f] ?? null])),
+    fields: {
+      ...Object.fromEntries(RELEASE_FIELDS.map((f) => [f, row[f] ?? null])),
+      ...(withoutDetails
+        ? {}
+        : {
+            distributor: row.distributor ?? null,
+            language: row.language ?? null,
+            territories: Array.isArray(row.territories) ? (row.territories as unknown as string[]).join(',') : null,
+          }),
+    },
     items: ((items.data ?? []) as unknown as { song_track_id: string; master_track_id: string; explicit: boolean | null; version_title: string | null }[]).map((i) => ({
       songId: i.song_track_id,
       masterId: i.master_track_id,
@@ -216,7 +228,7 @@ export async function releasesOfSong(admin: AdminClient, org: string, songId: st
   const rels = await admin.from('releases').select('id, title, state, contact_id').eq('org_id', org).in('id', ids.slice(0, 50));
   if (rels.error) throw new Error(`releases read: ${rels.error.message}`);
   return ((rels.data ?? []) as { id: string; title: string | null; state: string; contact_id: string | null }[])
-    .filter((r) => r.state !== 'cancelled')
+    .filter((r) => !RELEASE_STATES_NOT_GOING_OUT.includes(r.state))
     .map((r) => ({ id: r.id, title: r.title ?? 'Untitled release', contactId: r.contact_id }));
 }
 

@@ -40,6 +40,11 @@ const TITLE: Record<DirectAskKind, string> = {
   mention: 'mentioned you',
   credit_named_you: 'named you in a credit',
   invitation: 'invited you',
+  party_confirmation: 'asked you to confirm your rights details',
+  // LABEL-71: a release you are credited on is being put on the store; yours is the last word.
+  listing_proposed: 'asked for your say on putting a release on the store',
+  // LABEL-65: the marketing side asks the artist for material for a release's plan.
+  asset_requested: 'asked you for material for a release',
 };
 
 export const NOTIFICATION_TITLE_MAX = 160;

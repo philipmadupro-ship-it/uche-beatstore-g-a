@@ -103,6 +103,9 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
   const latest = useRef<ArInboxSong[]>([]);
   // The cursor, readable by a key pressed before React has re-rendered the one before it (J then Space in the same tick).
   const cursorRef = useRef<string | null>(null);
+  // Same reason for "may this viewer review": `act` is re-registered in a passive effect after the render that carries the
+  // first answer, so a key pressed in that gap saw `canReview` still false and toasted "You can read reviews but not add one".
+  const canReviewRef = useRef(false);
 
   const songs = useMemo(() => inbox?.songs ?? [], [inbox]);
   useEffect(() => { latest.current = songs; }, [songs]);
@@ -120,6 +123,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
     if (seq !== reloadSeq.current) return;
     if (!next) { setFailed(true); return; }
     setFailed(false);
+    canReviewRef.current = next.canReview;
     const gone = keep?.removed ?? new Set(before.filter((id) => !next.songs.some((s) => s.id === id)));
     setCursor(cursorAfterRemoval(before, cursorRef.current, gone) ?? next.songs[0]?.id ?? null);
     latest.current = next.songs;
@@ -133,6 +137,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
       if (cancelled) return;
       if (!next) { setFailed(true); return; }
       latest.current = next.songs;
+      canReviewRef.current = next.canReview;
       setInbox(next);
       setCursor(next.songs[0]?.id ?? null);
     });
@@ -171,11 +176,11 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
   }, [orgId, reload]);
 
   const saveReview = useCallback((song: ArInboxSong, patch: ReviewPatch) => {
-    if (!canReview) { toast.error('You can read reviews but not add one.'); return Promise.resolve(); }
+    if (!canReviewRef.current) { toast.error('You can read reviews but not add one.'); return Promise.resolve(); }
     // Saves and stage moves share one queue: each starts when the one before has answered.
     chain.current = chain.current.then(() => runSave(song.id, patch)).catch(() => undefined);
     return chain.current;
-  }, [canReview, runSave]);
+  }, [runSave]);
 
   const runMove = useCallback(async (ids: readonly string[], to: SongStage) => {
     const targets = latest.current.filter((s) => ids.includes(s.id));
@@ -230,7 +235,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
       case 'stage': if (focused) void moveStage(selected.size > 0 ? [...selected] : [focused.id], a.to); return;
       case 'comment':
         if (!focused) return;
-        if (!canReview) { toast.error('You can read reviews but not add one.'); return; }
+        if (!canReviewRef.current) { toast.error('You can read reviews but not add one.'); return; }
         setNoteDraft(focused.mine?.note ?? '');
         noteClosed.current = false;
         setNoteFor(focused.id);
@@ -239,7 +244,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
         if (focused) setSelected((sel) => { const n = new Set(sel); if (n.has(focused.id)) n.delete(focused.id); else n.add(focused.id); return n; });
         return;
     }
-  }, [selected, canReview, saveReview, moveStage, togglePlay, setCursor]);
+  }, [selected, saveReview, moveStage, togglePlay, setCursor]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -267,7 +272,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
     await saveReview(focused, { note: next === '' ? null : next });
   };
 
-  if (failed && !inbox) return <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/60" data-testid="ar-failed">Could not load the inbox. Reload to try again.</p>;
+  if (failed && !inbox) return <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/60" data-testid="ar-failed">Could not load the inbox. Reload to try again.</p>;
   if (!inbox) return <p className="text-[11px] text-white/40" data-testid="ar-loading">Loading the inbox…</p>;
 
   const offered = focused ? offeredStageKeys(focused.stage, caps, role) : [];
@@ -282,11 +287,11 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
       </p>
 
       {songs.length === 0 ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/40" data-testid="ar-empty">
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/40" data-testid="ar-empty">
           Nothing is waiting for review.{inbox.restricted > 0 ? ` ${inbox.restricted} more ${inbox.restricted === 1 ? 'song is' : 'songs are'} restricted for your role.` : ''}
         </p>
       ) : (
-        <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[#0D0D0A]" aria-label="Songs to review" data-testid="ar-list">
+        <ul className="divide-y divide-white/10 overflow-hidden rounded-xl border border-white/10 bg-[var(--surface-primary)]" aria-label="Songs to review" data-testid="ar-list">
           {songs.map((s) => {
             const on = s.id === cursor;
             const playing = currentId === s.id && isPlaying;
@@ -337,7 +342,7 @@ export function ArInboxView({ orgId, orgSlug }: { orgId: string; orgSlug: string
       )}
 
       {focused && (
-        <section className="space-y-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" aria-label={`Reviews of ${focused.title ?? 'Untitled'}`} data-testid="ar-detail">
+        <section className="space-y-3 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4" aria-label={`Reviews of ${focused.title ?? 'Untitled'}`} data-testid="ar-detail">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-[13px] text-white/80">{focused.title ?? 'Untitled'}</h2>
             <Link href={`/o/${orgSlug}/songs/${focused.id}`} className="text-[11px] text-white/60 hover:text-white">Open song</Link>

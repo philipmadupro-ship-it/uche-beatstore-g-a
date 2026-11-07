@@ -14,6 +14,7 @@ import { PageContainer } from '@/components/layout/PageHeader';
 import { MyWorkPanel } from '@/components/labelos/MyWorkPanel';
 import { NeedsAttention } from '@/components/labelos/NeedsAttention';
 import { OrgOverviewView } from '@/components/labelos/OrgOverviewView';
+import { RoleHomeTiles } from '@/components/labelos/RoleHomeTiles';
 import { OverviewDigest } from '@/components/labelos/OverviewDigest';
 import { orgShellFor, requireOrgCapability } from '@/lib/auth/org-access';
 import { loadOverviewDigest } from '@/lib/labelos/activity-store';
@@ -21,6 +22,7 @@ import { loadAttention } from '@/lib/labelos/attention-store';
 import { errorMessage } from '@/lib/errors';
 import { loadOrgOverview } from '@/lib/labelos/overview-store';
 import { createLogger } from '@/lib/log';
+import { homeTiles, roleViewFor, viewInputOf } from '@/lib/labelos/role-view';
 import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
 import { notFound } from 'next/navigation';
 
@@ -47,6 +49,11 @@ export default async function OrgHome({ params }: { params: Promise<{ orgSlug: s
     }),
   ]);
   const limited = access.artistScope !== null;
+  // LABEL-70: an independent artist and a label's roster artist get their own home, not the label's roster table.
+  const viewInput = viewInputOf(shell);
+  const tiles = homeTiles(shell.org.slug, viewInput);
+  const own = tiles.length > 0;
+  const view = roleViewFor(viewInput);
 
   return (
     <PageContainer>
@@ -58,12 +65,19 @@ export default async function OrgHome({ params }: { params: Promise<{ orgSlug: s
           Overview
         </h1>
         <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-white/70">
-          {limited ? 'Where the artists you work on stand.' : 'Where every artist on the roster stands.'}
+          {own
+            ? view === 'independent'
+              ? 'Your music, your releases, your money and your contracts.'
+              : 'Your songs, your releases and what waits for you.'
+            : limited
+              ? 'Where the artists you work on stand.'
+              : 'Where every artist on the roster stands.'}
         </p>
       </header>
+      {own && <RoleHomeTiles tiles={tiles} songCount={overview.totals.songs} />}
       {attention && <NeedsAttention items={attention.items} restricted={attention.restricted} releasesReady={attention.releasesReady} />}
       <MyWorkPanel orgId={shell.org.id} orgSlug={shell.org.slug} />
-      <OrgOverviewView orgSlug={shell.org.slug} overview={overview} limited={limited} />
+      {!own && <OrgOverviewView orgSlug={shell.org.slug} overview={overview} limited={limited} />}
       {digest && <OverviewDigest orgId={shell.org.id} orgSlug={shell.org.slug} viewerId={access.userId} feed={digest.feed} since={digest.since} lastSeenAt={digest.lastSeenAt} />}
     </PageContainer>
   );

@@ -8,13 +8,17 @@
  * `release.write` on the release (requireObjectAccess: 404 for another org's
  * release, one outside the member's artists or a producer-side id). The rules
  * are the pure lib/labelos/store-listing:
- *   - only a released release lists (delivered with its date come, or
- *     imported as already out); anything else is 409, nothing is written;
+ *   - a delivered release lists, even before its date, as a TEASER (preview
+ *     clips only, LABEL-72); an imported one lists as already out; a draft,
+ *     cancelled or withdrawn release is 409, nothing is written;
  *   - only the store owner's studio, or an artist connected to it, may list
  *     (Phase 8 brings label / artist storefronts): any other org is 409;
  *   - listing in `preview` mode COPIES each item's private clip to the public
- *     bucket (`promotePreviews`); `full` mode copies nothing — the master is
- *     streamed through the server by /api/store/releases/[id]/audio/[item];
+ *     bucket (`promotePreviews`); `full` mode (only from the release date; a
+ *     stored `full` reads as preview whenever the date has not come) cuts a lossy
+ *     full-length copy of each master into the PRIVATE bucket
+ *     (`ensureFullDerivative`) and the server streams that copy in bounded
+ *     partials from /api/store/releases/[id]/audio/[item] — never the master;
  *   - unlisting deletes the promoted previews only if the music was never
  *     publicly out AND the owner asked for it (the GET says when to ask).
  * Both directions are AUDIT events (`release.store_listed` / `…_unlisted`):
@@ -22,17 +26,35 @@
  * cannot be written — a public listing with no record cannot stand.
  * Migration 158 (`store_playback`) missing: GET reads as 'preview'; choosing
  * `full` answers 503 naming it.
+ *
+ * ARTIST CONSENT (LABEL-71, migration 186). Listing asks every credited artist
+ * (the release's artist plus the roster artists behind confirmed credits on
+ * its songs) for their say: a `proposed` row each, and one `listing_proposed`
+ * notification per account that stands for them. Silence does not block — the
+ * release serves — but any artist's `no` is final: `planList` refuses to list
+ * (or re-list) until that artist says yes, and the public routes stop serving
+ * on the next request. An artist with no account in the org cannot be told and
+ * is counted as unreachable in the answer; nothing is invented for them. The
+ * artists' proposals are written BEFORE the release goes public, so a failure
+ * there leaves it private. Migration 186 missing: no consent step (the store
+ * behaves as it did before LABEL-71).
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { orgHasModule, requireObjectAccess } from '@/lib/auth/org-access';
+import { orgHasModule, requireObjectAccess, type OrgAccessOk } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { OrgReleaseStoreBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
+import { auditRpc, isMissingAtomicRpc } from '@/lib/labelos/audit-rpc';
+import { readItemsKey, storeExpectation } from '@/lib/labelos/release-fingerprint';
 import { releaseEventSubject } from '@/lib/labelos/releases';
-import { planList, planUnlist, releasedPublicly, type ListingFacts } from '@/lib/labelos/store-listing';
+import { effectivePlayback, isReleasedForStore, planList, planUnlist, releasedPublicly, type ListingFacts } from '@/lib/labelos/store-listing';
+import { proposalRecipients, summarizeConsents, planProposal, answerableContacts } from '@/lib/labelos/store-consent';
+import { blockedByConsent, enforceRefusal, insertProposals, loadAccountLinks, loadCreditedArtists, readConsents, readVeto } from '@/lib/labelos/store-consent-store';
+import { askArtistsAboutListing } from '@/lib/labelos/store-consent-notify';
+import { askerName } from '@/lib/labelos/tasks-store';
 import {
   blockedItems,
   loadListingItems,
@@ -41,11 +63,14 @@ import {
   readPlayback,
 } from '@/lib/labelos/store-listing-store';
 import { deletePromotedPreviews, promotePreviews } from '@/lib/storage/store-release-media';
+import { ensureFullDerivative } from '@/lib/storage/org-derivative';
 import { isR2Configured } from '@/lib/local-store';
 import { fail, importedNeedsOwnerOrAdmin, schemaAware } from '../../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Cutting the full-length listening copies of a long tracklist is ffmpeg work; a retry skips the ones already made.
+export const maxDuration = 300;
 
 const log = createLogger('api.org.releases.store');
 
@@ -60,6 +85,48 @@ function stateOf(r: ListingFacts & { store_listed_at: string | null }, playback:
   return { listed: r.store_listed, listedAt: r.store_listed_at, playback, canList, unlist: { askToDeletePreviews: r.store_listed && ask } };
 }
 
+/**
+ * What the viewer may read of the consent step: the rolled-up status of the release, one line per artist
+ * IN THEIR OWN SCOPE (a member limited to some artists is not told the others' names or answers), and the
+ * contacts they themselves answer for (an artist sees their own question here too).
+ */
+async function consentView(
+  access: OrgAccessOk,
+  release: { id: string },
+  consents: Awaited<ReturnType<typeof readConsents>>,
+) {
+  if (!consents.schemaReady) return { schemaReady: false };
+  const summary = summarizeConsents(consents.rows);
+  const scope = access.artistScope === null ? null : new Set([...access.artistScope].map((c) => c.toLowerCase()));
+  const visible = consents.rows.filter((r) => scope === null || scope.has(r.artist_contact_id));
+  const ids = visible.map((r) => r.artist_contact_id);
+  const names = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data } = await access.admin.from('contacts').select('id, name').eq('org_id', access.orgId).in('id', ids);
+    for (const c of (data ?? []) as { id: string; name: string | null }[]) names.set(c.id.toLowerCase(), c.name ?? 'Artist');
+  }
+  const mine = new Set(await answerableForViewer(access, consents));
+  return {
+    schemaReady: true,
+    status: summary.status,
+    artists: visible.map((r) => ({ contactId: r.artist_contact_id, name: names.get(r.artist_contact_id) ?? 'Artist', state: r.state, decidedAt: r.decided_at, mine: mine.has(r.artist_contact_id) })),
+    releaseId: release.id,
+  };
+}
+
+async function answerableForViewer(access: OrgAccessOk, consents: Awaited<ReturnType<typeof readConsents>>): Promise<string[]> {
+  const links = await loadAccountLinks(access.admin, access.orgId, consents.rows.map((r) => r.artist_contact_id));
+  return answerableContacts(links, access.userId);
+}
+
+async function consentStatus(admin: OrgAccessOk['admin'], releaseId: string) {
+  try {
+    return summarizeConsents((await readConsents(admin, releaseId)).rows).status;
+  } catch {
+    return 'waiting' as const;
+  }
+}
+
 export async function GET(_req: NextRequest, { params }: Params) {
   const { orgId, releaseId } = await params;
   if (!isSupabaseConfigured()) return json(501, { error: 'Releases need Supabase.' });
@@ -72,17 +139,25 @@ export async function GET(_req: NextRequest, { params }: Params) {
     // Store listing is a licensed module (LABEL-47): absent for an org without it — except a release that is
     // still listed from before the module was withdrawn, which must stay readable so it can be taken off.
     if (!orgHasModule(access, 'store') && !release.store_listed) return json(404, { error: 'Not found' });
-    const [owner, items, { playback, schemaReady }] = await Promise.all([
+    const [owner, items, { playback, schemaReady }, consents, veto] = await Promise.all([
       loadStoreOwnerOrgs(access.admin),
       loadListingItems(access.admin, org, release.id),
       readPlayback(access.admin, release.id),
+      readConsents(access.admin, release.id),
+      readVeto(access.admin, release.id),
     ]);
     const now = new Date();
-    const plan = planList({ release, itemCount: items.length, orgId: org, owner, currentPlayback: playback, blockedItems: blockedItems(items) }, now);
+    const plan = planList({ release, itemCount: items.length, orgId: org, owner, currentPlayback: playback, blockedItems: blockedItems(items), consent: consents.rows, vetoed: veto.vetoed }, now);
     const unlist = planUnlist({ ...release, store_listed: true }, false, now);
     return json(200, {
       ...stateOf(release, playback, plan.ok ? { ok: true } : { ok: false, error: plan.error, field: plan.field ?? null }, unlist.ok && unlist.askToDeletePreviews),
       playbackChoice: schemaReady,
+      // LABEL-72: what visitors hear now, and whether full songs can be chosen yet (they can from the release date).
+      effectivePlayback: effectivePlayback(playback, release, now),
+      fullAvailable: isReleasedForStore(release, now),
+      releaseDate: release.release_date,
+      consent: await consentView(access, release, consents),
+      vetoed: veto.vetoed,
     });
   } catch (err) {
     log.error('state failed', { releaseId, error: errorMessage(err) });
@@ -107,7 +182,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const actor = { orgId: org, userId: access.userId };
 
   let release;
+  // Read BEFORE the facts the plan is made from (187): anything that changes after is caught under the lock.
+  let itemsKey: string;
   try {
+    itemsKey = await readItemsKey(admin, access.object.id);
     release = await loadListingRelease(admin, org, access.object.id);
   } catch (err) {
     log.error('read failed', { releaseId, error: errorMessage(err) });
@@ -130,31 +208,64 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (!plan.ok) return json(plan.status, { error: plan.error, field: plan.field });
     // Playback goes back to the default with the listing: a later listing by someone who may not choose
     // `full` must not inherit a manager's earlier choice.
-    const was = await readPlayback(admin, release.id);
-    const before = { store_listed: true, store_listed_at: release.store_listed_at, ...(was.schemaReady ? { store_playback: was.playback } : {}) };
-    const { data, error } = await admin
-      .from('releases')
-      .update({ store_listed: false, store_listed_at: null, ...(was.schemaReady ? { store_playback: 'preview' } : {}) })
-      .eq('id', release.id)
-      .eq('org_id', org)
-      .eq('store_listed', true)
-      .select('id')
-      .maybeSingle();
-    if (error) return fail(500, 'Could not take the release off the store').res;
-    if (!data) return json(409, { error: 'This release is not on the store', field: 'store_listed' });
+    // 187: the change and `release.store_unlisted` in one transaction, against the facts the plan read.
+    let atomic = false;
     try {
-      await recordEvent(admin, actor, 'release.store_unlisted', subject, {
-        askedToDeletePreviews: plan.askToDeletePreviews,
-        deletePreviews: plan.deletePreviews,
+      const { data, error: rpcError } = await auditRpc(admin, 'releaseStore', {
+        p_org: org,
+        p_actor: access.userId,
+        p_release: release.id,
+        p_list: false,
+        p_playback: null,
+        p_expect: storeExpectation(release, itemsKey),
+        p_ctx: { artist_id: release.contact_id, project_id: release.project_id },
+        p_payload: { askedToDeletePreviews: plan.askToDeletePreviews, deletePreviews: plan.deletePreviews },
       });
-    } catch (err) {
-      log.error('unlist audit failed', { releaseId, error: errorMessage(err) });
-      const { error: revertError } = await admin.from('releases').update(before).eq('id', release.id).eq('org_id', org).eq('store_listed', false);
-      if (revertError) {
-        log.error('unlist put-back FAILED: release is off the store without its event', { releaseId, error: revertError.message });
-        return json(500, { error: 'The release is off the store, but the record of it could not be written. Nothing is public; putting it on and taking it off again is safe.', listed: false });
+      if (!rpcError) {
+        if (data?.error === 'not_listed') return json(409, { error: 'This release is not on the store', field: 'store_listed' });
+        if (data?.error === 'changed') return json(409, { error: 'The release changed while it was being taken off; check it and try again', field: 'state' });
+        if (data?.error === 'not_found') return json(404, { error: 'Not found' });
+        atomic = true;
+      } else if (!isMissingAtomicRpc(rpcError)) {
+        log.error('unlist failed', { releaseId, error: rpcError.message });
+        return json(500, { error: 'Could not take the release off the store' });
       }
+    } catch (err) {
+      log.error('unlist failed', { releaseId, error: errorMessage(err) });
       return json(500, { error: 'Could not take the release off the store' });
+    }
+    if (!atomic) {
+      // Migration 187 is not applied: change, then event, put back on failure.
+      const legacy = await (async (): Promise<Response | null> => {
+        const was = await readPlayback(admin, release.id);
+        const before = { store_listed: true, store_listed_at: release.store_listed_at, ...(was.schemaReady ? { store_playback: was.playback } : {}) };
+        const { data, error } = await admin
+          .from('releases')
+          .update({ store_listed: false, store_listed_at: null, ...(was.schemaReady ? { store_playback: 'preview' } : {}) })
+          .eq('id', release.id)
+          .eq('org_id', org)
+          .eq('store_listed', true)
+          .select('id')
+          .maybeSingle();
+        if (error) return fail(500, 'Could not take the release off the store').res;
+        if (!data) return json(409, { error: 'This release is not on the store', field: 'store_listed' });
+        try {
+          await recordEvent(admin, actor, 'release.store_unlisted', subject, {
+            askedToDeletePreviews: plan.askToDeletePreviews,
+            deletePreviews: plan.deletePreviews,
+          });
+        } catch (err) {
+          log.error('unlist audit failed', { releaseId, error: errorMessage(err) });
+          const { error: revertError } = await admin.from('releases').update(before).eq('id', release.id).eq('org_id', org).eq('store_listed', false);
+          if (revertError) {
+            log.error('unlist put-back FAILED: release is off the store without its event', { releaseId, error: revertError.message });
+            return json(500, { error: 'The release is off the store, but the record of it could not be written. Nothing is public; putting it on and taking it off again is safe.', listed: false });
+          }
+          return json(500, { error: 'Could not take the release off the store' });
+        }
+        return null;
+      })();
+      if (legacy) return legacy;
     }
     let previewsDeleted = false;
     if (plan.deletePreviews) {
@@ -173,27 +284,57 @@ export async function PUT(req: NextRequest, { params }: Params) {
   let owner;
   let items;
   let current;
+  let consents;
+  let veto;
   try {
-    [owner, items, current] = await Promise.all([
+    [owner, items, current, consents, veto] = await Promise.all([
       loadStoreOwnerOrgs(admin),
       loadListingItems(admin, org, release.id),
       readPlayback(admin, release.id),
+      readConsents(admin, release.id),
+      readVeto(admin, release.id),
     ]);
   } catch (err) {
     log.error('listing facts failed', { releaseId, error: errorMessage(err) });
     return json(500, { error: 'Could not read the release' });
   }
   const plan = planList(
-    { release, itemCount: items.length, orgId: org, owner, playback: body.playback, currentPlayback: current.playback, blockedItems: blockedItems(items) },
+    { release, itemCount: items.length, orgId: org, owner, playback: body.playback, currentPlayback: current.playback, blockedItems: blockedItems(items), consent: consents.rows, vetoed: veto.vetoed },
     now,
   );
   if (!plan.ok) return json(plan.status, { error: plan.error, ...(plan.field ? { field: plan.field } : {}) });
   if (!current.schemaReady && body.playback === 'full') return NEEDS_158();
 
+  // Ask the credited artists BEFORE anything goes public: the proposals are plain rows (idempotent), so a
+  // failure here, or a later one, leaves the release private and the artists simply not yet notified.
+  let proposal: { asked: string[]; recipients: ReturnType<typeof proposalRecipients>['recipients']; unreachable: string[] } = { asked: [], recipients: [], unreachable: [] };
+  if (consents.schemaReady) {
+    try {
+      const credited = await loadCreditedArtists(admin, release);
+      const planned = planProposal(credited, consents.rows);
+      // A fresh listing asks everyone still unanswered (an earlier attempt may have written the rows but never
+      // got as far as the bell); a change to a listing already public only asks the artists newly credited.
+      const unanswered = new Set(consents.rows.filter((r) => r.state === 'proposed').map((r) => r.artist_contact_id));
+      const toAsk = plan.alreadyListed ? planned.insert : credited.filter((c) => planned.insert.includes(c) || unanswered.has(c));
+      const links = toAsk.length > 0 ? await loadAccountLinks(admin, org, toAsk) : [];
+      const who = proposalRecipients(toAsk, links, access.userId);
+      const { error: askError } = await insertProposals(admin, release, planned.insert, access.userId);
+      if (askError) {
+        log.error('consent proposals failed', { releaseId, error: askError.message });
+        return json(500, { error: 'Could not ask the artists on this release; nothing was listed' });
+      }
+      proposal = { asked: toAsk, recipients: who.recipients, unreachable: who.unreachable };
+    } catch (err) {
+      log.error('consent facts failed', { releaseId, error: errorMessage(err) });
+      return json(500, { error: 'Could not read who is credited on this release; nothing was listed' });
+    }
+  }
+
   // What a visitor can play must exist before the release is public.
   let promoted: string[] = [];
+  let derivatives = 0;
   try {
-    if (plan.playback === 'preview') {
+    if (plan.effective === 'preview') {
       promoted = await promotePreviews(org, release.id, items.map((i) => ({ masterTrackId: i.master_track_id, privatePreviewRef: i.master_preview_ref })));
       // ALL or nothing: a listed release with a silent track is worse than one that waits a few minutes.
       const missing = items.filter((i) => !promoted.includes(i.master_track_id));
@@ -205,32 +346,37 @@ export async function PUT(req: NextRequest, { params }: Params) {
           items: missing.map((i) => i.id),
         });
       }
-    } else if (!items.some((i) => i.master_audio_ref)) {
-      return json(409, { error: 'None of the recordings on this release can be played', field: 'items' });
+    } else {
+      // Full songs (LABEL-72) are a lossy full-length copy cut from each master into the private bucket; the
+      // master itself is never what a visitor streams. All or nothing, like the previews; a retry only cuts what
+      // is missing. A few at a time: ffmpeg is the cost.
+      const ready: boolean[] = new Array(items.length).fill(false);
+      let next = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(3, items.length) }, async () => {
+          while (next < items.length) {
+            const at = next++;
+            ready[at] = await ensureFullDerivative(org, items[at].master_track_id, items[at].master_audio_ref);
+          }
+        }),
+      );
+      const missing = items.filter((_, i) => !ready[i]);
+      if (missing.length > 0) {
+        return json(409, {
+          error: `The full-length listening copy of ${missing.map((i) => `“${i.title}”`).join(', ')} is not ready yet; try again in a few minutes`,
+          field: 'items',
+          items: missing.map((i) => i.id),
+        });
+      }
+      derivatives = items.length;
     }
   } catch (err) {
     log.error('promote failed', { releaseId, error: errorMessage(err) });
     return json(500, { error: 'Could not prepare the previews' });
   }
 
-  const before = { store_listed: release.store_listed, store_listed_at: release.store_listed_at };
-  const listedAt = release.store_listed_at ?? now.toISOString();
-  // Guarded: the statement itself repeats what the plan judged (state, import flag and release date as
-  // read), so a change between the plan and this write cannot store a listing for a release that is
-  // not out. The date of a release that went out is fixed by the PATCH route as well.
-  let guarded = admin
-    .from('releases')
-    .update({ store_listed: true, store_listed_at: listedAt, ...(current.schemaReady ? { store_playback: plan.playback } : {}) })
-    .eq('id', release.id)
-    .eq('org_id', org)
-    .eq('state', release.state)
-    .eq('imported_released', release.imported_released);
-  guarded = release.release_date === null ? guarded.is('release_date', null) : guarded.eq('release_date', release.release_date);
-  const { data: claimed, error } = await guarded.select('id').maybeSingle();
-  if (error) return fail(500, 'Could not put the release on the store').res;
-  if (!claimed) {
-    // The release changed under the plan. Copies promoted for it must not stay public if the music is not
-    // (and was not) publicly out — judged on the release as it is now.
+  /** The previews promoted for a first listing that did not happen. */
+  const dropPromoted = async () => {
     if (!plan.alreadyListed && promoted.length > 0) {
       try {
         const fresh = await loadListingRelease(admin, org, release.id);
@@ -239,31 +385,163 @@ export async function PUT(req: NextRequest, { params }: Params) {
         log.error('could not remove the previews promoted for a listing that did not happen', { releaseId, error: errorMessage(cleanupErr) });
       }
     }
-    return json(409, { error: 'The release changed while it was being listed; check it and try again', field: 'state' });
-  }
-  // recordEvent + put-back, as LABEL-33's delivery: there is no audit RPC for these verbs (that would be a
-  // second migration), so the change is written first and undone if its record cannot be written.
-  try {
-    await recordEvent(admin, actor, 'release.store_listed', subject, {
-      playback: plan.playback,
-      items: items.length,
-      promoted: promoted.length,
-      relisted: plan.alreadyListed,
+  };
+
+  // 187: the claim, the consent re-check and `release.store_listed` in ONE transaction under the release's lock.
+  // Derivatives were cut above, outside it. No claim exists to put back.
+  let atomic = false;
+  {
+    const { data, error: rpcError } = await auditRpc(admin, 'releaseStore', {
+      p_org: org,
+      p_actor: access.userId,
+      p_release: release.id,
+      p_list: true,
+      p_playback: current.schemaReady ? plan.playback : null,
+      p_expect: storeExpectation(release, itemsKey),
+      p_ctx: { artist_id: release.contact_id, project_id: release.project_id },
+      p_payload: {
+        playback: plan.playback,
+        effectivePlayback: plan.effective,
+        items: items.length,
+        promoted: promoted.length,
+        derivatives,
+        relisted: plan.alreadyListed,
+        consentAsked: proposal.asked.length,
+        consentUnreachable: proposal.unreachable.length,
+      },
     });
-  } catch (err) {
-    log.error('list audit failed', { releaseId, error: errorMessage(err) });
-    const { error: revertError } = await admin
-      .from('releases')
-      .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
-      .eq('id', release.id)
-      .eq('org_id', org);
-    if (revertError) {
-      // A public listing with no event: say so loudly. The release stays listed until an owner unlists it.
-      log.error('list put-back FAILED: release is listed without its event', { releaseId, error: revertError.message });
-      return json(500, { error: 'The release was listed but could not be recorded, and could not be undone. Take it off the store and try again.', listed: true });
+    if (!rpcError) {
+      if (data?.error === 'consent') {
+        await dropPromoted();
+        return json(409, { error: 'An artist on this release said no while it was being listed; nothing was put on the store', field: 'consent' });
+      }
+      if (data?.error === 'changed' || data?.error === 'not_released') {
+        await dropPromoted();
+        return json(409, { error: 'The release changed while it was being listed; check it and try again', field: 'state' });
+      }
+      if (data?.error === 'not_found') return json(404, { error: 'Not found' });
+      atomic = true;
+    } else if (!isMissingAtomicRpc(rpcError)) {
+      await dropPromoted();
+      log.error('list failed', { releaseId, error: rpcError.message });
+      return json(500, { error: 'Could not put the release on the store' });
     }
-    if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
-    return json(500, { error: 'Could not put the release on the store' });
   }
-  return json(200, { listed: true, playback: plan.playback, promoted: promoted.length });
+  if (!atomic) {
+    // Migration 187 is not applied: claim, re-check, event, put back on failure.
+    const legacy = await (async (): Promise<Response | null> => {
+  const before = { store_listed: release.store_listed, store_listed_at: release.store_listed_at };
+    /** Put the release row, and a first listing's promoted previews, back as they were before the claim. */
+    const putBackClaim = async () => {
+      await admin
+        .from('releases')
+        .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
+        .eq('id', release.id)
+        .eq('org_id', org);
+      if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
+      // The put-back restores `store_listed` as it was; if an artist said no meanwhile, "as it was" must not re-open it.
+      await enforceRefusal(admin, org, release.id, current.schemaReady).catch((e) => log.error('refusal enforcement after put-back failed', { releaseId, error: errorMessage(e) }));
+    };
+    const listedAt = release.store_listed_at ?? now.toISOString();
+    // Guarded: the statement itself repeats what the plan judged (state, import flag and release date as
+    // read), so a change between the plan and this write cannot store a listing for a release that is
+    // not out. The date of a release that went out is fixed by the PATCH route as well.
+    let guarded = admin
+      .from('releases')
+      .update({ store_listed: true, store_listed_at: listedAt, ...(current.schemaReady ? { store_playback: plan.playback } : {}) })
+      .eq('id', release.id)
+      .eq('org_id', org)
+      .eq('state', release.state)
+      .eq('imported_released', release.imported_released);
+    guarded = release.release_date === null ? guarded.is('release_date', null) : guarded.eq('release_date', release.release_date);
+    const { data: claimed, error } = await guarded.select('id').maybeSingle();
+    if (error) return fail(500, 'Could not put the release on the store').res;
+    if (!claimed) {
+      // The release changed under the plan. Copies promoted for it must not stay public if the music is not
+      // (and was not) publicly out — judged on the release as it is now.
+      if (!plan.alreadyListed && promoted.length > 0) {
+        try {
+          const fresh = await loadListingRelease(admin, org, release.id);
+          if (!fresh || !releasedPublicly(fresh, new Date())) await deletePromotedPreviews(release.id);
+        } catch (cleanupErr) {
+          log.error('could not remove the previews promoted for a listing that did not happen', { releaseId, error: errorMessage(cleanupErr) });
+        }
+      }
+      return json(409, { error: 'The release changed while it was being listed; check it and try again', field: 'state' });
+    }
+    // An artist may have said no (or the store owner vetoed) between the plan's read and the claim above. The public
+    // routes would refuse the release anyway; this keeps the flag honest and tells the lister, instead of a listing
+    // that looks live and serves nothing. A read that fails is treated like an answer we cannot rule out: the claim is
+    // put back (the listing must not stand on a check that did not happen).
+    if (consents.schemaReady) {
+      let refusedNow: boolean;
+      try {
+        refusedNow = (await blockedByConsent(admin, [release.id])).has(release.id.toLowerCase());
+      } catch (err) {
+        log.error('consent re-check failed: putting the claim back', { releaseId, error: errorMessage(err) });
+        await putBackClaim();
+        return json(500, { error: 'Could not check the artists’ answers; nothing was put on the store' });
+      }
+      if (refusedNow) {
+        await putBackClaim();
+        return json(409, { error: 'An artist on this release said no while it was being listed; nothing was put on the store', field: 'consent' });
+      }
+    }
+    // recordEvent + put-back, as LABEL-33's delivery: there is no audit RPC for these verbs (that would be a
+    // second migration), so the change is written first and undone if its record cannot be written.
+    try {
+      await recordEvent(admin, actor, 'release.store_listed', subject, {
+        playback: plan.playback,
+        effectivePlayback: plan.effective,
+        items: items.length,
+        promoted: promoted.length,
+        derivatives,
+        relisted: plan.alreadyListed,
+        // LABEL-71: counts only — never who, never what they answered.
+        consentAsked: proposal.asked.length,
+        consentUnreachable: proposal.unreachable.length,
+      });
+    } catch (err) {
+      log.error('list audit failed', { releaseId, error: errorMessage(err) });
+      const { error: revertError } = await admin
+        .from('releases')
+        .update({ ...before, ...(current.schemaReady ? { store_playback: current.playback } : {}) })
+        .eq('id', release.id)
+        .eq('org_id', org);
+      await enforceRefusal(admin, org, release.id, current.schemaReady).catch((e) => log.error('refusal enforcement after put-back failed', { releaseId, error: errorMessage(e) }));
+      if (revertError) {
+        // A public listing with no event: say so loudly. The release stays listed until an owner unlists it.
+        log.error('list put-back FAILED: release is listed without its event', { releaseId, error: revertError.message });
+        return json(500, { error: 'The release was listed but could not be recorded, and could not be undone. Take it off the store and try again.', listed: true });
+      }
+      if (!plan.alreadyListed && promoted.length > 0) await deletePromotedPreviews(release.id).catch(() => undefined);
+      return json(500, { error: 'Could not put the release on the store' });
+    }
+    // Tell the artists. Best effort, after the listing is recorded: the release is listed either way, and a
+    // bell that failed to write is the lister's to see in `consent.notified`, not a failed listing.
+      return null;
+    })();
+    if (legacy) return legacy;
+  }
+  let notified = 0;
+  if (proposal.recipients.length > 0) {
+    const res = await askArtistsAboutListing(admin, {
+      orgId: org,
+      askerId: access.userId,
+      askerName: await askerName(admin, org, access.userId),
+      releaseId: release.id,
+      releaseTitle: release.title,
+      recipients: proposal.recipients,
+    });
+    notified = res.asked;
+  }
+  return json(200, {
+    listed: true,
+    playback: plan.playback,
+    effectivePlayback: plan.effective,
+    promoted: promoted.length,
+    consent: consents.schemaReady
+      ? { schemaReady: true, asked: proposal.asked.length, notified, unreachable: proposal.unreachable.length, status: await consentStatus(admin, release.id) }
+      : { schemaReady: false },
+  });
 }

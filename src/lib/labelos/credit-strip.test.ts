@@ -7,7 +7,7 @@ const view = (over: Partial<CreditView> = {}): CreditView => ({
   id: 'c1', trackId: 't1', name: 'Nova', role: 'songwriter', roleLabel: 'Songwriter', scope: 'composition', status: 'confirmed', roleDetail: null,
   source: 'manual', partyId: 'p1', contactId: null, mine: false, proposedByMe: false, confirmedAt: null, disputeNote: null,
   createdAt: '2026-10-01T10:00:00Z', party: { id: 'p1', kind: 'person', displayName: 'Nova', contactId: null },
-  can: { confirm: false, dispute: false }, ...over,
+  can: { confirm: false, dispute: false, withdraw: false }, ...over,
 });
 
 describe('stripPeople', () => {
@@ -36,7 +36,7 @@ describe('stripPeople', () => {
   });
 
   it('mine / actionable come from the credit views', () => {
-    const [p] = stripPeople([view({ mine: true, can: { confirm: true, dispute: true } })]);
+    const [p] = stripPeople([view({ mine: true, can: { confirm: true, dispute: true, withdraw: false } })]);
     expect(p).toMatchObject({ mine: true, actionable: true });
     expect(stripPeople([view()])[0]).toMatchObject({ mine: false, actionable: false });
   });

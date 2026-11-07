@@ -103,6 +103,7 @@ export function TopBar() {
         viewerIsProducer: shell.viewerIsProducer && shell.role === 'owner',
         modules: shell.modules,
         isOwner: shell.role === 'owner',
+        role: shell.role,
       })
     : navGroupsFor('producer', null);
   const drawerGroups = !shell ? ALL_GROUPS : producerChrome ? [...hubs, ACCOUNT_GROUP] : hubs;
@@ -251,14 +252,14 @@ export function TopBar() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 bg-[#090907]/95 backdrop-blur-md border-b border-white/10 z-30">
+      <header className="fixed top-0 left-0 right-0 bg-[var(--background-primary)]/95 backdrop-blur-md border-b border-white/10 z-30">
         {/* ── Row 1: brand · hubs · utilities ─────────────────────── */}
         <div className="h-14 flex items-center px-4 md:px-6 gap-3 md:gap-5">
           {/* Brand — the producer's logo when they have set one. Contained
               rather than covered: a wide wordmark cropped to fill loses its
               ends, and this is the one place the mark has to stay legible at
               24px. */}
-          <Link href={homeHref} className="flex items-center gap-2.5 group shrink-0">
+          <Link href={homeHref} aria-label={shell ? `${shell.org.name} home` : 'Home'} className="flex items-center gap-2.5 group shrink-0">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -271,8 +272,8 @@ export function TopBar() {
                 <span className="text-[10px] font-black text-black tracking-tighter">U2C</span>
               </div>
             )}
-            <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-white/90 group-hover:text-white hidden lg:inline">
-              u2c beatstore
+            <span className="max-w-[16rem] truncate text-[11px] font-semibold tracking-[0.22em] uppercase text-white/90 group-hover:text-white hidden lg:inline">
+              {shell ? shell.org.name : 'u2c beatstore'}
             </span>
           </Link>
 
@@ -473,7 +474,7 @@ export function TopBar() {
             className={cn(
               'tap hidden md:flex w-9 h-9 rounded-full items-center justify-center transition-colors shrink-0',
               isItemActive('/settings', pathname)
-                ? 'bg-[#0D0D0A] text-white'
+                ? 'bg-[var(--surface-primary)] text-white'
                 : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
             )}
           >
@@ -567,7 +568,7 @@ export function TopBar() {
             aria-modal="true"
             aria-label="Navigation menu"
             tabIndex={-1}
- className="md:hidden fixed top-0 right-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[#090907] border-l border-white/[0.06] flex flex-col ui-drawer-right duration-300 focus:outline-none"
+ className="md:hidden fixed top-0 right-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[var(--background-primary)] border-l border-white/[0.06] flex flex-col ui-drawer-right duration-300 focus:outline-none"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
@@ -576,7 +577,7 @@ export function TopBar() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={logoUrl} alt="" className="h-6 w-6 rounded-[5px] object-contain" />
                 )}
-                U2C Beatstore
+                {shell ? shell.org.name : 'U2C Beatstore'}
               </span>
               <button
                 onClick={() => setMobileOpen(false)}
@@ -595,7 +596,7 @@ export function TopBar() {
                   </p>
                   <div className="space-y-0.5">
                     {g.items.map((it) => {
-                      const active = isItemActive(it.href, pathname);
+                      const active = isItemActive(it.href, pathname, it.exact);
                       const Icon = it.icon;
                       return (
                         <Link
@@ -606,7 +607,7 @@ export function TopBar() {
                           className={cn(
                             'flex items-center gap-3 px-3 py-2.5 rounded-md text-[13px] transition-colors',
                             active
-                              ? 'bg-[#0D0D0A] text-white'
+                              ? 'bg-[var(--surface-primary)] text-white'
                               : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
                           )}
                         >
@@ -661,7 +662,7 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
           className={cn(
             'flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium tracking-tight transition-colors',
             active || open
-              ? 'bg-[#0D0D0A] text-white'
+              ? 'bg-[var(--surface-primary)] text-white'
               : 'text-white/60 hover:bg-[#101010] hover:text-white',
           )}
         >
@@ -683,7 +684,7 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
            A labelled nav list keeps Tab working the way links already do. */
         <nav className="p-1" aria-label={`${group.label} pages`}>
           {group.items.map((it) => {
-            const itemActive = isItemActive(it.href, pathname);
+            const itemActive = isItemActive(it.href, pathname, it.exact);
             const ItemIcon = it.icon;
             return (
               <Link
@@ -693,7 +694,7 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
                 aria-current={itemActive ? 'page' : undefined}
                 className={cn(
                   'tap flex min-h-10 items-center gap-3 rounded-lg px-2.5 text-[13px] font-medium tracking-tight transition-colors',
-                  itemActive ? 'bg-[#0D0D0A] text-white' : 'text-white/65 hover:bg-white/[0.06] hover:text-white',
+                  itemActive ? 'bg-[var(--surface-primary)] text-white' : 'text-white/65 hover:bg-white/[0.06] hover:text-white',
                 )}
               >
                 <ItemIcon size={17} strokeWidth={1.75} className="shrink-0" />

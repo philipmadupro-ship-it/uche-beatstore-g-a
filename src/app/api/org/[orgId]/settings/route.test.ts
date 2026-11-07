@@ -79,7 +79,7 @@ describe('PATCH', () => {
     expect(res.status).toBe(200);
     expect(admin.rpcs).toEqual([
       {
-        name: 'labelos_audit_org_settings',
+        name: 'labelos_audit_org_settings_atomic',
         args: {
           p_org: ORG,
           p_actor: ME,
@@ -91,6 +91,16 @@ describe('PATCH', () => {
     const body = await res.json();
     expect(body.changed).toEqual(['legal_gate']);
     expect(body.settings.legal_gate).toBe('off');
+  });
+
+  it('LABEL-76: sets the artwork minimum through the audit function; 600 and 10000 pass, 599, 10001, a fraction and a string are 400', async () => {
+    const res = await patch({ artwork_min_px: 2400 });
+    expect(res.status).toBe(200);
+    expect(admin.rpcs[0]).toMatchObject({ args: { p_patch: { artwork_min_px: 2400 }, p_payload: { keys: ['artwork_min_px'], changes: { artwork_min_px: { from: 3000, to: 2400 } } } } });
+    expect((await res.json()).changed).toEqual(['artwork_min_px']);
+    expect((await patch({ artwork_min_px: 600 })).status).toBe(200);
+    expect((await patch({ artwork_min_px: 10000 })).status).toBe(200);
+    for (const bad of [599, 10001, 3000.5, '3000']) expect((await patch({ artwork_min_px: bad })).status).toBe(400);
   });
 
   it('writes only the keys that differ, and nothing at all for a no-op', async () => {

@@ -170,6 +170,10 @@ describe('GET /api/org/[orgId]/overview', () => {
 
   it('marketing: an in-review song on a release is finished (counted); a Kilo inbox song is restricted, a number only (D4)', async () => {
     current = MKT;
+    // S3 is in review on a DRAFT release (LABEL-56): working, so a number only, until the release has gone out.
+    const { overview: draft } = await (await overview()).json();
+    expect(rowOf(draft, C1)).toMatchObject({ songs: 1, restricted: 1 });
+    db.tables.releases.find((r) => r.id === R1)!.state = 'delivered';
     const { overview: o } = await (await overview()).json();
     expect(rowOf(o, C1)).toMatchObject({ songs: 2, restricted: 0 });
     expect(rowOf(o, C2)).toMatchObject({ songs: 0, restricted: 1, columns: { demos: 0, development: 0, selected: 0 } });

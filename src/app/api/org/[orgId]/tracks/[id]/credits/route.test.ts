@@ -133,16 +133,17 @@ beforeEach(() => {
 
 type Handler = (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
 
-async function call(method: 'GET' | 'POST' | 'PATCH', as: string | null, org: string, id: string, body?: unknown, creditId?: string) {
+async function call(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', as: string | null, org: string, id: string, body?: unknown, creditId?: string) {
   current = as;
   const mod = (creditId ? await import('./[creditId]/route') : await import('./route')) as unknown as Record<string, Handler>;
   const url = `https://app.test/api/org/${org}/tracks/${id}/credits${creditId ? `/${creditId}` : ''}`;
-  const req = new NextRequest(url, method === 'GET' ? undefined : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) });
+  const req = new NextRequest(url, method === 'GET' ? undefined : method === 'DELETE' ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) });
   return mod[method](req, { params: Promise.resolve({ orgId: org, id, ...(creditId ? { creditId } : {}) }) });
 }
 const list = (as: string | null, org: string, id: string) => call('GET', as, org, id);
 const propose = (as: string | null, org: string, id: string, body: unknown) => call('POST', as, org, id, body);
 const decide = (as: string | null, org: string, id: string, creditId: string, body: unknown) => call('PATCH', as, org, id, body, creditId);
+const withdraw = (as: string | null, org: string, id: string, creditId: string) => call('DELETE', as, org, id, undefined, creditId);
 const credits = () => db.tables.track_collaborators;
 const events = () => db.tables.activity_events;
 
@@ -369,5 +370,64 @@ describe('PATCH — confirm or dispute', () => {
     expect((await decide(OWN, L, S1, CR_PRD, { action: 'approve' })).status).toBe(400);
     expect((await decide(OWN, L, S1, CR_PRD, { action: 'confirm', status: 'confirmed' })).status).toBe(400);
     expect(rows(CR_PRD).status).toBe('proposed');
+  });
+});
+
+describe('DELETE — withdraw a credit (LABEL-54)', () => {
+  it('the credited person withdraws THEIR credit: the row goes and ONE audit event stays, with no legal data', async () => {
+    const res = await withdraw(PRD, L, S1, CR_PRD);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ withdrawn: true });
+    expect(credits().some((c) => c.id === CR_PRD)).toBe(false);
+    expect(credits()).toHaveLength(2);
+    expect(events()).toHaveLength(1);
+    expect(events()[0]).toMatchObject({ verb: 'credit.withdrawn', actor_id: PRD, org_id: L, audit: true, visibility: 'artist', subject_id: CR_PRD, song_id: S1, project_id: LP1, artist_id: C1 });
+    expect(events()[0].payload).toEqual({ role: 'mixer', scope: 'recording', from: 'proposed', own: true });
+    expect(JSON.stringify(events()[0])).not.toMatch(/Producteur|00123456789/);
+    // The party is untouched: the person withdrew a credit, not themselves.
+    expect(db.tables.parties.some((r) => r.id === PP)).toBe(true);
+  });
+
+  it('a rights writer removes any credit, even a confirmed one, and the event says it was not their own', async () => {
+    expect((await withdraw(OWN, L, S1, CR_NOVA)).status).toBe(200);
+    expect(credits().some((c) => c.id === CR_NOVA)).toBe(false);
+    expect(events()[0].payload).toEqual({ role: 'songwriter', scope: 'composition', from: 'confirmed', own: false });
+  });
+
+  it('a credit that is not theirs is 404 for the credited-person path, whoever asks; nothing changes', async () => {
+    for (const who of [PRD, AR, SC]) expect((await withdraw(who, L, S1, CR_NOVA)).status, who).toBe(404);
+    expect((await withdraw(STRANGER, L, S1, CR_PRD)).status).toBe(404);
+    expect((await withdraw(MKT, L, S1, CR_PRD)).status).toBe(403);
+    expect((await withdraw(null, L, S1, CR_PRD)).status).toBe(401);
+    expect(credits()).toHaveLength(3);
+    expect(events()).toEqual([]);
+  });
+
+  it('an external member withdraws their OWN credit only; a viewer cannot withdraw anyone’s', async () => {
+    const cleo = '60000000-0000-4000-8000-0000000000a3';
+    const cleoCredit = '70000000-0000-4000-8000-0000000000a4';
+    db.tables.parties.push(party({ id: cleo, display_name: 'Cleo', user_id: CONTRIB }));
+    db.tables.track_collaborators.push(credit({ id: cleoCredit, name: 'Cleo', role: 'mixer', party_id: cleo, created_by: OWN }));
+    expect((await withdraw(CONTRIB, L, S1, CR_NOVA)).status).toBe(404);
+    expect((await withdraw(CONTRIB, L, S1, CR_PRD)).status).toBe(404);
+    expect((await withdraw(VIEWER, L, S1, cleoCredit)).status).toBe(404);
+    expect((await withdraw(CONTRIB, L, S1, cleoCredit)).status).toBe(200);
+    expect(credits().some((c) => c.id === cleoCredit)).toBe(false);
+  });
+
+  it('a failed audit write withdraws nothing (the removal and the event commit together)', async () => {
+    failAudit = true;
+    expect((await withdraw(OWN, L, S1, CR_PRD)).status).toBe(500);
+    expect(credits().some((c) => c.id === CR_PRD)).toBe(true);
+    expect(events()).toEqual([]);
+  });
+
+  it('is 404 for a credit of another song, another org or a bad id; a second withdraw is 404 with no second event', async () => {
+    expect((await withdraw(OWN, L, S1, CR_S2)).status).toBe(404);
+    expect((await withdraw(OWN, L, S1, 'nope')).status).toBe(404);
+    expect((await withdraw(X, L2, S1, CR_PRD)).status).toBe(404);
+    expect((await withdraw(OWN, L, S1, CR_PRD)).status).toBe(200);
+    expect((await withdraw(OWN, L, S1, CR_PRD)).status).toBe(404);
+    expect(events()).toHaveLength(1);
   });
 });

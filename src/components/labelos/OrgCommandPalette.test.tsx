@@ -40,6 +40,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('OrgCommandPalette: role views (LABEL-70)', () => {
+  it('an independent artist is not offered the label A&R queue, and sees "Artist profile"', () => {
+    const shell = { ...SHELL, org: { ...SHELL.org, kind: 'artist' as const }, role: 'owner' as const, capabilities: ['catalog.read' as const, 'review.write' as const] };
+    render(<OrgShellProvider value={shell}><OrgCommandPalette /></OrgShellProvider>);
+    act(() => useCommandPalette.getState().setOpen(true));
+    expect(screen.queryByText('Go to A&R')).toBeNull();
+    expect(screen.getByText('Go to Artist profile')).toBeTruthy();
+    expect(screen.getByText('Go to Releases')).toBeTruthy();
+  });
+});
+
 describe('OrgCommandPalette', () => {
   it('renders nothing while closed and outside an org shell', async () => {
     const { container } = render(<OrgCommandPalette />);

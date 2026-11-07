@@ -1,4 +1,18 @@
 import { defineConfig, devices } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+
+/**
+ * The specs that drive a REAL database stack (scripts/local-db): every spec file that names E2E_REAL_DB.
+ * Found by that marker rather than listed by hand, so a new real-database spec runs under `npm run e2e:real-db`
+ * the day it is written (the list in package.json was 55 file names that had to be kept by hand) and can never
+ * leak into the default run, where it would only add skips to a count CI checks.
+ */
+const realDbSpecs = fs
+  .readdirSync(path.join(__dirname, 'e2e'))
+  .filter((f) => f.endsWith('.spec.ts') && fs.readFileSync(path.join(__dirname, 'e2e', f), 'utf8').includes('process.env.E2E_REAL_DB'))
+  .map((f) => `**/e2e/${f}`);
+const realDb = process.env.E2E_REAL_DB === '1';
 
 /**
  * Playwright config for end-to-end smoke tests.
@@ -15,18 +29,26 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e',
-  // artist-workspace drives a REAL database (scripts/local-db); it is not part
-  // of the default run, so CI's expected skip count is unchanged.
-  testIgnore: process.env.E2E_REAL_DB === '1' ? [] : ['**/artist-workspace*.spec.ts'],
+  // `npm run e2e:real-db` runs exactly the real-database specs; the default run (and CI) runs everything else.
+  ...(realDb ? { testMatch: realDbSpecs } : { testIgnore: realDbSpecs }),
   fullyParallel: false,                          // share one cart/player
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,                                    // single-producer storefront; one tab is enough
   reporter: process.env.CI ? 'github' : 'list',
-  timeout: 30_000,
+  // Real-database flows (and their beforeAll hooks, which drive routes through browser sessions) outlast the 30 s default.
+  timeout: realDb ? 90_000 : 30_000,
+  // The real-database flows hit PostgREST + RLS + a cold Next dev compile on
+  // every first visit to a route; the 5 s default expect timeout made
+  // assertions race the compile. 25 s is the budget the flows are written for.
+  // The default (local-store) suite keeps Playwright's 5 s.
+  expect: { timeout: process.env.E2E_REAL_DB === '1' ? 25_000 : 5_000 },
 
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3457',
+    // Real-database specs clean their orgs up with the service key; the local gateway ages `deleted_at` for a request that
+    // carries this header (scripts/local-db/org-cleanup.mjs) and for no other, so the app's own deletes still meet migration 195.
+    ...(realDb ? { extraHTTPHeaders: { 'x-e2e-org-cleanup': '1' } } : {}),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

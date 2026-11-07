@@ -31,6 +31,7 @@ const date = (iso: string | null) => (iso ? new Date(iso.length === 10 ? `${iso}
 
 function dateLine(r: BoardRelease): string {
   if (r.state === 'delivered') return `Delivered${r.deliveredTo ? ` to ${r.deliveredTo}` : ''}${r.deliveredAt ? ` · ${date(r.deliveredAt)}` : ''}`;
+  if (r.state === 'withdrawn') return `Withdrawn${r.deliveredTo ? ` from ${r.deliveredTo}` : ''}`;
   if (r.state === 'cancelled') return 'Cancelled';
   const d = r.releaseDate ?? r.targetDate;
   return d ? `${r.releaseDate ? 'Release' : 'Target'} ${date(d)}` : 'No date set';
@@ -94,13 +95,13 @@ export function ReleaseBoardView({
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/60" data-testid="release-board-empty">
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-8 text-center text-[11px] text-white/60" data-testid="release-board-empty">
           Nothing is {BOARD_FILTER_LABEL[filter].toLowerCase()} right now.
         </p>
       ) : (
         <ul className="space-y-2">
           {rows.map((r) => (
-            <li key={r.id} className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4 transition-colors hover:border-white/20" data-testid={`release-row-${r.id}`} data-stage={boardStage(r)}>
+            <li key={r.id} className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 transition-colors hover:border-white/20" data-testid={`release-row-${r.id}`} data-stage={boardStage(r)}>
               <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
                 <div className="min-w-0">
                   <Link href={`/o/${orgSlug}/releases/${r.id}`} className="text-[13px] text-white hover:underline" data-testid="release-row-link">

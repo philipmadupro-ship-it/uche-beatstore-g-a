@@ -11,11 +11,36 @@
  * (SOF0-SOF15 except DHT / JPG / DAC), which holds precision, height, width
  * and the component count (3 = YCbCr, i.e. RGB; 1 = grey; 4 = CMYK).
  */
-export type ImageColor = 'rgb' | 'grey' | 'palette' | 'cmyk' | 'other';
-export type ImageInfo = { format: 'png' | 'jpeg'; width: number; height: number; color: ImageColor };
+export type ImageColor = 'rgb' | 'rgba' | 'grey' | 'palette' | 'cmyk' | 'other';
+/** `transparent`: a PNG carries a `tRNS` chunk (colour-key or palette transparency); set only when true. */
+export type ImageInfo = { format: 'png' | 'jpeg'; width: number; height: number; color: ImageColor; transparent?: true };
 
-/** How much of the file the store reads: JPEG puts its frame header after EXIF / ICC segments, which are rarely beyond this. */
+/** How much of the file the store reads first: JPEG puts its frame header after EXIF / ICC segments, which are rarely beyond this. */
 export const IMAGE_HEAD_BYTES = 262144;
+/** The second, larger read for a JPEG whose frame header was not inside the first (large XMP / ICC / thumbnail segments). */
+export const IMAGE_HEAD_BYTES_MAX = 4194304;
+
+/** True when the bytes are a JPEG that simply ended before its frame header, so reading further could answer. */
+export function jpegHeaderMayFollow(bytes: Uint8Array): boolean {
+  return bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8 && readJpeg(bytes) === null && !jpegScanReached(bytes);
+}
+
+/** Walks the segments; true when it met the start of scan (no frame header will ever follow) or a malformed segment. */
+function jpegScanReached(b: Uint8Array): boolean {
+  let i = 2;
+  while (i + 4 <= b.length) {
+    if (b[i] !== 0xff) return true;
+    while (i < b.length && b[i] === 0xff) i += 1;
+    const marker = b[i];
+    i += 1;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) continue;
+    if (i + 2 > b.length) return false;
+    const length = u16(b, i);
+    if (length < 2 || marker === 0xda) return true;
+    i += length;
+  }
+  return false;
+}
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -31,8 +56,23 @@ function readPng(b: Uint8Array): ImageInfo | null {
   const height = u32(b, 20);
   if (width === 0 || height === 0) return null;
   const type = b[25];
-  const color: ImageColor = type === 2 || type === 6 ? 'rgb' : type === 0 || type === 4 ? 'grey' : type === 3 ? 'palette' : 'other';
-  return { format: 'png', width, height, color };
+  const color: ImageColor = type === 2 ? 'rgb' : type === 6 ? 'rgba' : type === 0 || type === 4 ? 'grey' : type === 3 ? 'palette' : 'other';
+  const info: ImageInfo = { format: 'png', width, height, color };
+  if (pngHasTransparencyChunk(b)) info.transparent = true;
+  return info;
+}
+
+/** Walks the chunks after IHDR for a `tRNS` (it must come before the image data, so stop at IDAT / IEND / the end of the head). */
+function pngHasTransparencyChunk(b: Uint8Array): boolean {
+  let i = 33; // signature (8) + IHDR chunk (4 + 4 + 13 + 4)
+  while (i + 8 <= b.length) {
+    const length = u32(b, i);
+    const type = String.fromCharCode(b[i + 4], b[i + 5], b[i + 6], b[i + 7]);
+    if (type === 'tRNS') return true;
+    if (type === 'IDAT' || type === 'IEND') return false;
+    i += 12 + length;
+  }
+  return false;
 }
 
 function readJpeg(b: Uint8Array): ImageInfo | null {
@@ -87,11 +127,12 @@ export type ArtworkSizeProblem = { code: 'artwork_unreadable' | 'artwork_not_squ
  * does not pass.
  */
 export function artworkSizeProblems(info: ImageInfo | null, minPx: number = ARTWORK_MIN_PX_DEFAULT): ArtworkSizeProblem[] {
-  if (!info) return [{ code: 'artwork_unreadable', message: 'The artwork’s size could not be read. Use a JPEG or PNG that opens normally.' }];
+  if (!info) return [{ code: 'artwork_unreadable', message: 'The artwork’s size could not be read. Use a JPEG or PNG that opens normally; a JPEG with very large embedded data before the picture can also fail.' }];
   const out: ArtworkSizeProblem[] = [];
   const size = `${info.width}×${info.height}`;
   if (info.width !== info.height) out.push({ code: 'artwork_not_square', message: `The artwork must be square; this one is ${size} px.` });
   if (Math.min(info.width, info.height) < minPx) out.push({ code: 'artwork_too_small', message: `The artwork must be at least ${minPx}×${minPx} px; this one is ${size} px.` });
-  if (info.color !== 'rgb') out.push({ code: 'artwork_color', message: 'The artwork must be RGB (not greyscale, indexed or CMYK).' });
+  if (info.color === 'rgba' || info.transparent) out.push({ code: 'artwork_color', message: 'The artwork must not have transparency. Flatten it onto a solid background and export a PNG without an alpha channel, or export a JPEG.' });
+  else if (info.color !== 'rgb') out.push({ code: 'artwork_color', message: 'The artwork must be RGB (not greyscale, indexed or CMYK).' });
   return out;
 }

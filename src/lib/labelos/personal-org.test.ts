@@ -104,7 +104,7 @@ describe('ensurePersonalOrg', () => {
       verb: 'org.created',
       subject_type: 'org',
       subject_id: ORG,
-      audit: false,
+      audit: true,
       payload: { kind: 'producer', source: 'profile' },
     });
   });

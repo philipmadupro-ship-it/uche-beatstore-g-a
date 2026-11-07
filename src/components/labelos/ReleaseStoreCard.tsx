@@ -17,20 +17,23 @@ import { useRouter } from 'next/navigation';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import {
+  answerListing,
   getReleaseStore,
   listReleaseOnStore,
   unlistReleaseFromStore,
+  type ListedAnswer,
   type StoreState,
 } from '@/lib/labelos/release-client';
+import { consentSentence, consentStateLabel, unreachableSentence } from '@/lib/labelos/store-consent-copy';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4';
 
 const PLAYBACKS = [
   { value: 'preview', label: 'Preview clips', hint: 'Visitors hear a 75 second clip of each song.' },
-  { value: 'full', label: 'Full songs', hint: 'Visitors hear each whole recording, streamed from our server.' },
+  { value: 'full', label: 'Full songs', hint: 'Visitors hear each whole recording as a compressed copy streamed from our server. The original file stays private.' },
 ] as const;
 
 export function ReleaseStoreCard({
@@ -51,6 +54,8 @@ export function ReleaseStoreCard({
   const [store, setStore] = useState<StoreState | null>(null);
   const [playback, setPlayback] = useState<'preview' | 'full'>('preview');
   const [busy, setBusy] = useState(false);
+  // What the last listing did about the artists (LABEL-71): shown until the card is left.
+  const [asked, setAsked] = useState<ListedAnswer['consent'] | null>(null);
   // True once the member has clicked a playback choice: a load that lands after that (a slower second
   // request — StrictMode runs the mount effect twice — or a refetch) must not put the server's value back.
   const picked = useRef(false);
@@ -59,8 +64,8 @@ export function ReleaseStoreCard({
     const res = await getReleaseStore(orgId, releaseId);
     if (res.ok) {
       setStore(res);
-      // Someone who may not choose full songs never starts on them (an old value on an unlisted release).
-      if (!picked.current) setPlayback(!canManagePublic && !res.listed ? 'preview' : res.playback);
+      // Someone who may not choose full songs, or before the release date, never starts on them (an old value on an unlisted release).
+      if (!picked.current) setPlayback((!canManagePublic || res.fullAvailable === false) && !res.listed ? 'preview' : res.playback);
     }
   }, [orgId, releaseId, canManagePublic]);
 
@@ -79,6 +84,7 @@ export function ReleaseStoreCard({
     setBusy(false);
     if (!res.ok) return void toast.error(res.error);
     toast.success(store.listed ? 'Store listing updated' : 'On the store');
+    setAsked(res.consent ?? null);
     picked.current = false; // what was saved is now the server's value
     await load();
     router.refresh();
@@ -100,9 +106,29 @@ export function ReleaseStoreCard({
     router.refresh();
   };
 
+  const answer = async (decision: 'yes' | 'no') => {
+    if (decision === 'no') {
+      const ok = await confirmToast('Say no to the store?', 'The release comes off the store now. It can only be listed again once you say yes.', { confirmLabel: 'Say no', cancelLabel: 'Cancel' });
+      if (!ok) return;
+    }
+    setBusy(true);
+    const res = await answerListing(orgId, releaseId, decision);
+    setBusy(false);
+    if (!res.ok) return void toast.error(res.error);
+    toast.success(decision === 'no' ? 'You said no; the release is off the store' : 'You said yes');
+    await load();
+    router.refresh();
+  };
+
   // The server refuses these for anyone else (403); the card says so up front instead of offering a dead button.
   const importedLocked = imported && !canManagePublic;
   const fullLocked = !canManagePublic;
+  // LABEL-72: whole songs wait for the release date; until then the release is a teaser of preview clips.
+  const notOutYet = store.fullAvailable === false;
+  const teaserNote = notOutYet
+    ? `Not out yet${store.releaseDate ? ` (${store.releaseDate})` : ''}: visitors hear preview clips until the release date, and full songs can be chosen then.`
+    : null;
+  const fallbackNote = store.listed && store.playback === 'full' && store.effectivePlayback === 'preview' ? 'Full songs were chosen, but the release date has not come, so visitors hear preview clips.' : null;
   const mayAct = canWrite && !importedLocked;
 
   return (
@@ -113,6 +139,44 @@ export function ReleaseStoreCard({
       </p>
       {!store.listed && !store.canList.ok && (
         <p className="mt-2 text-[11px] text-white/60" data-testid="release-store-blocked">{store.canList.error}</p>
+      )}
+      {store.vetoed && (
+        <p className="mt-2 text-[11px] text-white/60" data-testid="release-store-vetoed">The store owner has taken this release off their store.</p>
+      )}
+      {store.consent?.schemaReady && store.consent.status !== 'none' && (
+        <div className="mt-3" data-testid="release-store-consent" data-status={store.consent.status}>
+          <p className={`${LABEL} mb-1`}>The artists’ say</p>
+          <p className="text-[11px] text-white/60">{consentSentence(store.consent.status)}</p>
+          <ul className="mt-2 space-y-1">
+            {store.consent.artists.map((a) => (
+              <li key={a.contactId} className="flex items-center justify-between gap-3 text-[11px] text-white/80" data-testid="release-store-consent-artist" data-state={a.state}>
+                <span className="truncate">{a.name}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className={cn('text-[11px]', a.state === 'no' ? 'text-white' : 'text-white/60')}>{consentStateLabel(a.state)}</span>
+                  {a.mine && (
+                    <>
+                      {a.state !== 'yes' && (
+                        <button type="button" disabled={busy} onClick={() => void answer('yes')} className={BTN} data-testid="release-store-consent-yes">
+                          Yes
+                        </button>
+                      )}
+                      {a.state !== 'no' && (
+                        <button type="button" disabled={busy} onClick={() => void answer('no')} className={BTN} data-testid="release-store-consent-no">
+                          No
+                        </button>
+                      )}
+                    </>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {asked && asked.schemaReady && (asked.asked ?? 0) > 0 && (
+        <p className="mt-2 text-[11px] text-white/60" data-testid="release-store-asked">
+          {unreachableSentence({ asked: asked.asked ?? 0, notified: asked.notified ?? 0, unreachable: asked.unreachable ?? 0 })}
+        </p>
       )}
       {canWrite && importedLocked && (
         <p className="mt-2 text-[11px] text-white/60" data-testid="release-store-owner-only">
@@ -130,8 +194,8 @@ export function ReleaseStoreCard({
                     type="button"
                     role="radio"
                     aria-checked={playback === p.value}
-                    disabled={p.value === 'full' && fullLocked}
-                    title={p.value === 'full' && fullLocked ? 'Only an owner or an admin can choose full songs' : undefined}
+                    disabled={p.value === 'full' && (fullLocked || notOutYet)}
+                    title={p.value === 'full' && fullLocked ? 'Only an owner or an admin can choose full songs' : p.value === 'full' && notOutYet ? 'Full songs can be chosen from the release date' : undefined}
                     onClick={() => {
                       picked.current = true;
                       setPlayback(p.value);
@@ -144,6 +208,8 @@ export function ReleaseStoreCard({
                 ))}
               </div>
               <p className="mt-2 text-[11px] text-white/40">{PLAYBACKS.find((p) => p.value === playback)?.hint}</p>
+              {teaserNote && <p className="mt-1 text-[11px] text-white/40" data-testid="release-store-teaser">{teaserNote}</p>}
+              {fallbackNote && <p className="mt-1 text-[11px] text-white/40" data-testid="release-store-playback-fallback">{fallbackNote}</p>}
               {fullLocked && <p className="mt-1 text-[11px] text-white/40" data-testid="release-store-full-locked">Full songs are chosen by an owner or an admin.</p>}
             </div>
           ) : (

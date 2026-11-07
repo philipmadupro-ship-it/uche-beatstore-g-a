@@ -10,6 +10,7 @@
  * listed as "restricted", never named (07 §3.4). The songs on offer to add are
  * the same list minus the ones already on the release.
  */
+import { mayReadRightsDetail } from '@/lib/labelos/credits';
 import type { ObjectAccessResult } from '@/lib/auth/org-access';
 import { requireObjectAccess } from '@/lib/auth/org-access';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
@@ -19,7 +20,7 @@ import { loadOrgArtistWorkspace } from './org-workspace-store';
 import { parseOrgSettings, skippedGates } from './org-settings';
 import { evaluateReleaseReadiness, releaseReadinessView, type ReleaseReadinessView } from './release-readiness';
 import { loadReleaseReadinessFacts, ReleaseReadinessNotReadyError } from './release-readiness-store';
-import { RELEASE_COLUMNS, RELEASE_ITEM_COLUMNS, toReleaseView, type ReleaseItemRow, type ReleaseRow, type ReleaseView } from './releases';
+import { RELEASE_COLUMNS, RELEASE_DETAIL_COLUMNS, RELEASE_ITEM_COLUMNS, toReleaseView, type ReleaseItemRow, type ReleaseRow, type ReleaseView } from './releases';
 
 type Access = Extract<ObjectAccessResult, { ok: true }>;
 
@@ -60,7 +61,11 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
   const org = access.object.orgId;
   const id = access.object.id;
 
-  const relRes = await admin.from('releases').select(RELEASE_COLUMNS).eq('id', id).eq('org_id', org).maybeSingle();
+  let relRes = await admin.from('releases').select(RELEASE_DETAIL_COLUMNS).eq('id', id).eq('org_id', org).maybeSingle();
+  // Migration 175 not applied yet: the page still opens, without the three newer details.
+  if (relRes.error && /distributor|territories|language/.test(relRes.error.message ?? '')) {
+    relRes = await admin.from('releases').select(RELEASE_COLUMNS).eq('id', id).eq('org_id', org).maybeSingle();
+  }
   if (relRes.error) {
     if (isMissingSchema(relRes.error)) return null;
     throw new Error(`release read: ${relRes.error.message}`);
@@ -104,7 +109,7 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
   let readiness: ReleaseReadinessView | null = null;
   try {
     const facts = await loadReleaseReadinessFacts(admin, org, id);
-    if (facts) readiness = releaseReadinessView(evaluateReleaseReadiness(facts), access.capabilities.has('rights.read'));
+    if (facts) readiness = releaseReadinessView(evaluateReleaseReadiness(facts), mayReadRightsDetail(access.capabilities, access.role));
   } catch (err) {
     if (!(err instanceof ReleaseReadinessNotReadyError)) throw err;
   }
@@ -133,7 +138,7 @@ export async function loadReleaseDetail(access: Access): Promise<ReleaseDetail |
     me: {
       canWrite: access.capabilities.has('release.write'),
       isOwner: access.role === 'owner', canManagePublic: access.role === 'owner' || access.role === 'admin',
-      mayReadRights: access.capabilities.has('rights.read'),
+      mayReadRights: mayReadRightsDetail(access.capabilities, access.role),
     },
   };
 }

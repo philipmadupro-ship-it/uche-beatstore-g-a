@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { MusicView } from '@/components/labelos/MusicView';
 import { orgShellFor } from '@/lib/auth/org-access';
+import { pageAllowed, viewInputOf } from '@/lib/labelos/role-view';
 import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
 export default async function MusicPage({ params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
   const shell = await orgShellFor(orgSlug);
-  if (!shell || !shell.capabilities.includes('catalog.read')) notFound();
+  if (!shell || !pageAllowed('music', viewInputOf(shell))) notFound();
   return (
     <PageContainer>
       <header className="mb-6 sm:mb-8">

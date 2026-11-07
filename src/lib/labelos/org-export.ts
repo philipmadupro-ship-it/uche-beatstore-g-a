@@ -58,6 +58,14 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'split_sheets', source: { by: 'org' }, order: ['id'] },
   { name: 'split_lines', source: { by: 'org' }, order: ['id'] },
   { name: 'approvals', source: { by: 'org' }, order: ['id'] },
+  // Contracts (LABEL-57): the org's template versions, the contracts (with the clauses they were made from) and their parties.
+  { name: 'contract_templates', source: { by: 'org' }, order: ['id'] },
+  { name: 'contracts', source: { by: 'org' }, order: ['id'] },
+  { name: 'contract_parties', source: { by: 'org' }, order: ['contract_id', 'party_id', 'role'] },
+  // LABEL-60: the signing links (never the hash that opens one) and the append-only signatures. A drawn signature's PNG is
+  // an object reference (`signature_image`), so it lands in the manifest like any other private file, never as a URL.
+  { name: 'contract_signers', source: { by: 'org' }, order: ['id'], omit: ['token_hash'] },
+  { name: 'contract_signatures', source: { by: 'org' }, order: ['id'] },
   // Creative direction (LABEL-26) and what an artist org shares with a label (LABEL-41, the artist side's rows)
   { name: 'artist_direction', source: { by: 'org' }, order: ['contact_id'] },
   { name: 'artist_references', source: { by: 'org' }, order: ['id'] },
@@ -66,6 +74,33 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { name: 'connection_projects', source: { by: 'org' }, order: ['connection_id', 'project_id'] },
   // LABEL-37: filter definitions only (ids and enums, never results)
   { name: 'org_saved_views', source: { by: 'org' }, order: ['id'] },
+  // Finance (LABEL-61): payees, periods, advances, imported earnings, statements and payment RECORDS. Parents before children.
+  { name: 'payees', source: { by: 'org' }, order: ['id'], omit: ['payment_reference'] },
+  { name: 'finance_periods', source: { by: 'org' }, order: ['id'] },
+  { name: 'advances', source: { by: 'org' }, order: ['id'], omit: ['note'] },
+  { name: 'earnings_imports', source: { by: 'org' }, order: ['id'] },
+  { name: 'earnings_lines', source: { by: 'org' }, order: ['id'] },
+  // LABEL-62: how each line was split between payees, and what was recouped against which advance.
+  { name: 'earnings_allocations', source: { by: 'org' }, order: ['id'] },
+  { name: 'earnings_recoupments', source: { by: 'org' }, order: ['id'] },
+  { name: 'statements', source: { by: 'org' }, order: ['id'], omit: ['void_reason'] },
+  { name: 'statement_lines', source: { by: 'org' }, order: ['id'] },
+  { name: 'payments', source: { by: 'org' }, order: ['id'], omit: ['reference'] },
+  // LABEL-71: every credited artist's answer on listing a release, and the store owner's own vetoes.
+  { name: 'listing_consents', source: { by: 'org' }, order: ['id'] },
+  { name: 'store_listing_vetoes', source: { by: 'org' }, order: ['release_id'] },
+  // Marketing plans (LABEL-65). A budget line's free-text note stays out, like finance's free text (179); its amount and label go.
+  { name: 'marketing_plans', source: { by: 'org' }, order: ['id'] },
+  { name: 'marketing_plan_items', source: { by: 'org' }, order: ['id'] },
+  { name: 'marketing_platform_steps', source: { by: 'org' }, order: ['id'] },
+  { name: 'marketing_budget_lines', source: { by: 'org' }, order: ['id'], omit: ['note'] },
+  { name: 'marketing_asset_requests', source: { by: 'org' }, order: ['id'] },
+  // LABEL-66: the kit, its links and photo references, who it was shared with (label, expiry, views — NEVER the token hash) and the outreach tracker.
+  { name: 'press_kits', source: { by: 'org' }, order: ['id'] },
+  { name: 'press_kit_links', source: { by: 'org' }, order: ['id'] },
+  { name: 'press_kit_photos', source: { by: 'org' }, order: ['id'] },
+  { name: 'press_kit_shares', source: { by: 'org' }, order: ['id'], omit: ['token_hash'] },
+  { name: 'press_outreach', source: { by: 'org' }, order: ['id'] },
   { name: 'activity_events', source: { by: 'org' }, order: ['created_at', 'id'] },
 ];
 

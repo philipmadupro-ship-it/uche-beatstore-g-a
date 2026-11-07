@@ -9,7 +9,7 @@ import { notFound } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { LegalQueueView } from '@/components/labelos/LegalQueueView';
 import { orgShellFor } from '@/lib/auth/org-access';
-import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
+import { pageAllowed, viewInputOf } from '@/lib/labelos/role-view';
 import { ORG_KIND_LABELS } from '@/lib/labelos/switcher';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,8 @@ export default async function LegalQueuePage({ params }: { params: Promise<{ org
   const { orgSlug } = await params;
   const shell = await orgShellFor(orgSlug);
   // The queue is part of the contracts module (LABEL-47): not licensed, not there.
-  if (!shell || shell.org.kind === 'producer' || !shell.modules.includes('contracts') || !canSeeLegalQueue(new Set(shell.capabilities))) notFound();
+  // Label orgs only (LABEL-70): an independent artist has no legal queue.
+  if (!shell || !pageAllowed('legal', viewInputOf(shell))) notFound();
   return (
     <PageContainer>
       <header className="mb-6 sm:mb-8">

@@ -29,6 +29,7 @@ describe('dates', () => {
   it('puts a release on its release date, else its target (tentative); cancelled and undated are off', () => {
     expect(calendarDay({ releaseDate: '2026-11-06', targetDate: '2026-11-01', state: 'draft' })).toEqual({ day: { y: 2026, m: 11, d: 6 }, tentative: false });
     expect(calendarDay({ releaseDate: null, targetDate: '2026-11-01', state: 'draft' })?.tentative).toBe(true);
+    expect(calendarDay({ releaseDate: '2026-11-06', targetDate: null, state: 'withdrawn' })).toBeNull();
     expect(calendarDay({ releaseDate: '2026-11-06', targetDate: null, state: 'cancelled' })).toBeNull();
     expect(calendarDay({ releaseDate: null, targetDate: null, state: 'draft' })).toBeNull();
   });
@@ -125,5 +126,97 @@ describe('buildIcs', () => {
     const empty = buildIcs({ name: 'x', releases: [] });
     expect(empty).toContain('BEGIN:VCALENDAR');
     expect(empty).not.toContain('VEVENT');
+  });
+});
+
+describe('contract expiry events (LABEL-60)', () => {
+  const contract = (over: Partial<import('./release-calendar').CalendarContract> = {}): import('./release-calendar').CalendarContract => ({
+    id: 'c1',
+    title: 'Nova recording agreement',
+    status: 'signed',
+    effectiveDate: '2026-01-01',
+    termMonths: 12,
+    updatedAt: '2026-10-01T00:00:00Z',
+    ...over,
+  });
+  const ics = (contracts: import('./release-calendar').CalendarContract[]) => buildIcs({ name: 'Releases', releases: [], contracts });
+
+  it('is one all-day event on the last day of the term, with a month and a week reminder', () => {
+    const body = ics([contract()]);
+    expect(body).toContain('DTSTART;VALUE=DATE:20261231');
+    expect(body).toContain('DTEND;VALUE=DATE:20270101');
+    expect(body).toContain('SUMMARY:Contract ends: Nova recording agreement');
+    expect(body).toContain('TRIGGER:-P30D');
+    expect(body).toContain('TRIGGER:-P7D');
+    expect(body.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+    expect(body.endsWith('END:VCALENDAR\r\n')).toBe(true);
+  });
+
+  it('carries the title and the dates only: no party, no amount, no term length, no id', () => {
+    const body = buildIcs({ name: 'Releases', releases: [], contracts: [contract({ id: 'secret-row-id' })], contractUidFor: () => 'opaque@label-os' });
+    expect(body).not.toContain('secret-row-id');
+    expect(body).not.toMatch(/12 months|term_months|advance|party/i);
+    expect(ics([contract({ id: 'x1' })])).toContain('UID:contract-x1@label-os'); // the default, when the caller passes no opaque one
+  });
+
+  it('uses the opaque uid the feed passes', () => {
+    const body = buildIcs({ name: 'Releases', releases: [], contracts: [contract()], contractUidFor: () => 'abc@label-os' });
+    expect(body).toContain('UID:abc@label-os');
+  });
+
+  it('drafts, void contracts and contracts with no term are not on the calendar; sent ones are', () => {
+    const body = ics([
+      contract({ id: 'd', status: 'draft' }),
+      contract({ id: 'v', status: 'void' }),
+      contract({ id: 'n', termMonths: null }),
+      contract({ id: 'e', effectiveDate: null }),
+      contract({ id: 's', status: 'sent' }),
+    ]);
+    expect(body.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+    expect(body).toContain('contract-s@label-os');
+  });
+
+  it('escapes a title like any text and keeps the file stable', () => {
+    const body = ics([contract({ title: 'A, B; C\nD' })]);
+    expect(body).toContain('SUMMARY:Contract ends: A\\, B\\; C D');
+    expect(ics([contract()])).toBe(ics([contract()]));
+  });
+
+  it('sits beside releases, in date order after them', () => {
+    const body = buildIcs({
+      name: 'Releases',
+      releases: [{ id: 'r1', title: 'Single', releaseDate: '2026-12-01', targetDate: null, state: 'draft', updatedAt: '2026-10-01T00:00:00Z' }],
+      contracts: [contract()],
+    });
+    expect(body.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+    expect(body.indexOf('SUMMARY:Single')).toBeLessThan(body.indexOf('SUMMARY:Contract ends'));
+  });
+});
+
+describe('marketing milestones (LABEL-65)', () => {
+  it('adds one all-day event per milestone: a summary and a day, nothing else', () => {
+    const ics = buildIcs({
+      name: 'Releases',
+      releases: [],
+      milestones: [
+        { id: 'm2', summary: 'Release: Drop day · Night Shift', dueOn: '2026-12-05' },
+        { id: 'm1', summary: 'Teaser: Snippet, part 1 · Night Shift', dueOn: '2026-11-20' },
+        { id: 'bad', summary: 'Nope', dueOn: '2026-02-31' },
+      ],
+      milestoneUidFor: (id) => `opaque-${id}`,
+    });
+    const events = ics.split('BEGIN:VEVENT').slice(1);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toContain('UID:opaque-m1');
+    expect(events[0]).toContain('DTSTART;VALUE=DATE:20261120');
+    expect(events[0]).toContain('DTEND;VALUE=DATE:20261121');
+    expect(events[0]).toContain('SUMMARY:Teaser: Snippet\\, part 1 · Night Shift');
+    expect(events[1]).toContain('DTSTART;VALUE=DATE:20261205');
+    expect(ics).not.toMatch(/DESCRIPTION|URL|ATTENDEE|ORGANIZER|budget/i);
+    expect(ics.endsWith('\r\n')).toBe(true);
+  });
+  it('is byte-identical without milestones', () => {
+    const a = buildIcs({ name: 'Releases', releases: [] });
+    expect(buildIcs({ name: 'Releases', releases: [], milestones: [] })).toBe(a);
   });
 });

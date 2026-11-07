@@ -12,7 +12,9 @@ export const dynamic = 'force-dynamic';
 
 /** Postgres / PostgREST wording for a table that is not there (136 not applied). */
 const MISSING_SCHEMA = /does not exist|schema cache|Could not find the table/i;
-export const maxDuration = 300;
+/** Seconds. The run stops starting a purge at BUDGET_MS and leaves the rest for tomorrow (LABEL-75). */
+export const maxDuration = 60;
+const BUDGET_MS = 45_000;
 
 /** A run purges at most this many orgs; the rest wait for tomorrow (a purge lists and deletes every object). */
 const ORGS_PER_RUN = 5;
@@ -41,10 +43,12 @@ export async function GET(req: NextRequest) {
   if (!isSupabaseConfigured()) return NextResponse.json({ skipped: 'Supabase not configured' });
 
   const admin = createServiceClient();
+  const startedAt = Date.now();
   try {
     const due = await dueOrgs(admin, new Date(), ORGS_CONSIDERED);
     const outcomes = [];
     for (const org of due) {
+      if (Date.now() - startedAt >= BUDGET_MS) break;
       if (outcomes.filter((o) => o.status === 'purged').length >= ORGS_PER_RUN) break;
       // The org's prefix, then the previews promoted to the public store for its releases (LABEL-42);
       // ids are read BEFORE the rows go. Either failing keeps the org for tomorrow's run.

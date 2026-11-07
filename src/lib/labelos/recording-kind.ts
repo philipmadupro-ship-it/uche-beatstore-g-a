@@ -91,7 +91,8 @@ export interface SongForRecordings {
  * version / master / … of is another song's material, not this one's.
  *
  * The current mix is finished when the song is `selected` or sits on a
- * release (`onRelease`, known once releases exist — LABEL-16); every other
+ * release that went out (`onRelease`: delivered, withdrawn or imported — a draft
+ * release still being assembled does NOT finish it, LABEL-56); every other
  * mix is an earlier take and working.
  */
 export function songRecordings(

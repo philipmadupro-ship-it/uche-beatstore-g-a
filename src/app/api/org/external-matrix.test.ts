@@ -139,6 +139,9 @@ function seed(): MemoryDb {
       org_saved_views: [{ id: VIEW, org_id: L, created_by: OWNER, subject: 'songs', name: 'Nova demos', definition: { v: 1, subject: 'songs', filter: { artistIds: [C1] } }, shared: true, created_at: '2026-10-01', updated_at: '2026-10-01' }],
       tasks: [{ id: TASK, org_id: L, title: 'Clear the sample', assignee_id: EDITOR, created_by: OWNER, song_id: S1, artist_id: null, project_id: null, release_id: null, created_at: '2026-10-01', done_at: null }],
       notifications: [{ id: NOTE, user_id: EDITOR, org_id: L, kind: 'task_assigned', title: 'Owner assigned you a task', body: 'Clear the sample', data: null, read: false, created_at: '2026-10-01' }],
+      // LABEL-71: an artist's pending question on the release (Nova's contact), and the store owner's veto table
+      listing_consents: [{ id: 'c1710000-0000-4000-8000-000000000001', org_id: L, release_id: RELEASE, artist_contact_id: C1, state: 'proposed', proposed_by: OWNER, proposed_at: '2026-10-01', decided_by: null, decided_at: null }],
+      store_listing_vetoes: [],
       user_profiles: [],
       creator_profiles: [],
       track_links: [],
@@ -447,6 +450,26 @@ describe('LABEL-33: delivering a release is not an external member\'s', () => {
   }
 });
 
+describe('LABEL-56: withdrawing a delivered release is not an external member\'s', () => {
+  const route = '[orgId]/releases/[releaseId]/withdraw/route.ts';
+
+  it('the route exists and is not on the external allowlist', () => {
+    expect(files).toContain(route);
+    expect(externalRouteKeys()).not.toContain(`${route}:POST`);
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: withdrawing is 403/404, the release stays delivered and nothing is written or recorded`, async () => {
+      db.tables.releases[0].state = 'delivered';
+      const res = await call(route, 'POST', user, { body: { note: 'let me' } });
+      expect([403, 404], `answered ${res.status}`).toContain(res.status);
+      expect(db.tables.releases[0].state).toBe('delivered');
+      expect(db.tables.activity_events ?? []).toEqual([]);
+      expect(mem.writes).toEqual([]);
+    });
+  }
+});
+
 describe('LABEL-42: putting a release on the store is not an external member\'s', () => {
   const route = '[orgId]/releases/[releaseId]/store/route.ts';
 
@@ -470,10 +493,47 @@ describe('LABEL-42: putting a release on the store is not an external member\'s'
   }
 });
 
+describe('LABEL-71: artist consent on the store is not an external member\'s (route by route)', () => {
+  const routes: [string, string, unknown][] = [
+    ['[orgId]/releases/[releaseId]/consent/route.ts', 'PUT', { decision: 'no' }],
+    ['[orgId]/consents/route.ts', 'GET', undefined],
+    ['[orgId]/connected-releases/route.ts', 'GET', undefined],
+    ['[orgId]/connected-releases/[releaseId]/route.ts', 'PUT', { listed: false }],
+  ];
+
+  it('the routes exist and none is on the external allowlist', () => {
+    for (const [route, method] of routes) {
+      expect(files).toContain(route);
+      expect(externalRouteKeys()).not.toContain(`${route}:${method}`);
+    }
+  });
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: cannot answer for an artist, read the questions or reach the store owner's list; nothing is written`, async () => {
+      for (const [path, method, body] of routes) {
+        const res = await call(path, method, user, { body });
+        expect([403, 404], `${method} ${path} answered ${res.status}`).toContain(res.status);
+      }
+      expect(db.tables.listing_consents[0].state).toBe('proposed');
+      expect(db.tables.store_listing_vetoes).toEqual([]);
+      expect(db.tables.releases[0].store_listed).not.toBe(true);
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+
+  it('the owner of the org is not the artist either: only the account that stands for Nova may answer', async () => {
+    const res = await call(routes[0][0], 'PUT', OWNER, { body: { decision: 'no' } });
+    expect(res.status).toBe(404);
+    expect(db.tables.listing_consents[0].state).toBe('proposed');
+    const strangers = [STRANGER, null];
+    for (const who of strangers) expect([401, 403, 404]).toContain((await call(routes[0][0], 'PUT', who, { body: { decision: 'no' } })).status);
+  });
+});
+
 describe('LABEL-27: credits and parties (route by route)', () => {
   const credits = '[orgId]/tracks/[id]/credits/route.ts';
   const decide = '[orgId]/tracks/[id]/credits/[creditId]/route.ts';
-  const parties = ['[orgId]/parties/route.ts', '[orgId]/parties/[partyId]/route.ts'];
+  const parties = ['[orgId]/parties/route.ts', '[orgId]/parties/[partyId]/route.ts', '[orgId]/parties/[partyId]/confirm/route.ts', '[orgId]/parties/[partyId]/invite/route.ts'];
 
   const propose = (user: string, body: unknown) => {
     current = user;
@@ -510,6 +570,15 @@ describe('LABEL-27: credits and parties (route by route)', () => {
         expect(res.status, action).toBe(404);
       }
       expect(db.tables.track_collaborators[0].status).toBe('confirmed');
+      expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
+    });
+  }
+
+  for (const [role, user] of Object.entries(ROLES)) {
+    it(`${role}: cannot withdraw Nova’s credit (404) — nothing is deleted and no event is written`, async () => {
+      const res = await call(decide, 'DELETE', user);
+      expect(res.status).toBe(404);
+      expect(db.tables.track_collaborators).toHaveLength(1);
       expect(mem.writes.filter((w) => w.op !== 'rpc')).toEqual([]);
     });
   }

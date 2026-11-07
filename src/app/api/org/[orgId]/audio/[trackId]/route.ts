@@ -71,7 +71,8 @@ import {
 } from '@/lib/labelos/org-audio';
 import { AuditEventError, recordEvent } from '@/lib/labelos/activity';
 import { connectedAudioSource } from '@/lib/labelos/connections';
-import { externalAudioAction, externalAudioIsAudited, externalMayAny, membershipsGranting } from '@/lib/labelos/project-members';
+import { externalAudioAction, externalAudioIsAudited, externalHearsDerivative, externalMayAny, membershipsGranting } from '@/lib/labelos/project-members';
+import { ensureFullDerivative, openFullDerivative } from '@/lib/storage/org-derivative';
 import { countsAsOnRelease } from '@/lib/labelos/releases';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { isR2Configured } from '@/lib/local-store';
@@ -211,6 +212,18 @@ async function serve(req: NextRequest, { params }: Params, opts: { head: boolean
       );
     }
 
+    // LABEL-72: a project member who may listen but not download hears the lossy full-length derivative, in
+    // bounded partials — never a Range stream of the master. Made on first listen (an authenticated, per-recording
+    // job); if it cannot be made the answer is "not ready", not the master.
+    if (actor.kind === 'external' && externalHearsDerivative(variant, download, actor.access.memberships)) {
+      if (!(await ensureFullDerivative(org, trackId, source))) return json(503, 'The listening copy of this recording is not ready yet');
+      const res = await openFullDerivative(org, trackId, req.headers.get('range'));
+      if (!res) return json(404, 'No audio for this variant');
+      const derivativeHeaders = new Headers(res.headers);
+      derivativeHeaders.set('cache-control', 'private, no-store');
+      return new Response(res.body, { status: res.status, headers: derivativeHeaders });
+    }
+
     const upstream = download
       ? await streamAudioSource(req, source, orgAudioFilename(track.title, variant, source))
       : await streamAudioPreviewSource(req, source);
@@ -232,14 +245,14 @@ async function serve(req: NextRequest, { params }: Params, opts: { head: boolean
 async function songIsOnRelease(admin: AdminClient, org: string, trackId: string): Promise<boolean> {
   const { data, error } = await admin
     .from('release_items')
-    .select('release_id, releases!inner(state)')
+    .select('release_id, releases!inner(state, imported_released)')
     .eq('song_track_id', trackId)
     .eq('org_id', org);
   if (error) {
     if (isMissingSchema(error)) return false;
     throw new Error(error.message);
   }
-  return countsAsOnRelease((data ?? []) as unknown as { releases: { state: string } | null }[]);
+  return countsAsOnRelease((data ?? []) as unknown as { releases: { state: string; imported_released: boolean | null } | null }[]);
 }
 
 /** Headers only: the storage stream GET opened is cancelled, never read. */

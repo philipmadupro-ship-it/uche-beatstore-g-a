@@ -5,8 +5,9 @@
  *
  * LABEL-16. The release's project and artist are fixed (144's trigger
  * agrees). `state` moves only between draft and cancelled here: delivery is
- * LABEL-33, gates LABEL-32, the store LABEL-42. A delivered or
- * imported-as-released release went out and is not deleted — cancel it.
+ * LABEL-33, gates LABEL-32, the store LABEL-42. Cancel (and delete) is for a
+ * DRAFT only (LABEL-56): a delivered release is withdrawn
+ * (POST …/withdraw), one entered as already out is not deleted.
  * Items are ids only: who may read a song's title, audio or ISRC is the
  * track routes' question (scope and audio class), not the release's.
  */
@@ -18,8 +19,9 @@ import { OrgReleasePatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
-import { RELEASE_COLUMNS, releaseEventSubject, toReleaseItemView, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
-import { checkArtwork, fail, itemsOf, releaseRow, schemaAware, writeError } from '../access';
+import { RELEASE_COLUMNS, RELEASE_DETAIL_COLUMNS, releaseEventSubject, toReleaseItemView, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
+import { cancelRefusal } from '@/lib/labelos/release-withdrawal';
+import { checkArtwork, fail, isMissingDetailColumn, itemsOf, releaseRow, schemaAware, writeError } from '../access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,7 +38,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!isSupabaseConfigured()) return unconfigured();
   const access = await requireObjectAccess({ table: 'releases', id: releaseId, cap: 'catalog.read', orgId });
   if (!access.ok) return (await schemaAware(access)).res;
-  const found = await releaseRow(access);
+  const found = await releaseRow(access, { details: true });
   if (!found.ok) return found.res;
   try {
     const items = await itemsOf(access, found.release.id);
@@ -58,13 +60,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!parsed.ok) return parsed.res;
   const { release } = found;
 
-  if (parsed.data.state && release.state === 'delivered') {
-    return fail(409, 'A delivered release keeps its state', { field: 'state' }).res;
+  if (parsed.data.state && (release.state === 'delivered' || release.state === 'withdrawn')) {
+    // Cancel is draft-only (LABEL-56): a delivered release is withdrawn, and a withdrawn one keeps its state.
+    return fail(409, cancelRefusal(release, 'cancel') ?? 'A release that went out keeps its state', { field: 'state' }).res;
   }
   // LABEL-42: once a release is delivered or entered as already out, its date is the record of when
   // it came out — the store judges "released" by it, so it is not editable (a street date next month
   // cannot be moved to yesterday to put the release on the store).
-  const wentOut = release.state === 'delivered' || release.imported_released;
+  const wentOut = release.state === 'delivered' || release.state === 'withdrawn' || release.imported_released;
   const manages = access.role === 'owner' || access.role === 'admin';
   if (parsed.data.release_date !== undefined && parsed.data.release_date !== release.release_date && wentOut) {
     if (release.release_date !== null) {
@@ -91,14 +94,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     // Guarded in the statement: state and release date are repeated as READ, so a delivery (or a cancel)
     // that landed between the read and this write cannot be overwritten — it matches no row and is a 409.
-    let guarded = access.admin
-      .from('releases')
-      .update(parsed.data)
-      .eq('id', release.id)
-      .eq('org_id', access.object.orgId)
-      .eq('state', release.state);
-    guarded = release.release_date === null ? guarded.is('release_date', null) : guarded.eq('release_date', release.release_date);
-    const { data, error } = await guarded.select(RELEASE_COLUMNS).maybeSingle();
+    const update = (columns: string) => {
+      let guarded = access.admin
+        .from('releases')
+        .update(parsed.data)
+        .eq('id', release.id)
+        .eq('org_id', access.object.orgId)
+        .eq('state', release.state);
+      guarded = release.release_date === null ? guarded.is('release_date', null) : guarded.eq('release_date', release.release_date);
+      return guarded.select(columns).maybeSingle();
+    };
+    let { data, error } = await update(RELEASE_DETAIL_COLUMNS);
+    // Before 175 a change that does not name the three details still saves (the statement is refused whole, so it is safe to repeat).
+    if (error && isMissingDetailColumn(error) && !('distributor' in parsed.data || 'territories' in parsed.data || 'language' in parsed.data)) {
+      ({ data, error } = await update(RELEASE_COLUMNS));
+    }
     if (error) return writeError(error, 'Could not save the release').res;
     if (!data) return fail(409, 'The release changed while it was being saved; reload and try again', { field: 'state' }).res;
     await recordEvent(
@@ -126,9 +136,8 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const found = await releaseRow(access);
   if (!found.ok) return found.res;
   const { release } = found;
-  if (release.state === 'delivered' || release.imported_released) {
-    return fail(409, 'This release went out; cancel it instead of deleting it').res;
-  }
+  const refusal = cancelRefusal(release, 'delete');
+  if (refusal) return fail(409, refusal).res;
   try {
     const { data, error } = await access.admin
       .from('releases')

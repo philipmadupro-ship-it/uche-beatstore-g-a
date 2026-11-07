@@ -33,8 +33,9 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { approvalIsStale, currentDecision, isOwnerOrAdmin, planDecide, snapshotKey } from '@/lib/labelos/approvals';
 import { ApprovalsNotReadyError, approvalContext, currentSnapshot, isMissingApprovalsSchema, legalGateReadiness, listApprovals, readReleaseFacts, releasesOfSong } from '@/lib/labelos/approvals-store';
-import { actorOf, gateStates, json, resolveSubject } from '@/lib/labelos/approvals-route';
+import { actorOf, creativeGateRefusal, gateStates, json, resolveSubject } from '@/lib/labelos/approvals-route';
 import { APPROVALS_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
+import { latestGateId } from '@/lib/labelos/release-fingerprint';
 import { CreditsNotReadyError } from '@/lib/labelos/credits-store';
 import { LegalReadinessNotReadyError } from '@/lib/labelos/legal-readiness-store';
 import { SplitsNotReadyError } from '@/lib/labelos/splits-store';
@@ -65,6 +66,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { access } = resolved;
     const { admin } = access;
     const org = access.orgId;
+    const off = await creativeGateRefusal(admin, org, body.gate);
+    if (off) return off;
 
     const rows = await listApprovals(admin, org, subject);
     const current = currentDecision(rows.filter((r) => r.gate === body.gate));
@@ -102,7 +105,15 @@ export async function POST(req: NextRequest, { params }: Params) {
       p_note: body.note?.trim() || null,
       p_snapshot: snapshot as unknown as Record<string, unknown>,
       p_may_self_approve: isOwnerOrAdmin(access.role),
-      p_ctx: ctx,
+      // 187: what the plan read, re-checked under the subject's lock (older databases ignore the extra key).
+      p_ctx: {
+        ...ctx,
+        check: {
+          latest: latestGateId(rows.map((r) => ({ id: r.id, gate: r.gate, created_at: r.created_at })), plan.gate),
+          seen: body.seen ?? '',
+          key: snapshotKey(snapshot),
+        },
+      } as typeof ctx,
       // The gate and the decision are added by the function; never the note's words.
       p_payload: { subject: subject.kind, answered_request: plan.requestId !== null, ...(readiness ? { blockers: readiness.blockers } : {}) },
     });
@@ -113,6 +124,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
     if (data?.error === 'not_found') return json(404, { error: 'Not found' });
     if (data?.error === 'self_approval') return json(403, { error: 'You cannot approve a request you made yourself', code: 'self_approval' });
+    if (data?.error === 'changed') return json(409, { error: 'Someone else decided this while you were looking. Look at it again.', code: 'changed' });
+    if (data?.error === 'no_request') return json(403, { error: 'Approving needs a request addressed to you. Ask for one first.', code: 'no_request' });
+    if (data?.error === 'seen_required') return json(400, { error: 'Open it and look before approving', code: 'seen_required' });
+    if (data?.error === 'changed_since_seen') return json(409, { error: 'This changed after you opened it. Look at it again before approving.', code: 'changed_since_seen' });
+    if (data?.error === 'decided_on_release') return json(409, { error: 'This song is on a release. Legal is approved on the release.', code: 'decided_on_release' });
     if (data?.error === 'note_required') return json(400, { error: 'Say what needs to change', code: 'note_required' });
     if (data?.error) return json(400, { error: 'That decision does not apply here', code: String(data.error) });
 

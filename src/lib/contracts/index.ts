@@ -15,6 +15,7 @@
  * type). e.g. `RateBodySchema` and `RateBody = z.infer<typeof RateBodySchema>`.
  */
 import { z } from 'zod';
+import { isCurrency as isFinanceCurrency } from '@/lib/labelos/finance/currency';
 import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
 import { DECISIONS } from '@/lib/contacts/decisions';
 import { ORG_UPLOAD_RELATIONS } from '@/lib/labelos/org-upload';
@@ -22,11 +23,15 @@ import { ASSET_SENSITIVITIES, ORG_ASSET_KINDS } from '@/lib/labelos/org-assets';
 import { parseIdentifier, type IdentifierKind } from '@/lib/labelos/identifiers';
 import { RELEASE_MAX_ITEMS, RELEASE_TYPES } from '@/lib/labelos/releases';
 import { CONTRACT_TYPE_IDS, type ContractTypeId } from '@/lib/labelos/contract-types';
+import { PARTY_ROLES, TEMPLATE_TYPE_IDS, type PartyRole, type TemplateTypeId } from '@/lib/labelos/contracts/types';
 import { STORE_PLAYBACKS } from '@/lib/labelos/store-listing';
 import { CURSOR_RE } from '@/lib/labelos/activity-feed';
-import { DECISIONS as APPROVAL_DECISIONS, GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
+import { DECISIONS as APPROVAL_DECISIONS, ALL_GATES as APPROVAL_GATES, NOTE_MAX as APPROVAL_NOTE_MAX, SUBJECT_KINDS as APPROVAL_SUBJECT_KINDS } from '@/lib/labelos/approvals';
 import { SONG_STAGES } from '@/lib/labelos/song-stage';
 import { NOTE_MAX, REVIEW_VERDICTS } from '@/lib/labelos/song-review';
+import { ASSET_KINDS as MARKETING_ASSET_KINDS, ASSET_STATUSES as MARKETING_ASSET_STATUSES, BUDGET_STATUSES as MARKETING_BUDGET_STATUSES, PLAN_LIMITS as MARKETING_LIMITS, PLAN_PHASES as MARKETING_PHASES, PLATFORMS as MARKETING_PLATFORMS, PLATFORM_STEPS as MARKETING_PLATFORM_STEPS } from '@/lib/labelos/marketing-plan';
+import { parseDay } from '@/lib/labelos/release-calendar';
+import { PRESS_LIMITS, cleanHttpsUrl } from '@/lib/labelos/press';
 import { TASK_NOTES_MAX, TASK_OBJECT_KINDS, TASK_TITLE_MAX } from '@/lib/labelos/tasks';
 import { SPLIT_KINDS, SPLIT_ROLES } from '@/lib/labelos/splits';
 import { ACCOUNT_FACES } from '@/lib/labelos/account';
@@ -1032,6 +1037,13 @@ export const OrgReadinessSettingsSchema = z.object({
   legal_gate: z.enum(['on', 'off']).catch('on'),
   marketing_gate: z.enum(['on', 'off']).catch('on'),
   require_signed_master_split: z.boolean().catch(false),
+  /** LABEL-65: the marketing gate also needs a marketing plan with its required timeline items. Off unless exactly `true`. */
+  marketing_plan_required: z.boolean().catch(false),
+  /**
+   * LABEL-68: the OPTIONAL creative approval gate on a release (`creative.approve`). Off unless the stored value is exactly
+   * the string `on` — a missing, misspelt or malformed value reads as off, so a bad row can never add a gate nobody asked for.
+   */
+  creative_gate: z.enum(['on', 'off']).catch('off'),
   /** The shorter side of cover art, in pixels (09 §4: 3000 is the common DSP minimum). Whole numbers 600-10000; anything else reads as 3000. */
   artwork_min_px: z.number().int().min(600).max(10000).catch(3000),
 });
@@ -1072,7 +1084,11 @@ export function parseAttentionSettings(raw: unknown): OrgAttentionSettings {
  * `planSettingsChange` (lib/labelos/org-settings), checked by the route;
  * here the names are only bounded to the switchable departments.
  */
-export const OrgSettingsPatchBodySchema = z.object(OrgSettingsPatchFields).partial().strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
+export const OrgSettingsPatchBodySchema = z.object({
+  ...OrgSettingsPatchFields,
+  /** LABEL-76 (migration 196): the cover-art minimum, whole pixels. Same range as `OrgReadinessSettingsSchema` and the SQL validator. Not a setup-wizard key. */
+  artwork_min_px: z.number().int().min(600).max(10000),
+}).partial().strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'Nothing to change' });
 export type OrgSettingsPatchBody = z.infer<typeof OrgSettingsPatchBodySchema>;
 
 /**
@@ -1107,6 +1123,9 @@ export const OrgProjectInviteBodySchema = z.object({
   email: z.string().trim().email('Enter a valid email address').max(200),
   role: z.string().min(1).max(40),
   allow_downloads: z.boolean().optional().default(false),
+  /** LABEL-69: invite as a collaborator (beatmaker, producer, rapper, feature, engineer) and propose that credit on `song_id` once they accept. Both or neither. */
+  collaborator_role: z.string().min(1).max(40).optional(),
+  song_id: z.string().uuid().optional(),
 }).strict();
 export type OrgProjectInviteBody = z.infer<typeof OrgProjectInviteBodySchema>;
 
@@ -1356,6 +1375,20 @@ const releaseFields = {
   c_line: releaseText(200),
   p_line: releaseText(200),
   primary_genre: releaseText(80),
+  distributor: releaseText(120),
+  /** ISO 3166-1 alpha-2 codes (WW = worldwide), once each; null = not stated (migration 175). */
+  territories: z
+    .array(z.string().regex(/^[A-Z]{2}$/, 'Use two-letter country codes (WW for worldwide)'))
+    .min(1)
+    .max(250)
+    .refine((v) => new Set(v).size === v.length, 'List each territory once')
+    .refine((v) => !v.includes('WW') || v.length === 1, 'WW means worldwide on its own')
+    .nullable(),
+  language: z
+    .string()
+    .trim()
+    .regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/, 'Use a language code such as en or pt-BR')
+    .nullable(),
   target_date: releaseDate,
   release_date: releaseDate,
   artwork_asset_id: z.string().uuid().nullable(),
@@ -1372,6 +1405,9 @@ export const OrgReleaseCreateBodySchema = z.object({
   c_line: releaseFields.c_line.optional(),
   p_line: releaseFields.p_line.optional(),
   primary_genre: releaseFields.primary_genre.optional(),
+  distributor: releaseFields.distributor.optional(),
+  territories: releaseFields.territories.optional(),
+  language: releaseFields.language.optional(),
   target_date: releaseFields.target_date.optional(),
   release_date: releaseFields.release_date.optional(),
   artwork_asset_id: releaseFields.artwork_asset_id.optional(),
@@ -1392,6 +1428,24 @@ export const OrgReleaseStoreBodySchema = z.discriminatedUnion('listed', [
 ]);
 export type OrgReleaseStoreBody = z.infer<typeof OrgReleaseStoreBodySchema>;
 
+/**
+ * PUT /api/org/[orgId]/releases/[releaseId]/consent (LABEL-71): a credited
+ * artist's own answer on putting the release on the store. Only `yes` or
+ * `no` — `proposed` is the system's word. The artist is the caller; the body
+ * never names one, so nobody can answer for somebody else.
+ */
+export const OrgListingConsentBodySchema = z.object({ decision: z.enum(['yes', 'no']) }).strict();
+export type OrgListingConsentBody = z.infer<typeof OrgListingConsentBodySchema>;
+
+/**
+ * PUT /api/org/[orgId]/connected-releases/[releaseId] (LABEL-71): the store
+ * owner's Unlist (`listed: false`, a veto kept in their own org) and Allow
+ * again (`listed: true` lifts it). Allowing does not list anything: the
+ * artist's side still decides whether the release is on the store.
+ */
+export const OrgConnectedReleaseBodySchema = z.object({ listed: z.boolean() }).strict();
+export type OrgConnectedReleaseBody = z.infer<typeof OrgConnectedReleaseBodySchema>;
+
 /** PATCH /api/org/[orgId]/releases/[releaseId]. The project and the artist are fixed. */
 export const OrgReleasePatchBodySchema = z.object({
   title: releaseFields.title.optional(),
@@ -1401,6 +1455,9 @@ export const OrgReleasePatchBodySchema = z.object({
   c_line: releaseFields.c_line.optional(),
   p_line: releaseFields.p_line.optional(),
   primary_genre: releaseFields.primary_genre.optional(),
+  distributor: releaseFields.distributor.optional(),
+  territories: releaseFields.territories.optional(),
+  language: releaseFields.language.optional(),
   target_date: releaseFields.target_date.optional(),
   release_date: releaseFields.release_date.optional(),
   artwork_asset_id: releaseFields.artwork_asset_id.optional(),
@@ -1466,11 +1523,35 @@ const PartyFields = {
   publisher_ipi: PARTY_TEXT(32),
   contact_id: z.string().uuid().nullable().optional(),
   user_id: z.string().uuid().nullable().optional(),
+  // LABEL-54. Tax id and payment instructions are payee data: `rights.write` writes them, and
+  // lib/labelos/payee refuses anything that looks like a bank or card number.
+  address: PARTY_TEXT(500),
+  country: PARTY_TEXT(2),
+  tax_id: PARTY_TEXT(64),
+  payment_instructions: PARTY_TEXT(500),
 };
 export const OrgPartyCreateBodySchema = z.object({ ...PartyFields, display_name: z.string().trim().min(1).max(200) }).strict();
 export type OrgPartyCreateBody = z.infer<typeof OrgPartyCreateBodySchema>;
 export const OrgPartyPatchBodySchema = z.object(PartyFields).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type OrgPartyPatchBody = z.infer<typeof OrgPartyPatchBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/parties/[partyId]/confirm (LABEL-54): the person named by a party confirms
+ * their own rights details, optionally correcting the legal fields first. Identity, links and payee
+ * data are not here: the schema is strict, so they cannot be sent.
+ */
+export const OrgPartyConfirmBodySchema = z.object({
+  legal_name: PARTY_TEXT(200),
+  ipi: PARTY_TEXT(32),
+  isni: PARTY_TEXT(32),
+  pro: PARTY_TEXT(80),
+  pro_affiliation: z.enum(['affiliated', 'not_affiliated', 'unknown']).optional(),
+  publisher_name: PARTY_TEXT(200),
+  publisher_ipi: PARTY_TEXT(32),
+  address: PARTY_TEXT(500),
+  country: PARTY_TEXT(2),
+}).strict();
+export type OrgPartyConfirmBody = z.infer<typeof OrgPartyConfirmBodySchema>;
 
 /**
  * POST /api/org/[orgId]/tracks/[id]/credits (LABEL-27): propose a credit.
@@ -1516,6 +1597,15 @@ export const OrgSplitCreateBodySchema = z.object({
   lines: z.array(SplitLineSchema).max(50).optional(),
 }).strict();
 export type OrgSplitCreateBody = z.infer<typeof OrgSplitCreateBodySchema>;
+
+/** POST /api/org/[orgId]/contracts/[contractId]/splits: pre-fill split sheet drafts from a contract (LABEL-59). */
+export const OrgContractSplitsBodySchema = z.object({
+  /** One kind, or both of the kinds the contract type has a rule for. */
+  kind: z.enum(SPLIT_KINDS).optional(),
+  /** Replace an existing draft's lines. Without it an existing draft is never touched (409). */
+  replace_draft: z.boolean().optional(),
+}).strict();
+export type OrgContractSplitsBody = z.infer<typeof OrgContractSplitsBodySchema>;
 
 /** PATCH …/splits/[sheetId]: replace a draft's note and / or its whole set of lines. */
 export const OrgSplitPatchBodySchema = z.object({
@@ -1644,6 +1734,17 @@ export const OrgReleaseDeliverBodySchema = z.object({
   override_note: z.string().max(1000).optional(),
 }).strict();
 export type OrgReleaseDeliverBody = z.infer<typeof OrgReleaseDeliverBodySchema>;
+
+/**
+ * POST /api/org/[orgId]/releases/[releaseId]/withdraw (LABEL-56). The reason is optional and recorded with the
+ * (internal) audit event; `delete_previews` is the LABEL-42 unlist choice, honoured only for music that was never
+ * publicly out.
+ */
+export const OrgReleaseWithdrawBodySchema = z.object({
+  note: z.string().max(1000).optional(),
+  delete_previews: z.boolean().optional(),
+}).strict();
+export type OrgReleaseWithdrawBody = z.infer<typeof OrgReleaseWithdrawBodySchema>;
 
 /** POST /api/org/[orgId]/releases/[releaseId]/items — appended at the end. No master = the song itself. */
 export const OrgReleaseItemCreateBodySchema = z.object({
@@ -1797,3 +1898,402 @@ export const OrgTrackMetadataBodySchema = z.object({
   notes: metadataText,
 }).strict();
 export type OrgTrackMetadataBody = z.infer<typeof OrgTrackMetadataBodySchema>;
+
+
+// ── Contracts and contract templates (LABEL-57) ─────────────────────────
+
+const templateTypeEnum = z.enum(TEMPLATE_TYPE_IDS as [TemplateTypeId, ...TemplateTypeId[]]);
+const partyRoleEnum = z.enum(PARTY_ROLES as unknown as [PartyRole, ...PartyRole[]]);
+
+/** PUT /api/org/[orgId]/contract-templates/[type]: save the next version of the org's own template. */
+export const OrgContractTemplateSaveBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    clauses: z
+      .array(
+        z
+          .object({
+            id: z.string().trim().max(40).optional(),
+            heading: z.string().trim().min(1).max(120),
+            body: z.string().max(6000),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(60),
+  })
+  .strict();
+export type OrgContractTemplateSaveBody = z.infer<typeof OrgContractTemplateSaveBodySchema>;
+
+const contractTerritories = z
+  .array(z.string().regex(/^[A-Z]{2}$/, 'Use two-letter country codes (WW for worldwide)'))
+  .min(1)
+  .max(250)
+  .refine((v) => new Set(v).size === v.length, 'List each territory once')
+  .refine((v) => !v.includes('WW') || v.length === 1, 'WW means worldwide on its own')
+  .nullable();
+
+const contractParty = z.object({ party_id: z.string().uuid(), role: partyRoleEnum }).strict();
+const contractFields = z.record(z.string().max(60), z.union([z.string().max(600), z.null()]));
+const contractDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2027-03-01').nullable();
+
+const ContractFields = {
+  title: z.string().trim().min(1).max(200),
+  artist_contact_id: z.string().uuid().nullable(),
+  track_id: z.string().uuid().nullable(),
+  release_id: z.string().uuid().nullable(),
+  effective_date: contractDate,
+  term_months: z.number().int().min(1).max(1200).nullable(),
+  territories: contractTerritories,
+  fields: contractFields,
+  parties: z.array(contractParty).max(20),
+  internal_note: z.string().trim().max(2000).nullable(),
+};
+
+/** POST /api/org/[orgId]/contracts: a draft from a template (the org's latest version of the type, else the platform default). */
+export const OrgContractCreateBodySchema = z
+  .object({
+    type: templateTypeEnum,
+    /** `platform` forces the built-in wording even when the org has its own version. */
+    source: z.enum(['org', 'platform']).optional(),
+    title: ContractFields.title,
+    artist_contact_id: ContractFields.artist_contact_id.optional(),
+    track_id: ContractFields.track_id.optional(),
+    release_id: ContractFields.release_id.optional(),
+    effective_date: ContractFields.effective_date.optional(),
+    term_months: ContractFields.term_months.optional(),
+    territories: ContractFields.territories.optional(),
+    fields: ContractFields.fields.optional(),
+    parties: ContractFields.parties.optional(),
+    internal_note: ContractFields.internal_note.optional(),
+  })
+  .strict();
+export type OrgContractCreateBody = z.infer<typeof OrgContractCreateBodySchema>;
+
+/** One clause of a contract's own wording (LABEL-58). Ids, lengths and merge keys are checked again by `cleanContractClauses`. */
+const contractClause = z.object({
+  id: z.string().trim().max(40).optional(),
+  heading: z.string().max(400),
+  body: z.string().max(20000),
+});
+const contractClauses = z.array(contractClause).min(1).max(60);
+
+/** POST …/contracts/[contractId]/preview: the unsaved form, rendered by the server exactly as the PDF will say it. */
+export const OrgContractPreviewBodySchema = z
+  .object({
+    title: ContractFields.title.optional(),
+    artist_contact_id: ContractFields.artist_contact_id.optional(),
+    track_id: ContractFields.track_id.optional(),
+    release_id: ContractFields.release_id.optional(),
+    effective_date: ContractFields.effective_date.optional(),
+    term_months: ContractFields.term_months.optional(),
+    territories: ContractFields.territories.optional(),
+    fields: ContractFields.fields.optional(),
+    parties: ContractFields.parties.optional(),
+    clauses: contractClauses.optional(),
+  })
+  .strict();
+export type OrgContractPreviewBody = z.infer<typeof OrgContractPreviewBodySchema>;
+
+/** POST …/contracts/[contractId]/send: the version the sender reviewed; a newer one is refused. */
+export const OrgContractSendBodySchema = z.object({ version: z.number().int().min(1) }).strict();
+
+/**
+ * LABEL-60 — signing. A drawn signature is a PNG data URL (parseDrawnSignature re-checks magic bytes and size);
+ * `version` is the contract version the signer read, so a contract that moved on is a 409, not a signature on text
+ * they did not see.
+ */
+const signatureName = z.string().min(2).max(200);
+const signatureDrawing = z.string().max(400_000).optional();
+
+/** POST /api/org/[orgId]/contracts/[contractId]/signing — a signed-in member signs for a party. */
+export const OrgContractSignBodySchema = z
+  .object({
+    party_id: z.string().uuid(),
+    version: z.number().int().min(1),
+    /** The SHA-256 the signer's page showed (GET …/signing `documentSha256`): what they read is what is signed. */
+    document_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    name: signatureName,
+    drawing: signatureDrawing,
+  })
+  .strict();
+
+/** POST /api/sign/[token] — an external signer signs through their link (the party is the link's). */
+export const PublicContractSignBodySchema = z
+  .object({ version: z.number().int().min(1), document_sha256: z.string().regex(/^[0-9a-f]{64}$/), name: signatureName, drawing: signatureDrawing })
+  .strict();
+
+/** POST|DELETE …/signing/links — issue / rotate, or revoke, one party's signing link. */
+export const OrgContractLinkBodySchema = z.object({ party_id: z.string().uuid() }).strict();
+
+/** PUT …/signing/provider — the external e-signature address (https only; null clears it). */
+export const OrgContractProviderBodySchema = z.object({ url: z.string().max(500).nullable() }).strict();
+
+/** POST …/supersede — void a sent or signed contract and start its replacement draft. */
+export const OrgContractSupersedeBodySchema = z.object({ reason: z.string().trim().max(500).optional() }).strict();
+
+/** PATCH /api/org/[orgId]/contracts/[contractId]: edit a draft, or void the contract. */
+export const OrgContractPatchBodySchema = z
+  .object({
+    clauses: contractClauses.optional(),
+    /** The version the editor loaded; a different one on the server means someone else saved first (409). */
+    base_version: z.number().int().min(1).optional(),
+    title: ContractFields.title.optional(),
+    artist_contact_id: ContractFields.artist_contact_id.optional(),
+    track_id: ContractFields.track_id.optional(),
+    release_id: ContractFields.release_id.optional(),
+    effective_date: ContractFields.effective_date.optional(),
+    term_months: ContractFields.term_months.optional(),
+    territories: ContractFields.territories.optional(),
+    fields: ContractFields.fields.optional(),
+    parties: ContractFields.parties.optional(),
+    internal_note: ContractFields.internal_note.optional(),
+    status: z.literal('void').optional(),
+    void_reason: z.string().trim().max(500).optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' })
+  .refine((b) => !b.void_reason || b.status === 'void', { message: 'A reason goes with voiding' })
+  .refine((b) => b.status !== 'void' || Object.keys(b).every((k) => k === 'status' || k === 'void_reason'), { message: 'Void a contract on its own' })
+  .refine((b) => Object.keys(b).some((k) => k !== 'base_version'), { message: 'Nothing to update' });
+export type OrgContractPatchBody = z.infer<typeof OrgContractPatchBodySchema>;
+
+// ── Finance (LABEL-61) ──────────────────────────────────────────────────
+
+/** A payee: a rights holder (`parties`) who is paid. The currency is an ISO-4217 code the money helpers know. */
+export const OrgPayeeCreateBodySchema = z
+  .object({
+    party_id: z.string().uuid(),
+    // The artist the writer expects the party to stand for (null = none). The database refuses the insert if the party says otherwise.
+    artist_contact_id: z.string().uuid().nullable(),
+    currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine((c) => isFinanceCurrency(c), 'Unknown currency')
+      .default('USD'),
+    // Free text for finance ("wire details on file"), never an account number: the route and the database refuse one.
+    payment_reference: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+export type OrgPayeeCreateBody = z.infer<typeof OrgPayeeCreateBodySchema>;
+
+// ── Earnings import (LABEL-62) ──────────────────────────────────────────
+
+const EarningsMappingSchema = z
+  .object({
+    amount: z.string().trim().min(1).max(120),
+    isrc: z.string().trim().min(1).max(120).optional(),
+    upc: z.string().trim().min(1).max(120).optional(),
+    title: z.string().trim().min(1).max(120).optional(),
+    store: z.string().trim().min(1).max(120).optional(),
+    territory: z.string().trim().min(1).max(120).optional(),
+    units: z.string().trim().min(1).max(120).optional(),
+    currency: z.string().trim().min(1).max(120).optional(),
+    period: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict();
+
+/**
+ * The text fields that travel with the file in a multipart upload (the file itself is the exact bytes the
+ * SHA-256 is taken over). Every value arrives as a string.
+ */
+export const OrgEarningsImportFieldsSchema = z
+  .object({
+    preset: z.enum(['auto', 'distrokid', 'tunecore', 'cdbaby', 'generic']).default('auto'),
+    currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine((c) => isFinanceCurrency(c), 'Unknown currency')
+      .optional(),
+    income_class: z.enum(['master', 'publishing']).default('master'),
+    period_id: z.string().uuid().optional(),
+    round_fractional: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    // Generic mapper only: JSON of { amount, isrc?, upc?, … } naming header texts.
+    mapping: z
+      .string()
+      .max(2000)
+      .optional()
+      .transform((v, ctx) => {
+        if (v === undefined || v === '') return undefined;
+        try {
+          const parsed = EarningsMappingSchema.safeParse(JSON.parse(v));
+          if (parsed.success) return parsed.data;
+        } catch {
+          /* fall through */
+        }
+        ctx.addIssue({ code: 'custom', message: 'The column mapping is not valid' });
+        return z.NEVER;
+      }),
+  })
+  .strict();
+export type OrgEarningsImportFields = z.infer<typeof OrgEarningsImportFieldsSchema>;
+
+/**
+ * An amount sent by a client, in minor units: a whole number JSON can carry exactly (a number past 2^53 has
+ * already been rounded by the parser, so it is refused — a 400, never silently a different amount) or a digit
+ * string inside the signed 64-bit range of the database column.
+ */
+export const OrgMinorAmountSchema = z.union([
+  z.number().int().safe(),
+  z
+    .string()
+    .regex(/^-?\d{1,19}$/)
+    .refine((v) => {
+      if (!/^-?\d{1,19}$/.test(v)) return false;
+      const n = BigInt(v);
+      return n <= BigInt('9223372036854775807') && n >= -BigInt('9223372036854775807') - BigInt(1);
+    }, 'Amount is outside the range of a 64-bit integer'),
+]);
+
+
+// ── Marketing plans (LABEL-65) ────────────────────────────────────────────
+
+const MARKETING_DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => parseDay(v) !== null, 'Not a real calendar day');
+const MARKETING_TITLE = z.string().trim().min(1).max(MARKETING_LIMITS.title);
+
+/** POST …/marketing/items: one timeline milestone. */
+export const MarketingItemCreateBodySchema = z.object({ phase: z.enum(MARKETING_PHASES), title: MARKETING_TITLE, due_on: MARKETING_DAY }).strict();
+/** PATCH …/marketing/items/[itemId]: any of title, day, phase, done. */
+export const MarketingItemPatchBodySchema = z
+  .object({ phase: z.enum(MARKETING_PHASES), title: MARKETING_TITLE, due_on: MARKETING_DAY, done: z.boolean() })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Name something to change');
+/** PUT …/marketing/platform: tick or untick one step of the fixed checklist. */
+export const MarketingStepBodySchema = z.object({ platform: z.enum(MARKETING_PLATFORMS), step: z.enum(MARKETING_PLATFORM_STEPS), done: z.boolean() }).strict();
+
+/** Money is whole minor units in a known ISO currency, as a digit string so a double never touches it. */
+const MARKETING_AMOUNT = z.string().regex(/^\d{1,15}$/, 'Whole minor units');
+const MARKETING_CURRENCY = z.string().refine((v) => isFinanceCurrency(v), 'Unknown currency');
+export const MarketingBudgetCreateBodySchema = z
+  .object({
+    label: z.string().trim().min(1).max(MARKETING_LIMITS.label),
+    amount_minor: MARKETING_AMOUNT,
+    currency: MARKETING_CURRENCY,
+    status: z.enum(MARKETING_BUDGET_STATUSES).optional(),
+    note: z.string().trim().min(1).max(MARKETING_LIMITS.budgetNote).nullable().optional(),
+  })
+  .strict();
+export const MarketingBudgetPatchBodySchema = z
+  .object({
+    label: z.string().trim().min(1).max(MARKETING_LIMITS.label),
+    amount_minor: MARKETING_AMOUNT,
+    currency: MARKETING_CURRENCY,
+    status: z.enum(MARKETING_BUDGET_STATUSES),
+    note: z.string().trim().min(1).max(MARKETING_LIMITS.budgetNote).nullable(),
+  })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Name something to change');
+
+/** POST …/marketing/assets: ask the artist for something. */
+export const MarketingAssetCreateBodySchema = z
+  .object({ kind: z.enum(MARKETING_ASSET_KINDS), note: z.string().trim().min(1).max(MARKETING_LIMITS.assetNote).nullable().optional() })
+  .strict();
+export const MarketingAssetPatchBodySchema = z.object({ status: z.enum(MARKETING_ASSET_STATUSES) }).strict();
+
+/** PUT …/settings/marketing-plan (owner only). */
+export const MarketingPlanRequiredBodySchema = z.object({ required: z.boolean() }).strict();
+
+/** PUT …/settings/creative-gate (owner only, LABEL-68): switch the optional creative approval gate on or off. */
+export const CreativeGateBodySchema = z.object({ enabled: z.boolean() }).strict();
+
+// ── Statements and payment tracking (LABEL-63) ──────────────────────────
+
+const FinanceDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-09-30')
+  .refine((d) => {
+    const t = Date.parse(`${d}T00:00:00Z`);
+    return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === d;
+  }, 'That date does not exist');
+
+/** A reporting period statements are made for. Open when made; closing is LABEL-64's. */
+export const OrgFinancePeriodCreateBodySchema = z
+  .object({ label: z.string().trim().min(1).max(80), starts_on: FinanceDateSchema, ends_on: FinanceDateSchema })
+  .strict()
+  .refine((b) => b.ends_on >= b.starts_on, { message: 'The period cannot end before it starts', path: ['ends_on'] });
+export type OrgFinancePeriodCreateBody = z.infer<typeof OrgFinancePeriodCreateBodySchema>;
+
+/** Make (or replace the draft of) the statement for one payee and one period. */
+export const OrgStatementGenerateBodySchema = z.object({ payee_id: z.string().uuid(), period_id: z.string().uuid() }).strict();
+export type OrgStatementGenerateBody = z.infer<typeof OrgStatementGenerateBodySchema>;
+
+export const OrgStatementVoidBodySchema = z.object({ reason: z.string().trim().min(1).max(500).optional() }).strict();
+export type OrgStatementVoidBody = z.infer<typeof OrgStatementVoidBodySchema>;
+
+/** An advance paid to a payee (LABEL-64). Minor units as digits; the currency is the payee's. */
+export const OrgAdvanceCreateBodySchema = z
+  .object({
+    payee_id: z.string().uuid(),
+    kind: z.enum(['recoupable', 'non_recoupable']),
+    amount_minor: z.string().regex(/^[1-9]\d{0,17}$/, 'Enter an amount above zero'),
+    paid_on: FinanceDateSchema.optional(),
+    note: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+export type OrgAdvanceCreateBody = z.infer<typeof OrgAdvanceCreateBodySchema>;
+
+/** Change an advance: any of kind / amount / date (only while nothing references it) and the note. null clears the date or the note. */
+export const OrgAdvancePatchBodySchema = z
+  .object({
+    kind: z.enum(['recoupable', 'non_recoupable']).optional(),
+    amount_minor: z.string().regex(/^[1-9]\d{0,17}$/, 'Enter an amount above zero').optional(),
+    paid_on: FinanceDateSchema.nullable().optional(),
+    note: z.string().trim().min(1).max(500).nullable().optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type OrgAdvancePatchBody = z.infer<typeof OrgAdvancePatchBodySchema>;
+
+/** A payment somebody made elsewhere. The amount is minor units as digits (no float on the wire). A reference is never an account number. */
+export const OrgPaymentCreateBodySchema = z
+  .object({
+    amount_minor: z.string().regex(/^[1-9]\d{0,17}$/, 'Enter an amount above zero'),
+    paid_on: FinanceDateSchema,
+    reference: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+export type OrgPaymentCreateBody = z.infer<typeof OrgPaymentCreateBodySchema>;
+
+
+// ── PR and press (LABEL-66) ───────────────────────────────────────────────
+
+const PRESS_OPT_TEXT = (max: number) => z.string().trim().min(1).max(max).nullable();
+const PRESS_HTTPS = z.string().trim().min(1).max(500).refine((v) => cleanHttpsUrl(v) !== null, 'Use a full https:// address');
+
+/** PUT …/press: any of the kit's own fields; null clears one. The embargo is an ISO moment. */
+export const PressKitPutBodySchema = z
+  .object({
+    headline: PRESS_OPT_TEXT(PRESS_LIMITS.headline),
+    bio: PRESS_OPT_TEXT(PRESS_LIMITS.bio),
+    pre_embargo_note: PRESS_OPT_TEXT(PRESS_LIMITS.note),
+    embargo_at: z.string().datetime({ offset: true }).nullable(),
+  })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Name something to change');
+export const PressLinkCreateBodySchema = z.object({ label: z.string().trim().min(1).max(PRESS_LIMITS.label), url: PRESS_HTTPS }).strict();
+export const PressPhotoCreateBodySchema = z
+  .object({ asset_id: z.string().uuid(), caption: PRESS_OPT_TEXT(PRESS_LIMITS.caption).optional(), pre_embargo: z.boolean().optional() })
+  .strict();
+export const PressPhotoPatchBodySchema = z
+  .object({ caption: PRESS_OPT_TEXT(PRESS_LIMITS.caption), pre_embargo: z.boolean() })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Name something to change');
+/** POST …/press/shares: a labelled link, optionally expiring. */
+export const PressShareCreateBodySchema = z
+  .object({ label: z.string().trim().min(1).max(PRESS_LIMITS.label), expires_at: z.string().datetime({ offset: true }).nullable().optional() })
+  .strict();
+export const PressOutreachCreateBodySchema = z.object({ contact_id: z.string().uuid(), sent: z.boolean().optional() }).strict();
+export const PressOutreachPatchBodySchema = z
+  .object({ sent: z.boolean(), opened: z.boolean(), replied: z.boolean(), coverage_url: PRESS_HTTPS.nullable() })
+  .partial()
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, 'Name something to change');

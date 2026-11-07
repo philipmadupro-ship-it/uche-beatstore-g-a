@@ -11,7 +11,7 @@ import {
 } from './org-read';
 import { recordingClass } from './capabilities';
 import { recordingKindOf } from './recording-kind';
-import { RELEASE_STATES_OFF_RELEASE } from './releases';
+import { RELEASE_STATES_ON_RELEASE, countsAsOnRelease } from './releases';
 
 const MIGRATION = readFileSync(join(process.cwd(), 'supabase/migrations/141_labelos_org_catalog.sql'), 'utf8').replace(/--[^\n]*/g, '');
 
@@ -99,11 +99,24 @@ describe('orgTrackReadClass (the SQL twin of labelos_track_is_finished)', () => 
     for (const list of lists) expect(list).toEqual([...FINISHED_LINK_RELATIONS]);
   });
 
-  it('a song on a release is finished at any stage (06 §2.3, LABEL-16)', () => {
+  it('a song on a release that went out is finished at any stage (06 §2.3, LABEL-16, LABEL-56)', () => {
     for (const stage of ['inbox', 'in_review', 'in_development', null]) {
       expect(orgTrackReadClass({ type: 'song', song_stage: stage, on_release: true }, [])).toBe('finished');
       expect(orgTrackReadClass({ type: 'song', song_stage: stage, on_release: false }, [])).toBe('working');
     }
+  });
+
+  it('LABEL-56: a song whose only release is a draft reads as working until that release is delivered', () => {
+    const readAs = (state: string) =>
+      orgTrackReadClass({ type: 'song', song_stage: 'in_review', on_release: countsAsOnRelease([{ releases: { state } }]) }, []);
+    expect(readAs('draft')).toBe('working');
+    expect(readAs('cancelled')).toBe('working');
+    expect(readAs('delivered')).toBe('finished');
+    expect(readAs('withdrawn')).toBe('finished');
+    // A marketing member (audio.finished only) therefore cannot read the draft's song, and can read the delivered one's.
+    const marketing = new Set(['catalog.read', 'audio.finished']);
+    expect(orgRowAudioAllows(marketing, readAs('draft'))).toBe(false);
+    expect(orgRowAudioAllows(marketing, readAs('delivered'))).toBe(true);
   });
 
   it('… but a working link into it still wins, and a non-song is never finished by it', () => {
@@ -111,11 +124,14 @@ describe('orgTrackReadClass (the SQL twin of labelos_track_is_finished)', () => 
     expect(orgTrackReadClass({ type: 'beat', song_stage: null, on_release: true }, [])).toBe('working');
   });
 
-  it('the SQL twin has the release arm: a song item of a release that is not cancelled', () => {
+  it('the SQL twin has the release arm: a song item of a release that went out (delivered / withdrawn / imported), never cancelled or draft', () => {
     const body = functionBody('labelos_track_is_finished');
     expect(body).toMatch(/JOIN public\.release_items ri ON ri\.song_track_id = t\.id/);
     expect(body).toMatch(/t\.type = 'song'/);
-    expect(inLists(body, 'state')).toEqual([[...RELEASE_STATES_OFF_RELEASE]]);
+    expect(body).toMatch(/r\.state <> 'cancelled'/);
+    expect(body).toMatch(/r\.imported_released/);
+    expect(inLists(body, 'state')).toEqual([[...RELEASE_STATES_ON_RELEASE]]);
+    expect(body).not.toMatch(/'draft'/);
   });
 });
 

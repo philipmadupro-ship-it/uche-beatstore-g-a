@@ -15,12 +15,14 @@ import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { ApprovalsNotReadyError, currentSnapshot, isMissingApprovalsSchema, listApprovals, readReleaseFacts } from './approvals-store';
 import { CreditsNotReadyError } from './credits-store';
 import { SplitsNotReadyError } from './splits-store';
-import { currentDecision, GATES, type Gate } from './approvals';
+import { currentDecision, GATES, type CoreGate } from './approvals';
 import { readProjectAssetHead } from '@/lib/storage/project-assets';
 import { evaluateLegalReadiness, type LegalReadiness } from './legal-readiness';
 import { LegalReadinessNotReadyError, loadLegalFacts, readReadinessSong } from './legal-readiness-store';
-import { IMAGE_HEAD_BYTES, readImageInfo, type ImageInfo } from './image-size';
+import { IMAGE_HEAD_BYTES, IMAGE_HEAD_BYTES_MAX, jpegHeaderMayFollow, readImageInfo, type ImageInfo } from './image-size';
 import { ARTWORK_MIME, type MasterRelation, type ReadinessApproval, type ReadinessItem, type ReleaseReadinessFacts } from './release-readiness';
+import { orgHasMarketing, readPlanPhases } from './marketing-plan-store';
+import { creativeGateEffective, orgHasArtistic } from './creative-store';
 import { RELEASE_ITEM_COLUMNS, type ReleaseItemRow } from './releases';
 
 export class ReleaseReadinessNotReadyError extends Error {
@@ -55,7 +57,12 @@ export async function readArtworkInfo(ref: string | null | undefined): Promise<I
   if (!ref) return null;
   try {
     const head = await readProjectAssetHead(ref, IMAGE_HEAD_BYTES);
-    return head ? readImageInfo(head) : null;
+    if (!head) return null;
+    const info = readImageInfo(head);
+    if (info || !jpegHeaderMayFollow(head)) return info;
+    // A JPEG whose frame header lies beyond the first read (big XMP / ICC): read further once.
+    const more = await readProjectAssetHead(ref, IMAGE_HEAD_BYTES_MAX);
+    return more ? readImageInfo(more) : null;
   } catch {
     return null;
   }
@@ -74,11 +81,15 @@ export async function loadReleaseReadinessFacts(admin: AdminClient, org: string,
   }
   if (!base) return null;
 
-  const [relRes, settings] = await Promise.all([
+  const [relRes, storedSettings] = await Promise.all([
     admin.from('releases').select('title, type, upc, label_name, c_line, p_line, primary_genre, target_date, release_date, state').eq('id', releaseId).eq('org_id', org).maybeSingle(),
     readReadinessSettings(admin, org),
   ]);
   check('release read', relRes.error);
+  // LABEL-68: a creative gate left on after the artistic department is gone gates nothing (see creativeGateEffective), so
+  // readiness is evaluated exactly as if it were off: no creative key, no approval read.
+  const settings: OrgReadinessSettings =
+    storedSettings.creative_gate === 'on' && !creativeGateEffective('on', await orgHasArtistic(admin, org)) ? { ...storedSettings, creative_gate: 'off' } : storedSettings;
   const rel = relRes.data as Record<string, string | null> | null;
   if (!rel) return null;
 
@@ -155,7 +166,7 @@ export async function loadReleaseReadinessFacts(admin: AdminClient, org: string,
 
   // Approvals and the snapshot of what each gate covers right now (LABEL-30).
   let rows;
-  const approvals = {} as Record<Gate, ReadinessApproval>;
+  const approvals = {} as Record<CoreGate, ReadinessApproval> & { creative?: ReadinessApproval };
   try {
     rows = await listApprovals(admin, org, { kind: 'release', id: releaseId });
     for (const gate of GATES) {
@@ -164,12 +175,26 @@ export async function loadReleaseReadinessFacts(admin: AdminClient, org: string,
         now: await currentSnapshot(admin, org, { kind: 'release', id: releaseId }, gate, base),
       };
     }
+    // LABEL-68: the creative gate is read only while the org has it on; off, nothing about it is loaded or evaluated.
+    if (settings.creative_gate === 'on') {
+      approvals.creative = {
+        current: currentDecision(rows.filter((r) => r.gate === 'creative')),
+        now: await currentSnapshot(admin, org, { kind: 'release', id: releaseId }, 'creative', base),
+      };
+    }
   } catch (err) {
     if (err instanceof ApprovalsNotReadyError || err instanceof CreditsNotReadyError || err instanceof SplitsNotReadyError) throw new ReleaseReadinessNotReadyError();
     throw err;
   }
 
+  // LABEL-65: only worth a read when the org asks for a plan (a missing table is "not asked", never an error).
+  // Only while the org HAS the marketing module (licensed and not switched off): without it the plan cannot be made,
+  // so asking for one would block every draft with no way to satisfy it.
+  const marketingPlan =
+    settings.marketing_plan_required && settings.marketing_gate !== 'off' && (await orgHasMarketing(admin, org)) ? await readPlanPhases(admin, org, releaseId) : undefined;
+
   return {
+    marketingPlan,
     release: {
       state: String(rel.state),
       title: rel.title,

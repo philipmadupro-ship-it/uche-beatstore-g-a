@@ -53,7 +53,7 @@ export default async function OrgShellLayout({
   if (await sessionMustChangePassword(session?.userId ?? null, createServiceClient())) redirect('/account/password');
 
   const body = (
-    <div className="min-h-screen bg-[#090907]">
+    <div className="labelos-shell min-h-screen bg-[var(--background-primary)] text-[var(--text-primary)]">
       <WidgetErrorBoundary name="TopBar"><TopBar /></WidgetErrorBoundary>
       <main className="pt-14 pb-28 min-h-screen">{children}</main>
       <WidgetErrorBoundary name="PlayerBar"><PlayerBar /></WidgetErrorBoundary>

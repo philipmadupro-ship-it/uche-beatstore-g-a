@@ -179,9 +179,10 @@ describe('isReleased', () => {
   const on = (state: string) => ({ releases: { state } });
   it('is a fact about the release, the rule the audio classifier uses', () => {
     expect(isReleased({ stage: 'selected' }, [on('delivered')])).toBe(true);
-    expect(isReleased({ stage: 'selected' }, [on('draft')])).toBe(true);
+    expect(isReleased({ stage: 'selected' }, [on('withdrawn')])).toBe(true);
   });
-  it('is false with no release, a dangling item, or only a cancelled release', () => {
+  it('is false with no release, a dangling item, only a draft (LABEL-56) or only a cancelled release', () => {
+    expect(isReleased({ stage: 'selected' }, [on('draft')])).toBe(false);
     expect(isReleased({ stage: 'selected' }, [])).toBe(false);
     expect(isReleased({ stage: 'selected' }, [{ releases: null }])).toBe(false);
     expect(isReleased({ stage: 'selected' }, [on('cancelled')])).toBe(false);

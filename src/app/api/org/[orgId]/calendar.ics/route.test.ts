@@ -336,6 +336,36 @@ describe('what the feed shows', () => {
     expect(ics).not.toMatch(/Nova|Kilo(?! LP)|DESCRIPTION|URL|LOCATION|ATTENDEE/);
   });
 
+  it('LABEL-65: marketing milestones of the releases the member sees are in the feed: a summary and a day, no id, no budget', async () => {
+    db.tables.marketing_plans = [
+      { id: 'pl1', org_id: L, release_id: rid(1) },
+      { id: 'pl2', org_id: L, release_id: rid(2) },
+      { id: 'pl4', org_id: L, release_id: rid(4) },
+    ];
+    db.tables.marketing_plan_items = [
+      { id: 'mi1', org_id: L, plan_id: 'pl1', phase: 'teaser', title: 'Snippet', due_on: '2026-10-30', done_at: null },
+      { id: 'mi2', org_id: L, plan_id: 'pl1', phase: 'post', title: 'Wrap-up', due_on: '2026-11-20', done_at: null },
+      { id: 'mi3', org_id: L, plan_id: 'pl2', phase: 'release', title: 'Kilo drop', due_on: '2026-12-01', done_at: null },
+      { id: 'mi4', org_id: L, plan_id: 'pl4', phase: 'teaser', title: 'Cancelled teaser', due_on: '2026-11-01', done_at: null },
+    ];
+    db.tables.marketing_budget_lines = [{ id: 'b1', org_id: L, plan_id: 'pl1', label: 'Hidden spend', amount_minor: 424242, currency: 'USD' }];
+    const own = await (await feed((await issue(OWN)).path)).text();
+    expect(titles(own)).toEqual(['Midnight Run', 'Target Only', 'Kilo LP', 'Teaser: Snippet · Midnight Run', 'Post: Wrap-up · Midnight Run', 'Release: Kilo drop · Kilo LP']);
+    expect(own).toContain('DTSTART;VALUE=DATE:20261030');
+    expect(own).not.toMatch(/Cancelled teaser|Hidden spend|424242|mi1|pl1/);
+    expect(own).not.toMatch(/DESCRIPTION/);
+    const kilo = await (await feed((await issue(AR_C2)).path)).text();
+    expect(titles(kilo)).toEqual(['Kilo LP', 'Release: Kilo drop · Kilo LP']);
+  });
+
+  it('LABEL-65: an org not licensed for marketing has no milestones in its feed', async () => {
+    db.tables.marketing_plans = [{ id: 'pl1', org_id: L, release_id: rid(1) }];
+    db.tables.marketing_plan_items = [{ id: 'mi1', org_id: L, plan_id: 'pl1', phase: 'teaser', title: 'Snippet', due_on: '2026-10-30', done_at: null }];
+    db.tables.org_entitlements = [{ org_id: L, modules: ['contracts'], max_seats: null, max_artists: null, setup_done: true }];
+    const { path } = await issue(OWN);
+    expect(titles(await (await feed(path)).text())).toEqual(['Midnight Run', 'Target Only', 'Kilo LP']);
+  });
+
   it('artist scope: A&R scoped to Kilo sees only Kilo’s release', async () => {
     const { path } = await issue(AR_C2);
     expect(titles(await (await feed(path)).text())).toEqual(['Kilo LP']);

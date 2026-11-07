@@ -17,7 +17,7 @@ import { RELEASE_TYPES } from '@/lib/labelos/releases';
 
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
-const FIELD = 'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
+const FIELD = 'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 
 export function ReleaseImportPanel({ orgId, orgSlug, artists }: { orgId: string; orgSlug: string; artists: { id: string; name: string }[] }) {
@@ -43,7 +43,7 @@ export function ReleaseImportPanel({ orgId, orgSlug, artists }: { orgId: string;
 
   if (!open) {
     return (
-      <div className="mb-6">
+      <div>
         <button type="button" onClick={() => setOpen(true)} className={BTN} data-testid="release-import-open">
           Add released music
         </button>
@@ -52,7 +52,7 @@ export function ReleaseImportPanel({ orgId, orgSlug, artists }: { orgId: string;
   }
 
   return (
-    <form onSubmit={submit} className="mb-6 max-w-xl space-y-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid="release-import">
+    <form onSubmit={submit} className="max-w-xl space-y-3 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4" data-testid="release-import">
       <p className="text-[11px] text-white/60">For music that is already out. It skips the release gates; add the songs on the next page.</p>
       <label className="block">
         <span className={LABEL}>Title</span>

@@ -39,7 +39,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { GATE_LABEL, gateCapability, currentDecision, planRequest } from '@/lib/labelos/approvals';
 import { ApprovalsNotReadyError, approvalContext, currentSnapshot, isMissingApprovalsSchema, legalGateReadiness, listApprovals, readReleaseFacts } from '@/lib/labelos/approvals-store';
-import { actorOf, gateStates, json, resolveSubject, subjectOfQuery } from '@/lib/labelos/approvals-route';
+import { actorOf, creativeGateRefusal, gateStates, json, resolveSubject, subjectOfQuery } from '@/lib/labelos/approvals-route';
 import { APPROVALS_NOT_READY, auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { CreditsNotReadyError } from '@/lib/labelos/credits-store';
 import { LegalReadinessNotReadyError } from '@/lib/labelos/legal-readiness-store';
@@ -97,6 +97,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { admin } = access;
     const org = access.orgId;
     if (body.with_task && !access.capabilities.has('tasks.write')) return json(403, { error: 'Forbidden' });
+    const off = await creativeGateRefusal(admin, org, body.gate);
+    if (off) return off;
 
     const rows = await listApprovals(admin, org, subject);
     const current = currentDecision(rows.filter((r) => r.gate === body.gate));

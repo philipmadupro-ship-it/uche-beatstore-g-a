@@ -15,7 +15,7 @@
  * row on purpose: LABEL-34's export buttons and calendar link are mounted there, for
  * `release.write` only.
  */
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
@@ -33,23 +33,31 @@ import {
   addReleaseItem,
   cancelRelease,
   deliverRelease,
+  getMasterOptions,
+  patchRelease,
   removeReleaseItem,
   reopenRelease,
   reorderReleaseItems,
+  setItemExplicit,
+  setItemMaster,
   setReleaseArtwork,
+  withdrawRelease,
+  type MasterOptions,
 } from '@/lib/labelos/release-client';
+import { MASTER_RELATION_LABEL } from '@/lib/labelos/master-choice';
+import { formatTerritories, parseLanguage, parseTerritories } from '@/lib/labelos/release-form';
 import { OrgApprovals } from '@/components/labelos/OrgApprovals';
 import type { ReleaseDetail } from '@/lib/labelos/release-detail-store';
 import { gateSkipNotice } from '@/lib/labelos/org-settings';
-import { RELEASE_GATES, RELEASE_GATE_LABEL, type ReleaseGate } from '@/lib/labelos/release-readiness';
+import { CREATIVE_GATE_LABEL, RELEASE_GATES, RELEASE_GATE_LABEL, type ReleaseGate } from '@/lib/labelos/release-readiness';
 import { moveBy, moveTo } from '@/lib/labelos/release-tracklist';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const BTN =
   'rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
 const ICON_BTN = 'grid size-7 place-items-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.10] hover:text-white disabled:opacity-30';
-const FIELD = 'w-full rounded-lg border border-white/10 bg-[#090907] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
-const CARD = 'rounded-xl border border-white/10 bg-[#0D0D0A] p-4';
+const FIELD = 'w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none';
+const CARD = 'rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4';
 
 const day = (iso: string | null) =>
   iso ? new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null;
@@ -82,17 +90,26 @@ export function ReleaseDetailView({ orgId, orgSlug, detail, extraActions }: { or
   };
 
   const saveField = async (key: string, value: string): Promise<boolean> => {
-    const body = { [key]: key === 'title' ? value.trim() : value.trim() === '' ? null : value.trim() };
-    return act(async () => {
-      try {
-        const res = await fetch(`/api/org/${orgId}/releases/${release.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (res.ok) return { ok: true };
-        const json = (await res.json().catch(() => ({}))) as { error?: string; issues?: { message?: string }[] };
-        return { ok: false, error: json.issues?.[0]?.message ?? json.error ?? `HTTP ${res.status}` };
-      } catch {
-        return { ok: false, error: 'Could not reach the server' };
+    const v = value.trim();
+    let body: Record<string, unknown>;
+    if (key === 'territories') {
+      const parsed = parseTerritories(v);
+      if (!parsed.ok) {
+        toast.error(parsed.error);
+        return false;
       }
-    });
+      body = { territories: parsed.codes };
+    } else if (key === 'language') {
+      const parsed = parseLanguage(v);
+      if (!parsed.ok) {
+        toast.error(parsed.error);
+        return false;
+      }
+      body = { language: parsed.code };
+    } else {
+      body = { [key]: key === 'title' ? v : v === '' ? null : v };
+    }
+    return act(() => patchRelease(orgId, release.id, body));
   };
 
   const menu: MenuSection[] = [];
@@ -121,7 +138,7 @@ export function ReleaseDetailView({ orgId, orgSlug, detail, extraActions }: { or
               <h1 className="font-heading text-[28px] font-bold leading-[1.05] tracking-tight text-white sm:text-[32px] md:text-[40px]">{release.title}</h1>
             )}
             <p className="mt-2 text-[11px] text-white/60" data-testid="release-state">
-              <span className="capitalize">{release.type}</span> · {release.state === 'delivered' ? 'Delivered' : release.state === 'cancelled' ? 'Cancelled' : 'Draft'}
+              <span className="capitalize">{release.type}</span> · {release.state === 'delivered' ? 'Delivered' : release.state === 'withdrawn' ? 'Withdrawn' : release.state === 'cancelled' ? 'Cancelled' : 'Draft'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2" data-testid="release-actions">
@@ -165,10 +182,8 @@ type Act = (run: () => Promise<{ ok: true } | { ok: false; error: string }>, suc
 // ── Tracklist ───────────────────────────────────────────────────────────
 
 function Tracklist({ orgId, orgSlug, detail, editable, busy, act }: { orgId: string; orgSlug: string; detail: Detail; editable: boolean; busy: boolean; act: Act }) {
-  const { release, items, candidates, me } = detail;
+  const { release, items, me } = detail;
   const order = items.map((i) => i.id);
-  const [pick, setPick] = useState('');
-  const options: DropdownOption<string>[] = candidates.map((c) => ({ value: c.id, label: c.title }));
 
   const reorder = (next: string[] | null) => {
     if (next) void act(() => reorderReleaseItems(orgId, release.id, next));
@@ -182,7 +197,7 @@ function Tracklist({ orgId, orgSlug, detail, editable, busy, act }: { orgId: str
       ) : (
         <ol className="space-y-1.5">
           {items.map((item, index) => (
-            <li key={item.id} className="flex items-center gap-2 rounded-lg border border-white/10 px-2.5 py-2" data-testid={`release-item-${item.id}`} data-position={item.position}>
+            <li key={item.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 px-2.5 py-2" data-testid={`release-item-${item.id}`} data-position={item.position}>
               {editable ? (
                 <PositionField
                   value={item.position}
@@ -194,18 +209,33 @@ function Tracklist({ orgId, orgSlug, detail, editable, busy, act }: { orgId: str
               ) : (
                 <span className="w-6 text-center font-mono text-[10px] text-white/40">{item.position}</span>
               )}
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 basis-40">
                 {item.title ? (
                   <Link href={`/o/${orgSlug}/songs/${item.songId}`} className="truncate text-[13px] text-white hover:underline">{item.title}</Link>
                 ) : (
                   <span className="text-[13px] text-white/40">Restricted song</span>
                 )}
-                <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-white/40">
+                <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-white/40" data-testid={`release-item-info-${item.id}`}>
                   {item.ownMaster ? 'Own mix' : 'Separate master'}
                   {item.explicit ? ' · Explicit' : ''}
                   {item.versionTitle ? ` · ${item.versionTitle}` : ''}
                 </p>
               </div>
+              {editable && item.title && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <MasterPicker orgId={orgId} releaseId={release.id} item={item} busy={busy} act={act} />
+                  <button
+                    type="button"
+                    className={BTN}
+                    aria-pressed={item.explicit}
+                    disabled={busy}
+                    data-testid={`release-item-explicit-${item.id}`}
+                    onClick={() => void act(() => setItemExplicit(orgId, release.id, item.id, !item.explicit))}
+                  >
+                    {item.explicit ? 'Explicit' : 'Mark explicit'}
+                  </button>
+                </div>
+              )}
               {editable && (
                 <div className="flex items-center">
                   <button type="button" className={ICON_BTN} aria-label={`Move ${item.title ?? 'track'} up`} disabled={busy || index === 0} onClick={() => reorder(moveBy(order, item.id, -1))}>
@@ -223,31 +253,135 @@ function Tracklist({ orgId, orgSlug, detail, editable, busy, act }: { orgId: str
           ))}
         </ol>
       )}
-      {editable && (
-        <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="release-add-track">
-          {options.length > 0 ? (
-            <>
-              <div className="min-w-[200px] flex-1">
-                <Dropdown value={pick} onChange={setPick} options={options} placeholder="Add a song…" aria-label="Song to add" />
-              </div>
-              <button
-                type="button"
-                className={BTN}
-                disabled={busy || !pick}
-                onClick={async () => {
-                  if (await act(() => addReleaseItem(orgId, release.id, pick), 'Track added')) setPick('');
-                }}
-              >
-                Add to tracklist
-              </button>
-            </>
-          ) : (
-            <p className="text-[11px] text-white/40">No other songs of this artist to add.</p>
-          )}
-        </div>
-      )}
+      {editable && <AddTrack orgId={orgId} detail={detail} busy={busy} act={act} />}
       {!editable && release.state !== 'draft' && <p className="mt-3 text-[11px] text-white/40">{release.importedReleased && release.storeListed ? 'Take this release off the store to change its tracklist.' : release.importedReleased && !me.canManagePublic ? 'Only an owner or an admin can change the tracklist of a release that was entered as already out.' : `A ${release.state} release keeps its tracklist.`}</p>}
     </section>
+  );
+}
+
+/**
+ * Add a song: pick it, then the recording it goes out as (the master chooser,
+ * LABEL-55). The song's single linked master is chosen for you; with none or
+ * several you choose, and Add waits for that. The rules are the server's
+ * (`master-options` offers only what the item route will accept).
+ */
+function AddTrack({ orgId, detail, busy, act }: { orgId: string; detail: Detail; busy: boolean; act: Act }) {
+  const { release, candidates } = detail;
+  const [pick, setPick] = useState('');
+  const [choice, setChoice] = useState<MasterOptions | null>(null);
+  const [masterId, setMasterId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const latest = useRef('');
+  const options: DropdownOption<string>[] = candidates.map((c) => ({ value: c.id, label: c.title }));
+
+  const choose = async (songId: string) => {
+    latest.current = songId;
+    setPick(songId);
+    setChoice(null);
+    setMasterId('');
+    setLoadError(null);
+    setLoading(false);
+    if (!songId) return;
+    setLoading(true);
+    const res = await getMasterOptions(orgId, release.id, songId);
+    if (latest.current !== songId) return;
+    setLoading(false);
+    if (!res.ok) return setLoadError(res.error);
+    setChoice(res);
+    setMasterId(res.defaultId ?? '');
+  };
+
+  if (options.length === 0) return <p className="mt-3 text-[11px] text-white/40" data-testid="release-add-track">No other songs of this artist to add.</p>;
+
+  const masterOptions: DropdownOption<string>[] = (choice?.options ?? []).map((o) => ({ value: o.id, label: `${o.title} · ${MASTER_RELATION_LABEL[o.relation]}` }));
+  const onlyOwnMix = choice !== null && choice.options.length === 1;
+  return (
+    <div className="mt-3 space-y-2" data-testid="release-add-track">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-[200px] flex-1">
+          <Dropdown value={pick} onChange={(id) => void choose(id)} options={options} placeholder="Add a song…" aria-label="Song to add" />
+        </div>
+        <button
+          type="button"
+          className={BTN}
+          disabled={busy || loading || !pick || !choice || !masterId}
+          data-testid="release-add-submit"
+          onClick={async () => {
+            if (await act(() => addReleaseItem(orgId, release.id, pick, masterId), 'Track added')) void choose('');
+          }}
+        >
+          Add to tracklist
+        </button>
+      </div>
+      {loading && <p className="text-[11px] text-white/40">Looking for its masters…</p>}
+      {loadError && <p role="alert" className="text-[11px] text-[var(--error-text)]">{loadError}</p>}
+      {choice && (
+        <div className="space-y-1.5" data-testid="release-master-choice" data-ask={choice.ask ? 'true' : 'false'}>
+          <span className={LABEL}>Goes out as</span>
+          <Dropdown value={masterId} onChange={setMasterId} options={masterOptions} placeholder="Choose the recording…" aria-label="Master recording" />
+          <p className="text-[10px] text-white/40" data-testid="release-master-hint">
+            {!choice.ask
+              ? 'Its linked master is selected.'
+              : onlyOwnMix
+                ? 'No master is linked to this song. Link one on the song page, or release its own mix — the masters gate stays open until a master is chosen.'
+                : 'This song has more than one recording. Choose the one that goes out.'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Change which recording an item goes out as, from its row. The options are read when it opens. */
+function MasterPicker({ orgId, releaseId, item, busy, act }: { orgId: string; releaseId: string; item: Detail['items'][number]; busy: boolean; act: Act }) {
+  const [state, setState] = useState<{ loading: boolean; error: string | null; options: MasterOptions['options'] }>({ loading: false, error: null, options: [] });
+  const load = async () => {
+    setState({ loading: true, error: null, options: [] });
+    const res = await getMasterOptions(orgId, releaseId, item.songId);
+    setState(res.ok ? { loading: false, error: null, options: res.options } : { loading: false, error: res.error, options: [] });
+  };
+  return (
+    <Popover
+      label={`Master for ${item.title ?? 'track'}`}
+      width={300}
+      align="right"
+      onOpenChange={(open) => {
+        if (open) void load();
+      }}
+      trigger={({ toggle, ref, open }) => (
+        <button type="button" ref={ref} onClick={toggle} aria-expanded={open} disabled={busy} className={BTN} data-testid={`release-item-master-${item.id}`}>
+          Master
+        </button>
+      )}
+    >
+      {(close) => (
+        <div className="space-y-1 p-2 text-[11px]" data-testid={`release-item-master-options-${item.id}`}>
+          {state.loading && <p className="px-2 py-1 text-white/40">Loading…</p>}
+          {state.error && <p role="alert" className="px-2 py-1 text-[var(--error-text)]">{state.error}</p>}
+          {state.options.map((o) => {
+            const current = o.id.toLowerCase() === item.masterId.toLowerCase();
+            return (
+              <button
+                key={o.id}
+                type="button"
+                aria-pressed={current}
+                disabled={busy}
+                data-testid={`release-item-master-option-${o.id}`}
+                className={cn('flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/[0.08] disabled:opacity-40', current ? 'bg-white/[0.08] text-white' : 'text-white/80')}
+                onClick={() => {
+                  close();
+                  if (!current) void act(() => setItemMaster(orgId, releaseId, item.id, o.id), 'Master changed');
+                }}
+              >
+                <span className="min-w-0 truncate">{o.title}</span>
+                <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-white/40">{MASTER_RELATION_LABEL[o.relation]}{current ? ' · current' : ''}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Popover>
   );
 }
 
@@ -280,7 +414,7 @@ function PositionField({ value, max, label, disabled, onCommit }: { value: numbe
         if (e.key === 'Enter') e.currentTarget.blur();
         if (e.key === 'Escape') setDraft(String(value));
       }}
-      className="w-10 rounded-lg border border-white/10 bg-[#090907] px-1 py-1 text-center font-mono text-[10px] text-white/80 focus:border-white/30 focus:outline-none disabled:opacity-40"
+      className="w-10 rounded-lg border border-white/10 bg-[var(--background-primary)] px-1 py-1 text-center font-mono text-[10px] text-white/80 focus:border-white/30 focus:outline-none disabled:opacity-40"
     />
   );
 }
@@ -297,7 +431,7 @@ function Artwork({ orgId, detail, editable, busy, act }: { orgId: string; detail
     <section aria-labelledby="release-artwork" className={CARD} data-testid="release-artwork">
       <h2 id="release-artwork" className={`${LABEL} mb-3`}>Artwork</h2>
       <div className="flex flex-wrap items-center gap-4">
-        <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-[#090907]">
+        <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-[var(--background-primary)]">
           {artwork.current ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -348,6 +482,9 @@ const DETAIL_FIELDS: { key: string; label: string; read: (r: Detail['release']) 
   { key: 'p_line', label: '℗ line', read: (r) => r.pLine, placeholder: '℗ 2026 …' },
   { key: 'c_line', label: '© line', read: (r) => r.cLine, placeholder: '© 2026 …' },
   { key: 'primary_genre', label: 'Genre', read: (r) => r.primaryGenre, placeholder: 'Primary genre' },
+  { key: 'language', label: 'Language', read: (r) => r.language, placeholder: 'en, pt-BR…' },
+  { key: 'territories', label: 'Territories', read: (r) => formatTerritories(r.territories) || null, placeholder: 'WW, or US GB FR…' },
+  { key: 'distributor', label: 'Distributor', read: (r) => r.distributor, placeholder: 'Who it will go to' },
   { key: 'target_date', label: 'Target date', read: (r) => r.targetDate, placeholder: 'YYYY-MM-DD' },
   { key: 'release_date', label: 'Release date', read: (r) => r.releaseDate, placeholder: 'YYYY-MM-DD' },
 ];
@@ -364,7 +501,7 @@ function Details({ detail, editable, onSave }: { detail: Detail; editable: boole
               <dt className={LABEL}>{f.label}</dt>
               <dd className="mt-0.5 text-[11px] text-white/80">
                 {editable ? (
-                  <InlineText value={value} label={f.label} placeholder={f.placeholder} emptyLabel="Not set" maxLength={200} onSave={onSave.bind(null, f.key)} />
+                  <InlineText value={value} label={f.label} placeholder={f.placeholder} emptyLabel="Not set" maxLength={f.key === 'territories' ? 1000 : 200} onSave={onSave.bind(null, f.key)} />
                 ) : (
                   value || <span className="text-white/40">Not set</span>
                 )}
@@ -391,25 +528,29 @@ function Gates({ detail, orgSlug }: { detail: Detail; orgSlug: string }) {
           {RELEASE_GATES.map((g) => (
             <GateRow key={g} gate={g} view={readiness.gates[g]} mayReadRights={detail.me.mayReadRights} orgSlug={orgSlug} canFix={detail.me.canWrite} />
           ))}
+          {/* LABEL-68: the optional creative approval, listed only while the org has switched it on. */}
+          {readiness.creative && (
+            <GateRow gate="creative" view={readiness.creative} mayReadRights={detail.me.mayReadRights} orgSlug={orgSlug} canFix={detail.me.canWrite} />
+          )}
         </ul>
       )}
     </section>
   );
 }
 
-function GateRow({ gate, view, mayReadRights, orgSlug, canFix }: { gate: ReleaseGate; view: NonNullable<Detail['readiness']>['gates'][ReleaseGate]; mayReadRights: boolean; orgSlug: string; canFix: boolean }) {
+function GateRow({ gate, view, mayReadRights, orgSlug, canFix }: { gate: ReleaseGate | 'creative'; view: NonNullable<Detail['readiness']>['gates'][ReleaseGate]; mayReadRights: boolean; orgSlug: string; canFix: boolean }) {
   const tone = gateTone(view.status);
   const hasDetail = view.blockerCount > 0 || view.warningCount > 0;
   return (
     <li className="flex flex-wrap items-center justify-between gap-2" data-testid={`release-gate-${gate}`} data-status={view.status}>
-      <span className="text-[13px] text-white">{RELEASE_GATE_LABEL[gate]}</span>
+      <span className="text-[13px] text-white">{gate === 'creative' ? CREATIVE_GATE_LABEL : RELEASE_GATE_LABEL[gate]}</span>
       <span className="flex items-center gap-2">
         <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.1em]', TONE_TEXT[tone])} data-testid={`release-gate-chip-${gate}`}>
           {gateWord(view.status)}
         </span>
         {hasDetail && (
           <Popover
-            label={`${RELEASE_GATE_LABEL[gate]}: what is open`}
+            label={`${gate === 'creative' ? CREATIVE_GATE_LABEL : RELEASE_GATE_LABEL[gate]}: what is open`}
             width={320}
             align="right"
             trigger={({ toggle, ref, open }) => (
@@ -463,6 +604,47 @@ function GateRow({ gate, view, mayReadRights, orgSlug, canFix }: { gate: Release
   );
 }
 
+// ── Withdraw ────────────────────────────────────────────────────────────
+
+/** Cancel is for drafts; a release that went out is withdrawn. Asks first, with an optional reason for the record. */
+function Withdraw({ orgId, detail, busy, act }: { orgId: string; detail: Detail; busy: boolean; act: Act }) {
+  const { release } = detail;
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  if (!open) {
+    return (
+      <button type="button" className={`${BTN} mt-3`} disabled={busy} data-testid="release-withdraw-open" onClick={() => setOpen(true)}>
+        Withdraw release…
+      </button>
+    );
+  }
+  return (
+    <div className="mt-3 space-y-2 rounded-lg border border-white/10 p-3" data-testid="release-withdraw-panel">
+      <p className="text-[11px] leading-relaxed text-white/80">
+        Withdrawing keeps this release and its history, but it is no longer delivered{release.storeListed ? ' and comes off the store' : ''}. A release that went out is not cancelled or deleted.
+      </p>
+      <label className="block">
+        <span className={LABEL}>Why (optional)</span>
+        <textarea className={`${FIELD} mt-1`} rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Kept in the activity record, for the business side." data-testid="release-withdraw-note" />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={BTN}
+          disabled={busy}
+          data-testid="release-withdraw"
+          onClick={() => void act(() => withdrawRelease(orgId, release.id, { note }), 'Release withdrawn').then((ok) => ok && setOpen(false))}
+        >
+          Withdraw release
+        </button>
+        <button type="button" className={BTN} disabled={busy} data-testid="release-withdraw-cancel" onClick={() => setOpen(false)}>
+          Keep it delivered
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Delivery ────────────────────────────────────────────────────────────
 
 function Delivery({ orgId, detail, busy, act }: { orgId: string; detail: Detail; busy: boolean; act: Act }) {
@@ -479,6 +661,18 @@ function Delivery({ orgId, detail, busy, act }: { orgId: string; detail: Detail;
         <p className="text-[13px] text-white" data-testid="release-delivered">
           Delivered{release.deliveredTo ? ` to ${release.deliveredTo}` : ''}{release.deliveredAt ? ` · ${day(release.deliveredAt)}` : ''}
         </p>
+        {me.canWrite && (!release.importedReleased || me.canManagePublic) && <Withdraw orgId={orgId} detail={detail} busy={busy} act={act} />}
+      </section>
+    );
+  }
+  if (release.state === 'withdrawn') {
+    return (
+      <section aria-labelledby="release-delivery" className={CARD} data-testid="release-delivery">
+        <h2 id="release-delivery" className={`${LABEL} mb-3`}>Delivery</h2>
+        <p className="text-[13px] text-white" data-testid="release-withdrawn">
+          Delivered{release.deliveredTo ? ` to ${release.deliveredTo}` : ''}{release.deliveredAt ? ` · ${day(release.deliveredAt)}` : ''}, then withdrawn.
+        </p>
+        <p className="mt-2 text-[11px] text-white/60">The record, the tracklist and the gates stay as they were. A withdrawn release is not on the store and is not delivered again.</p>
       </section>
     );
   }
@@ -500,7 +694,7 @@ function Delivery({ orgId, detail, busy, act }: { orgId: string; detail: Detail;
   }
 
   const ready = readiness?.readyToDeliver === true;
-  const open = readiness ? Object.values(readiness.gates).filter((g) => !['approved', 'satisfied', 'not_required'].includes(g.status)).length : 0;
+  const open = readiness ? [...Object.values(readiness.gates), ...(readiness.creative ? [readiness.creative] : [])].filter((g) => !['approved', 'satisfied', 'not_required'].includes(g.status)).length : 0;
   const overriding = !ready && override;
   const problem =
     !readiness ? 'The gates could not be worked out.'

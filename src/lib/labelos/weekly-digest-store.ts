@@ -131,6 +131,29 @@ export async function contentFor(access: Parameters<typeof loadAttention>[0], or
   return { orgName: org.name, orgSlug: org.slug, attention: attention.items, activity: activityLines(events, feed.names, projectArtists) };
 }
 
+/**
+ * LABEL-74: the Slack channel is read by people we cannot scope, so it gets the
+ * artist-visible, non-restricted view only. An owner or admin's own access is
+ * narrowed to what a marketing-style member holds: no `internal` events
+ * (`business.read.internal`), no working material such as demos
+ * (`audio.working`), and no Needs-attention list (tasks, stalled songs and
+ * blocked releases name people and unreleased work). Only events marked
+ * `artist` about songs a finished-audio reader may open are posted.
+ */
+export const CHANNEL_WITHHELD_CAPABILITIES: readonly string[] = ['business.read.internal', 'audio.working', 'rights.read'];
+
+export function channelAccessFor<A extends { capabilities: ReadonlySet<string> }>(access: A): A {
+  const withheld = new Set(CHANNEL_WITHHELD_CAPABILITIES);
+  return { ...access, capabilities: new Set([...access.capabilities].filter((c) => !withheld.has(c))) } as A;
+}
+
+export async function channelContentFor(access: Parameters<typeof loadActivityFeed>[0], org: OrgInfo, now: Date): Promise<WeeklyDigestContent> {
+  const feed = await loadActivityFeed(channelAccessFor(access), { target: { kind: 'org' }, since: digestSince(now), limit: 200 });
+  const events = feed.events.filter((e) => !NOISE.test(e.verb));
+  const projectArtists = new Map(Object.entries(feed.projectArtists));
+  return { orgName: org.name, orgSlug: org.slug, attention: [], activity: activityLines(events, feed.names, projectArtists) };
+}
+
 // ── Ports ───────────────────────────────────────────────────────────────
 
 const PAGE = 500;
@@ -196,6 +219,12 @@ export function databasePorts(admin: AdminClient, baseUrl: string): DigestPorts 
       // An org not licensed for the digest module (LABEL-47) gets no digest, by email or Slack.
       if (!orgHasModule(access, 'digest')) return null;
       return { userId, orgId, role: access.role };
+    },
+
+    async channelContent(r, org, now) {
+      const access = await memberAccessFor(r.orgId, r.userId);
+      if (!access.ok) throw new Error('membership vanished');
+      return channelContentFor(access, org, now);
     },
 
     async content(r, org, now) {

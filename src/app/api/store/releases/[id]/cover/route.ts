@@ -4,11 +4,15 @@ import { isSupabaseConfigured } from '@/lib/local-store';
 import { isUUID } from '@/lib/validate';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { clientIp, rateLimit } from '@/lib/security/rate-limit';
 import { loadPublicRelease } from '@/lib/labelos/store-listing-store';
 import { streamProjectAsset } from '@/lib/storage/project-assets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+/** Per caller and release, per minute (LABEL-75). */
+const REQUESTS_PER_MINUTE = 120;
 
 const log = createLogger('api.store.releases.cover');
 
@@ -24,6 +28,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id: rawId } = await params;
   // Lower-cased once: every key below (cache, limiter) is a lowercase UUID, so letter case multiplies nothing.
   const id = rawId.toLowerCase();
+  // Only a well-formed release id can mint a limiter bucket: anything else is a 404 before it.
+  if (isUUID(id) && !rateLimit(`store-release-cover:${clientIp(req)}:${id}`, REQUESTS_PER_MINUTE)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60', 'Cache-Control': 'no-store' } });
+  }
   try {
     if (!isSupabaseConfigured() || !isUUID(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const admin = createServiceClient();
@@ -48,7 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     const upstream = await streamProjectAsset(req, asset.url, { fileName: asset.file_name, mime: asset.mime, inline: true });
     const headers = new Headers(upstream.headers);
-    headers.set('cache-control', 'public, max-age=60, s-maxage=60');
+    headers.set('cache-control', loaded.consentGoverned ? 'no-store' : 'public, max-age=60, s-maxage=60');
     return new Response(upstream.body, { status: upstream.status, headers });
   } catch (err) {
     log.error('cover failed', { id, error: errorMessage(err) });

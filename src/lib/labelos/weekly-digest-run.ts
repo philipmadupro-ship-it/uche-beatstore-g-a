@@ -23,9 +23,10 @@
  *  - the content is built FOR THE RECIPIENT through their own access
  *    (weekly-digest-store.ts), never for the org.
  *
- * The Slack channel is one post per org per week, built from the access of an
- * opted-in owner or admin (the whole-org view): the channel is the org's own
- * and its audience is not a member we can scope to.
+ * The Slack channel is one post per org per week. Its audience is not a member
+ * we can scope to, so it is built from the artist-visible, non-restricted view
+ * only (LABEL-74, `channelContent`): an opted-in owner or admin supplies the
+ * whole-org reach, never their internal events, working material or tasks.
  */
 import { buildWeeklyDigest, isEmptyDigest, isoWeekKey, type DigestMessage, type DigestSubscription, type WeeklyDigestContent } from './weekly-digest';
 
@@ -45,6 +46,8 @@ export type DigestPorts = {
   recipient(orgId: string, userId: string): Promise<RecipientAccess | null>;
   /** Content through that member's own access. */
   content(r: RecipientAccess, org: OrgInfo, now: Date): Promise<WeeklyDigestContent>;
+  /** The Slack post's content: the artist-visible, non-restricted view only (LABEL-74), never the poster's own. */
+  channelContent(r: RecipientAccess, org: OrgInfo, now: Date): Promise<WeeklyDigestContent>;
   claimMember(orgId: string, userId: string, week: string): Promise<boolean>;
   releaseMember(orgId: string, userId: string, week: string, previous: string): Promise<void>;
   claimChannel(orgId: string, week: string): Promise<boolean>;
@@ -159,7 +162,7 @@ export async function runWeeklyDigest(ports: DigestPorts, now: Date = new Date()
         if (!(await ports.claimChannel(channel.orgId, week))) { result.skipped += 1; continue; }
         let posted = false;
         try {
-          const content = await ports.content(who, org, now);
+          const content = await ports.channelContent(who, org, now);
           if (isEmptyDigest(content)) { result.empty += 1; continue; }
           posted = await ports.postSlack(channel.orgId, buildWeeklyDigest(content, ports.baseUrl));
         } catch {

@@ -30,6 +30,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { RestrictedNote } from '@/components/artists/OrgArtistWorkspaceTabs';
 import { OrgCredits } from '@/components/labelos/OrgCredits';
+import { useOrgShell } from '@/components/labelos/OrgShellContext';
 import { OrgSplits } from '@/components/labelos/OrgSplits';
 import { OrgTrackMetadata } from '@/components/labelos/OrgTrackMetadata';
 import { OrgApprovals } from '@/components/labelos/OrgApprovals';
@@ -73,6 +74,8 @@ export function playRecordingAt(orgId: string, song: OrgSongDetail['song'], rec:
 }
 
 export function OrgSongView({ orgId, orgSlug, detail, editTrackId = null }: { orgId: string; orgSlug: string; detail: OrgSongDetail; editTrackId?: string | null }) {
+  const shell = useOrgShell();
+  const readsRights = !shell || shell.can('rights.read') || shell.can('rights.read.own_line');
   const { song, recordings } = detail;
   const base = `/o/${orgSlug}`;
   const currentId = usePlayer((s) => s.currentTrack?.id ?? null);
@@ -141,9 +144,9 @@ export function OrgSongView({ orgId, orgSlug, detail, editTrackId = null }: { or
           </button>
         </div>
         {recordings.length === 0 ? (
-          <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/40">No recording you can play yet.</p>
+          <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-6 text-center text-[11px] text-white/40">No recording you can play yet.</p>
         ) : (
-          <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]">
+          <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[var(--surface-primary)]">
             {recordings.map((r) => {
               const active = currentId === r.trackId;
               const playing = active && isPlaying;
@@ -189,9 +192,11 @@ export function OrgSongView({ orgId, orgSlug, detail, editTrackId = null }: { or
         )}
       </section>
 
-      <OrgCredits key={`credits-${song.id}`} orgId={orgId} trackId={song.id} />
+      {/* Credits and splits answer 403 to a member with no rights reading at all (marketing, say):
+          they are not asked for, rather than asked and refused. Outside a shell (tests) both show. */}
+      {readsRights && <OrgCredits key={`credits-${song.id}`} orgId={orgId} trackId={song.id} />}
 
-      <OrgSplits key={`splits-${song.id}`} orgId={orgId} trackId={song.id} />
+      {readsRights && <OrgSplits key={`splits-${song.id}`} orgId={orgId} orgSlug={orgSlug} trackId={song.id} />}
 
       <OrgLegalReadiness key={`legal-${song.id}`} orgId={orgId} trackId={song.id} />
 
@@ -199,11 +204,11 @@ export function OrgSongView({ orgId, orgSlug, detail, editTrackId = null }: { or
 
       <section id="details" aria-labelledby="org-song-details" className="scroll-mt-24 space-y-4" data-testid="org-song-details">
         <h2 id="org-song-details" className={LABEL}>Details</h2>
-        <div className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+        <div className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4">
           <OrgTrackMetadata key={`meta-${song.id}`} orgId={orgId} trackId={song.id} title="Song" testId="org-song-metadata" />
         </div>
         {recordings.filter((r) => r.trackId !== song.id && editing === r.trackId).map((r) => (
-          <div key={r.trackId} className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+          <div key={r.trackId} className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4">
             <OrgTrackMetadata orgId={orgId} trackId={r.trackId} title={`Recording · ${r.label}`} testId={`org-rec-metadata-${r.trackId}`} />
           </div>
         ))}

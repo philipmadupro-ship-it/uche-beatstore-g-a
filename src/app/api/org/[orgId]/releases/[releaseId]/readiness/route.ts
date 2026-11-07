@@ -15,6 +15,7 @@
  * counts. Migrations 144 / 153 / 155 / 157 missing answer
  * `{ schemaReady: false }`, as the song's legal readiness does.
  */
+import { mayReadRightsDetail } from '@/lib/labelos/credits';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireObjectAccess } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -47,7 +48,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const facts = await loadReleaseReadinessFacts(access.admin, access.object.orgId, access.object.id);
     if (!facts) return json(404, { error: 'Not found' });
-    const readiness = releaseReadinessView(evaluateReleaseReadiness(facts), access.capabilities.has('rights.read'));
+    const readiness = releaseReadinessView(evaluateReleaseReadiness(facts), mayReadRightsDetail(access.capabilities, access.role));
     return json(200, { schemaReady: true, readiness });
   } catch (err) {
     if (err instanceof ReleaseReadinessNotReadyError) return json(200, { schemaReady: false });

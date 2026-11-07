@@ -37,8 +37,7 @@ function ws(overrides: Partial<OrgArtistWorkspace> = {}): OrgArtistWorkspace {
     releases: [{
       id: 'r1', title: 'Midnight EP', type: 'ep', state: 'draft', targetDate: null, releaseDate: null, projectId: 'p1',
       items: [
-        { position: 1, songTrackId: 's1', title: 'Midnight', restricted: false },
-        { position: 2, songTrackId: 's9', title: null, restricted: true },
+        { position: 1, songTrackId: 's1', title: 'Midnight' },
       ],
     }],
     releasesReady: true,
@@ -99,11 +98,11 @@ describe('OrgArtistWorkspaceTabs', () => {
     expect(screen.queryByTestId('upload-panel')).toBeNull(); // no catalog.write, no upload
   });
 
-  it('a release slot whose song is hidden reads "Restricted song" and names nothing', () => {
+  it('a release lists only the songs the member can open, with no placeholder for the rest', () => {
     open();
     fireEvent.click(screen.getByRole('tab', { name: /Releases/ }));
     const release = screen.getByTestId('ows-release-r1');
-    expect(within(release).getByText('Restricted song')).toBeTruthy();
+    expect(within(release).queryByText('Restricted song')).toBeNull();
     expect(within(release).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/o/night-shift/songs/s1']);
   });
 

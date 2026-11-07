@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { UserPlus } from 'lucide-react';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { toast, confirmToast } from '@/hooks/useToast';
+import { COLLABORATOR_ROLES, COLLABORATOR_ROLE_DEFS, type CollaboratorRole } from '@/lib/labelos/collaborators';
 import { EXTERNAL_PROJECT_ROLES, type ExternalProjectRole } from '@/lib/labelos/capabilities';
 import { PROJECT_ROLE_LABELS, isExternalProjectRole, projectRoleSummary } from '@/lib/labelos/project-members';
 
@@ -34,13 +35,18 @@ type Member = {
   live: boolean;
   summary: string | null;
 };
-type Invitation = { id: string; email: string; role: string | null; allow_downloads: boolean; expires_at: string };
+type Invitation = { id: string; email: string; role: string | null; allow_downloads: boolean; collaborator_role?: string | null; expires_at: string };
 type Loaded = { members: Member[]; invitations: Invitation[]; schemaReady: boolean };
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BUTTON =
   'inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
+
+const COLLAB_OPTIONS = [
+  { value: '', label: 'No credit' },
+  ...COLLABORATOR_ROLES.map((r) => ({ value: r, label: `Credit as ${COLLABORATOR_ROLE_DEFS[r].label.toLowerCase()}` })),
+];
 
 const ROLE_OPTIONS = EXTERNAL_PROJECT_ROLES.map((r) => ({ value: r, label: PROJECT_ROLE_LABELS[r] }));
 
@@ -49,13 +55,29 @@ function shortDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export function ProjectMembersPanel({ orgId, orgName, projectId }: { orgId: string; orgName: string; projectId: string }) {
+export function ProjectMembersPanel({
+  orgId,
+  orgName,
+  projectId,
+  songs = [],
+  canProposeCredit = false,
+}: {
+  orgId: string;
+  orgName: string;
+  projectId: string;
+  /** The project's songs, for a collaborator invitation (LABEL-69). */
+  songs?: { id: string; title: string }[];
+  /** The viewer holds `rights.write`: a collaborator role proposes a credit. */
+  canProposeCredit?: boolean;
+}) {
   const base = `/api/org/${orgId}/projects/${projectId}`;
   const [data, setData] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<ExternalProjectRole>('contributor');
   const [downloads, setDownloads] = useState(false);
+  const [collab, setCollab] = useState<CollaboratorRole | ''>('');
+  const [songId, setSongId] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -101,7 +123,17 @@ export function ProjectMembersPanel({ orgId, orgName, projectId }: { orgId: stri
       toast.error('Enter a valid email address');
       return;
     }
-    const sent = await call('/members', { method: 'POST', body: JSON.stringify({ email: email.trim(), role, allow_downloads: downloads }) }, 'Invitation sent');
+    if (collab && !(songId || songs[0]?.id)) {
+      toast.error('Pick the song to credit them on');
+      return;
+    }
+    const body = {
+      email: email.trim(),
+      role,
+      allow_downloads: downloads,
+      ...(collab ? { collaborator_role: collab, song_id: songId || songs[0]?.id } : {}),
+    };
+    const sent = await call('/members', { method: 'POST', body: JSON.stringify(body) }, collab ? 'Invitation sent. Their credit is proposed once they accept.' : 'Invitation sent');
     if (sent) setEmail('');
   };
 
@@ -122,7 +154,7 @@ export function ProjectMembersPanel({ orgId, orgName, projectId }: { orgId: stri
   return (
     <section aria-labelledby="project-members" className="mb-10 space-y-3" data-testid="project-members">
       <h2 id="project-members" className={LABEL}>People outside {orgName}</h2>
-      <div className="rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+      <div className="rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4">
         <form onSubmit={invite} className="flex flex-wrap items-center gap-2" noValidate>
           <label htmlFor="project-invite-email" className="sr-only">Email address</label>
           <input
@@ -132,7 +164,7 @@ export function ProjectMembersPanel({ orgId, orgName, projectId }: { orgId: stri
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="producer@example.com"
-            className="min-h-9 w-full rounded-lg border border-white/10 bg-[#090907] px-3 text-[11px] text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none sm:w-64"
+            className="min-h-9 w-full rounded-lg border border-white/10 bg-[var(--background-primary)] px-3 text-[11px] text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none sm:w-64"
           />
           <Dropdown aria-label="Role" value={role} onChange={(v) => setRole(v as ExternalProjectRole)} options={roleOptions} />
           <label className={`flex items-center gap-2 text-[11px] ${downloadsApply ? 'text-white/70' : 'text-white/30'}`}>
@@ -145,6 +177,21 @@ export function ProjectMembersPanel({ orgId, orgName, projectId }: { orgId: stri
             />
             Can download masters{downloadsApply ? '' : ' (always)'}
           </label>
+          {canProposeCredit && songs.length > 0 && (
+            <>
+              <Dropdown
+                aria-label="Credit"
+                value={collab}
+                onChange={(v) => {
+                  const next = (v || '') as CollaboratorRole | '';
+                  setCollab(next);
+                  if (next) setRole(COLLABORATOR_ROLE_DEFS[next].suggestedProjectRole);
+                }}
+                options={COLLAB_OPTIONS}
+              />
+              {collab && <Dropdown aria-label="Song" value={songId || songs[0].id} onChange={setSongId} options={songs.map((s) => ({ value: s.id, label: s.title }))} />}
+            </>
+          )}
           <button type="submit" disabled={busy} className={BUTTON}>
             <UserPlus className="h-3.5 w-3.5" aria-hidden />
             Invite
@@ -154,15 +201,15 @@ export function ProjectMembersPanel({ orgId, orgName, projectId }: { orgId: stri
       </div>
 
       {failed && !data ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-4 text-[11px] text-white/60" role="alert">
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-4 text-[11px] text-white/60" role="alert">
           Could not load the people on this project. Reload to try again.
         </p>
       ) : !data ? (
         <p className="px-1 text-[11px] text-white/40" role="status">Loading…</p>
       ) : data.members.length === 0 && data.invitations.length === 0 ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-5 text-center text-[11px] text-white/40">Nobody outside {orgName} is on this project yet.</p>
+        <p className="rounded-xl border border-white/10 bg-[var(--surface-primary)] px-4 py-5 text-center text-[11px] text-white/40">Nobody outside {orgName} is on this project yet.</p>
       ) : (
-        <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]">
+        <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[var(--surface-primary)]">
           {data.members.map((m) => (
             <li key={m.user_id} className="flex flex-wrap items-center gap-3 px-3 py-3" data-testid={`project-member-${m.user_id}`}>
               <span className="min-w-0 flex-1">
@@ -202,7 +249,8 @@ export function ProjectMembersPanel({ orgId, orgName, projectId }: { orgId: stri
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] text-white/80">{i.email}</span>
                 <span className="block text-[11px] text-white/40">
-                  Invited as {isExternalProjectRole(i.role ?? '') ? PROJECT_ROLE_LABELS[i.role as ExternalProjectRole] : 'member'} · expires {shortDate(i.expires_at)}
+                  Invited as {isExternalProjectRole(i.role ?? '') ? PROJECT_ROLE_LABELS[i.role as ExternalProjectRole] : 'member'}
+                  {i.collaborator_role && i.collaborator_role in COLLABORATOR_ROLE_DEFS ? ` · credit: ${COLLABORATOR_ROLE_DEFS[i.collaborator_role as CollaboratorRole].label}` : ''} · expires {shortDate(i.expires_at)}
                 </span>
               </span>
               <button

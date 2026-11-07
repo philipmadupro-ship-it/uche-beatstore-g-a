@@ -149,6 +149,8 @@ export function planMetadataPatch(input: MetadataInput, current: MetadataValues,
         next = parsed.value;
       } else if (f === 'language') {
         // "EN" and "pt-br" are how people type it; the form kept is language lower, region as typed upper.
+        // Fold only what is already ASCII: toUpperCase / toLowerCase turn ı into I and the Kelvin sign into k (as for ISRC).
+        if (/[^\x00-\x7f]/.test(text)) return bad(f, 'language: a code such as en, fr or pt-BR');
         const [primary, ...rest] = text.split('-');
         const tidy = [primary.toLowerCase(), ...rest.map((p) => (p.length === 2 ? p.toUpperCase() : p))].join('-');
         if (!LANGUAGE_RE.test(tidy)) return bad(f, 'language: a code such as en, fr or pt-BR');

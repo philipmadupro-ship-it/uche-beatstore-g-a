@@ -22,6 +22,7 @@
  *    creator ids. The item id is the public handle of a playable track.
  */
 import { isUUID } from '@/lib/validate';
+import { planConsentGate, type ConsentRow } from './store-consent';
 
 export const STORE_PLAYBACKS = ['preview', 'full'] as const;
 export type StorePlayback = (typeof STORE_PLAYBACKS)[number];
@@ -46,14 +47,41 @@ export function todayUtc(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
 
-/** Released: imported as already out, or delivered with a date that has come (or none). Cancelled and draft: never. */
+/**
+ * Released: imported as already out, or delivered with a date that has come (or none). Cancelled, draft and
+ * WITHDRAWN (LABEL-56: pulled back after delivery, even one entered as already out): never.
+ */
 export function isReleasedForStore(r: Pick<ListingFacts, 'state' | 'imported_released' | 'release_date'>, now: Date): boolean {
-  if (r.state === 'cancelled') return false;
+  if (r.state === 'cancelled' || r.state === 'withdrawn') return false;
   if (r.imported_released) return true;
   if (r.state !== 'delivered') return false;
   // A date that has come, and only a RELEASE date: a target date is a plan, never "out", and a delivery
   // with no release date at all has not said when it comes out (readiness accepts a target date alone).
   return r.release_date !== null && r.release_date <= todayUtc(now);
+}
+
+/**
+ * May this release be on the store at all — as a TEASER? (LABEL-72.) A delivered release is on its way out, so
+ * its preview clips may be listed before the release date (and with no date yet); the whole songs wait for the
+ * date (`effectivePlayback`). A draft, cancelled or withdrawn release is never on the store.
+ */
+export function canListOnStore(r: Pick<ListingFacts, 'state' | 'imported_released'>): boolean {
+  if (r.state === 'cancelled' || r.state === 'withdrawn') return false;
+  return r.imported_released || r.state === 'delivered';
+}
+
+/**
+ * How a visitor hears a listed release RIGHT NOW. `full` is only ever the stored choice AND a release date that
+ * has come: it is derived on every read, so a date that is stated later (or a release that is withdrawn) turns the
+ * release back into `preview` by itself — nothing is stored on the way down, and nothing needs to be undone when
+ * the date comes. Imported releases are released by definition.
+ */
+export function effectivePlayback(
+  stored: StorePlayback,
+  r: Pick<ListingFacts, 'state' | 'imported_released' | 'release_date'>,
+  now: Date,
+): StorePlayback {
+  return stored === 'full' && isReleasedForStore(r, now) ? 'full' : 'preview';
 }
 
 /**
@@ -68,7 +96,7 @@ export function isReleasedForStore(r: Pick<ListingFacts, 'state' | 'imported_rel
 export function releasedPublicly(r: Pick<ListingFacts, 'state' | 'imported_released' | 'release_date' | 'store_listed_at'>, now: Date): boolean {
   if (isReleasedForStore(r, now)) return true;
   if (r.store_listed_at && !Number.isNaN(Date.parse(r.store_listed_at))) {
-    return isReleasedForStore({ ...r, state: r.state === 'cancelled' ? 'delivered' : r.state }, new Date(r.store_listed_at));
+    return isReleasedForStore({ ...r, state: r.state === 'cancelled' || r.state === 'withdrawn' ? 'delivered' : r.state }, new Date(r.store_listed_at));
   }
   return false;
 }
@@ -89,7 +117,16 @@ export function orgMayListOnStore(orgId: string, owner: StoreOwnerOrgs): boolean
 
 export type ListingProblem = { ok: false; status: 404 | 409 | 400; error: string; field?: string };
 
-export type ListPlan = { ok: true; playback: StorePlayback; alreadyListed: boolean } | ListingProblem;
+export type ListPlan =
+  | {
+      ok: true;
+      /** What is stored on the release. */
+      playback: StorePlayback;
+      /** What a visitor hears now (`effectivePlayback`): `full` only once the release date has come. */
+      effective: StorePlayback;
+      alreadyListed: boolean;
+    }
+  | ListingProblem;
 
 export interface ListInput {
   release: ListingFacts;
@@ -101,6 +138,12 @@ export interface ListInput {
   /** Requested playback; omitted keeps the release's current one. */
   playback?: StorePlayback;
   currentPlayback: StorePlayback;
+  /**
+   * Artist consent rows of the release (LABEL-71; absent before migration 186 = no rows). Any `no` blocks the
+   * listing until that artist says yes; so does the store owner's veto.
+   */
+  consent?: readonly ConsentRow[];
+  vetoed?: boolean;
 }
 
 /** Can this release go on the store, and with what playback? */
@@ -115,12 +158,18 @@ export function planList(input: ListInput, now: Date): ListPlan {
     };
   }
   if (release.state === 'cancelled') return { ok: false, status: 409, error: 'A cancelled release cannot be listed', field: 'state' };
-  if (!isReleasedForStore(release, now)) {
+  if (release.state === 'withdrawn') return { ok: false, status: 409, error: 'A withdrawn release cannot be listed', field: 'state' };
+  if (!canListOnStore(release)) {
+    return { ok: false, status: 409, error: 'Only a delivered or released release can be listed', field: 'state' };
+  }
+  // LABEL-72: before the release date a delivered release may be listed as a TEASER (preview clips only).
+  // Whole songs are chosen from the date on; a stored `full` that meets a later date simply reads as preview.
+  if (input.playback === 'full' && !isReleasedForStore(release, now)) {
     return {
       ok: false,
       status: 409,
-      error: release.state === 'delivered' ? 'This release is not out yet; it can be listed from its release date' : 'Only a released release can be listed',
-      field: 'state',
+      error: 'Full songs can be chosen from the release date; until then visitors hear preview clips',
+      field: 'playback',
     };
   }
   if (input.blockedItems && input.blockedItems.length > 0) {
@@ -133,7 +182,10 @@ export function planList(input: ListInput, now: Date): ListPlan {
     };
   }
   if (input.itemCount === 0) return { ok: false, status: 409, error: 'Add the songs of the release before listing it', field: 'items' };
-  return { ok: true, playback: input.playback ?? input.currentPlayback, alreadyListed: release.store_listed };
+  const consent = planConsentGate(input.consent ?? [], input.vetoed === true);
+  if (!consent.ok) return consent;
+  const playback = input.playback ?? input.currentPlayback;
+  return { ok: true, playback, effective: effectivePlayback(playback, release, now), alreadyListed: release.store_listed };
 }
 
 export type UnlistPlan =
@@ -151,9 +203,9 @@ export function planUnlist(release: ListingFacts, wantsDelete: boolean, now: Dat
   return { ok: true, askToDeletePreviews: ask, deletePreviews: ask && wantsDelete };
 }
 
-/** Should the public store show this release right now? Listed AND still released. */
-export function isPubliclyVisible(r: ListingFacts, now: Date): boolean {
-  return r.store_listed && isReleasedForStore(r, now);
+/** Should the public store show this release right now? Listed AND still deliverable (a teaser counts). */
+export function isPubliclyVisible(r: ListingFacts, _now?: Date): boolean {
+  return r.store_listed && canListOnStore(r);
 }
 
 /**
@@ -171,23 +223,24 @@ export function publicReleasePrefix(releaseId: string): string | null {
   return isUUID(releaseId) ? `store-releases/${releaseId.toLowerCase()}/` : null;
 }
 
-/** How one item of a listed release is streamed to a visitor. */
+/**
+ * How one item of a listed release is streamed to a visitor. There is NO plan that names the master (LABEL-72):
+ * preview mode streams the promoted copy in the public bucket, full mode streams the private lossy full-length
+ * derivative of the master through the server. A master's reference never reaches a public route.
+ */
 export type PublicStreamPlan =
   | { kind: 'public-preview'; key: string }
-  | { kind: 'private-master'; ref: string }
+  | { kind: 'private-derivative'; orgId: string; masterTrackId: string }
   | null;
 
-/**
- * Preview mode streams only the promoted copy in the public bucket. Full mode
- * streams the master through the server (the share pages' rule: bytes pass
- * through us, no URL leaves) and never copies it to a public place.
- */
+/** `playback` is the EFFECTIVE playback (`effectivePlayback`), never the stored one. */
 export function publicStreamPlan(
   playback: StorePlayback,
   releaseId: string,
-  item: { master_track_id: string; master_audio_ref: string | null },
+  item: { master_track_id: string },
+  orgId: string,
 ): PublicStreamPlan {
-  if (playback === 'full') return item.master_audio_ref ? { kind: 'private-master', ref: item.master_audio_ref } : null;
+  if (playback === 'full') return isUUID(orgId) && isUUID(item.master_track_id) ? { kind: 'private-derivative', orgId: orgId.toLowerCase(), masterTrackId: item.master_track_id.toLowerCase() } : null;
   const key = publicPreviewKey(releaseId, item.master_track_id);
   return key ? { kind: 'public-preview', key } : null;
 }
@@ -206,6 +259,8 @@ export interface PublicReleaseRow {
   store_playback: StorePlayback;
   has_artwork: boolean;
   artist_name: string | null;
+  /** Out now (`isReleasedForStore`); false for a teaser listed before its release date (LABEL-72). */
+  out: boolean;
 }
 
 export interface PublicReleaseItemRow {
@@ -250,6 +305,7 @@ export function publicReleaseTile(r: PublicReleaseRow, trackCount: number) {
     primary_genre: r.primary_genre,
     release_date: r.release_date,
     already_out: r.imported_released,
+    out: r.out,
     cover_url: r.has_artwork ? publicReleaseCoverUrl(r.id) : null,
     track_count: trackCount,
   };

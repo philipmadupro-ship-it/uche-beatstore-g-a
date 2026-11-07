@@ -19,11 +19,12 @@ import { OrgReleaseCreateBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
+import { auditRpc, isMissingAtomicRpc } from '@/lib/labelos/audit-rpc';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
-import { RELEASE_COLUMNS, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
+import { RELEASE_COLUMNS, RELEASE_DETAIL_COLUMNS, toReleaseView, type ReleaseRow } from '@/lib/labelos/releases';
 import { importedDeliveredAt, planImport } from '@/lib/labelos/release-import';
 import { inChunks, pageAll, ReadError } from '@/lib/labelos/overview-store';
-import { checkArtwork, fail, notReady, writeError } from './access';
+import { checkArtwork, fail, isMissingDetailColumn, notReady, writeError } from './access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -107,6 +108,42 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!art.ok) return art.res;
   }
 
+  // 187 (LABEL-73): an import — its project, the release row and `release.imported` — in one transaction,
+  // so nothing is put back. Without the function, the path below.
+  if (importing) {
+    const { data, error: rpcError } = await auditRpc(admin, 'releaseImport', {
+      p_org: org,
+      p_actor: access.userId,
+      p_row: {
+        title: body.title,
+        contact_id: artist.object.id,
+        project_id: body.project_id ?? null,
+        type: body.type ?? 'single',
+        upc: body.upc ?? null,
+        label_name: body.label_name ?? null,
+        c_line: body.c_line ?? null,
+        p_line: body.p_line ?? null,
+        primary_genre: body.primary_genre ?? null,
+        target_date: body.target_date ?? null,
+        release_date: body.release_date ?? null,
+        artwork_asset_id: body.artwork_asset_id ?? null,
+        delivered_at: importedDeliveredAt(body.release_date as string),
+        created_by: access.userId,
+        distributor: body.distributor ?? null,
+        territories: body.territories ?? null,
+        language: body.language ?? null,
+      },
+      p_payload: { releaseDate: body.release_date ?? null, type: body.type ?? 'single' },
+    });
+    if (!rpcError) {
+      if (data?.error === 'not_found') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      const created = data?.release as unknown as ReleaseRow | undefined;
+      if (!created) return NextResponse.json({ error: 'Could not create the release' }, { status: 500 });
+      return NextResponse.json({ release: toReleaseView(created) }, { status: 201, headers: NO_STORE });
+    }
+    if (!isMissingAtomicRpc(rpcError)) return writeError(rpcError, 'Could not create the release').res;
+  }
+
   let projectId = body.project_id ?? null;
   let createdProject = false;
   try {
@@ -127,9 +164,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (link.error) throw new Error(link.error.message);
     }
 
-    const { data, error } = await admin
-      .from('releases')
-      .insert({
+    const row = {
         org_id: org,
         project_id: projectId,
         contact_id: artist.object.id,
@@ -153,9 +188,18 @@ export async function POST(req: NextRequest, { params }: Params) {
             }
           : { state: 'draft' }),
         created_by: access.userId,
-      })
-      .select(RELEASE_COLUMNS)
-      .single();
+        // Migration 175's details: sent only when the body names them, so a create that does not
+        // touch them works on a database that has 144 but not 175.
+        ...(body.distributor !== undefined ? { distributor: body.distributor } : {}),
+        ...(body.territories !== undefined ? { territories: body.territories } : {}),
+        ...(body.language !== undefined ? { language: body.language } : {}),
+    };
+    const insert = (columns: string) => admin.from('releases').insert(row).select(columns).single();
+    let { data, error } = await insert(RELEASE_DETAIL_COLUMNS);
+    // Before 175 the detail columns are not there to select back: the same insert, without them.
+    if (error && isMissingDetailColumn(error) && body.distributor === undefined && body.territories === undefined && body.language === undefined) {
+      ({ data, error } = await insert(RELEASE_COLUMNS));
+    }
     if (error || !data) {
       await removeProject(admin, org, createdProject ? projectId : null);
       return writeError(error ?? {}, 'Could not create the release').res;

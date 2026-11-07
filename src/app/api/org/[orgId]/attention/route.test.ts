@@ -243,9 +243,15 @@ describe('restricted counts (doc 21 #9)', () => {
 describe('D4 and task visibility', () => {
   it('marketing never reads a working demo: it is a count, not a title; its own task is listed', async () => {
     const { attention } = await (await read(MKT)).json();
-    expect(attention.restricted).toBe(1);
+    // 'Midnight' and 'Dawn' are only on DRAFT releases (LABEL-56): still working, so they are counts too, never titles.
+    expect(attention.restricted).toBe(3);
     expect(JSON.stringify(attention)).not.toContain('Secret demo');
-    expect(titles(attention)).toContain('Midnight'); // on a release: a finished row
+    expect(titles(attention)).not.toContain('Midnight');
+    // Once that release has gone out the song is finished and marketing reads its row.
+    db.tables.releases.find((r) => r.id === R1)!.state = 'delivered';
+    const out = (await (await read(MKT)).json()).attention;
+    expect(out.restricted).toBe(2);
+    expect(titles(out)).toContain('Midnight');
     expect(attention.items.filter((i: { kind: string }) => i.kind === 'tasks').map((i: { person: { name: string } }) => i.person.name)).toEqual(['Max']);
   });
 

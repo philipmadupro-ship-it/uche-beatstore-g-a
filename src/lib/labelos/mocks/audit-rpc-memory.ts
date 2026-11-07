@@ -39,7 +39,7 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
     const kind = String(args.p_kind);
     const gate = String(args.p_gate);
     if (kind !== 'song' && kind !== 'release') throw new Error(`unknown approval subject ${kind}`);
-    if (!['master', 'artwork', 'legal', 'marketing', 'metadata'].includes(gate) || (kind === 'song' && gate !== 'legal')) return ok({ error: 'bad_gate' });
+    if (!['master', 'artwork', 'legal', 'marketing', 'metadata', 'creative'].includes(gate) || (kind === 'song' && gate !== 'legal')) return ok({ error: 'bad_gate' });
     const decision = op === 'request' ? 'requested' : String(args.p_decision);
     const note = String(args.p_note ?? '').trim() || null;
     if (op === 'decide') {
@@ -365,6 +365,29 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
       });
       return ok({ credit: { ...credit } });
     },
+    // Migration 174 (LABEL-54): withdraw a credit — the row goes, the event stays.
+    labelos_audit_credit_withdraw: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const credits = (tables.track_collaborators ??= []);
+      const i = credits.findIndex((c) => c.id === args.p_credit && c.org_id === args.p_org);
+      if (i < 0) return ok({ error: 'not_found' });
+      const [credit] = credits.splice(i, 1);
+      const subject = (args.p_subject ?? {}) as Row;
+      (tables.activity_events ??= []).push({
+        org_id: args.p_org,
+        actor_id: args.p_actor,
+        verb: 'credit.withdrawn',
+        subject_type: 'credit',
+        subject_id: credit.id,
+        artist_id: subject.artist_id ?? null,
+        project_id: subject.project_id ?? null,
+        song_id: subject.song_id ?? null,
+        payload: args.p_payload,
+        audit: true,
+        visibility: 'artist',
+      });
+      return ok({ withdrawn: true });
+    },
     // Migration 155 (LABEL-28): split sheets. These mimic the SQL: the same refusals, in the same order.
     labelos_split_create_draft: (args, tables) => {
       const track = (tables.tracks ?? []).find((t) => t.id === args.p_track && t.org_id === args.p_org && t.type === 'song');
@@ -471,6 +494,36 @@ export function auditRpcMemory(opts: { failAudit?: () => boolean } = {}): Record
     // Migration 157 (LABEL-30): approvals. Mimic the SQL: the same refusals in the same order, append-only rows.
     labelos_audit_approval_request: (args, tables) => approval(args, tables, 'request'),
     labelos_audit_approval_decide: (args, tables) => approval(args, tables, 'decide'),
+    // Migration 183 (LABEL-65): the marketing plan requirement, owner only, `from` derived from the stored value.
+    labelos_audit_marketing_plan_required: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const org = (tables.organizations ?? []).find((o) => o.id === args.p_org && !o.deleted_at);
+      if (!org) return ok({ error: 'not_found' });
+      const owner = (tables.org_members ?? []).find((m) => m.org_id === args.p_org && m.user_id === args.p_actor && m.role === 'owner');
+      if (!owner) return ok({ error: 'not_owner' });
+      const settings = (org.settings ?? {}) as Row;
+      const before = settings.marketing_plan_required === true;
+      const required = args.p_required === true;
+      if (before === required) return ok({ required, changed: false });
+      org.settings = { ...settings, marketing_plan_required: required };
+      event(tables, args, 'marketing_plan.requirement_changed', 'org', args.p_org, { from: before, to: required });
+      return ok({ required, changed: true });
+    },
+    // Migration 194 (LABEL-68): the creative approval gate switch, owner only, `from` derived from the stored value.
+    labelos_audit_creative_gate: (args, tables) => {
+      if (opts.failAudit?.()) return failed();
+      const org = (tables.organizations ?? []).find((o) => o.id === args.p_org && !o.deleted_at);
+      if (!org) return ok({ error: 'not_found' });
+      const owner = (tables.org_members ?? []).find((m) => m.org_id === args.p_org && m.user_id === args.p_actor && m.role === 'owner');
+      if (!owner) return ok({ error: 'not_owner' });
+      const settings = (org.settings ?? {}) as Row;
+      const before = settings.creative_gate === 'on';
+      const enabled = args.p_enabled === true;
+      if (before === enabled) return ok({ enabled, changed: false });
+      org.settings = { ...settings, creative_gate: enabled ? 'on' : 'off' };
+      event(tables, args, 'creative_gate.changed', 'org', args.p_org, { from: before ? 'on' : 'off', to: enabled ? 'on' : 'off' });
+      return ok({ enabled, changed: true });
+    },
     labelos_audit_invitation_revoke: (args, tables) => {
       if (opts.failAudit?.()) return failed();
       const inv = (tables.org_invitations ?? []).find((i) => i.org_id === args.p_org && i.id === args.p_id && !i.accepted_at && !i.revoked_at);

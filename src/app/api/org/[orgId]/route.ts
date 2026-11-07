@@ -23,6 +23,7 @@ import { requireOrgCapability, requireOrgOwner } from '@/lib/auth/org-access';
 import { OrgDeleteBodySchema, OrgPatchBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { recordEvent } from '@/lib/labelos/activity';
+import { auditRpc, isMissingAtomicRpc } from '@/lib/labelos/audit-rpc';
 import { GRACE_DAYS, canDeleteOrgKind, confirmationMatches, purgeAfter } from '@/lib/labelos/org-lifecycle';
 import { restoreOrg, softDeleteOrg } from '@/lib/labelos/org-lifecycle-store';
 import { createLogger } from '@/lib/log';
@@ -99,6 +100,29 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ o
   }
   if (!confirmationMatches(parsed.data.confirmName, org.name)) {
     return NextResponse.json({ error: 'Type the organization name exactly to confirm' }, { status: 400 });
+  }
+
+  // 187 (LABEL-73): the stamp and `org.deletion_scheduled` in one transaction; no put-back exists.
+  {
+    const stamp = new Date();
+    const due = purgeAfter(stamp)!.toISOString();
+    const { data, error } = await auditRpc(admin, 'orgDelete', {
+      p_org: org.id,
+      p_actor: owner.userId,
+      p_deleted_at: stamp.toISOString(),
+      p_payload: { graceDays: GRACE_DAYS, purgeAfter: due },
+    });
+    if (!error) {
+      if (data?.error === 'not_found') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (data?.error === 'not_owner') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      if (data?.error === 'producer_org') return NextResponse.json({ error: 'The producer workspace cannot be deleted from here' }, { status: 409 });
+      log.info('org scheduled for deletion', { orgId: org.id, purgeAfter: due });
+      return NextResponse.json({ deletedAt: stamp.toISOString(), purgeAfter: due, graceDays: GRACE_DAYS, restoreUrl: `/restore/${org.id}` });
+    }
+    if (!isMissingAtomicRpc(error)) {
+      log.error('delete org failed', { orgId: org.id, error: error.message });
+      return NextResponse.json({ error: 'Could not delete the organization' }, { status: 500 });
+    }
   }
 
   let deletedAt: string | null;

@@ -18,7 +18,8 @@ import { NextResponse } from 'next/server';
 import { requireObjectAccess, type OrgAccessOk } from '@/lib/auth/org-access';
 import type { AdminClient } from '@/lib/auth/ownership';
 import {
-  GATES,
+  ALL_GATES,
+  CREATIVE_GATE,
   GATE_LABEL,
   approvalChip,
   approvalIsStale,
@@ -28,6 +29,7 @@ import {
   currentDecision,
   gateAppliesTo,
   gateCapability,
+  mayReadApprovals,
   gatesFor,
   isOwnerOrAdmin,
   mayRequest,
@@ -38,6 +40,7 @@ import {
 } from './approvals';
 import { approverCandidates, currentSnapshot, listApprovals, namesOf, readReleaseFacts, releasesOfSong, approvalView, type ApprovalView, type Subject } from './approvals-store';
 import { readReadinessSong } from './legal-readiness-store';
+import { readCreativeGate } from './creative-store';
 import { scopeAllowsContact } from './artist-scope';
 import { memberMayReadSongRow } from './song-stage-store';
 
@@ -45,9 +48,7 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 export const json = (status: number, body: Record<string, unknown>) => NextResponse.json(body, { status, headers: NO_STORE });
 
 /** The abilities that let a member see approvals at all (the policy of migration 157). */
-export function mayReadApprovals(caps: ReadonlySet<string>): boolean {
-  return caps.has('release.write') || GATES.some((g) => caps.has(gateCapability(g)));
-}
+export { mayReadApprovals };
 
 export type ResolvedSubject =
   | { ok: true; access: OrgAccessOk; subject: Subject; table: 'tracks' | 'releases'; title: string | null }
@@ -72,6 +73,16 @@ export async function resolveSubject(orgId: string, subject: Subject): Promise<R
     title = (rel.data as { title: string } | null)?.title ?? null;
   }
   return { ok: true, access, subject, table, title };
+}
+
+/**
+ * LABEL-68: the creative gate exists only while the org switched it on. Asking for or deciding it with the switch off
+ * is a 409 (`gate_off`), never a quiet success, so nothing is recorded against a gate that gates nothing. Null = go on.
+ */
+export async function creativeGateRefusal(admin: AdminClient, org: string, gate: string): Promise<NextResponse | null> {
+  if (gate !== CREATIVE_GATE) return null;
+  if (await readCreativeGate(admin, org)) return null;
+  return json(409, { error: 'Creative approval is not switched on for this organization.', code: 'gate_off' });
 }
 
 export const actorOf = (access: Pick<OrgAccessOk, 'userId' | 'role' | 'capabilities'>): Actor => ({
@@ -131,7 +142,9 @@ export async function gateStates(admin: AdminClient, access: OrgAccessOk, resolv
   const actor = actorOf(access);
   const out: GateState[] = [];
   const onReleases = subject.kind === 'song' ? await releasesOfSong(admin, org, subject.id) : [];
-  for (const gate of gatesFor(subject.kind)) {
+  // LABEL-68: the creative gate is listed only while the org has it on.
+  const creative = subject.kind === 'release' && (await readCreativeGate(admin, org));
+  for (const gate of gatesFor(subject.kind, { creative })) {
     const current = currentDecision(all.filter((r) => r.gate === gate));
     let stale = false;
     let changed: string[] = [];

@@ -66,7 +66,7 @@ K Finish           78
 Task numbers continue from 42; the table keys above use LABEL-nn = nn.
 
 Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (D), 180–183 (E),
-184–185 (F), 186 (G), 187 (I), 188 (J). Unused numbers are simply skipped.
+184–185 (F), 186 (G), 187 (I), 188 (J). Unused numbers are simply skipped. 188 is released (2026-11-06): it would sort before 189–194, so LABEL-74/75 take 195.
 
 ---
 
@@ -122,7 +122,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Out of scope: the modules themselves.
 
 ### LABEL-50 — Roster and team window
-**Priority:** P0 · **Risk:** Medium · **Deps:** 48, 49 · **Status:** In Progress (session_01J9Cs4e12d1Khurw8sTDw9P)
+**Priority:** P0 · **Risk:** Medium · **Deps:** 48, 49 · **Status:** Done — #145, squash `837ab51` (2026-10-25)
 - One window ("Team and roster") usable from the wizard and from Organization: **add artist** (creates the roster contact, optional login invite with role `artist`), **add member** with role + functions + artist scope, **add collaborator** (beatmaker, producer, rapper, feature: a contact with a role and optional external-project invite), edit/remove with `planMemberChange` rules (last owner is 409).
 - Reuses `POST /api/org/[orgId]/contacts` and invitations; adds the screens and the missing role pickers.
 - Acceptance: add/remove for each role in e2e; scoped member sees only their artists; independent face shows "Your collaborators" instead of roster wording.
@@ -147,41 +147,41 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Acceptance: the release "Track has no ISRC" blocker offers a working link to this editor; a Playwright journey sets an ISRC with no service-key seeding; audit event names fields, never values of notes.
 
 ### LABEL-54 — Parties and payee data
-**Priority:** P1 · **Risk:** Medium · **Deps:** 49 · **Migration:** 174 · **Status:** In Progress (session_01VdMEG5FGhGT7BkditBEft4)
+**Priority:** P1 · **Risk:** Medium · **Deps:** 49 · **Migration:** 174 · **Status:** Done — #148, squash `f7882dd` (2026-10-26)
 - Parties page (G6 spec gap): legal name, stage name, address, country, tax id (restricted: `rights.write`/`finance.read` only), **PRO**, **IPI/CAE**, publisher, publisher IPI, payee details reference (no bank numbers stored in the app; a free-text "payment instructions" restricted to finance), invite-to-confirm. Credit **withdraw**. Lock `display_name`/`user_id` once a sheet naming the party is circulated, or snapshot names onto lines (G6 D-c).
 - Acceptance: scoped members only see parties in scope; roster artist sees names/roles/shares only (decision: no co-writer contact data); mutation check on the lock.
 
 ### LABEL-55 — Create release, release metadata, master chooser
-**Priority:** P0 · **Risk:** Medium · **Deps:** 53 · **Migration:** 175 · **Status:** Not Started
+**Priority:** P0 · **Risk:** Medium · **Deps:** 53 · **Migration:** 175 · **Status:** Done — #150, squash `99f7c49` (2026-10-26)
 - "New release" (draft) from the releases board: title, type (single/EP/album), artists, label name, **UPC**, **C-line / P-line**, territories, distributor, genre, language, planned date, explicit. Tracklist add with **master chooser** (default = the single linked master; otherwise ask); `master_track_id` editable from the row (PATCH exists).
 - Acceptance: all seven gates are satisfiable by a human in the UI; `label-org-release-board.spec.ts` rewritten so ISRC and master are set through the UI, not the service key; "Deliver anyway" stays owner-only and audited.
 
 ### LABEL-56 — Delivered-release lifecycle and draft-song class
-**Priority:** P2 · **Risk:** Low · **Deps:** 55 · **Status:** Not Started
-- A delivered release cannot be cancelled; it can be **withdrawn** (audited, unlists from the store, keeps the record); fix the DELETE message. Songs on a draft release stay `working` (not `finished`) until the release is ready: update `recording-kind`/org-audio class and tests.
+**Priority:** P2 · **Risk:** Low · **Deps:** 55 · **Status:** Done — #156, squash `4f4f6424389478645fd7172b55b03caff77a4943` (2026-10-27). Migration 193. A song whose only releases are drafts stays `working` until a release is delivered (or withdrawn, or imported as already out); cancelled releases never count
+- A delivered release cannot be cancelled; it can be **withdrawn** (audited, unlists from the store, keeps the record); fix the DELETE message. Songs on a draft release stay `working` (not `finished`) until the release is delivered (decided 2026-10-27: gates are derived in TS and cannot be mirrored in SQL): update `recording-kind`/org-audio class and tests.
 
 ---
 
 ## D. Contracts
 
 ### LABEL-57 — Contract model and templates (all types)
-**Priority:** P0 · **Risk:** High · **Deps:** 49, 54 · **Migration:** 176 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** 49, 54 · **Migration:** 176 · **Status:** Done — #154, squash `a85241956cdf4e8e987c7b046685cea6a23c525e` (2026-10-27). Migration 176. `internal_note`, `void_reason`, `created_by` and `voided_by` have no column grant to API roles
 - Tables `contract_templates` (platform defaults + org-editable copies), `contracts` (type, parties, artist/song/release links, status `draft|sent|signed|void`, term, territory, fields jsonb, version), same-org triggers, RLS keyed on `contract.read` + artist scope (an artist reads only their own contracts).
 - **Template for every type:** recording agreement, distribution, licence (sync/sample), 360, producer agreement / work-for-hire, beat licence/lease, feature, co-writing/co-publishing, management, collaboration, session/engineer, work-made-for-hire, mixing/mastering, NDA. Each template = clauses with merge fields (parties, advance, royalty rate, term, territory, splits) in `lib/labelos/contracts/templates/*`; **text is placeholder legal wording marked "not legal advice, have counsel review"**; the owner/legal replace it in the template editor.
 - Acceptance: every type has a template that renders with sample data; two-org and two-scope tests; template editor (`contract.write`) versions templates.
 
 ### LABEL-58 — Contract editor and document generation
-**Priority:** P0 · **Risk:** Medium · **Deps:** 57 · **Status:** Not Started
+**Priority:** P0 · **Risk:** Medium · **Deps:** 57 · **Status:** Done — #158, squash `0bcd988467cea5ec1c8f490c6729d55d55ffaa86` (2026-10-27). No migration. The PDF is filed only in the contract artist's own project; a sent contract downloads its frozen sent copy; contract / split-sheet files cannot be declassified through the asset PATCH
 - Create a contract from a template for an artist/song/release; fill merge fields (with suggestions from parties and splits); live preview; generate HTML/PDF stored as a restricted `project_assets` row; clause-level edits tracked in versions; "send for signature" moves to `sent`.
 - Acceptance: PDF contains the filled values (test parses text); restricted download audited; 390 px usable.
 
 ### LABEL-59 — Contract ↔ split sheets
-**Priority:** P0 · **Risk:** High · **Deps:** 58 · **Migration:** 177 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** 58 · **Migration:** none (177 released) · **Status:** Done (#160, `cd0d9d9`)
 - A contract of an applicable type creates or pre-fills the split sheet (master/publishing percentages from the contract fields); a circulated sheet that disagrees with its contract shows a drift warning on both; signing the contract can require a signed sheet (`require_signed_master_split`). Splits stay integer-unit exact (no float); 33.3333×3 refusal stays.
 - Acceptance: tests for prefill, drift, and the signed-sheet requirement; D2 holds (note never leaves the route).
 
 ### LABEL-60 — In-app signature and contract store
-**Priority:** P1 · **Risk:** High · **Deps:** 58 · **Migration:** 178 · **Status:** Not Started
+**Priority:** P1 · **Risk:** High · **Deps:** 58 · **Migration:** 178 · **Status:** Done (#166, `17e770e`)
 - Signing flow for members and external signers (token link like the artist portal): typed/drawn signature, timestamp, IP hash, document SHA-256 recorded in an append-only `contract_signatures` table, countersign, certificate page; void/supersede. Contract store with search and expiry reminders (calendar feed).
 - Acceptance: signature rows immutable (trigger); a changed document hash invalidates earlier signatures; audit events; the page states plainly this is an in-app signature, with a field for an external e-signature provider URL (provider integration is a later decision).
 - Out of scope: third-party e-signature vendors.
@@ -191,22 +191,22 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## E. Finance
 
 ### LABEL-61 — Finance schema and permissions
-**Priority:** P0 · **Risk:** High · **Deps:** 49, 54, 59 · **Migration:** 179 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** 49, 54, 59 · **Migration:** 179 · **Status:** Done (#165, `b474c1f`)
 - Tables: `payees` (link to parties), `advances`, `finance_periods`, `earnings_imports`, `earnings_lines`, `statements`, `statement_lines`, `payments` (records only; **the app never moves money**). Money as integer minor units + currency; RLS on `finance.read` + artist scope (an artist reads their own statements only).
 - Acceptance: money arithmetic helpers in `lib/labelos/finance/money.ts` (integer, rounding rule documented, largest-remainder allocation) with property-style tests.
 
 ### LABEL-62 — Earnings import and royalty calculation
-**Priority:** P0 · **Risk:** High · **Deps:** 61 · **Migration:** 180 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** 61 · **Migration:** 180 · **Status:** Done (#169, `8302d8a`)
 - CSV import (generic mapper + presets for common distributor reports), idempotent by file hash; match lines to recordings by ISRC/UPC; allocate by the song's current splits (master/publishing) and contract terms; **recoupment** of advances per payee; unmatched lines queue.
 - Acceptance: golden-file tests for allocation and recoupment; re-importing a file changes nothing; unmatched queue is scoped.
 
 ### LABEL-63 — Statements and payment tracking
-**Priority:** P1 · **Risk:** Medium · **Deps:** 62 · **Migration:** 181 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 62 · **Migration:** 181 · **Status:** Done (#174, `9dde850`)
 - Generate a statement per payee per period (PDF/CSV), approve (`finance.approve`), mark paid with a reference, export a payout CSV. Payee statements visible to the artist/collaborator in their own view.
 - Acceptance: statement totals equal the sum of allocations (test); approval is append-only; artist sees only theirs.
 
 ### LABEL-64 — Finance dashboard and advances
-**Priority:** P2 · **Risk:** Low · **Deps:** 63 · **Migration:** 182 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** 63 · **Migration:** 182 · **Status:** Done — #180, squash `9aaff9d4bc9ba3d6b7e77bc2c9cb17abdd1bdb6a` (2026-11-06)
 - Advances ledger (recoupable / non-recoupable), per-artist position, per-release income vs cost, period close; feeds the executive dashboard (LABEL-67).
 
 ---
@@ -214,12 +214,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## F. Marketing and PR
 
 ### LABEL-65 — Marketing plans
-**Priority:** P1 · **Risk:** Medium · **Deps:** 49, 55 · **Migration:** 183 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 49, 55 · **Migration:** 183 · **Status:** Done (#170, `44bb802`)
 - Per-release marketing plan: timeline (pre-save, teaser, release, post), tasks with owners (reusing LABEL-23 tasks), budget lines, asset requests to the artist (a closed notification kind), platform checklist; calendar integration; marketing gate can require a plan.
 - Acceptance: scoped to the release's artist; marketing role without audio access cannot hear working demos.
 
 ### LABEL-66 — PR and press
-**Priority:** P1 · **Risk:** Medium · **Deps:** 65 · **Migration:** 184 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 65 · **Migration:** 184 · **Status:** Done (#172, `a0da509`)
 - Press kit builder (bio, photos, links, one-sheet from release data), press contacts (org contacts with role `press`), outreach tracker per release (sent/opened/replied/coverage URL), embargo date. Press-kit page shareable by token with the same grant discipline as artist portals.
 - Acceptance: embargo respected on shared pages; no private audio exposed (previews of unreleased music stay private, D8).
 
@@ -228,11 +228,11 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## G. Leadership and creative
 
 ### LABEL-67 — Executive (CEO) dashboard
-**Priority:** P1 · **Risk:** Medium · **Deps:** 64, 65 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 64, 65 · **Status:** Done — #184, squash `bee57da18fa52a8420be7d5b472c3c9e6d403b0d` (2026-11-07)
 - Read-only cross-roster view for `exec.read`: pipeline by stage, releases by month, blocked releases, approvals waiting, income vs cost, top songs, task load by department, exports (CSV). Respects entitlements and D4; no audio.
 
 ### LABEL-68 — Artistic direction workspace
-**Priority:** P2 · **Risk:** Medium · **Deps:** 49, 53 · **Migration:** 185 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Medium · **Deps:** 49, 53 · **Migration:** 194 (185 released: the migration redefines 187's functions, so it must sort after 187) · **Status:** Done (#176, `9d55067`)
 - `creative.read/approve`: one place across direction, references, reviews, song stages and releases; optional **creative approval** gate on a release (off by default, toggled in settings).
 
 ---
@@ -240,11 +240,11 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## H. Collaborators and role views
 
 ### LABEL-69 — Collaborators: producers, rappers, features
-**Priority:** P1 · **Risk:** Medium · **Deps:** 50, 54, 59 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 50, 54, 59 · **Status:** Done (#175, `d3997f3`, no migration)
 - Invite a collaborator to a song or project with a role (beatmaker, producer, rapper, feature, engineer); they accept their credit and their split, see their contract and statements (scoped), upload stems/versions (existing external-member rules), and ask for things through the closed notification kinds. "My sessions" list for a collaborator who has several labels.
 
 ### LABEL-70 — Role views
-**Priority:** P0 · **Risk:** Medium · **Deps:** 47, 49, 69 · **Status:** Not Started
+**Priority:** P0 · **Risk:** Medium · **Deps:** 47, 49, 69 · **Status:** Done — #178, squash `3ab02150f972389de4f8ae1e24f38e9b90997ed1` (2026-11-06)
 - Navigation and home driven by `accountFace` + role + functions + entitlements (`navGroupsFor`): **independent artist/producer home** ("my music, my releases, my money, my contracts"), **label shell** (current, plus finance, marketing/PR, executive, artistic direction), **roster-artist "My music"** (own songs, releases, splits, contracts, statements, open asks), **collaborator home**. Artist-org owners no longer see A&R inbox / Legal queue / roster wording.
 - Acceptance: persona matrix like G10's for every role×face, at 1440 and 390 px; forbidden pages 404 (settings may explain).
 
@@ -253,12 +253,12 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## I. Consent and playback
 
 ### LABEL-71 — Artist consent on store listing + showcase
-**Priority:** P0 · **Risk:** High · **Deps:** 55 · **Migration:** 186 · **Status:** Not Started
+**Priority:** P0 · **Risk:** High · **Deps:** 55 · **Migration:** 186 · **Status:** Done — #159, squash `6eea56c068863670c98cbc98848bda8f39b57d5a` (2026-10-28). Migration 186. Only a role-`artist` member scoped to the contact, or the owner of an artist org (its self artist), answers for an artist; a party's linked account never does. Credited artists in the producer org are unreachable (product gap, doc 26)
 - `listing_consents(release_id|showcase_id, artist_contact_id, state, decided_by, decided_at)`. The label lists a release (or a "greatest moments" showcase of released songs) → every credited artist gets a notification (new closed-union kind `listing_proposed`) → **any artist's "no" withdraws it and it cannot be re-listed without their yes**; the store-owner list "Releases from connected artists" with Unlist; consent text on the connection-accept screen.
 - Acceptance: a listing never serves until no artist has said no (state machine in `lib/labelos/store-consent.ts`); notification test; coverage and external-matrix updated.
 
 ### LABEL-72 — Playback rules
-**Priority:** P1 · **Risk:** Medium · **Deps:** 71 · **Status:** Not Started
+**Priority:** P1 · **Risk:** Medium · **Deps:** 71 · **Status:** Done (#162, `4592fdf`, no migration)
 - Default `preview`; `preview`-only listing allowed from delivery (teaser); `full` only from the release date, auto-fall back to `preview` if the date moves; `full` and listen-only external roles stream a **lossy full-length derivative, never the master**; durable per-IP limiter (`rateLimitDurable`); `Range` handling cannot return the whole file in one request for the derivative.
 - Acceptance: tests for the date rules and fallback; the master URL is unreachable from public routes; throttle test.
 
@@ -267,7 +267,7 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## J. Reliability and polish
 
 ### LABEL-73 — Atomic audit functions
-**Priority:** P1 · **Risk:** High · **Deps:** 44, 55 · **Migration:** 187 · **Status:** Not Started
+**Priority:** P1 · **Risk:** High · **Deps:** 44, 55 · **Migration:** 187 · **Status:** Done (#168, `2ccf06d`)
 - **Also (from LABEL-52):** the addressee rule (approve only an open request addressed to you), the song-on-a-live-release refusal and `seen` are enforced in the route only. `labelos_audit_approval_decide` re-checks only self-approval and does not verify that the latest row is the one the plan read; move all three into the function.
 - **Also (from LABEL-51):** `settings.departments_off` is enforced in SQL only for restricted project files (172's `labelos_org_asset_allowed`); `has_org_cap` ignores it, so the first RLS policy that uses a `finance.*` / `pr.*` / `exec.read` / `creative.*` capability must subtract `departments_off` there too (parity tests). The settings audit payload's `from` values are read before the lock (two simultaneous owner saves can log a stale `from`); build the payload inside the function.
 - **Also (from LABEL-47):** the caps are check-then-write: an artist→staff role change (seat cap) and contact create/edit (artist cap) can both pass at cap−1 under concurrency (only the invitation accept is enforced under a lock); 154's connection accept inserts a roster artist into the label without checking `max_artists`. Enforce both caps atomically in SQL.
@@ -275,19 +275,19 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 - Implement `20-review-G7-atomic-deliver.md` with G10's amendments (raw `updated_at` string, fingerprint scope, one function family): `labelos_audit_release_deliver`, plus `release.imported`, `release.store_listed/unlisted`, org delete/restore/export, digest channel verbs. `AUDIT_RPCS` entry, `AuditRpcArgs` type, a check proving the four G7 cases, a rollback. Remove the compensating writes.
 
 ### LABEL-74 — Visibility decisions
-**Priority:** P2 · **Risk:** Low · **Deps:** 52 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** 52 · **Migration:** 195 (shared with LABEL-75) · **Status:** Done — #182 (with LABEL-75), squash `506654b900df9c61c7d63700ad45ebb9ec767715` (2026-11-07)
 - Slack channel digest from the artist-visible, non-restricted view only (+ warning when sharing a saved view name); forbidden pages 404 except settings; `ensurePersonalOrg` gated on the flag; `references` cap no longer reveals internal references. **Added from LABEL-52:** `releaseItemTitles` (`org-workspace.ts`) keeps restricted placeholders in position, so a scoped viewer can count hidden songs on a release; drop them (or collapse them into one uncounted line) for anyone who does not get restricted counts.
 
 ### LABEL-75 — Lifecycle decisions
-**Priority:** P2 · **Risk:** Low · **Deps:** none · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** none · **Migration:** 195 (shared with LABEL-74) · **Status:** Done — #182 (with LABEL-74), squash `506654b900df9c61c7d63700ad45ebb9ec767715` (2026-11-07)
 - `org.created` becomes audit-class (never pruned); purge cron gets a 45–60 s budget; sole-owner account deletion blocked with "transfer ownership or delete the organization first"; throttle `/api/store/releases/*`; doc drift (`artist_org_id` is SET NULL; AGENTS.md `team_members`). **Added from LABEL-43's "Found, not fixed" (orchestrator, 2026-10-17):** column grant on `split_lines` so an own-line reader cannot read `signature_asset_id` / `signed_by`; a statement-level `BEFORE TRUNCATE` guard on `activity_events`; replace 147's per-row `has_org_cap` in `activity_events_member_read` with uncorrelated helpers (R-08); a trigger on `organizations` refusing DELETE unless `deleted_at` is older than the 30-day grace period (audit history can only be erased by the purge).
 
 ### LABEL-76 — UI polish
-**Priority:** P2 · **Risk:** Low · **Deps:** 70 · **Status:** Not Started
+**Priority:** P2 · **Risk:** Low · **Deps:** 70 · **Migration:** 196 · **Status:** Done — #185, squash `ea51d609d9ca9b2ae2c433c2cb4aa7176d286c69`, migration 196 (2026-11-07)
 - Overview at 390 px (stage counts, next release) and the 1440 px header overlap; Label OS panels use tokens so `data-theme="de-roche-archive"` is readable; `/o` app chrome (logo/home/sign-out); stop UI-asks-server-refuses 403s in the console. **Added from LABEL-52:** a settings field for `artwork_min_px` (today JSON only); the artwork head read is 256 KB, so a JPEG with large APP/XMP/ICC segments before its SOF reads as "size could not be read" (read further or say so plainly); decide whether a PNG with alpha passes the RGB rule; answer `no_request` before `seen_required`.
 
 ### LABEL-77 — Test infrastructure
-**Priority:** P1 · **Risk:** Low · **Deps:** none · **Status:** Not Started
+**Priority:** P1 · **Risk:** Low · **Deps:** none · **Status:** Done — #181, squash `5aa1007ba9ef22c46b24edff68e2bc1eca01f9f4` (2026-11-07)
 - `e2e:real-db` expect timeout 25 s; no e2e seeds a product field with the service key where a UI exists; decide and fix or delete the 47 stale default e2e specs; add `e2e` of the default suite flag-off to CI only if green.
 
 ---
@@ -295,8 +295,8 @@ Migration reservations: 162–167 (A), 168–171 (B), 172–175 (C), 176–179 (
 ## K. Finish
 
 ### LABEL-78 — Final integration and review
-**Priority:** P0 · **Risk:** Medium · **Deps:** all · **Status:** Not Started
-- Migration apply-order document for 136…N (never applied until the owner says), update `18-test-roadmap.md` (new screens, both faces, departments), update `19-independent-review-prompt.md` with groups G11+ for phase 2, update CLAUDE.md/AGENTS.md product text, run the review fleet on phase 2 (4–5 tasks each) and a G10-style cross-cutting pass, write `docs/bstudio-label-os/25-phase-2-report.md`.
+**Priority:** P0 · **Risk:** Medium · **Deps:** all · **Status:** In Progress (this session: docs, PR #186; review fleet run by the orchestrator)
+- Migration apply-order document for 136…N (never applied until the owner says), update `18-test-roadmap.md` (new screens, both faces, departments), update `19-independent-review-prompt.md` with groups G11+ for phase 2, update CLAUDE.md/AGENTS.md product text, run the review fleet on phase 2 (4–5 tasks each) and a G10-style cross-cutting pass, write `docs/bstudio-label-os/27-phase-2-report.md` (the migration apply order is `28-migration-apply-order.md`; 25 and 26 were already taken).
 
 ### LABEL-79 — Link-only project access with upload (owner idea, PROPOSED)
 **Priority:** — · **Risk:** Medium · **Deps:** none · **Status:** Proposed — being planned in PR #135 (PORTAL-UP, another session, migration 191)

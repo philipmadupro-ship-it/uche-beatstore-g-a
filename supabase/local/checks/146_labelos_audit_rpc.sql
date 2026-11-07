@@ -73,7 +73,23 @@ SELECT public.check_eq('all five functions exist',
      AND proname NOT LIKE 'labelos\_audit\_approval\_%'
      -- 172 (LABEL-51) adds the organization settings write; 190 (doc 25) the team-account family; each checked in its own file.
      AND proname <> 'labelos_audit_org_settings'
-     AND proname NOT LIKE 'labelos\_audit\_team\_account\_%'), 5);
+     AND proname NOT LIKE 'labelos\_audit\_team\_account\_%'
+     -- 176 (LABEL-57) adds the contract void; checked in 176's own file.
+     AND proname <> 'labelos_audit_contract_void'
+     -- 178 (LABEL-60) adds signer links, signing and supersede; checked in 178's own file.
+     AND proname NOT LIKE 'labelos\_audit\_contract\_%'
+     -- 183 (LABEL-65) adds the marketing plan requirement; checked in 183's own file.
+     AND proname <> 'labelos_audit_marketing_plan_required'
+     -- 194 (LABEL-68) adds the creative approval gate switch; checked in 194's own file.
+     AND proname <> 'labelos_audit_creative_gate'
+     -- 187 (LABEL-73) adds deliver, store listing, import, org delete / restore / export and the digest channel; checked in 187's own file.
+     AND proname NOT LIKE 'labelos\_audit\_release\_%' AND proname NOT LIKE 'labelos\_audit\_org\_%'
+     AND proname NOT LIKE 'labelos\_audit\_digest\_%'
+     -- 181 (LABEL-63) adds statements, payments and the import void; checked in 181's own file.
+     AND proname NOT LIKE 'labelos\_audit\_statement\_%' AND proname NOT LIKE 'labelos\_audit\_payment\_%'
+     AND proname NOT LIKE 'labelos\_audit\_earnings\_%'
+     -- 182 (LABEL-64) adds the advances ledger and the period close; checked in 182's own file.
+     AND proname NOT LIKE 'labelos\_audit\_advance\_%' AND proname NOT LIKE 'labelos\_audit\_period\_%'), 5);
 SELECT public.check_eq('the private event helper has no caller but its owner',
   (SELECT (has_function_privilege('service_role', p.oid, 'EXECUTE'), has_function_privilege('authenticated', p.oid, 'EXECUTE'))::text
    FROM pg_proc p WHERE p.proname = 'labelos_audit_insert'),

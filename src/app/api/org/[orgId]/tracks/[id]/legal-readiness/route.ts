@@ -15,6 +15,7 @@
  * the counts and the display percentage only. The percentage is display only;
  * a gate reads `ready` / `blockerCount`.
  */
+import { mayReadRightsDetail } from '@/lib/labelos/credits';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireObjectAccess } from '@/lib/auth/org-access';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -47,7 +48,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       return json(404, { error: 'Not found' });
     }
     const facts = await loadLegalFacts(access.admin, org, song);
-    const readiness = readinessView(evaluateLegalReadiness(facts), access.capabilities.has('rights.read'));
+    const readiness = readinessView(evaluateLegalReadiness(facts), mayReadRightsDetail(access.capabilities, access.role));
     return json(200, { schemaReady: true, readiness });
   } catch (err) {
     if (err instanceof LegalReadinessNotReadyError) return json(200, { schemaReady: false });

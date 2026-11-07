@@ -7,7 +7,8 @@
  * the database uses a NARROWER rule than the routes' per-recording one:
  *
  *  - a track is `finished` only when it is the own audio of a song that is
- *    selected or on a release (one not cancelled — LABEL-16, migration 144),
+ *    selected or on a release that went out (delivered, withdrawn or
+ *    imported — a draft or cancelled one does not; LABEL-16, 144, LABEL-56, 193),
  *    or a song's `master` / `instrumental`, AND nothing links to it as
  *    working material (a beat, loop, topline, version or demo). Everything
  *    else — including material R1 does not classify — reads as `working`;
@@ -36,7 +37,7 @@ export const OPEN_ASSET_KINDS = ['artwork', 'lyrics'] as const;
 export interface OrgReadTrack {
   type: string | null;
   song_stage: string | null;
-  /** The song is an item of a release that is not cancelled (lib/labelos/releases#countsAsOnRelease). */
+  /** The song is an item of a release that went out (lib/labelos/releases#countsAsOnRelease). */
   on_release?: boolean;
 }
 

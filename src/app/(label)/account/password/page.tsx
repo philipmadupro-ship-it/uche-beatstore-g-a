@@ -35,7 +35,7 @@ export default async function AccountPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#090907] px-4 py-10 text-white">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--background-primary)] px-4 py-10 text-white">
       <PageSignOut />
       <AccountPasswordForm email={session.email} required={required} />
     </div>

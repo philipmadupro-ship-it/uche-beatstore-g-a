@@ -62,6 +62,8 @@ export const COLLABORATOR_KINDS = [
   // (that is what puts a contact on the roster, lib/labelos/roster): the role is a label on a directory contact.
   { id: 'rapper', label: 'Rapper', category: 'other', role: 'Rapper' },
   { id: 'feature', label: 'Featured artist', category: 'other', role: 'Featured artist' },
+  // LABEL-66: a journalist, blogger or playlist curator. `press` is the category the release outreach tracker offers.
+  { id: 'press', label: 'Press contact', category: 'press', role: 'Press' },
 ] as const;
 export type CollaboratorKind = (typeof COLLABORATOR_KINDS)[number]['id'];
 

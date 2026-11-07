@@ -123,8 +123,42 @@ function labelOsTables(): string[] {
     // 170_labelos_entitlements_platform.sql (LABEL-47)
     'org_entitlements',
     'platform_admins',
+    // 176_labelos_contracts.sql (LABEL-57)
+    'contract_templates',
+    'contracts',
+    'contract_parties',
+    // 179_labelos_finance.sql (LABEL-61): org-only, service-role writes, finance.read + artist scope
+    'payees',
+    'finance_periods',
+    'advances',
+    'earnings_imports',
+    'earnings_lines',
+    'statements',
+    'statement_lines',
+    'payments',
+    // 180_labelos_earnings.sql (LABEL-62): allocations and recoupments of imported earnings
+    'earnings_allocations',
+    'earnings_recoupments',
+    // 178_labelos_contract_signing.sql (LABEL-60): service-role only behind a deny-all policy; signatures are append-only.
+    'contract_signers',
+    'contract_signatures',
     // 190_labelos_team_accounts.sql (doc 25): service-role only, no policy.
     'org_managed_accounts',
+    // 186_labelos_listing_consent.sql (LABEL-71): service-role only behind a deny-all policy.
+    'listing_consents',
+    'store_listing_vetoes',
+    // 183_labelos_marketing_plans.sql (LABEL-65): service-role only behind a deny-all policy; budget lines are business data.
+    'marketing_plans',
+    'marketing_plan_items',
+    'marketing_platform_steps',
+    'marketing_budget_lines',
+    'marketing_asset_requests',
+    // 184_labelos_press.sql (LABEL-66): service-role only behind a deny-all policy; shares hold a token hash.
+    'press_kits',
+    'press_kit_links',
+    'press_kit_photos',
+    'press_kit_shares',
+    'press_outreach',
   ];
 }
 
@@ -156,6 +190,8 @@ const ORG_HELPERS = [
   'labelos_visible_members',
   // 164 (LABEL-43): the caller's own live orgs, the own-row fast path of org_members_member_read.
   'labelos_my_live_orgs',
+  // 179 (LABEL-61): the payees that are the caller (a roster artist's own), one uncorrelated call, for payees / statements / payments.
+  'labelos_my_payees',
 ];
 const ORG_HELPER_CALL = new RegExp(`\\b(${ORG_HELPERS.join('|')})\\s*\\(`, 'i');
 
@@ -284,8 +320,9 @@ describe('final RLS policy state', () => {
       expect(onTable('activity_events').map(([k]) => k)).toEqual(['activity_events.activity_events_member_read']);
       const body = policies.get('activity_events.activity_events_member_read') ?? '';
       expect(body).toMatch(/^\s*FOR SELECT\b/i);
-      expect(body).toMatch(/has_org_cap\(org_id, 'catalog\.read'\)/);
-      expect(body).toMatch(/visibility = 'artist' OR[\s\S]*has_org_cap\(org_id, 'business\.read\.internal'\)/);
+      // 195 (LABEL-75, R-08): the two capability tests run over the caller's own memberships, once, not per event row.
+      expect(body).toMatch(/has_org_cap\(cm\.org_id, 'catalog\.read'\)/);
+      expect(body).toMatch(/visibility = 'artist' OR[\s\S]*has_org_cap\(im\.org_id, 'business\.read\.internal'\)/);
       // Without these a member limited to some artists (or a roster artist) reads every artist's events with their own JWT.
       expect(body).toMatch(/\(org_id, artist_id\) IN \(\s*SELECT s\.org_id, s\.contact_id FROM public\.member_artist_scopes s WHERE s\.user_id = \(SELECT auth\.uid\(\)\)/);
       expect(body).toMatch(/artist_id IS NULL AND project_id IS NOT NULL AND \(org_id, project_id\) IN \(SELECT sp\.org_id, sp\.project_id FROM public\.labelos_scoped_projects\(\) sp\)/);
@@ -295,8 +332,9 @@ describe('final RLS policy state', () => {
     it('activity_events scope makes no per-row SECURITY DEFINER call: every scope disjunct is an uncorrelated subquery (R-08)', () => {
       const body = policies.get('activity_events.activity_events_member_read') ?? '';
       expect(body).toMatch(/org_id IN \(\s*SELECT om\.org_id FROM public\.org_members om WHERE om\.user_id = \(SELECT auth\.uid\(\)\)/);
-      // The only has_org_cap calls are 136's two capability tests; scope adds no helper call keyed on the row.
+      // The only has_org_cap calls are the two capability tests, and none is keyed on the event row's own org_id.
       expect([...body.matchAll(/has_org_cap\(/g)]).toHaveLength(2);
+      expect(body).not.toMatch(/has_org_cap\(org_id\b/);
       expect(body).not.toMatch(/can_see_artist\(|can_see_org_project\(|can_see_org_track\(/);
     });
 
@@ -569,6 +607,149 @@ describe('final RLS policy state', () => {
     });
   });
 
+  describe('Label OS party payee data (mig 174, LABEL-54)', () => {
+    const sql = () => readFileSync(join(DIR, '174_labelos_parties_payee.sql'), 'utf8').replace(/--[^\n]*/g, '');
+    const HIDDEN = ['tax_id', 'payment_instructions'];
+
+    it('takes the payee columns out of every API role’s SELECT: the table-wide grant goes, the column list omits them', () => {
+      expect(sql()).toMatch(/REVOKE SELECT ON public\.parties FROM anon, authenticated/);
+      for (const role of ['authenticated', 'anon']) {
+        const grant = sql().match(new RegExp(`GRANT SELECT \\(([^)]*)\\)\\s+ON public\\.parties TO ${role};`));
+        expect(grant, `column grant to ${role}`).not.toBeNull();
+        const cols = grant![1].split(',').map((c) => c.trim());
+        for (const hidden of HIDDEN) expect(cols, `${role}: ${hidden}`).not.toContain(hidden);
+        for (const shown of ['id', 'org_id', 'display_name', 'user_id', 'address', 'country']) expect(cols, `${role}: ${shown}`).toContain(shown);
+      }
+      // No later migration may bring the table-wide grant back (it would reopen the tax id).
+      for (const m of realMigrations().filter((x) => x.name > '174')) {
+        const body = readFileSync(join(DIR, m.name), 'utf8').replace(/--[^\n]*/g, '');
+        expect(body, m.name).not.toMatch(/GRANT\s+(SELECT|ALL)(\s+PRIVILEGES)?\s+ON\s+(TABLE\s+)?(public\.)?parties\b/i);
+      }
+    });
+
+    it('changes exactly one policy: the parties read, which now excludes role artist from the capability branch', () => {
+      const before = replay(realMigrations().filter((m) => m.name < '174')).policies;
+      // A policy that did not exist at 173 is a new table's (176's contracts, 186's deny-all pair), not a change to an old one.
+      // Up to 194: 195 (LABEL-75) rewrites the activity_events read on its own account.
+      const after = replay(realMigrations().filter((m) => m.name < '195')).policies;
+      const changed = [...after.keys()].filter((k) => before.has(k) && after.get(k) !== before.get(k)).sort();
+      expect(changed).toEqual(['parties.parties_member_read']);
+      const body = policies.get('parties.parties_member_read') ?? '';
+      expect(body).toMatch(/cm\.role <> 'artist'/);
+      // The caller’s own party stays readable (the own-line credits policy depends on it).
+      expect(body).toMatch(/user_id = \(SELECT auth\.uid\(\)\)/);
+      expect(body).not.toMatch(/has_org_cap\(\s*org_id/);
+      expect(body).not.toMatch(/WITH CHECK/i);
+    });
+  });
+
+  describe('Label OS finance (mig 179, LABEL-61)', () => {
+    const sql = () => readFileSync(join(DIR, '179_labelos_finance.sql'), 'utf8').replace(/--[^\n]*/g, '');
+    const TABLES = ['payees', 'finance_periods', 'advances', 'earnings_imports', 'earnings_lines', 'statements', 'statement_lines', 'payments'];
+    const HIDDEN: Record<string, string[]> = { payees: ['payment_reference'], advances: ['note'], payments: ['reference'] };
+
+    it('every finance table has exactly one SELECT policy and no write policy of any kind', () => {
+      for (const t of TABLES) {
+        const own = [...policies].filter(([k]) => k.startsWith(`${t}.`));
+        expect(own.map(([k]) => k), t).toEqual([`${t}.${t}_member_read`]);
+        expect(own[0][1], t).toMatch(/^\s*FOR SELECT\b/i);
+        expect(own[0][1], t).not.toMatch(/WITH CHECK/i);
+      }
+    });
+
+    it('takes the table-wide grants away and never grants the free-text columns to an API role', () => {
+      expect(sql()).toMatch(/REVOKE ALL ON public\.payees[\s\S]*?FROM anon, authenticated;/);
+      for (const t of TABLES) {
+        const grant = sql().match(new RegExp(`GRANT SELECT \\(([^)]*)\\)\\s+ON public\\.${t} TO authenticated;`));
+        expect(grant, `column grant on ${t}`).not.toBeNull();
+        const cols = grant![1].split(',').map((c) => c.trim());
+        for (const hidden of HIDDEN[t] ?? []) expect(cols, `${t}.${hidden}`).not.toContain(hidden);
+        expect(cols, t).toContain('org_id');
+      }
+      for (const m of realMigrations().filter((x) => x.name > '179')) {
+        const body = readFileSync(join(DIR, m.name), 'utf8').replace(/--[^\n]*/g, '');
+        expect(body, m.name).not.toMatch(new RegExp(`GRANT\\s+(SELECT|ALL)(\\s+PRIVILEGES)?\\s+ON\\s+(TABLE\\s+)?(public\\.)?(${TABLES.join('|')})\\b`, 'i'));
+      }
+    });
+
+    it('staff read needs finance.read and not role artist; the artist path goes through the one helper and only ISSUED statements', () => {
+      for (const t of ['payees', 'advances', 'statements', 'payments']) {
+        const body = policies.get(`${t}.${t}_member_read`) ?? '';
+        expect(body, t).toMatch(/cm\.role <> 'artist' AND public\.has_org_cap\(cm\.org_id, 'finance\.read'\)/);
+        expect(body, t).toMatch(/member_artist_scopes/);
+      }
+      expect(policies.get('statements.statements_member_read')).toMatch(/status = 'issued' AND payee_id IN \(SELECT mp\.payee_id FROM public\.labelos_my_payees\(\) mp\)/);
+      // advances, earnings: no artist path at all
+      for (const t of ['advances', 'earnings_imports', 'earnings_lines']) expect(policies.get(`${t}.${t}_member_read`), t).not.toMatch(/labelos_my_payees/);
+      // earnings are whole-org finance readers only
+      for (const t of ['earnings_imports', 'earnings_lines']) expect(policies.get(`${t}.${t}_member_read`), t).toMatch(/cm\.scope = 'org'/);
+    });
+
+    it('"own" never goes through a party’s linked account', () => {
+      const fn = sql().match(/FUNCTION public\.labelos_my_payees\(\)[\s\S]*?\$\$;/)?.[0] ?? '';
+      expect(fn).toMatch(/member_artist_scopes/);
+      expect(fn).toMatch(/org_self_artist/);
+      expect(fn).not.toMatch(/parties|\.user_id = p\./);
+    });
+
+    it('is service-role only for writes and carries no processor column', () => {
+      for (const t of TABLES) expect(sql(), t).toMatch(new RegExp(`CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE ON public\\.${t}\\b`));
+      const body = sql().match(/CREATE TABLE IF NOT EXISTS public\.payments \(([\s\S]*?)\n\);/)?.[1] ?? '';
+      const columns = [...body.matchAll(/^ {2}([a-z_]+)\s+(?:uuid|bigint|char|date|timestamptz|text)\b/gm)].map((m) => m[1]);
+      expect(columns.length).toBeGreaterThan(8);
+      for (const c of columns) expect(c, c).not.toMatch(/stripe|processor|account|iban|transfer|payout|bank|method/i);
+    });
+  });
+
+  describe('Label OS earnings (mig 180, LABEL-62)', () => {
+    const sql = () => readFileSync(join(DIR, '180_labelos_earnings.sql'), 'utf8').replace(/--[^\n]*/g, '');
+    const TABLES = ['earnings_allocations', 'earnings_recoupments'];
+
+    it('each new table has exactly one SELECT policy, no write policy, and a column-listed grant', () => {
+      for (const t of TABLES) {
+        const own = [...policies].filter(([k]) => k.startsWith(`${t}.`));
+        expect(own.map(([k]) => k), t).toEqual([`${t}.${t}_member_read`]);
+        expect(own[0][1], t).toMatch(/^\s*FOR SELECT\b/i);
+        expect(own[0][1], t).not.toMatch(/WITH CHECK/i);
+        expect(sql(), t).toMatch(new RegExp(`GRANT SELECT \\([^)]*\\)\\s+ON public\\.${t} TO authenticated;`));
+      }
+      expect(sql()).toMatch(/REVOKE ALL ON public\.earnings_allocations, public\.earnings_recoupments FROM anon, authenticated;/);
+    });
+
+    it('reads need finance.read, never role artist, and stay inside the member\'s artist scope; no artist path', () => {
+      for (const t of TABLES) {
+        const body = policies.get(`${t}.${t}_member_read`) ?? '';
+        expect(body, t).toMatch(/cm\.role <> 'artist' AND public\.has_org_cap\(cm\.org_id, 'finance\.read'\)/);
+        expect(body, t).toMatch(/member_artist_scopes/);
+        expect(body, t).not.toMatch(/labelos_my_payees/);
+      }
+    });
+
+    it('the write functions are service-role only: no PUBLIC, anon or authenticated execute', () => {
+      const body = sql();
+      for (const fn of ['labelos_earnings_write\\(uuid, uuid, jsonb, jsonb\\)', 'labelos_earnings_import\\(uuid, uuid, jsonb, jsonb, jsonb, jsonb\\)', 'labelos_earnings_resolve\\(uuid, uuid, jsonb, jsonb, jsonb\\)']) {
+        expect(body, fn).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.${fn} FROM PUBLIC, anon, authenticated;`));
+      }
+      expect(body).not.toMatch(/GRANT EXECUTE ON FUNCTION public\.labelos_earnings_write/);
+      expect(body).not.toMatch(/GRANT EXECUTE ON FUNCTION[^;]*TO (anon|authenticated|PUBLIC)/i);
+    });
+
+    it('rows are service-role-only and fixed once written', () => {
+      for (const t of TABLES) {
+        expect(sql(), t).toMatch(new RegExp(`CREATE TRIGGER labelos_org_rows_service_only BEFORE INSERT OR UPDATE OR DELETE ON public\\.${t}\\b`));
+        expect(sql(), t).toMatch(new RegExp(`CREATE TRIGGER ${t}_frozen BEFORE UPDATE OR DELETE ON public\\.${t}[\\s\\S]*?labelos_finance_frozen\\(\\)`));
+      }
+    });
+
+    it('stores money as bigint minor units only', () => {
+      for (const t of TABLES) {
+        const body = sql().match(new RegExp(`CREATE TABLE IF NOT EXISTS public\\.${t} \\(([\\s\\S]*?)\\n\\);`))?.[1] ?? '';
+        for (const m of body.matchAll(/^ {2}([a-z_]*_minor)\s+(\w+)/gm)) expect(m[2], `${t}.${m[1]}`).toBe('bigint');
+        expect(body, t).not.toMatch(/numeric|float|double|real\b/i);
+      }
+    });
+  });
+
   describe('Label OS audit rows are immutable (mig 163, LABEL-43)', () => {
     const sql = () => readFileSync(join(DIR, '163_labelos_audit_events_immutable.sql'), 'utf8').replace(/--[^\n]*/g, '');
 
@@ -587,7 +768,9 @@ describe('final RLS policy state', () => {
 
     it('changes no activity_events policy', () => {
       const before = replay(realMigrations().filter((m) => m.name < '163')).policies;
-      expect(policies.get('activity_events.activity_events_member_read')).toBe(before.get('activity_events.activity_events_member_read'));
+      // 195 (LABEL-75) rewrites the policy on purpose; compare with the state just before it.
+      const after = replay(realMigrations().filter((m) => m.name < '195')).policies;
+      expect(after.get('activity_events.activity_events_member_read')).toBe(before.get('activity_events.activity_events_member_read'));
     });
   });
 
@@ -729,6 +912,84 @@ describe('final RLS policy state', () => {
       // org-only: no user_id (every producer route filters on it), and it cascades from the organization
       expect(sql).not.toMatch(/\buser_id\b/);
       expect(sql).toMatch(/org_id\s+uuid NOT NULL REFERENCES public\.organizations\(id\) ON DELETE CASCADE/);
+    });
+  });
+
+  describe('Label OS artist consent on store listing (mig 186, LABEL-71)', () => {
+    const TABLES = ['listing_consents', 'store_listing_vetoes'];
+
+    it('each table has exactly one policy and it says no: an artist reads their own answers through the route, and a scoped member must not read the others’', () => {
+      for (const table of TABLES) {
+        const own = [...policies].filter(([k]) => k.startsWith(`${table}.`));
+        expect(own.map(([k]) => k), table).toEqual([`${table}.${table}_no_direct_access`]);
+        expect(own[0][1], table).toMatch(/FOR ALL TO anon, authenticated\s+USING \(false\)\s+WITH CHECK \(false\)/i);
+      }
+    });
+
+    it('row level security is on, the API roles hold no privilege, the service-only trigger is attached, and both cascade from the organization', () => {
+      const sql = readFileSync(join(DIR, '186_labelos_listing_consent.sql'), 'utf8').replace(/--[^\n]*/g, '');
+      for (const table of TABLES) {
+        expect(sql, table).toMatch(new RegExp(`ALTER TABLE public\\.${table} ENABLE ROW LEVEL SECURITY`));
+        expect(sql, table).toMatch(new RegExp(`REVOKE ALL ON public\\.${table} FROM anon, authenticated`));
+        expect(sql, table).toMatch(new RegExp(`ON public\\.${table}\\s+FOR EACH ROW EXECUTE FUNCTION public\\.labelos_org_rows_service_only\\('self', 'org_id'\\)`));
+      }
+      expect(sql).not.toMatch(/\buser_id\b/);
+      expect((sql.match(/org_id\s+uuid NOT NULL REFERENCES public\.organizations\(id\) ON DELETE CASCADE/g) ?? []).length).toBe(2);
+    });
+
+    it('an artist’s answer is not erased by erasing the artist: the contact key has no cascade', () => {
+      const sql = readFileSync(join(DIR, '186_labelos_listing_consent.sql'), 'utf8').replace(/--[^\n]*/g, '');
+      expect(sql).toMatch(/artist_contact_id uuid NOT NULL REFERENCES public\.contacts\(id\),/);
+    });
+  });
+
+  describe('Label OS contract signing (mig 178, LABEL-60)', () => {
+    const TABLES = ['contract_signers', 'contract_signatures'];
+    const sql = () => readFileSync(join(DIR, '178_labelos_contract_signing.sql'), 'utf8').replace(/--[^\n]*/g, '');
+
+    it('each table has exactly one policy and it says no: a signature carries an address hash and an image reference, so it is read through the route or not at all', () => {
+      for (const table of TABLES) {
+        const own = [...policies].filter(([k]) => k.startsWith(`${table}.`));
+        expect(own.map(([k]) => k), table).toEqual([`${table}.${table}_no_direct_access`]);
+        expect(own[0][1], table).toMatch(/FOR ALL TO anon, authenticated\s+USING \(false\)\s+WITH CHECK \(false\)/i);
+      }
+    });
+
+    it('row level security is on, the API roles hold no privilege, the service-only trigger is attached, and both cascade from the organization', () => {
+      for (const table of TABLES) {
+        expect(sql(), table).toMatch(new RegExp(`ALTER TABLE public\\.${table} ENABLE ROW LEVEL SECURITY`));
+        expect(sql(), table).toMatch(new RegExp(`REVOKE ALL ON public\\.${table} FROM anon, authenticated`));
+        expect(sql(), table).toMatch(new RegExp(`ON public\\.${table}\\s+FOR EACH ROW EXECUTE FUNCTION public\\.labelos_org_rows_service_only\\('self', 'org_id'\\)`));
+      }
+      // The signing tables name no account column (a plain uuid, no FK). The parties trigger (who linked a party's
+      // account) legitimately reads parties.user_id, so that one block is set aside.
+      expect(sql().replace(/CREATE OR REPLACE FUNCTION public\.parties_linked_by_reset[\s\S]*?EXECUTE FUNCTION public\.parties_linked_by_reset\(\);/, '')).not.toMatch(/\buser_id\b/);
+      expect((sql().match(/org_id\s+uuid NOT NULL REFERENCES public\.organizations\(id\) ON DELETE CASCADE/g) ?? []).length).toBe(2);
+    });
+
+    it('signatures are append-only: an UPDATE is refused, a direct DELETE and a TRUNCATE are refused, and no foreign key can UPDATE a row behind the trigger', () => {
+      expect(sql()).toMatch(/CREATE TRIGGER contract_signatures_immutable BEFORE UPDATE OR DELETE ON public\.contract_signatures/);
+      expect(sql()).toMatch(/CREATE TRIGGER contract_signatures_no_truncate BEFORE TRUNCATE ON public\.contract_signatures/);
+      // The signing account is a plain uuid: an ON DELETE SET NULL to auth.users would UPDATE the row.
+      const table = /CREATE TABLE IF NOT EXISTS public\.contract_signatures \(([\s\S]*?)\n\);/.exec(sql())?.[1] ?? '';
+      expect(table).not.toMatch(/ON DELETE SET NULL/);
+      expect(table).not.toMatch(/auth\.users/);
+      // Only the contract and the organization cascade; the party is NO ACTION, so a signed party cannot be deleted.
+      expect(table).toMatch(/contract_id\s+uuid NOT NULL REFERENCES public\.contracts\(id\) ON DELETE CASCADE/);
+      expect(table).toMatch(/party_id\s+uuid NOT NULL REFERENCES public\.parties\(id\),/);
+    });
+
+    it('the signing functions are service_role only, and nothing is granted to an API role', () => {
+      for (const fn of ['link_issue', 'link_revoke', 'sign', 'supersede']) {
+        expect(sql(), fn).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.labelos_audit_contract_${fn}\\([^)]*\\) FROM PUBLIC, anon, authenticated`));
+        expect(sql(), fn).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.labelos_audit_contract_${fn}\\([^)]*\\) TO service_role`));
+      }
+      expect(sql()).not.toMatch(/GRANT\s+(SELECT|INSERT|UPDATE|DELETE|ALL)[^;]*contract_sign(ers|atures)/i);
+    });
+
+    it('the contracts table gains columns but no read for an API role: the provider address stays behind the route', () => {
+      expect(sql()).not.toMatch(/GRANT[^;]*ON public\.contracts/i);
+      expect(sql()).toMatch(/esign_provider_url ~ '\^https:\/\/\[\^\[:space:\]@\]\+\$'/);
     });
   });
 

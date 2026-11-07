@@ -27,7 +27,7 @@ import {
   toOrgContactView,
   type OrgContactRow,
 } from '@/lib/labelos/org-contacts';
-import { artistOrgRemovalError, artistOrgRosterError, isSecondArtistError, ONE_ARTIST, rosterCapError } from '@/lib/labelos/roster';
+import { artistOrgRemovalError, artistOrgRosterError, ARTIST_CAP_REACHED, isArtistCapError, isSecondArtistError, ONE_ARTIST, rosterCapError } from '@/lib/labelos/roster';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
 
@@ -96,6 +96,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       .select(ORG_CONTACT_COLUMNS);
     // 166: a second artist that raced past the check above.
     if (isSecondArtistError(updateErr)) return NextResponse.json({ error: ONE_ARTIST }, { status: 409 });
+    if (isArtistCapError(updateErr)) return NextResponse.json({ error: ARTIST_CAP_REACHED }, { status: 409 });
     if (isDuplicateEmail(updateErr)) return NextResponse.json({ error: DUPLICATE_EMAIL }, { status: 409 });
     if (updateErr) throw new Error(updateErr.message);
     const row = (Array.isArray(updated) ? updated[0] : null) as unknown as OrgContactRow | null;
@@ -147,6 +148,18 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
         // LABEL-41: the roster contact of a connection (org_connections.label_contact_id) is not removed from under it.
         if (/org_connections/.test(deleteErr.message ?? '')) {
           return NextResponse.json({ error: 'This artist has an open connection with an artist organization (connected or requested). End or withdraw it first.' }, { status: 409 });
+        }
+        // LABEL-71: an artist's answer on a store listing outlives tidying the directory (erasing it would re-open the listing).
+        if (/listing_consents/.test(deleteErr.message ?? '')) {
+          return NextResponse.json({ error: 'This artist has a say on a store listing of one of the organization’s releases. Delete that release first.' }, { status: 409 });
+        }
+        // LABEL-57: a contract names this contact as its artist (a contract is a record; it is voided, never deleted).
+        if (/"contracts"|contracts_artist_contact/.test(deleteErr.message ?? '')) {
+          return NextResponse.json({ error: 'This contact is the artist on a contract. Contracts are kept as a record, so the contact cannot be removed.' }, { status: 409 });
+        }
+        // LABEL-61: finance records (payee, advance, statement, payment) keep naming the artist they were made for.
+        if (/payees|advances|statements|payments/.test(deleteErr.message ?? '')) {
+          return NextResponse.json({ error: 'This artist is paid through finance (a payee, advance, statement or payment names them), so they cannot be removed. Finance keeps those records.' }, { status: 409 });
         }
         return NextResponse.json({ error: 'This contact is the artist of a release. Delete the release first.' }, { status: 409 });
       }

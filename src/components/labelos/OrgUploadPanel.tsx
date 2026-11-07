@@ -88,7 +88,7 @@ export function OrgUploadPanel({ orgId, artists }: { orgId: string; artists: { i
   if (artists.length === 0) return null;
 
   return (
-    <section aria-label="Upload audio" className="mb-6 rounded-xl border border-white/10 bg-[#0D0D0A] p-4 sm:mb-8">
+    <section aria-label="Upload audio" className="mb-6 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4 sm:mb-8">
       <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Upload audio</p>
       <div className="flex flex-wrap items-center gap-2">
         <Dropdown

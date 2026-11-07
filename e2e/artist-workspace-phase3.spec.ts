@@ -61,6 +61,18 @@ async function pulseNow(artist: Page) {
   await artist.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 }
 
+/**
+ * Load the portal and wait for its baseline pulse. The baseline is fetched by the hydrated page, so once it is in the page
+ * is interactive (a tab click before hydration is swallowed) and its visibility listener exists (`pulseNow` fires one
+ * event and nothing retries it); and a change the producer makes before the baseline lands is simply PART of the baseline,
+ * which the portal rightly does not announce.
+ */
+async function openPortal(artist: Page) {
+  const baseline = artist.waitForResponse((r) => r.url().includes(`/api/portal/${portalToken}/pulse`) && r.ok());
+  await artist.goto(portalUrl);
+  await baseline;
+}
+
 /** The artist "left the portal an hour ago" — the email fallback then applies. */
 async function artistAway(request: APIRequestContext) {
   await rest(request, 'PATCH', 'artist_portals', { last_viewed_at: new Date(Date.now() - 3_600_000).toISOString() }, `?contact_id=eq.${ids.artist}`);
@@ -183,7 +195,7 @@ test('1 · messages: artist → producer → artist, with the email fallback', a
 
 test('2 · requests: the artist asks, the producer marks it done, the portal shows it', async ({ page, baseURL, browser }) => {
   const artist = await browser.newPage();
-  await artist.goto(portalUrl);
+  await openPortal(artist);
   await artist.getByRole('tab', { name: /Messages/ }).click();
   const box = artist.getByTestId('portal-messages');
   await box.getByRole('radio', { name: 'Ask for something' }).click();
@@ -230,7 +242,7 @@ test('2 · requests: the artist asks, the producer marks it done, the portal sho
 
 test('3 · live updates: a new beat and a new message reach an open portal', async ({ page, baseURL, browser }) => {
   const artist = await browser.newPage();
-  await artist.goto(portalUrl);
+  await openPortal(artist);
   await expect(artist.locator(`li[data-track-id="${ids.beat}"]`)).toBeVisible();
   await expect(artist.locator(`li[data-track-id="${ids.late}"]`)).toHaveCount(0);
 

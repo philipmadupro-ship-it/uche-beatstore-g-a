@@ -4,7 +4,7 @@
  * The regression this guards: the page sent the hero photo as a data: URL,
  * the contract rejected it, and the whole profile save failed with it.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { profileSaveBody, type ProfileFormState } from '@/lib/profile/save-body';
 
@@ -150,7 +150,9 @@ describe('POST /api/profile', () => {
 });
 
 describe('POST /api/profile → personal org (LABEL-07)', () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
+    vi.stubEnv('LABEL_OS_ENABLED', 'true');
     mockUpdate.mockImplementation(async (payload: Record<string, unknown>) => ({ profile: { user_id: PRODUCER, ...payload } }));
   });
 
@@ -160,6 +162,12 @@ describe('POST /api/profile → personal org (LABEL-07)', () => {
     expect(res.status).toBe(200);
     expect(mockEnsure).toHaveBeenCalledTimes(1);
     expect(mockEnsure).toHaveBeenCalledWith(serviceClient, PRODUCER);
+  });
+
+  it('creates no org while Label OS is off (LABEL-74)', async () => {
+    vi.stubEnv('LABEL_OS_ENABLED', '');
+    expect((await post(profileSaveBody(form))).status).toBe(200);
+    expect(mockEnsure).not.toHaveBeenCalled();
   });
 
   it('uses the saved row\'s owner, never one from the body', async () => {

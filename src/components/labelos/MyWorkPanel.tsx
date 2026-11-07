@@ -48,7 +48,7 @@ export function MyWorkPanel({ orgId, orgSlug }: { orgId: string; orgSlug: string
 
   const hrefFor = (t: TaskView) => targetHref(orgSlug, t.target);
   return (
-    <section aria-label="My work" className="mb-8 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid="my-work">
+    <section aria-label="My work" className="mb-8 rounded-xl border border-white/10 bg-[var(--surface-primary)] p-4" data-testid="my-work">
       <h2 className={`${LABEL} mb-1`}>My work <span className="ml-1.5 text-white/30" data-testid="my-work-count">{mine.length}</span></h2>
       {mine.length === 0 && <p className="py-2 text-[11px] text-white/40">Nothing is assigned to you.</p>}
       {groups.map((g) => (

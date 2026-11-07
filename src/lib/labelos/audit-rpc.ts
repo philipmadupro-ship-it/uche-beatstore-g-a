@@ -19,11 +19,30 @@
  *   connectionEnd            connection.ended     (both orgs)
  *   connectionShare          share.created | share.revoked (the artist org)
  *   creditDecide             credit.confirmed | credit.disputed (153, LABEL-27)
+ *   creditWithdraw           credit.withdrawn (174, LABEL-54; the credit is removed with its event)
+ *   contractVoid             contract.voided (176, LABEL-57; the contract is voided with its event)
+ *   contractLinkIssue        contract.signer_link_issued (178, LABEL-60)
+ *   contractLinkRevoke       contract.signer_link_revoked (178)
+ *   contractSign             contract.signature_added (+ contract.signed in the same transaction when it was the last party) (178)
+ *   contractSupersede        contract.superseded (178; the old contract is voided and a draft copy made with its event)
  *   splitCirculate           split_sheet.circulated (+ .superseded for the version it replaces) (155, LABEL-28)
  *   splitSign                split_sheet.signed (155, LABEL-28)
  *   platformCreateLicensee   org.created + org.entitlements_changed in the new org (170, LABEL-47)
  *   platformSetEntitlements  org.entitlements_changed in the licensee org (170, LABEL-47)
  *   orgSettings              org.settings_changed (172, LABEL-51; owner only, checked again in SQL)
+ *   marketingPlanRequired    marketing_plan.requirement_changed (183, LABEL-65; owner only, checked again in SQL)
+ *   creativeGate            creative_gate.changed (194, LABEL-68; owner only, checked again in SQL)
+ *   orgSettingsAtomic        the same, with the payload's `from` read under the lock (187, LABEL-73)
+ *   releaseDeliver           release.delivered (187; fingerprint compared under the release lock)
+ *   releaseStore             release.store_listed | release.store_unlisted (187; consent re-checked under the lock)
+ *   releaseImport            project.created + release.created + release.imported (187)
+ *   orgDelete | orgRestore | orgExport   org.deletion_scheduled | org.restored | org.exported (187)
+ *   statementGenerate | statementApprove | statementIssue | statementVoid   statement.* (181, LABEL-63)
+ *   paymentRecord | paymentVoid   payment.recorded | payment.voided (181)
+ *   earningsImportVoid   earnings.import_voided (181; releases the import's allocations and recoupments)
+ *   advanceCreate | advanceUpdate | advanceVoid   advance.created | updated | voided (182, LABEL-64)
+ *   periodClose | periodReopen   period.closed | period.reopened (182; reopen is owner-only, checked again in SQL)
+ *   digestChannelSet | digestChannelRemove   digest.channel_set | digest.channel_removed (187)
  *
  * Accepting an invitation (`member.joined`) is 138's
  * `labelos_accept_invitation` (lib/labelos/invitations.ts), which already
@@ -61,6 +80,15 @@ export const AUDIT_RPCS = {
   connectionShare: 'labelos_audit_connection_share',
   // Migration 153 (LABEL-27): a credit is confirmed or disputed, with its event.
   creditDecide: 'labelos_audit_credit_decide',
+  // Migration 174 (LABEL-54): a credit is withdrawn (the credited person, or a rights writer), with its event.
+  creditWithdraw: 'labelos_audit_credit_withdraw',
+  // Migration 176 (LABEL-57): a contract is voided, with its event.
+  contractVoid: 'labelos_audit_contract_void',
+  // Migration 178 (LABEL-60): signing links, signatures and the supersede chain, each with its event.
+  contractLinkIssue: 'labelos_audit_contract_link_issue',
+  contractLinkRevoke: 'labelos_audit_contract_link_revoke',
+  contractSign: 'labelos_audit_contract_sign',
+  contractSupersede: 'labelos_audit_contract_supersede',
   // Migration 155 (LABEL-28): a split sheet is circulated (superseding the live one) or signed, with its event.
   splitCirculate: 'labelos_audit_split_circulate',
   splitSign: 'labelos_audit_split_sign',
@@ -72,10 +100,38 @@ export const AUDIT_RPCS = {
   platformSetEntitlements: 'labelos_platform_set_entitlements',
   // Migration 172 (LABEL-51): the owner's organization settings, with `org.settings_changed`.
   orgSettings: 'labelos_audit_org_settings',
+  // Migration 183 (LABEL-65): whether the marketing gate asks for a plan, with `marketing_plan.requirement_changed`.
+  marketingPlanRequired: 'labelos_audit_marketing_plan_required',
+  // Migration 194 (LABEL-68): whether releases need a creative approval, with `creative_gate.changed`.
+  creativeGate: 'labelos_audit_creative_gate',
+  // Migration 187 (LABEL-73): the same write with `from` read under the row lock (a sibling, because 192 redefines the one above).
+  orgSettingsAtomic: 'labelos_audit_org_settings_atomic',
   // Migration 190 (doc 25): team accounts an org creates — membership + managed row + event, and reset / switch-off.
   teamAccountCreate: 'labelos_audit_team_account_create',
   teamAccountReset: 'labelos_audit_team_account_reset',
   teamAccountSetDisabled: 'labelos_audit_team_account_set_disabled',
+  // Migration 187 (LABEL-73): the audit-class writes that used to be "change, then event, put back on failure".
+  releaseDeliver: 'labelos_audit_release_deliver',
+  releaseStore: 'labelos_audit_release_store',
+  releaseImport: 'labelos_audit_release_import',
+  orgDelete: 'labelos_audit_org_delete',
+  orgRestore: 'labelos_audit_org_restore',
+  orgExport: 'labelos_audit_org_export',
+  // Migration 181 (LABEL-63): statements, payment records and voiding an earnings import, each with its event.
+  statementGenerate: 'labelos_audit_statement_generate',
+  statementApprove: 'labelos_audit_statement_approve',
+  statementIssue: 'labelos_audit_statement_issue',
+  statementVoid: 'labelos_audit_statement_void',
+  paymentRecord: 'labelos_audit_payment_record',
+  paymentVoid: 'labelos_audit_payment_void',
+  earningsImportVoid: 'labelos_audit_earnings_import_void',
+  advanceCreate: 'labelos_audit_advance_create',
+  advanceUpdate: 'labelos_audit_advance_update',
+  advanceVoid: 'labelos_audit_advance_void',
+  periodClose: 'labelos_audit_period_close',
+  periodReopen: 'labelos_audit_period_reopen',
+  digestChannelSet: 'labelos_audit_digest_channel_set',
+  digestChannelRemove: 'labelos_audit_digest_channel_remove',
 } as const;
 export type AuditRpcKey = keyof typeof AUDIT_RPCS;
 
@@ -165,6 +221,45 @@ export type AuditRpcArgs = {
     p_subject: { artist_id: string | null; project_id: string | null; song_id: string | null };
     p_payload: EventPayload;
   };
+  creditWithdraw: {
+    p_org: string;
+    p_actor: string;
+    p_credit: string;
+    /** The song's context keys the event is filed under: { artist_id, project_id, song_id }. */
+    p_subject: { artist_id: string | null; project_id: string | null; song_id: string | null };
+    p_payload: EventPayload;
+  };
+  contractVoid: {
+    p_org: string;
+    p_actor: string;
+    p_contract: string;
+    p_reason: string | null;
+    p_payload: EventPayload;
+  };
+  contractLinkIssue: { p_org: string; p_actor: string; p_contract: string; p_party: string; p_token_hash: string; p_expires_at: string; p_payload: EventPayload };
+  contractLinkRevoke: { p_org: string; p_actor: string; p_contract: string; p_party: string; p_payload: EventPayload };
+  contractSign: {
+    p_org: string;
+    /** The signing account; null for someone who signed through a link. */
+    p_actor: string | null;
+    p_contract: string;
+    p_party: string;
+    p_role: string;
+    p_version: number;
+    /** SHA-256 of the document as the signer read it (lib/labelos/contract-signing documentHash). */
+    p_sha: string;
+    p_name: string;
+    p_method: 'typed' | 'drawn';
+    /** A private-bucket reference of the drawn PNG; null when typed. */
+    p_image: string | null;
+    p_via: 'member' | 'link';
+    p_countersign: boolean;
+    p_ip_hash: string | null;
+    /** A link signer's token hash: the database re-checks it (live, unexpired) under the contract's row lock. */
+    p_link_hash: string | null;
+    p_payload: EventPayload;
+  };
+  contractSupersede: { p_org: string; p_actor: string; p_contract: string; p_reason: string | null; p_payload: EventPayload };
   splitCirculate: {
     p_org: string;
     p_actor: string;
@@ -237,6 +332,11 @@ export type AuditRpcArgs = {
   };
   /** Merge `p_patch` (only the keys that change) into `organizations.settings`; answers `{ settings }` or `{ error: 'not_found' | 'not_owner' }`. */
   orgSettings: { p_org: string; p_actor: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
+  /** Answers `{ required, changed }` or `{ error: 'not_found' | 'not_owner' }`; derives `from` itself, so there is no payload. */
+  marketingPlanRequired: { p_org: string; p_actor: string; p_required: boolean };
+  /** Answers `{ enabled, changed }` or `{ error: 'not_found' | 'not_owner' }`; derives `from` itself, so there is no payload. */
+  creativeGate: { p_org: string; p_actor: string; p_enabled: boolean };
+  orgSettingsAtomic: { p_org: string; p_actor: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
   teamAccountCreate: {
     p_org: string;
     p_actor: string;
@@ -246,6 +346,66 @@ export type AuditRpcArgs = {
     p_artist_ids: string[];
     p_payload: EventPayload;
   };
+  /** 187: p_expect is the fingerprint (lib/labelos/release-fingerprint `deliverExpectation`); answers { release } or { error: not_found | not_draft | changed }. */
+  releaseDeliver: {
+    p_org: string;
+    p_actor: string;
+    p_release: string;
+    p_distributor: string;
+    p_delivered_at: string;
+    p_expect: Record<string, unknown>;
+    p_ctx: { artist_id: string | null; project_id: string | null };
+    p_payload: EventPayload;
+    p_visibility: 'artist' | 'internal';
+  };
+  /** 187: list / unlist. Answers { release } or { error: not_found | changed | consent | not_released | not_listed }. */
+  releaseStore: {
+    p_org: string;
+    p_actor: string;
+    p_release: string;
+    p_list: boolean;
+    p_playback: 'preview' | 'full' | null;
+    p_expect: Record<string, unknown>;
+    p_ctx: { artist_id: string | null; project_id: string | null };
+    p_payload: EventPayload;
+  };
+  /** 187: answers { release, project_id, created_project } or { error: not_found }. */
+  releaseImport: { p_org: string; p_actor: string; p_row: Record<string, unknown>; p_payload: EventPayload };
+  /** 187: answers { deleted_at } or { error: not_found | not_owner | producer_org }. */
+  orgDelete: { p_org: string; p_actor: string; p_deleted_at: string; p_payload: EventPayload };
+  /** 187: answers { restored } or { error: not_found | not_owner | not_deleted | changed | expired }. */
+  orgRestore: { p_org: string; p_actor: string; p_expect_deleted_at: string; p_payload: EventPayload };
+  /** 187: answers { recorded } or { error: not_found | not_owner }. */
+  orgExport: { p_org: string; p_actor: string; p_payload: EventPayload };
+  /** 187: p_cipher is the AES-GCM ciphertext; answers { configured, replaced } or { error: not_found }. */
+  statementGenerate: {
+    p_org: string;
+    p_actor: string;
+    p_payee: string;
+    p_period: string;
+    /** From `buildStatementLines` (snake_case, amounts as strings); the function re-proves them against the tables. */
+    p_lines: Record<string, unknown>[];
+    p_payload: EventPayload;
+  };
+  statementApprove: { p_org: string; p_actor: string; p_statement: string; p_payload: EventPayload };
+  statementIssue: { p_org: string; p_actor: string; p_statement: string; p_payload: EventPayload };
+  statementVoid: { p_org: string; p_actor: string; p_statement: string; p_reason: string | null; p_payload: EventPayload };
+  paymentRecord: { p_org: string; p_actor: string; p_statement: string; p_amount: string; p_paid_on: string; p_reference: string | null; p_payload: EventPayload };
+  paymentVoid: { p_org: string; p_actor: string; p_payment: string; p_payload: EventPayload };
+  earningsImportVoid: { p_org: string; p_actor: string; p_import: string; p_payload: EventPayload };
+  /** 182: answers { id } or { error: not_found | payee_inactive }. */
+  advanceCreate: { p_org: string; p_actor: string; p_payee: string; p_kind: string; p_amount: string; p_paid_on: string | null; p_note: string | null; p_payload: EventPayload };
+  /** 182: p_patch holds only the keys to change (null clears paid_on / note). Answers { updated, fields } or { error: not_found | advance_void | advance_referenced | no_change }. */
+  advanceUpdate: { p_org: string; p_actor: string; p_advance: string; p_patch: Record<string, unknown>; p_payload: EventPayload };
+  /** 182: answers { voided } or { error: not_found | already_void | advance_referenced }. */
+  advanceVoid: { p_org: string; p_actor: string; p_advance: string; p_payload: EventPayload };
+  /** 182: answers { closed } or { error: not_found | already_closed | drafts_open | lines_waiting }. */
+  periodClose: { p_org: string; p_actor: string; p_period: string; p_payload: EventPayload };
+  /** 182: owner only. Answers { reopened } or { error: not_found | not_owner | not_closed }. */
+  periodReopen: { p_org: string; p_actor: string; p_period: string; p_payload: EventPayload };
+  digestChannelSet: { p_org: string; p_actor: string; p_cipher: string; p_payload: EventPayload };
+  /** 187: answers { configured: false, changed }. */
+  digestChannelRemove: { p_org: string; p_actor: string; p_payload: EventPayload };
   teamAccountReset: { p_org: string; p_actor: string; p_user: string };
   teamAccountSetDisabled: { p_org: string; p_actor: string; p_user: string; p_disabled: boolean };
 };
@@ -276,6 +436,17 @@ export function isMissingAuditRpc(error: AuditRpcError | null): boolean {
   if (!error) return false;
   if (!/labelos_audit_/.test(error.message)) return false;
   return error.code === 'PGRST202' || error.code === '42883' || /could not find the function/i.test(error.message);
+}
+
+/**
+ * Migration 187 is not applied (or this function is not in it): the caller
+ * falls back to its previous path — change, then event, put back on failure.
+ * Never a 500, never a 503: production behaves as before until 187 is pasted.
+ */
+export function isMissingAtomicRpc(error: AuditRpcError | null): boolean {
+  if (isMissingAuditRpc(error)) return true;
+  // The settings sibling calls 192's validator; a database with 187 but not 192 has none.
+  return !!error && /labelos_validate_org_settings_patch/.test(error.message) && (error.code === 'PGRST202' || error.code === '42883');
 }
 
 export const AUDIT_RPC_NOT_READY = 'Auditing is not set up yet (migration 146 has not been applied).';

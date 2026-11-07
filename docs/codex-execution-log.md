@@ -9596,3 +9596,240 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Gate: 3 checks green on both heads; preview checked on both (`/store` 200, `/library` 307, `/o` and `/api/org` 404 with the flag off).
 - 2026-10-25 — PORTAL-UP (#135, migration 191) was merged into this branch by its own session (`96e9d94`). 191 is not applied; it joins the go-live bundle.
 - 2026-10-25 04:41 UTC — LABEL-54 opened #148 (migration 174, head `7b2a369`). It chose a lock trigger over a snapshot for party identity once a sheet has left draft. `finance.read` now opens Parties for the payee fields. Role `artist` loses legal data on credits, splits and parties.
+- 2026-10-25 — **LABEL-50 Done**: #145 squash-merged (`837ab51`).
+  - One Team and roster window (`TeamRosterEditor`) serves setup wizard step 3 and `/o/<slug>/settings/members`. It adds members (invite or team login), roster artists and collaborators.
+  - Roster rows: "Invite to sign in" (role `artist`, scoped to the existing contact, no duplicate). Collaborator rows: "Invite to a project".
+  - New `GET /api/org/[orgId]/projects` (`share.external`, whole-org viewers only). No migration.
+  - Gate: CI green on `5b92a4f`; preview checked; independent review found nothing blocking, and its regression (no login for an existing roster artist) was fixed before merge.
+- 2026-10-26 — **LABEL-54 Done**: #148 squash-merged (`f7882dd`), migration 174 (not applied).
+  - Party payee data: `tax_id` needs `rights.write` or `finance.read`; `payment_instructions` needs `finance.read` only, so nobody can read them without the finance module (accepted per the spec).
+  - A lock trigger freezes a party's display name and linked account once a non-draft sheet names it. Deleting an auth user is still allowed.
+  - Editing self-correctable fields or relinking resets "confirmed by the person".
+  - Role `artist` loses legal data on credits, splits, parties, party search and readiness reasons (views and RLS).
+  - Gate: CI green on `73b39f8`; preview checked; independent review fixes applied before merge.
+- 2026-10-25 — LABEL-55 (migration 175) started on Sonnet, session_01B78NKcfVzPhjTMAuMGinJ2, PR #150. The next reserved number is 176 (LABEL-57).
+- 2026-10-25 — **Go-live PR #149** (release/label-os-into-main → main) reported.
+  - It contains the bundle `supabase/apply/labelos-go-live.sql` (130–173, 189–192), a production-state rehearsal, both-order safety and sign-out for every org role.
+  - It is under an independent review. 174+ ship as a second paste.
+- 2026-10-25 — **Owner report: library WAV uploads crawl (~20 KB/s) with "Chunk N retrying".**
+  - Cause, reproduced locally: `@aws-sdk/client-s3` 3.1022 presigns `UploadPart` URLs with `x-amz-checksum-crc32` + `x-amz-sdk-checksum-algorithm` (default `requestChecksumCalculation: WHEN_SUPPORTED`). R2 rejects each 8 MiB part after it is sent.
+  - Fix in progress (session_01AZYEkfBpQvzmvfQKBtdN31, branch `fix/upload-slow` → main): set `WHEN_REQUIRED` on the S3 client.
+- Follow-ups noted:
+  - `ui/Dropdown` (z-[200]) renders behind `ui/Modal` (`--z-modal` 240).
+  - Saved-view credit/split filter clauses still key on `rights.read`, so role `artist` can filter by credited names.
+  - eslint-plugin-react-hooks 7.1 needs a code pass.
+- 2026-10-26 — **Upload speed fix live** (#152 → main, `801a3b2`). The r2 S3Client now uses `requestChecksumCalculation`/`responseChecksumValidation: 'WHEN_REQUIRED'`. A presign test guards against the checksum params coming back. The tray's retry text shows the real HTTP status / S3 code and whether the upload is direct or proxied. Waiting on the owner's WAV test.
+- 2026-10-26 — **Label OS go-live merged into main**: #149, merge commit `584b212`.
+  - Gate:
+    - CI green on `a18ec79`; preview checked.
+    - Independent HARD review: safe to merge; bundle byte-identical to its generator; no write to existing producer rows.
+    - Cold rehearsal reported: 63/63 applied twice, fingerprints identical, guard refusals.
+  - Production already has `LABEL_OS_ENABLED=true` (`/o` and `/setup` redirect to login and `/api/org` answers 401 after the deploy). The owner still has to run the go-live.md pre-checks and paste `supabase/apply/labelos-go-live.sql` (130–173, 189–192). 174+ ship in a later rebuilt paste.
+- 2026-10-26 — **LABEL-55 Done**: #150 squash `99f7c49`, migration 175 (not applied).
+  - Adds a New release form, a master chooser (D4-filtered), a per-row master / explicit editor, and release distributor / territories / language.
+  - Single-release routes degrade without 175; writes naming the new fields answer 503 naming 175.
+  - The metadata approval snapshot includes the new fields.
+  - Gate: CI green on `958aca6`; preview checked; independent review fixes M1/M2/L1/L3 applied before merge.
+- 2026-10-26 — LABEL-56 started (session_01EsNbV2xZ8ChWsGtjbL7474, no migration) and LABEL-57 started (session_01DCscGqX56BBP54VFWPemjL, migration 176), both on Sonnet. Next reserved: 177 (LABEL-59).
+- Follow-ups noted:
+  - LABEL-34 export lacks distributor / territories / language.
+  - Deliver does not pre-fill the planned distributor.
+  - The New-release artist list uses main-role artists only.
+  - CI e2e `timeout-minutes` raised 15 → 25 in this status PR: runs take ~12–15 min and were cancelled at the limit (twice on #151, once on #149).
+- 2026-10-27 — **CI e2e timeout raised 15 → 25 min**, on this branch (#151, `98e33d1`) and on main (#153, `1064cef`). Runs take about 12–15 min and were cancelled at the limit without a failing test.
+- 2026-10-27 — **LABEL-56 decisions (orchestrator):** migration **193** approved, the next free number outside the backlog; next free is now 194. A song whose only releases are drafts stays `working` until a release is DELIVERED, not when its gates turn green, because the gates are derived in TS and cannot be mirrored in SQL. Cancelled releases are ignored. The TS rule and its SQL twin (`labelos_track_is_finished`) carry parity tests. Without 193 the old rule applies; 193 ships in the second paste.
+- 2026-10-27 — **LABEL-56 Done**: #156 squash `4f4f642`, migration 193 (not applied; second paste). It adds the delivered-release withdraw (audited, unlists, keeps the record, put-back if the audit fails) and makes cancel draft-only. A song stays `working` until a release is delivered. Gate: CI green on `444df1e`; preview checked; independent review (not blocking); its four items were fixed before merge: a stray `public/uploads` WAV, a truncated test block, the put-back message, and the best-effort `release.store_unlisted` listed as an accepted deviation.
+- 2026-10-27 — **LABEL-57 Done**: #154 squash `a852419`, migration 176 (not applied; second paste). It adds the contract model, 14 platform templates and the template editor. Gate: CI green on `3302a30`; preview checked; independent review (not blocking). Fixed before merge:
+  - M1: column grants keep `internal_note`, `void_reason`, `created_by` and `voided_by` off API JWTs; a party or roster artist could otherwise read the internal note through RLS. The 176 check proves it.
+  - L1: party delete answers 409 when a contract names the party.
+  - L2: org contact delete gives the right message for a contract artist.
+  - L3: POST answers 503 when 174 is also missing.
+- 2026-10-27 — LABEL-58 started (session_019AUhHbkT7VPBpTf7EocUCZ, no migration; reuses pdfkit) and LABEL-71 started (session_019AUhHcTrzenYfjeqYpuTqL, migration 186 as reserved). Both on Sonnet. Next reserved is still 177 (LABEL-59, after 58).
+- 2026-10-27 — **LABEL-58 Done**: #158 squash `0bcd988`, no migration. Adds the contract editor, a pdfkit PDF stored as a restricted `contract` asset, and an audited send.
+  - Gate: CI green on `0925bab`; preview checked; independent review (not blocking). Fixed before merge:
+    - the PDF is filed only in the contract artist's own project;
+    - a sent contract always serves its frozen sent copy;
+    - `contract.send_failed` is recorded when the send claim is lost;
+    - a partially saved PATCH records its event and answers 409;
+    - older draft copies are deleted when a new one is filed;
+    - GETs answer `schemaReady: false` without 176;
+    - the asset PATCH refuses to declassify contract or split-sheet files.
+  - `pdfkit` moved to `serverExternalPackages`. This also affects the Stripe webhook's best-effort licence PDF; check a real licence PDF after the next main integration.
+- 2026-10-28 — **LABEL-71 Done**: #159 squash `6eea56c`, migration 186 (not applied; second paste). Adds artist consent on store listing: any credited artist's no unlists, and it stays unlisted until that artist says yes; no-store caching on governed releases.
+  - Gate: CI green on `8db767b`; preview checked. The independent review was BLOCKING. H1: a `rights.write` member could link a party to their own account, confirm it themself and answer as the artist. The first fix (confirmation-only) still allowed self-confirm. The final rule: a party never answers; only a role-artist scoped member, or an artist org's owner.
+  - Accepted deviation: an admin can invite an address they control as role artist (label orgs). Known gap: credited artists in the producer org are unreachable.
+- 2026-10-28 — LABEL-59 resumed after the usage limit (#160, migration 177). LABEL-72 started (session_019AUhHf7cB5hZ5AzMkogSjr, no migration reserved; 194 on request). LABEL-60 waits for 59 (both touch contract signing).
+- 2026-11-01 — **LABEL-59 Done**: #160 squash `cd0d9d9`, **no migration — 177 is released** (a contract already names its song, so the link is derived). It adds:
+  - a contract → draft split sheet pre-fill (drafts only; an existing draft is replaced only on request);
+  - drift between a live sheet and a sent or signed contract, derived on read and warned on both pages;
+  - `assertCanSign` for LABEL-60.
+  - Gate: CI green on `4bce528`; preview checked; independent review (not blocking). Fixed before merge:
+    - L1: the contract page's drift covers only sheets the caller can see, so the other sheets' existence is not disclosed (D2);
+    - L2: one shared `driftDetailFor` rule for both routes.
+  - Also fixes the test helper `pdf-text.ts`, which dropped a final CR byte from a compressed stream. That made `contract-editor.test` fail on some dates; it broke #161's CI on 2026-10-28.
+  - Noted for LABEL-60: `canSignContract` accepts a signed master sheet that disagrees with the contract.
+- 2026-11-01 — LABEL-72 resumed after the weekly usage limit (#162, no migration). LABEL-60 started at the owner's request (session_019AUhHfrxtwvQbCJYPndU7q, migration 178), branched from LABEL-59 just before it merged. Next reserved: 179 (LABEL-62).
+- 2026-11-01 — LABEL-61 started (session_019AUhHecUE3Bs5jsSUugPNK, migration 179): finance schema, permissions and money helpers only. Next reserved: 180 (LABEL-62).
+- 2026-11-01 — **LABEL-72 Done**: #162 squash `4592fdf`, no migration.
+  - What it adds:
+    - teaser listing before the release date, preview clips only;
+    - `full` derived from the release date on every read;
+    - full playback and listen-only project members stream a 128 kbps MP3 derivative in the private bucket (`orgs/<org>/derivatives/`), never the master;
+    - each Range response is capped at 1 MiB;
+    - a durable per-IP limiter (120/min) on public full playback.
+  - Gate: CI green on `5fe78c0` (one re-run for an `ArInboxView` timing flake outside the PR); preview checked; independent review not blocking.
+  - Accepted: a release listed `full` before this change needs a re-list to get its derivative. None exist on production (158 is not applied).
+  - Follow-ups (low):
+    - `clientIp` trusts the first `x-forwarded-for` entry, which is safe only on Vercel;
+    - the limiter caps volume, not scraping;
+    - the first-listen cut for external members has no negative cache and no `maxDuration`, and reads the whole master into memory;
+    - HEAD spends the limiter;
+    - a reversed range gets 416.
+- 2026-11-01 — **LABEL-60 Done**: #166 squash `17e770e`, migration 178 (not applied; second paste).
+  - What it adds:
+    - in-app signatures bound to the SHA-256 of the frozen sent copy's stored bytes;
+    - append-only `contract_signatures`;
+    - countersign by owner, admin or a `contracts.write` member;
+    - external signing links, emailed to the party and never returned to the issuer;
+    - a certificate page, supersede, and contract expiry on the calendar feed.
+  - Gate: CI green on `a6315c3`; preview checked (`/sign` is 404 with the flag off). The independent review was BLOCKING:
+    - H1: a `rights.write` member could link a party to their own account, self-confirm and sign as the artist. Fixed: `parties.user_linked_by` is recorded; signing needs a link made by someone else plus the party's own confirmation; the confirm route refuses the self-linker.
+    - M1: the issuer received the raw link token. Fixed: the link is emailed, no token is in any response, and the certificate names the issuer.
+    - Also fixed: L1 (void revokes links), L3 (scope in the GET view), L4 (no DELETE of a non-draft contract), L5 (the sent copy is re-hashed before it is served).
+    - L2 kept: the drift gate stays in Node; documented.
+  - Accepted residual: a member can link a second account they control, because there is no invitation-accept flow for party links yet. Existing party links have no recorded linker and must be re-linked before anyone can sign through them.
+- 2026-11-02 — **LABEL-61 Done**: #165 squash `b474c1f`, migration 179 (not applied; second paste).
+  - What it adds:
+    - eight finance tables with bigint minor units and a currency on every amount;
+    - RLS: `finance.read` plus artist scope for staff; role artist reads only their own ISSUED statements;
+    - integer money helpers (half-to-even rounding, largest-remainder allocation).
+  - Gate: CI green on `cd6f80e` (after merging LABEL-60); preview checked; independent review found no security blocker. Fixed before merge:
+    - M1: a user who wrote finance rows could not be deleted; the user columns may now only go to NULL.
+    - L1: contact delete has a finance message.
+    - L2: payee POST requires `artist_contact_id`, closing a re-point race.
+    - L3: int64 bounds on the money helpers.
+    - L4: documented that statement visibility follows `member_artist_scopes`.
+- 2026-11-01 — LABEL-73 started (session_019AUhHchpteAUmRDWbmX5fx, migration 187).
+- 2026-11-02 — LABEL-62 started (session_019AUhHc8KkPccemFofVqZfr, migration 180). Next reserved: 181 (LABEL-63).
+- Follow-ups:
+  - an invitation-accept flow for party↔account links;
+  - `contact-roles` real-DB e2e #3 failing locally (unconfirmed on base);
+  - `label-org-departments` e2e flake;
+  - LABEL-72 lows (XFF trust, derivative negative cache and `maxDuration`, HEAD spends the limiter).
+- 2026-11-02 — **LABEL-73 Done**: #168 squash `2ccf06d`, migration 187 (not applied; second paste).
+  - What it adds:
+    - one atomic SQL function family (change + audit event in one transaction) for: deliver (G7 + G10, raw `updated_at` fingerprint), import, store list/unlist (LABEL-71 consent re-checked under the lock; LABEL-72 derivatives still cut before the claim), org delete/restore/export and the digest channel;
+    - `approval_decide` checks addressee, live release, seen and the latest row;
+    - `has_org_cap` subtracts `departments_off`;
+    - seat and artist caps enforced under the `org_entitlements` lock, including the 154 connection accept;
+    - routes fall back to the previous path only on a missing function (PGRST202 / 42883 naming `labelos_audit_*`);
+    - the members route's six-argument fallback is kept (it is only reachable without 167).
+  - Gate: CI green on `3c3071d`; preview checked; independent review not blocking. `db:local:check` passed, including the dblink race checks, and the rollback is byte-identical to the previous definitions.
+  - Follow-ups (low):
+    - the approval "seen" key is computed before the lock;
+    - no TS↔SQL parity test for `departments_off`;
+    - a store list answering `not_found` does not drop promoted previews;
+    - `contacts_artist_cap` 23514 becomes a raw 500 for future writers;
+    - the approval tie-break uses id where the plan uses array order.
+- 2026-11-02 — LABEL-62 #169: orchestrator decision on royalties. A signed contract's royalty rate REPLACES the split share for that payee (never split × rate); lines whose shares exceed 100% go to review (`terms_exceed_gross`); the remainder is retained by the label. LABEL-65 #170 is in review.
+- 2026-11-02 — **LABEL-65 Done**: #170 squash `44bb802`, migration 183 (not applied; second paste).
+  - What it adds: release marketing plans (timeline, tasks, budget lines in integer minor units, platform checklist, asset requests to the artist with one recipient), an owner-only "plan required" switch that only counts while the marketing module is present, and plan milestones in the calendar feed.
+  - Gate: CI green on `f46424d`; preview checked; independent review found no High. Fixed before merge:
+    - M1: plan requirement without the marketing module;
+    - L2: one notification recipient;
+    - L3: the artist sees how to deliver an ask;
+    - L4: all plan events internal.
+  - Follow-up: the artist cannot mark an asset as received in-app.
+- 2026-11-02 — **LABEL-62 Done**: #169 squash `8302d8a`, migration 180 (not applied; second paste).
+  - What it adds: distributor CSV import (idempotent by file bytes), ISRC/UPC matching, allocation, recoupment, and a needs-review queue scoped to the member's artists.
+  - Gate: CI green on `31d64ba`; preview checked. The independent review was BLOCKING twice. Fixed before merge:
+    - income class per contract type;
+    - contract-only payees loaded;
+    - the song's artist = the Inbox contact only;
+    - the rate goes only to the receiving role (`RATE_TERMS`);
+    - a receiver with no payee → `no_payee` review, never retained silently;
+    - golden tests fail when their file is missing.
+  - **Royalty rule (orchestrator decision; owner may change):** a signed contract's rate REPLACES the split share for the receiving party; shares over 100 % go to review (`terms_exceed_gross`); the remainder is retained by the label.
+  - CI change: the Type-check step runs with `NODE_OPTIONS=--max-old-space-size=4096`, because tsc on the branch exceeds node's 2 GB default heap. Main needs the same change at final integration.
+- 2026-11-02 — LABEL-66 started (session_019AUhHdgtc1yjaLzBLRhKxP, migration 184). LABEL-63 started (session_019AUhHfmYhmCPwuv3PbWtUU, migration 181). Next reserved: 182 (LABEL-64).
+- Follow-up: `ArInboxView.test.tsx` "Escape abandons the note" timing flake (recurring) → LABEL-77.
+- 2026-11-02 — **LABEL-66 Done**: #172 squash `a0da509`, migration 184 (not applied; second paste).
+  - What it adds: release press kits, press contacts and a public press page by token with an embargo, and PR tasks. No private audio reaches a public route.
+  - Gate: CI green on `7f30782`; preview checked; independent review found nothing blocking.
+  - Follow-ups (low):
+    - a store teaser can reveal what the press embargo hides;
+    - the embargo page shows title and artist;
+    - ids appear in public JSON;
+    - the per-IP photo limit;
+    - the token sits in the page path;
+    - the link, photo and live-share caps are not atomic.
+- 2026-11-02 — LABEL-69 started (session_019AUhHbF14KRc9E5FH2NgNa, no migration). LABEL-68 started (session_019AUhHeNHwgaBP1ijwbN479, PR #176).
+  - Orchestrator decision: LABEL-68's migration moves from 185 to **194**, because it redefines 187's approval-decide and release-deliver functions and must sort after 187. Merged migrations are never edited. 185 is released; the next free number outside the backlog is 195.
+- 2026-11-02 — LABEL-63 CI: `src/lib/store/filters.test.ts:130` and `marketing/route.test.ts:296` failed once with order swaps (possibly unstable sort ties). Under investigation; LABEL-77 is the home if recurring.
+- 2026-11-03 — **LABEL-69 Done**: #175 squash `d3997f3` (no migration).
+  - What it adds: invite a collaborator to a project with a role (beatmaker, producer, rapper, feature, engineer); on accept, a credit is proposed for the invitee's own party, which they confirm themselves. "My sessions" on `/shared` groups their projects by org with what is waiting on them: a credit, a split line, a contract.
+  - Gate: CI green on `ace0e77`; preview checked; independent review NOT BLOCKING.
+  - Follow-ups (low):
+    - the compensating revoke is not audited;
+    - the collaborator intent is not in the invitation audit payload;
+    - a credit withdrawn within 2 minutes can be proposed again;
+    - a duplicate-by-name skip is silent;
+    - a contract ask may show without an issued signing link;
+    - `song_id` is not checked to be a song;
+    - storing the intent atomically needs a column (migration 195+);
+    - no resend-signing-link action;
+    - collaborator statements.
+- 2026-11-03 — **LABEL-63 Done**: #174 squash `9dde850`, migration 181 (not applied; second paste).
+  - What it adds: statements per payee per period (generate / approve / issue / void, PDF and CSV), payments recorded (never moved), payout CSV, and earnings import void. The artist sees only their own issued statements.
+  - Gate: CI green on `c9a0d2b`; preview checked; independent review NOT BLOCKING (totals = allocations − recoupments in SQL, append-only approval, void rules). Fixed before merge: the flaky 181 local check (amount regex vs UUIDs) and period creation probing only 179.
+  - Decisions: no "statement issued" notification for now; an import with no period never reaches a statement; an import into a period with an approved or issued statement is refused until it is voided.
+  - Follow-ups:
+    - the self-approval check is skipped once the generator account is deleted;
+    - no carry-forward of a negative net;
+    - exports show display names, not legal names.
+- 2026-11-03 — LABEL-70 (session_019AUhHdnLXe7mLCoov8wmhq, no migration) and LABEL-64 (session_019AUhHbQckpjX1sMdPkHon5, migration 182) started.
+  - LABEL-68's first review was BLOCKING: a creative gate left on after the artistic department was switched off or unlicensed blocked delivery. Fixed with `creativeGateEffective`; re-review pending.
+- 2026-11-03 — **LABEL-68 Done**: #176 squash `9d55067`, migration 194 (not applied; second paste).
+  - What it adds: a creative workspace reading direction, references, reviews, song stages and releases through the existing scope and D4 rules, and an optional creative approval release gate. The gate is OFF by default and owner-toggled. It is in force only while the artistic department is licensed and on (`creativeGateEffective`).
+  - Gate: CI green on `3d86ea0`; preview checked. The independent review was BLOCKING once (H1, fixed); the re-review was NOT BLOCKING.
+  - Follow-ups:
+    - saved-view filters cannot select the creative gate;
+    - the real-db `label-org-departments` 1440 "Approve statements" switch timeout is pre-existing (→ LABEL-77).
+- 2026-11-06 — LABEL-77 (session_019AUhHdvXtZepahKVJnTZZ9) started; also asked to root-cause the known flaky tests rather than hide them.
+- 2026-11-06 — **LABEL-70 Done**: #178 squash `3ab0215` (no migration).
+  - What it adds: one role-view table (`lib/labelos/role-view.ts`, `pageAllowed`) behind the nav, the page guards and the artist-shaped home tiles; a creative-workspace entry for `creative.read` with the artistic department on and licensed; independent-artist orgs no longer get the legal queue.
+  - Gate: CI green on `cb7b675`; preview checked; independent review (Sonnet) NOT BLOCKING. Fixed before merge: a dead `/ar` link on the creative workspace, six pages moved onto `pageAllowed` (statements skipped the finance licence; music/releases opened for a producer-kind org), nav "My statements" built from the same rule.
+  - Follow-ups: `/o/<slug>/artists` is a client page with no server guard; department staff still land on the label Overview; the org palette has no "My music" jump.
+- 2026-11-06 — **LABEL-64 Done**: #180 squash `9aaff9d`, migration 182 (not applied; second paste).
+  - What it adds: advances ledger (frozen once referenced), finance overview (per-payee position, per-release income vs cost), period close/reopen under the earnings lock; a closed period is immutable (import void, statement issue and void refuse `period_closed`; 182 redefines 181's three functions, defined by no later migration).
+  - Decisions: release cost = `spent` marketing budget lines (LABEL-65) until a general cost table exists; close refused with draft statements or review-waiting lines, payees without a statement only warn.
+  - Gate: CI green on `59c18e4`; preview checked; independent review (Sonnet) NOT BLOCKING. Fixed before merge: statement void/issue in a closed period, scoped dashboard readers no longer see spend/committed/margin, a voided statement no longer freezes an advance.
+  - Follow-ups: general cost table; income of a song on several releases is "ambiguous"; the dashboard filters after reading the whole org (SQL aggregate at scale).
+- 2026-11-06 — LABEL-74 + LABEL-75 started as one PR (session_019AUhHeidKKga8RUEDpPiLK, migration 195). 188 released. Orchestration now runs at most two children, with Sonnet reviews for Medium/High risk only.
+- 2026-11-07 — LABEL-74 + LABEL-75 in one PR (#182, migration 195, not applied).
+  - LABEL-74: the Slack digest uses `channelContent` (owner/admin reach minus `business.read.internal`, `audio.working`, `rights.read`; no Needs-attention list); sharing a saved view warns that its name is shown to every member; `/o/<slug>/artists` (layout) and `/releases/store` 404 through `pageAllowed`; `ensurePersonalOrg` runs only with `LABEL_OS_ENABLED`; the references cap counts only what the member can read (`referencesAtCap`); `releaseItemTitles` drops hidden songs and renumbers (no "Restricted song" line, no gap).
+  - LABEL-75: `org.created` is an audit verb (the prune skips it by verb, so existing rows are kept too); purge cron `maxDuration` 60 with a 45 s budget; `/api/store/releases` list, detail and cover are rate limited per caller; migration 195 = sole-owner `auth.users` delete guard, `split_lines` column grant, `activity_events` TRUNCATE guard, uncorrelated `activity_events_member_read`, `organizations` DELETE only past the 30-day grace.
+  - Side effect of the `organizations` guard: 21 local check files that delete an org now first set `deleted_at` 31 days back, and 137's rollback does the same. 155's plan probe names granted `split_lines` columns.
+  - Doc drift fixed: `contacts.artist_org_id` is `ON DELETE SET NULL` (it is `label_contact_id` that is RESTRICT); AGENTS.md marks `invites` / `team_members` legacy.
+- 2026-11-07 — **LABEL-74 + LABEL-75 Done**: #182 squash `506654b`, migration 195 (not applied; second paste).
+  - What it adds: the Slack digest from the artist-visible, non-restricted view; a warning when sharing a saved view's name; `/artists` and `/releases/store` 404 through `pageAllowed`; `ensurePersonalOrg` behind the flag; the references cap counts only readable references; restricted songs dropped from release tracklists. `org.created` is audit-class (195 redefines 170's console function so its event is audit too); purge cron budget; `/api/store/releases/*` rate limited; sole-owner account deletion refused; `split_lines` column grant; `activity_events` TRUNCATE guard; 147's read policy without per-row `has_org_cap`; an `organizations` row is deleted only 30 days after `deleted_at`.
+  - Gate: CI green on `ce0e52b`; preview checked; Low risk, no independent review. Fixed before merge: the console-created `org.created` event, purge vs the delete guard's clock (a refusal is "kept, retry tomorrow").
+  - Follow-ups: `org.created` rows written before 195 stay non-audit (163 forbids promotion; the prune skips the verb); a new local check that deletes an org must backdate `deleted_at`.
+- 2026-11-07 — **LABEL-67 Done**: #184 squash `bee57da`, no migration.
+  - What it adds: `/o/<slug>/exec` and `GET /api/org/[orgId]/exec[?format=csv]` for `exec.read` (label org, module `executive`): pipeline by stage, releases by month, blocked releases, approvals waiting, income vs cost, top songs, task load by department, audited CSV (`exec.exported`, written before any byte).
+  - Decisions (orchestrator): pipeline counts the songs in the reader's scope, numbers only; money, top songs and task load are whole-org readers only and come back as `withheld` for a scoped reader; label kind only; approvals waiting covers release gates only. Commits 27e50ef and 9f3e913 changed this before merge: counts include every song in the reader's artist scope regardless of audio class (numbers only; titles stay D4-filtered); #184's PR body still describes the superseded `restricted` count.
+  - Follow-ups: song-level legal requests stay in the legal queue; a person with several functions counts under one department; UPC-only earnings lines cannot appear in top songs.
+- 2026-11-07 — **LABEL-76 Done**: #185 squash `ea51d60`, migration 196 (not applied).
+  - What it adds: Overview at 390 px and an aligned 1440 header; org bar with the org name, home link and Sign out; Label OS panels on tokens plus a scoped `de-roche-archive` override layer; no UI-asks-server-refuses 403s; artwork checks (large JPEG headers read further, `no_request` before `seen_required`); the `artwork_min_px` settings field (196 redefines 192's `labelos_validate_org_settings_patch`, 600 to 10000).
+  - Decisions: a transparent PNG (alpha) fails the RGB rule; the archive theme is a scoped override layer, not a rewrite of the white-alpha utilities.
+  - Gate: CI green and the orchestrator's preview check before merge; the PR body's "first slice" wording is stale, it merged complete.
+- 2026-11-07 — **LABEL-77 Done**: #181 squash `5aa1007`, no migration.
+  - What it adds: `e2e:real-db` timeouts (expect 25 s, test 90 s) and marker-based discovery of the real-DB specs (58 files); service-key seeds replaced by the real routes where a UI exists; four named flakes root-caused (A&R note Escape race, `ui/Popover` top-edge clamp `fitPanelTop`, equal `created_at` ordering, check regexes); CI e2e states `LABEL_OS_ENABLED: 'false'`.
+  - Decisions: producer orgs keep the releases page; org cleanup in e2e is header-gated (`x-e2e-org-cleanup: 1`, service role only) because migration 195 refuses early org deletes; all 20 default specs kept; the real-DB suite is verified in chunks because one dev server degrades late.
+  - Follow-ups: no chunked runner; `clickWhenHydrated` uses a React internal key; screenshot churn under `e2e-artifacts/`.
+- 2026-11-07 — LABEL-78 docs (#186): `27-phase-2-report.md`, `28-migration-apply-order.md`, roadmap 4b, review groups G11 to G19, CLAUDE.md and AGENTS.md phase-2 text.
+- 2026-11-07 — **Migrations 130–196 applied to PRODUCTION** (owner, SQL editor, reported via the orchestrator; two pastes, both 0 errors).
+  - Paste 1: main's `supabase/apply/labelos-go-live.sql` (130–135, 136–173, `139_buyer_offer_email_verified`, 189–192, the operator step); its verify table ran.
+  - Paste 2: a `scripts/ops/bundle-migrations.sh` bundle from `claude/happy-bardeen-rnosf3`: 174, 175, 176, 178, 186, 179, 180, 181, 182, 183, 184, 187, 193, 194, 195, 196. No verify table exists for that range; "0 errors" is the evidence.
+  - Recorded in `supabase/MIGRATIONS.md` (rows 130–196 applied; row 159 added, it was missing), `CLAUDE.md`, doc 27 and doc 28 §0. `pending.sql` untouched. Follow-up: a post-hoc verify table for 174–196.
+  - Also in #186: LABEL-67's pipeline counts changed before merge (every song in the reader's artist scope, numbers only); #184's PR body is stale.

@@ -133,10 +133,10 @@ export function transition(
 /**
  * Is the song released? Derived from its release items, never stored (04 W3):
  * the same rule the audio classifier uses for "on a release"
- * (`countsAsOnRelease`; the SQL twin is 144's `labelos_track_is_finished`), so
+ * (`countsAsOnRelease`; the SQL twin is `labelos_track_is_finished`, 193), so
  * the two cannot disagree. `releases` are the song's release_items with their
  * release's state embedded.
  */
-export function isReleased(_song: { stage?: string | null }, releases: ReadonlyArray<{ releases: { state: string } | null }>): boolean {
+export function isReleased(_song: { stage?: string | null }, releases: ReadonlyArray<{ releases: { state: string; imported_released?: boolean | null } | null }>): boolean {
   return countsAsOnRelease(releases);
 }
