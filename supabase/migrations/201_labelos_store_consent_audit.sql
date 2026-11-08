@@ -35,6 +35,11 @@
 -- previous path (change, then event, put back on failure) while this migration is missing.
 -- Rollback: supabase/rollback/201_labelos_store_consent_audit.down.sql. Idempotent: CREATE OR REPLACE.
 
+-- A GENERIC mover, on purpose: this function does not know who may answer or whether a transition is allowed.
+-- The transition rules (`planDecision` in lib/labelos/store-consent.ts: which state may move to which, and that the
+-- answering account stands for a credited artist of the release) are enforced by the route before the call. The
+-- function only moves the row from `p_from` to `p_to` atomically with its events, and is executable by
+-- `service_role` only, so nothing but that route can reach it.
 CREATE OR REPLACE FUNCTION public.labelos_audit_consent_decide(
   p_org uuid,
   p_actor uuid,
@@ -101,7 +106,7 @@ BEGIN
   -- Conditional on the row still being a no: a repeat that lost a race to a yes must not unlist.
   IF p_to = 'no' AND v_rel.store_listed AND EXISTS (
        SELECT 1 FROM public.listing_consents lc
-        WHERE lc.release_id = p_release AND lc.artist_contact_id = p_artist AND lc.state = 'no') THEN
+        WHERE lc.release_id = p_release AND lc.org_id = p_org AND lc.artist_contact_id = p_artist AND lc.state = 'no') THEN
     UPDATE public.releases
        SET store_listed = false, store_listed_at = NULL, store_playback = 'preview'
      WHERE id = p_release;
