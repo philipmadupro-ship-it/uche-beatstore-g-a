@@ -9838,4 +9838,8 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - 199: press share create / revoke are audit class through `labelos_audit_press_share_create` / `_revoke` (change + event in one transaction, hash only); verbs added to `AUDIT_VERBS`; routes use `auditRpc` with the old path as fallback while 199 is unapplied (undone if the event cannot be written).
   - 200: `parties_confirmation_reset` lists `email`, so SQL and TS `clearsConfirmation` agree.
   - 197 left to G12b. `supabase/apply/pending.sql` untouched.
+- 2026-11-08 — Migration 201 (review G17, branch `fix/migration-201-consent-audit`, NOT applied).
+  - What it adds: `labelos_audit_consent_decide` and `labelos_audit_listing_veto`, so an artist's answer on store listing and the store owner's veto commit WITH their audit events (`listing.consent_decided`, `listing.vetoed`, `listing.veto_lifted`, and `release.store_unlisted` for a no on a listed release) in one transaction. Before, each was change-then-`recordEvent` with a put-back.
+  - Routes: the consent PUT and the connected-releases veto PUT call `auditRpc('consentDecide' | 'listingVeto')` and use the old path when `isMissingAuditRpc` (201 unapplied). Deleting promoted public previews (storage) stays in the route, after the commit. `store-consent.ts` rules unchanged (silence is not a no; one no withdraws; re-listing needs that artist's yes, still enforced by 187's `labelos_audit_release_store`).
+  - Decision: the artist-org copy of the veto event is now written inside the same function (it was best effort); a lost race on a `no` is followed by an enforce call (`p_from` NULL) so a standing no always ends with the release off the store. 146's check excludes the two new functions from its count.
 
