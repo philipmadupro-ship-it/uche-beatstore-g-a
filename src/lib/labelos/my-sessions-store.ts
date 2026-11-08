@@ -160,6 +160,9 @@ async function contractAsks(
   titles: Map<string, string | null>,
 ): Promise<ContractCandidate[]> {
   const links = await inChunks<Row>(myParties, (part, from, to) => admin.from('contract_parties').select('contract_id, party_id').in('party_id', part).in('org_id', orgIds).order('contract_id').order('party_id').range(from, to), 'contract link read');
+  // Which of the person's parties they ARE for signing purposes (`maySignAs`): confirmed by them, linked by someone else.
+  const partyRows = await inChunks<Row>(myParties, (part, from, to) => admin.from('parties').select('id, details_confirmed_by, user_linked_by').eq('user_id', userId).in('id', part).order('id').range(from, to), 'party identity read');
+  const identity = new Map(partyRows.map((r) => [str(r.id) ?? '', { confirmedBy: str(r.details_confirmed_by), linkedBy: str(r.user_linked_by) }]));
   const contractIds = [...new Set(links.map((r) => str(r.contract_id)).filter((v): v is string => !!v))];
   if (contractIds.length === 0) return [];
 
@@ -194,12 +197,17 @@ async function contractAsks(
     const id = str(r.id);
     const trackId = str(r.track_id);
     if (!id || !trackId) continue;
+    const partyIds = links.filter((l) => str(l.contract_id) === id).map((l) => str(l.party_id) ?? '');
+    const ids = partyIds.map((p) => identity.get(p)).filter((v): v is { confirmedBy: string | null; linkedBy: string | null } => !!v);
+    const mine = ids.find((v) => v.confirmedBy === userId && !!v.linkedBy && v.linkedBy !== userId) ?? ids[0];
     const fact = {
       id,
       title: str(r.title) ?? 'Contract',
       status: str(r.status) ?? '',
       track_id: trackId,
       party_user_id: userId,
+      party_confirmed_by: mine?.confirmedBy ?? null,
+      party_linked_by: mine?.linkedBy ?? null,
       signedCurrent: signed.has(`${id}:${str(r.sent_document_sha256)}`),
     };
     if (contractNeedsSigning(fact, userId)) out.push({ id, title: fact.title, trackId });
