@@ -101,13 +101,22 @@ export type ContractFact = {
   status: string;
   track_id: string | null;
   party_user_id: string | null;
+  /** `parties.details_confirmed_by` and `parties.user_linked_by` (LABEL-60/54): the identity rule of in-app signing. */
+  party_confirmed_by: string | null;
+  party_linked_by: string | null;
   /** The party already holds a signature on the contract's frozen document. */
   signedCurrent: boolean;
 };
 
-/** A contract waits on the caller when it is out for signature, they are a party, and have not signed this document. */
+/**
+ * A contract waits on the caller when it is out for signature, they are a party, and have not signed this document.
+ * "They are a party" is `maySignAs`' own rule (contract-signing.ts): the account is linked, they confirmed the
+ * party's details, and the link was made by SOMEONE ELSE — a rights writer who merely sets `parties.user_id`, or a
+ * person who links and confirms their own account, is not the party, so no ask (and no contract title) is shown.
+ */
 export function contractNeedsSigning(c: ContractFact, userId: string): boolean {
-  return c.status === 'sent' && c.party_user_id === userId && !c.signedCurrent;
+  const isParty = c.party_user_id === userId && c.party_confirmed_by === userId && !!c.party_linked_by && c.party_linked_by !== userId;
+  return c.status === 'sent' && isParty && !c.signedCurrent;
 }
 
 export function creditAskLabel(roleLabel: string): string {
