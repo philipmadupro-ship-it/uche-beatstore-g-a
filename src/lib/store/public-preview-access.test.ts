@@ -49,6 +49,8 @@ vi.mock('@/lib/audio/stream-source', () => ({
   streamAudioPreviewSource: (req: unknown, src: string) => mockStream(req, src),
 }));
 vi.mock('@/lib/auth/ownership', () => ({
+  // Anonymous caller: the owner fallback (owned-preview-access) finds no session.
+  requireUser: () => Promise.resolve({ ok: false }),
   createServiceClient: () => ({
     from: (table: string) => {
       const filters: Record<string, unknown> = {};

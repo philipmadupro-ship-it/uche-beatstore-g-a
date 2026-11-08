@@ -21,6 +21,7 @@ import { NextRequest } from 'next/server';
 
 const mockConstructEvent = vi.fn();
 const mockSessionsList = vi.fn(async (..._args: unknown[]) => ({ data: [] as Array<{ id: string }> }));
+const mockChargesRetrieve = vi.fn<(id: string) => Promise<{ refunded: boolean }>>();
 const mockFrom = vi.fn();
 const mockRpc = vi.fn();
 const mockResendSend = vi.fn();
@@ -31,6 +32,7 @@ vi.mock('@/lib/stripe/server', () => ({
   getStripe: () => ({
     webhooks: { constructEvent: (...args: unknown[]) => mockConstructEvent(...args) },
     checkout: { sessions: { list: (...args: unknown[]) => mockSessionsList(...args) } },
+    charges: { retrieve: (id: string) => mockChargesRetrieve(id) },
   }),
 }));
 
@@ -409,6 +411,10 @@ interface DbContext {
   table: string;
   op: DbOperation;
   payload?: unknown;
+  /** The column list passed to `.select()`, to tell two reads of one table apart. */
+  columns?: string;
+  /** Filters applied to a write (`['eq', col, val]`, `['in', …]`, `['not', …]`), for asserting WHERE clauses. */
+  filters?: unknown[][];
 }
 
 interface SupabaseTestChain extends PromiseLike<unknown> {
@@ -422,6 +428,8 @@ interface SupabaseTestChain extends PromiseLike<unknown> {
   gte: (...args: unknown[]) => SupabaseTestChain;
   lt: (...args: unknown[]) => SupabaseTestChain;
   gt: (...args: unknown[]) => SupabaseTestChain;
+  neq: (...args: unknown[]) => SupabaseTestChain;
+  overlaps: (...args: unknown[]) => SupabaseTestChain;
   or: (...args: unknown[]) => SupabaseTestChain;
   not: (...args: unknown[]) => SupabaseTestChain;
   order: (...args: unknown[]) => SupabaseTestChain;
@@ -438,15 +446,21 @@ function installDb(responder: (ctx: DbContext) => unknown) {
   mockFrom.mockImplementation((table: string) => {
     let op: DbOperation = 'select';
     let payload: unknown;
-    const settle = () => Promise.resolve(responder({ table, op, payload }) ?? { data: null, error: null });
+    let columns: string | undefined;
+    const filters: unknown[][] = [];
+    const settle = () => Promise.resolve(responder({ table, op, payload, columns }) ?? { data: null, error: null });
     const chain: SupabaseTestChain = {
-      select: () => chain,
-      insert: (p: unknown) => { op = 'insert'; payload = p; writes.push({ table, op, payload: p }); return chain; },
-      upsert: (p: unknown) => { op = 'upsert'; payload = p; writes.push({ table, op, payload: p }); return chain; },
-      update: (p: unknown) => { op = 'update'; payload = p; writes.push({ table, op, payload: p }); return chain; },
-      delete: () => { op = 'delete'; writes.push({ table, op }); return chain; },
-      eq: () => chain, in: () => chain, gte: () => chain, lt: () => chain, gt: () => chain,
-      or: () => chain, not: () => chain, order: () => chain, limit: () => chain,
+      select: (cols?: unknown) => { if (typeof cols === 'string') columns = cols; return chain; },
+      insert: (p: unknown) => { op = 'insert'; payload = p; writes.push({ table, op, payload: p, filters }); return chain; },
+      upsert: (p: unknown) => { op = 'upsert'; payload = p; writes.push({ table, op, payload: p, filters }); return chain; },
+      update: (p: unknown) => { op = 'update'; payload = p; writes.push({ table, op, payload: p, filters }); return chain; },
+      delete: () => { op = 'delete'; writes.push({ table, op, filters }); return chain; },
+      eq: (...a: unknown[]) => { filters.push(['eq', ...a]); return chain; },
+      in: (...a: unknown[]) => { filters.push(['in', ...a]); return chain; },
+      not: (...a: unknown[]) => { filters.push(['not', ...a]); return chain; },
+      gte: () => chain, lt: () => chain, gt: () => chain,
+      neq: () => chain, overlaps: () => chain,
+      or: () => chain, order: () => chain, limit: () => chain,
       maybeSingle: () => settle(),
       single: () => settle(),
       then: (onfulfilled, onrejected) => settle().then(onfulfilled, onrejected),
@@ -457,6 +471,222 @@ function installDb(responder: (ctx: DbContext) => unknown) {
   mockRpc.mockResolvedValue({ data: 1, error: null });
   return writes;
 }
+
+describe('POST /api/stripe/webhook — exclusive that sold twice', () => {
+  const exclusiveEvent = () => ({
+    id: 'evt_excl',
+    type: 'checkout.session.completed',
+    data: { object: {
+      id: 'cs_excl', amount_total: 30000, payment_intent: 'pi_excl', customer: 'cus_3',
+      metadata: {
+        purchase_kind: 'track_license',
+        seller_user_id: SELLER,
+        buyer_email: 'buyer@example.com',
+        cart_items: JSON.stringify([{ track_id: 't1', license_id: 'exclusive', license_type: 'exclusive' }]),
+      },
+    } },
+  });
+
+  /** Both buyers' rows name t1; `others` is what the claim check finds, `flagged` what step 4 re-reads. */
+  function setup(others: unknown[], flagged: boolean) {
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.RESEND_FROM_EMAIL = 'sales@example.test';
+    mockConstructEvent.mockReturnValue(exclusiveEvent());
+    mockRenderContractPdf.mockResolvedValue(Buffer.from('pdf'));
+    mockUploadContractPdf.mockResolvedValue(null);
+    mockResendSend.mockResolvedValue({ data: { id: 'email_1' }, error: null });
+    return installDb(({ table, op, columns }) => {
+      if (table === 'processed_stripe_events' && op === 'insert') return { error: null, count: null };
+      if (table === 'license_purchases' && op === 'upsert') return { data: [{ id: 'lp_excl' }], error: null };
+      if (table === 'license_purchases' && op === 'select') {
+        if (columns?.includes('download_unlocked')) return { data: others, error: null };
+        if (columns?.includes('needs_refund_review')) return { data: { fulfillment_email_sent: false, needs_refund_review: flagged }, error: null };
+        return { data: null, error: null };
+      }
+      // The conditional claim returns no rows: the track was already sold.
+      if (table === 'tracks' && op === 'update') return { data: [], error: null };
+      return { data: null, error: null };
+    });
+  }
+
+  const winnersRow = {
+    track_ids: ['t1'], line_items: [{ track_id: 't1', license_type: 'exclusive' }],
+    license_type: 'exclusive', download_unlocked: true, needs_refund_review: false,
+  };
+
+  it('flags the losing buyer and tells them the purchase is on hold, with no download link or contract', async () => {
+    const writes = setup([winnersRow], true);
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+
+    expect(writes.find((w) => w.table === 'license_purchases' && w.op === 'update'
+      && (w.payload as Record<string, unknown>).needs_refund_review === true)).toBeTruthy();
+    expect(mockResendSend).toHaveBeenCalledTimes(1);
+    const mail = mockResendSend.mock.calls[0][0] as { subject: string; html: string; attachments?: unknown };
+    expect(mail.subject).toBe('Your purchase is being reviewed');
+    expect(mail.html).not.toMatch(/ready to download|Download your files|store\/download/);
+    expect(mail.attachments).toBeUndefined();
+  });
+
+  it('does not flag the winner when a re-delivered event finds the track already sold by their own first run', async () => {
+    // The only other row naming t1 is the loser, already flagged: nobody else holds it.
+    const writes = setup([{ ...winnersRow, needs_refund_review: true }], false);
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+
+    expect(writes.find((w) => w.table === 'license_purchases' && w.op === 'update'
+      && (w.payload as Record<string, unknown>).needs_refund_review === true)).toBeUndefined();
+    const mail = mockResendSend.mock.calls[0][0] as { subject: string };
+    expect(mail.subject).toBe('Your license is ready');
+  });
+});
+
+describe('POST /api/stripe/webhook — charge.dispute.closed', () => {
+  const disputeEvent = (status: string | undefined, over: Record<string, unknown> = {}) => ({
+    id: `evt_dispute_closed_${status}`,
+    type: 'charge.dispute.closed',
+    data: { object: { status, payment_intent: 'pi_d', charge: 'ch_d', ...over } },
+  });
+
+  /** A paid sale whose dispute created earlier flipped it to 'disputed'. */
+  function setup(opts: { licenseRows?: unknown[]; bundleRows?: unknown[]; sale?: Record<string, unknown> | null } = {}) {
+    mockChargesRetrieve.mockReset();
+    mockChargesRetrieve.mockResolvedValue({ refunded: false });
+    mockSessionsList.mockReset();
+    mockSessionsList.mockResolvedValue({ data: [{ id: 'cs_bundle' }] });
+    return installDb(({ table, op, columns }) => {
+      if (table === 'license_purchases' && op === 'update') return { data: opts.licenseRows ?? [{ id: 'lp_1' }], error: null };
+      if (table === 'project_access_links' && op === 'update') return { data: opts.bundleRows ?? [], error: null };
+      if (table === 'license_purchases' && op === 'select' && columns?.includes('seller_user_id')) {
+        return { data: opts.sale === undefined ? { seller_user_id: SELLER, amount_usd: 300, buyer_email: 'b@x.com' } : opts.sale, error: null };
+      }
+      return { data: null, error: null };
+    });
+  }
+  const licenseUpdate = (w: ReturnType<typeof installDb>) => w.find((x) => x.table === 'license_purchases' && x.op === 'update');
+  const bundleUpdates = (w: ReturnType<typeof installDb>) => w.filter((x) => x.table === 'project_access_links' && x.op === 'update');
+  const notice = (w: ReturnType<typeof installDb>) => w.find((x) => x.table === 'notifications' && x.op === 'insert')?.payload as Record<string, unknown> | undefined;
+
+  it('won: restores a disputed track license — and only one still marked disputed', async () => {
+    mockConstructEvent.mockReturnValue(disputeEvent('won'));
+    const writes = setup();
+
+    expect((await POST(req('{}'))).status).toBe(200);
+
+    const upd = licenseUpdate(writes)!;
+    expect(upd.payload).toEqual({ status: 'paid', download_unlocked: true });
+    // The WHERE clause is the guard: a sale a later refund moved to 'refunded' is left alone.
+    expect(upd.filters).toContainEqual(['eq', 'stripe_payment_intent', 'pi_d']);
+    expect(upd.filters).toContainEqual(['eq', 'status', 'disputed']);
+    expect(notice(writes)).toMatchObject({ kind: 'dispute', title: 'Dispute won — $300.00' });
+    expect(notice(writes)!.body).toMatch(/restored/);
+  });
+
+  it('warning_closed: restores too, worded as an inquiry', async () => {
+    mockConstructEvent.mockReturnValue(disputeEvent('warning_closed'));
+    const writes = setup();
+
+    await POST(req('{}'));
+
+    expect(licenseUpdate(writes)!.payload).toMatchObject({ status: 'paid', download_unlocked: true });
+    expect(notice(writes)).toMatchObject({ title: 'Dispute inquiry closed — $300.00' });
+  });
+
+  it('lost: leaves access revoked and tells the producer', async () => {
+    mockConstructEvent.mockReturnValue(disputeEvent('lost'));
+    const writes = setup();
+
+    expect((await POST(req('{}'))).status).toBe(200);
+
+    expect(licenseUpdate(writes)).toBeUndefined();
+    expect(bundleUpdates(writes)).toEqual([]);
+    expect(mockChargesRetrieve).not.toHaveBeenCalled();
+    expect(notice(writes)).toMatchObject({ title: 'Dispute lost — $300.00' });
+  });
+
+  it('charge_refunded: changes nothing and does not announce a lost dispute (the refund already notified)', async () => {
+    mockConstructEvent.mockReturnValue(disputeEvent('charge_refunded'));
+    const writes = setup();
+
+    await POST(req('{}'));
+
+    expect(licenseUpdate(writes)).toBeUndefined();
+    expect(bundleUpdates(writes)).toEqual([]);
+    expect(notice(writes)).toBeUndefined();
+  });
+
+  it.each(['needs_response', 'under_review', 'something_new', undefined])('%s: does nothing at all', async (status) => {
+    mockConstructEvent.mockReturnValue(disputeEvent(status as string | undefined));
+    const writes = setup();
+
+    expect((await POST(req('{}'))).status).toBe(200);
+    expect(writes.filter((w) => w.op === 'update' || w.op === 'insert').filter((w) => w.table !== 'processed_stripe_events')).toEqual([]);
+  });
+
+  it('does nothing when the dispute names no payment intent', async () => {
+    mockConstructEvent.mockReturnValue(disputeEvent('won', { payment_intent: null }));
+    const writes = setup();
+
+    expect((await POST(req('{}'))).status).toBe(200);
+    expect(licenseUpdate(writes)).toBeUndefined();
+  });
+
+  it('won: un-expires a bundle link, by payment intent and by session, only where it was expired', async () => {
+    mockConstructEvent.mockReturnValue(disputeEvent('won'));
+    const writes = setup({ licenseRows: [], bundleRows: [{ id: 'pal_1' }], sale: null });
+
+    await POST(req('{}'));
+
+    const updates = bundleUpdates(writes);
+    expect(updates).toHaveLength(2);
+    for (const u of updates) {
+      expect(u.payload).toEqual({ expires_at: null });
+      expect(u.filters).toContainEqual(['not', 'expires_at', 'is', null]);
+    }
+    expect(updates[0].filters).toContainEqual(['eq', 'stripe_payment_intent', 'pi_d']);
+    expect(updates[1].filters).toContainEqual(['in', 'stripe_session_id', ['cs_bundle']]);
+    expect(mockChargesRetrieve).toHaveBeenCalledWith('ch_d');
+  });
+
+  it('won: leaves a bundle revoked when the charge was refunded, which is what actually revoked it', async () => {
+    mockConstructEvent.mockReturnValue(disputeEvent('won'));
+    const writes = setup({ licenseRows: [] });
+    mockChargesRetrieve.mockResolvedValue({ refunded: true });
+
+    await POST(req('{}'));
+
+    expect(bundleUpdates(writes)).toEqual([]);
+  });
+
+  it('won: leaves a bundle revoked — rather than guess — when Stripe cannot say whether it was refunded', async () => {
+    mockConstructEvent.mockReturnValue(disputeEvent('won'));
+    const writes = setup({ licenseRows: [] });
+    mockChargesRetrieve.mockRejectedValue(new Error('stripe down'));
+
+    expect((await POST(req('{}'))).status).toBe(200);
+    expect(bundleUpdates(writes)).toEqual([]);
+  });
+
+  it('won: says so when nothing could be restored automatically', async () => {
+    mockConstructEvent.mockReturnValue(disputeEvent('won'));
+    const writes = setup({ licenseRows: [], bundleRows: [] });
+
+    await POST(req('{}'));
+
+    expect(notice(writes)!.body).toMatch(/could not be restored automatically/);
+    expect((notice(writes)!.data as Record<string, unknown>).restored).toBe(false);
+  });
+
+  it('is idempotent: a redelivered event writes the same conditional updates and breaks nothing', async () => {
+    mockConstructEvent.mockReturnValue(disputeEvent('won'));
+    const writes = setup({ licenseRows: [] }); // already restored: the guarded update matches no row
+
+    expect((await POST(req('{}'))).status).toBe(200);
+    expect(licenseUpdate(writes)!.filters).toContainEqual(['eq', 'status', 'disputed']);
+  });
+});
 
 describe('POST /api/stripe/webhook — fulfillment branches', () => {
   it('track_license: upserts a paid license_purchases row with the frozen amount', async () => {
@@ -581,6 +811,85 @@ describe('POST /api/stripe/webhook — fulfillment branches', () => {
 
     const relist = writes.find((w) => w.table === 'tracks' && w.op === 'update');
     expect(relist!.payload).toMatchObject({ exclusive_sold: false, store_listed: true });
+  });
+
+  it('charge.refunded (partial): keeps downloads, does not re-list the exclusive, and tells the producer', async () => {
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_partial',
+      type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_lp', refunded: false, amount: 30000, amount_refunded: 1000 } },
+    });
+    const writes = installDb(({ table, op }) => {
+      if (table === 'license_purchases' && op === 'select') return {
+        data: { seller_user_id: SELLER, amount_usd: 300, buyer_email: 'b@x.com',
+          line_items: [{ track_id: 't1', license_type: 'exclusive' }], track_ids: ['t1'] },
+      };
+      return { data: null, error: null };
+    });
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+
+    expect(writes.filter((w) => w.table === 'license_purchases' && w.op === 'update')).toEqual([]);
+    expect(writes.filter((w) => w.table === 'project_access_links' && w.op === 'update')).toEqual([]);
+    expect(writes.filter((w) => w.table === 'tracks' && w.op === 'update')).toEqual([]);
+    const note = writes.find((w) => w.table === 'notifications' && w.op === 'insert');
+    expect(note!.payload).toMatchObject({ kind: 'refund', title: 'Partial refund — $10.00 of $300.00' });
+  });
+
+  it('charge.refunded (full, with amounts): revokes as before', async () => {
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_full',
+      type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_lp', refunded: true, amount: 30000, amount_refunded: 30000 } },
+    });
+    const writes = installDb(() => ({ data: null, error: null }));
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    expect(writes.find((w) => w.table === 'license_purchases' && w.op === 'update')!.payload)
+      .toMatchObject({ status: 'refunded', download_unlocked: false });
+  });
+
+  it('charge.dispute.created: revokes whatever the charge fields say', async () => {
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_dispute',
+      type: 'charge.dispute.created',
+      data: { object: { payment_intent: 'pi_lp', refunded: false, amount: 30000, amount_refunded: 0 } },
+    });
+    const writes = installDb(() => ({ data: null, error: null }));
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    expect(writes.find((w) => w.table === 'license_purchases' && w.op === 'update')!.payload)
+      .toMatchObject({ status: 'disputed', download_unlocked: false });
+  });
+
+  it('charge.refunded: refunding the LOSER of a double sale does not re-list a track the winner still holds', async () => {
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_loser_refund',
+      type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_loser', refunded: true, amount: 30000, amount_refunded: 30000 } },
+    });
+    const winner = {
+      track_ids: ['t1'], line_items: [{ track_id: 't1', license_type: 'exclusive' }],
+      license_type: 'exclusive', download_unlocked: true, needs_refund_review: false,
+    };
+    const writes = installDb(({ table, op, columns }) => {
+      if (table === 'license_purchases' && op === 'select') {
+        if (columns?.includes('download_unlocked')) return { data: [winner], error: null };
+        return { data: { seller_user_id: SELLER, amount_usd: 300, buyer_email: 'loser@x.com',
+          line_items: [{ track_id: 't1', license_type: 'exclusive' }], track_ids: ['t1'] }, error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+
+    expect(writes.find((w) => w.table === 'license_purchases' && w.op === 'update')!.payload)
+      .toMatchObject({ status: 'refunded', download_unlocked: false });
+    expect(writes.filter((w) => w.table === 'tracks' && w.op === 'update')).toEqual([]);
   });
 
   it.each(['charge.refunded', 'charge.dispute.created'])('%s: revokes project bundle access by expiring the link', async (type) => {

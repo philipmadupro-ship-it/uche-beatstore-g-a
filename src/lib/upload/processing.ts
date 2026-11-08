@@ -8,7 +8,10 @@ import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { readStoredObject, uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
 import { uploadOrgPeaks, uploadOrgPreview } from '@/lib/storage/org-media';
+import { prepareMp3Deliverable } from '@/lib/audio/mp3-deliverable';
+import { realMp3Deps } from '@/lib/audio/mp3-deliverable.server';
 import { errorMessage } from '@/lib/errors';
+import { isMissingOrgColumn } from '@/lib/auth/org-column';
 import { parseTitleMetadata } from '@/lib/upload/title-metadata';
 import { compareFilenameWithDetected } from '@/lib/audio/metadata-agreement';
 
@@ -237,6 +240,16 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
       console.warn('Upload processing preview failed:', err);
     }
 
+    // The MP3 a lease on this track delivers, made now from the master already
+    // in memory so the first buyer does not wait for it (it is otherwise made on
+    // first download — lib/audio/mp3-deliverable). Non-fatal either way.
+    // Never for an org recording: it is not sold, and the derivative would sit
+    // under deliverables/, outside the orgs/<id>/ prefix the org export and purge cover.
+    const mp3 = orgId ? null : await prepareMp3Deliverable({ id: job.track_id, audio_url: job.audio_url }, audioBuffer, realMp3Deps);
+    if (!orgId && !mp3 && job.audio_url && !/\.mp3(?:\?|$)/i.test(job.audio_url)) {
+      console.warn('Upload processing: delivery MP3 not made (ffmpeg unavailable?); it will be made on first download');
+    }
+
     const { bpm, key, scale, ...rest } = merged;
     const { error: trackError } = await admin
       .from('tracks')
@@ -296,6 +309,8 @@ type Scalar = string | number | null;
 /** The track's organization (LABEL-12 `tracks.org_id`), or null for a producer track. Throws on a read error. */
 async function trackOrgId(admin: ServiceClient, trackId: string): Promise<string | null> {
   const { data, error } = await admin.from('tracks').select('org_id').eq('id', trackId).maybeSingle();
+  // Before migration 141 no track has an org.
+  if (error && isMissingOrgColumn(error)) return null;
   if (error) throw new Error(`Track lookup failed: ${error.message}`);
   const orgId = (data as { org_id?: unknown } | null)?.org_id;
   return typeof orgId === 'string' && orgId ? orgId : null;

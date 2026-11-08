@@ -27,6 +27,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
+import { SignOutButton } from '@/components/auth/SignOutButton';
 import { usePlayer } from '@/hooks/usePlayer';
 
 // Each item carries a one-line `description` shown as a hover tooltip so
@@ -333,7 +334,11 @@ export function Sidebar() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-medium text-white truncate">Creator</p>
-            <Link href="/settings" className="text-[9px] text-white/50 font-mono uppercase tracking-wider hover:text-white transition-colors">Settings</Link>
+            <div className="flex items-center gap-2">
+              <Link href="/settings" className="text-[9px] text-white/50 font-mono uppercase tracking-wider hover:text-white transition-colors">Settings</Link>
+              <span aria-hidden="true" className="text-white/20 text-[9px]">·</span>
+              <SignOutButton variant="link" />
+            </div>
           </div>
         </div>
       </div>

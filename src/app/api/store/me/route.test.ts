@@ -54,6 +54,10 @@ function builder(table: string) {
 const mockVerify = vi.fn();
 const session: { userId: string | null; email: string | null } = { userId: null, email: null };
 vi.mock('@/lib/buyer-tokens', () => ({ verifyBuyerToken: (t: string) => mockVerify(t) }));
+const mockOwns = vi.fn();
+vi.mock('@/lib/store/buyer-ownership', () => ({
+  buyerOwnsTrack: (...a: unknown[]) => mockOwns(...a),
+}));
 vi.mock('@/lib/local-store', () => ({ isSupabaseConfigured: () => true }));
 vi.mock('@/lib/auth/ownership', () => ({
   requireUser: () => Promise.resolve(session.userId ? { ok: true, userId: session.userId } : { ok: false }),
@@ -80,6 +84,7 @@ beforeEach(() => {
   for (const k of Object.keys(lists)) delete lists[k];
   session.userId = null;
   session.email = null;
+  mockOwns.mockResolvedValue(false);
   mockVerify.mockImplementation((t: string) => (t === 'good' ? { email: 'buyer@example.test' } : null));
 });
 
@@ -106,6 +111,44 @@ describe('POST /api/store/me', () => {
     expect(writes()).toEqual([
       { table: 'buyer_listening_history', op: 'insert', payload: { email: 'buyer@example.test', track_id: TRACK }, filters: [] },
     ]);
+  });
+
+  it('log_play writes a beat the buyer owns even though the sale delisted it', async () => {
+    // singles.tracks unset: the store_listed lookup finds nothing (delisted).
+    mockOwns.mockResolvedValue(true);
+    const { POST } = await import('./route');
+    const res = await POST(post({ action: 'log_play', track_id: TRACK }));
+    expect(res.status).toBe(200);
+    expect(mockOwns).toHaveBeenCalledWith(expect.anything(), 'buyer@example.test', TRACK);
+    expect(writes()).toEqual([
+      { table: 'buyer_listening_history', op: 'insert', payload: { email: 'buyer@example.test', track_id: TRACK }, filters: [] },
+    ]);
+  });
+
+  it('log_play 404s a beat that is neither listed nor owned, writing nothing', async () => {
+    const { POST } = await import('./route');
+    const res = await POST(post({ action: 'log_play', track_id: TRACK }));
+    expect(res.status).toBe(404);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it('log_play of a listed beat does not need the ownership lookup', async () => {
+    singles.tracks = { id: TRACK };
+    const { POST } = await import('./route');
+    const res = await POST(post({ action: 'log_play', track_id: TRACK }));
+    expect(res.status).toBe(200);
+    expect(mockOwns).not.toHaveBeenCalled();
+  });
+
+  it('ownership does not loosen set_favorite or add_to_playlist for an unlisted beat', async () => {
+    mockOwns.mockResolvedValue(true);
+    singles.buyer_playlists = { id: PL };
+    const { POST } = await import('./route');
+    const fav = await POST(post({ action: 'set_favorite', track_id: TRACK, favorited: true }));
+    const add = await POST(post({ action: 'add_to_playlist', playlist_id: PL, track_id: TRACK }));
+    expect(fav.status).toBe(404);
+    expect(add.status).toBe(404);
+    expect(writes()).toHaveLength(0);
   });
 
   it.each(['add_to_playlist', 'remove_from_playlist'])(

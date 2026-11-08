@@ -18,20 +18,27 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Loader2, AlertCircle, Music, Layers, Download, ExternalLink,
-  CreditCard, Heart, History, ListMusic, Plus, Trash2, LogOut, X,
+  CreditCard, Heart, History, ListMusic, Play, Plus, Trash2, LogOut, X,
 } from 'lucide-react';
+import { useBuyerPlayback } from '@/hooks/useBuyerPlayback';
 import { createClient } from '@/lib/supabase/client';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { clearBuyerIdentity, setPersistentBuyerSession } from '@/lib/buyer-session';
 import { useWishlistStore } from '@/hooks/useWishlist';
-import { BuyerLibraryTile, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
+import { BuyerLibraryTile, BuyerPlayButton, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
+import { BuyerBeatsWorkspace } from '@/components/store/BuyerBeatsWorkspace';
 import { CoverImage } from '@/components/ui/CoverImage';
 import type { BuyerLibraryShape, BuyerLibraryPlaylist } from '@/lib/store/buyer-library';
+import { purchasedItemSummary } from '@/lib/store/buyer-playback';
 
 interface TrackLicense {
   id: string;
   kind: 'track';
-  items: Array<{ track_id: string; license_id: string; license_type: string; title?: string | null }>;
+  items: Array<{
+    track_id: string; license_id: string; license_type: string; title?: string | null;
+    cover_url?: string | null; type?: string | null; bpm?: number | null;
+    key?: string | null; scale?: string | null; duration_seconds?: number | null;
+  }>;
   amount_usd: number;
   created_at: string;
   status: string | null;
@@ -68,8 +75,12 @@ function fmtMoney(n: number) {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** The page is session-gated, so its audio is always asked for as the session. */
+const ACCOUNT_IDENTITY = 'session=1';
+
 export default function BuyerMePage() {
   const router = useRouter();
+  const { isPlayingTrack, play } = useBuyerPlayback(ACCOUNT_IDENTITY);
   const [authChecked, setAuthChecked] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -194,6 +205,8 @@ export default function BuyerMePage() {
           </div>
         )}
 
+        <BuyerBeatsWorkspace />
+
         {isEmpty ? (
           <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-16 text-center">
             <Music size={28} className="text-white/40 mx-auto mb-3" />
@@ -240,8 +253,8 @@ export default function BuyerMePage() {
                           href={b.download_url}
                           className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white text-black hover:bg-white/90 transition-colors"
                         >
-                          <Download size={11} />
-                          Open
+                          <Play size={11} fill="currentColor" aria-hidden="true" />
+                          Open to listen
                         </a>
                       )}
                     </li>
@@ -261,10 +274,30 @@ export default function BuyerMePage() {
                     <li key={r.id} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-medium text-white truncate">
-                            {r.items.map((i) => i.title).filter(Boolean).join(' · ')
-                              || `${r.items.length} track${r.items.length === 1 ? '' : 's'}`}
-                          </p>
+                          {r.access_revoked || r.items.length === 0 ? (
+                            <p className="text-[11px] font-medium text-white truncate">
+                              {r.items.map((i) => i.title).filter(Boolean).join(' · ')
+                                || `${r.items.length} track${r.items.length === 1 ? '' : 's'}`}
+                            </p>
+                          ) : (
+                            <ul className="space-y-1">
+                              {r.items.map((i, n) => {
+                                const itemTitle = i.title?.trim() || 'Untitled beat';
+                                const summary = purchasedItemSummary(i);
+                                return (
+                                  <li key={`${i.track_id}-${n}`} className="flex items-center gap-1.5 min-w-0">
+                                    <BuyerPlayButton
+                                      title={itemTitle}
+                                      playing={isPlayingTrack(i.track_id)}
+                                      onToggle={() => play(summary, r.items.map(purchasedItemSummary))}
+                                      className="size-7 shrink-0 rounded-md border border-white/10 hover:border-white/20 hover:bg-white/[0.06]"
+                                    />
+                                    <span className="text-[11px] font-medium text-white truncate">{itemTitle}</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
                           <p className="text-[10px] font-mono text-white/40 mt-0.5">
                             {fmtDate(r.created_at)} · {fmtMoney(r.amount_usd)}
                             {r.items[0]?.license_type ? ` · ${r.items[0].license_type}` : ''}
@@ -333,6 +366,7 @@ export default function BuyerMePage() {
 
 function SessionLibrary() {
   const queryClient = useQueryClient();
+  const { isPlayingTrack, play } = useBuyerPlayback(ACCOUNT_IDENTITY);
   const [newPlaylistName, setNewPlaylistName] = useState('');
 
   const { data, isLoading } = useQuery({
@@ -361,7 +395,7 @@ function SessionLibrary() {
       if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
       return j.playlist as BuyerLibraryPlaylist;
     },
-    onSuccess: () => { setNewPlaylistName(''); toast.success('Playlist created'); refresh(); },
+    onSuccess: () => { setNewPlaylistName(''); toast.success('Project created'); refresh(); },
     onError: (e: Error) => toast.error('Could not create', e.message),
   });
 
@@ -377,7 +411,7 @@ function SessionLibrary() {
         throw new Error(j.error ?? `HTTP ${res.status}`);
       }
     },
-    onSuccess: () => { toast.success('Playlist deleted'); refresh(); },
+    onSuccess: () => { toast.success('Project deleted'); refresh(); },
     onError: (e: Error) => toast.error('Could not delete', e.message),
   });
 
@@ -426,6 +460,8 @@ function SessionLibrary() {
                 <BuyerLibraryTile
                   track={r.track}
                   subline={new Date(r.played_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                  playing={r.track ? isPlayingTrack(r.track.id) : false}
+                  onPlay={r.track ? () => play(r.track!, recentHistory.map((h) => h.track)) : undefined}
                 />
               </li>
             ))}
@@ -444,7 +480,11 @@ function SessionLibrary() {
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
             {data.favorites.map((f) => (
               <li key={f.track_id}>
-                <BuyerLibraryTile track={f.track} />
+                <BuyerLibraryTile
+                  track={f.track}
+                  playing={f.track ? isPlayingTrack(f.track.id) : false}
+                  onPlay={f.track ? () => play(f.track!, data.favorites.map((x) => x.track)) : undefined}
+                />
               </li>
             ))}
           </ul>
@@ -454,14 +494,14 @@ function SessionLibrary() {
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4">
         <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-3">
           <ListMusic size={11} />
-          My playlists ({data.playlists.length})
+          Projects ({data.playlists.length})
         </p>
         <div className="flex items-center gap-2 mb-3">
           <input
             type="text"
             value={newPlaylistName}
             onChange={(e) => setNewPlaylistName(e.target.value)}
-            placeholder="New playlist name"
+            placeholder="New project name"
             maxLength={80}
             onKeyDown={(e) => { if (e.key === 'Enter' && newPlaylistName.trim()) createMut.mutate(newPlaylistName.trim()); }}
             className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
@@ -478,7 +518,7 @@ function SessionLibrary() {
         </div>
         {data.playlists.length === 0 ? (
           <p className="text-[11px] text-white/40">
-            Create one here, or use the playlist button on any beat&apos;s page to add it.
+            Create one here, or use the project button on any beat&apos;s page to add it.
           </p>
         ) : (
           <ul className="space-y-1.5">
@@ -497,12 +537,12 @@ function SessionLibrary() {
                     onClick={async () => {
                       const ok = await confirmToast(
                         `Delete "${p.name}"?`,
-                        'The playlist is removed from your account on every device.',
+                        'The project is removed from your account on every device.',
                         { confirmLabel: 'Delete', danger: true },
                       );
                       if (ok) deleteMut.mutate(p.id);
                     }}
-                    aria-label={`Delete playlist ${p.name}`}
+                    aria-label={`Delete project ${p.name}`}
                     title="Delete"
                     className="w-7 h-7 rounded-md border border-white/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-900/40 transition-colors"
                   >
@@ -510,9 +550,15 @@ function SessionLibrary() {
                   </button>
                 </div>
                 {p.tracks.length > 0 && (
-                  <ul className="mt-2 space-y-1 pl-6">
+                  <ul className="mt-2 space-y-1 pl-2">
                     {p.tracks.map((t) => (
                       <li key={t.id} className="flex items-center gap-2">
+                        <BuyerPlayButton
+                          title={t.title?.trim() || 'Untitled beat'}
+                          playing={isPlayingTrack(t.id)}
+                          onToggle={() => play(t, p.tracks)}
+                          className="size-6 shrink-0 rounded-md text-white/60 hover:text-white hover:bg-white/[0.06]"
+                        />
                         <Link
                           href={`/store/${t.id}`}
                           className="flex-1 min-w-0 truncate text-[10px] text-white/60 hover:text-white transition-colors"
@@ -524,7 +570,7 @@ function SessionLibrary() {
                           onClick={() => removeTrackMut.mutate({ playlist_id: p.id, track_id: t.id })}
                           disabled={removeTrackMut.isPending}
                           aria-label={`Remove ${t.title?.trim() || 'beat'} from ${p.name}`}
-                          title="Remove from playlist"
+                          title="Remove from project"
                           className="w-6 h-6 rounded-md flex items-center justify-center text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-40"
                         >
                           <X size={11} />

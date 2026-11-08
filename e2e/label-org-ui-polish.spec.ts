@@ -99,8 +99,9 @@ test('2 · /o carries a home link and Sign out; the org bar names the org and a 
   await shot(page, 'org-index-1440');
   await page.goto(`/o/${SLUG}`);
   await expect(page.getByRole('link', { name: `Polish Records ${run} home` })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId('org-sign-out')).toBeVisible();
-  await page.getByTestId('org-sign-out').click();
+  await page.getByRole('button', { name: /open account menu/i }).click();
+  await expect(page.getByRole('button', { name: /^sign out$/i })).toBeVisible();
+  await page.getByRole('button', { name: /^sign out$/i }).click();
   await page.waitForURL(/\/login/, { timeout: 30_000 });
   await ctx.close();
   await rest(request, 'PATCH', `organizations?id=eq.${second}`, { deleted_at: new Date(Date.now() - 31 * 86_400_000).toISOString() });

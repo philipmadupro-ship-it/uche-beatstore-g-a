@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Music } from 'lucide-react';
+import { Music, Pause, Play } from 'lucide-react';
 import type { BuyerLibraryTrackSummary } from '@/lib/store/buyer-library';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
@@ -15,17 +15,55 @@ function formatTrackMeta(track: BuyerLibraryTrackSummary | null): string {
   return parts.join(' · ') || 'Beat';
 }
 
+/**
+ * Icon-only play/pause for a beat in the buyer's account. It drives the
+ * global player (the caller owns that), so it only reports the click.
+ */
+export function BuyerPlayButton({
+  title,
+  playing,
+  onToggle,
+  className = '',
+}: {
+  title: string;
+  playing: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={`${playing ? 'Pause' : 'Play'} ${title}`}
+      className={`flex items-center justify-center text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] ${className}`}
+    >
+      {playing
+        ? <Pause size={13} fill="currentColor" aria-hidden="true" />
+        : <Play size={13} fill="currentColor" aria-hidden="true" className="ml-0.5" />}
+    </button>
+  );
+}
+
 export function BuyerLibraryTile({
   track,
   subline,
+  playing = false,
+  onPlay,
 }: {
   track: BuyerLibraryTrackSummary | null;
   subline?: string;
+  /** This beat is the one the global player is playing right now. */
+  playing?: boolean;
+  /** Present = the cover carries a play button. Absent (or no track) = none. */
+  onPlay?: () => void;
 }) {
   const href = track ? `/store/${track.id}` : '/store';
   const title = track?.title?.trim() || (track ? 'Untitled beat' : 'Beat unavailable');
 
   return (
+    // The play button is a SIBLING of the link, never inside it: a <button>
+    // in an <a> is invalid and the browser decides which one a click hits.
+    <div className="relative">
     <Link
       href={href}
       aria-label={track ? `Open ${title}` : 'Browse available beats'}
@@ -56,6 +94,15 @@ export function BuyerLibraryTile({
         )}
       </span>
     </Link>
+    {track && onPlay && (
+      <BuyerPlayButton
+        title={title}
+        playing={playing}
+        onToggle={onPlay}
+        className="absolute left-2 top-2 size-12 rounded-md bg-black/40 hover:bg-black/60"
+      />
+    )}
+    </div>
   );
 }
 

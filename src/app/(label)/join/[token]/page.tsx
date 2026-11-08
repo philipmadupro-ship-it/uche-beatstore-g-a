@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { useParams } from 'next/navigation';
 import { AlertCircle, CheckCircle2, Loader2, Mail } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { describeGrant, joinStep, type InvitationPreview } from '@/lib/labelos/invitations';
 import { PROJECT_ROLE_LABELS, isExternalProjectRole } from '@/lib/labelos/project-members';
 import { ORG_FUNCTIONS, ROLES, type OrgFunction, type Role } from '@/lib/labelos/capabilities';
@@ -136,11 +137,15 @@ export default function JoinPage() {
     else setLinkSent(true);
   };
 
+  const { signOut: authSignOut } = useAuth();
+  // The shared helper (clears the session, hard-navigates); back to this invitation.
   const signOut = async () => {
     setBusy(true);
-    await createClient().auth.signOut();
-    // A full load, so the proxy and the route see the cleared session.
-    window.location.assign(returnTo);
+    const { error: outErr } = await authSignOut({ redirectTo: returnTo });
+    if (outErr) {
+      setBusy(false);
+      setError(outErr);
+    }
   };
 
   return (
@@ -295,6 +300,9 @@ function JoinBody(props: {
           </Lead>
           <button type="button" onClick={props.onAccept} disabled={busy} className={`${PRIMARY} mt-6`}>
             {busy ? 'Joining…' : p.project ? 'Accept and open the project' : 'Accept invitation'}
+          </button>
+          <button type="button" onClick={props.onSignOut} disabled={busy} className="mt-4 w-full text-center text-[11px] text-[var(--text-readable)] underline underline-offset-2 hover:text-white disabled:opacity-50">
+            Sign out
           </button>
         </>
       )}

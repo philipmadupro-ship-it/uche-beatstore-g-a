@@ -13,6 +13,8 @@ import { usePlayer } from '@/hooks/usePlayer';
 import type { Track } from '@/lib/types';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { PublicArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import { toast } from '@/hooks/useToast';
+import { probeDownload } from '@/lib/store/download-failure';
 
 /* ─── Types ────────────────────────────────────────────────── */
 
@@ -114,20 +116,24 @@ function DownloadPortal() {
   }, [sessionId]);
 
   /**
-   * Trigger a file download using a same-origin proxied URL.
-   * Because proxied_url points to /api/audio (same-origin) and the server
-   * sets Content-Disposition: attachment, the browser saves the file
-   * instead of navigating — no redirect chain, no "opens a page" issue.
+   * Save a file through its same-origin gated URL. The route answers JSON on a
+   * refusal, which an `<a download>` would turn into a silent failed download,
+   * so ask it first and say why when it declines. On success the server's
+   * Content-Disposition names the file.
    */
-  const triggerDownload = (trackId: string, file: DownloadFile) => {
+  const triggerDownload = async (trackId: string, file: DownloadFile) => {
     const key = `${trackId}-${file.format}`;
     setDownloading((d) => ({ ...d, [key]: true }));
 
+    const probe = await probeDownload(file.proxied_url);
+    if (!probe.ok) {
+      setDownloading((d) => ({ ...d, [key]: false }));
+      toast.error(`${file.label} could not be downloaded`, probe.message);
+      return;
+    }
+
     const a = document.createElement('a');
     a.href = file.proxied_url;
-    // Extract filename from the proxied_url for the download attribute
-    const filenameParam = new URL(file.proxied_url, window.location.origin).searchParams.get('filename');
-    a.download = filenameParam ? decodeURIComponent(filenameParam) : file.label;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

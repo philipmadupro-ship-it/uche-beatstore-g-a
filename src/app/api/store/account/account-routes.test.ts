@@ -117,7 +117,7 @@ beforeEach(() => {
     },
   ];
   tables.tracks = [
-    { id: TRACK_A, title: 'Night Shift' },
+    { id: TRACK_A, title: 'Night Shift', cover_url: 'https://cdn.example/a.jpg', duration_seconds: 180, bpm: 140 },
     { id: TRACK_B, title: 'Cold Front' },
   ];
   tables.projects = [{ id: PROJECT, name: 'Winter Tape', cover_url: null }];
@@ -139,6 +139,10 @@ describe('GET /api/store/account/me — signed-in buyer', () => {
     expect(body.email).toBe('buyer@example.test');
     expect(body.track_licenses.map((r: { id: string }) => r.id)).toEqual(['lp-mine']);
     expect(body.track_licenses[0].items[0].title).toBe('Night Shift');
+    // The player needs these to play a bought beat from the account.
+    expect(body.track_licenses[0].items[0]).toMatchObject({
+      cover_url: 'https://cdn.example/a.jpg', duration_seconds: 180, bpm: 140, key: null,
+    });
     expect(body.track_licenses[0].download_url).toBe('/store/download?session_id=cs_mine');
     expect(body.project_bundles.map((r: { id: string }) => r.id)).toEqual(['pa-mine']);
     expect(body.project_bundles[0].download_url).toBe('/store/projects/access/access-token-mine');

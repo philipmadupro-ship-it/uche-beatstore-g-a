@@ -7,6 +7,7 @@
  */
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { SignOutButton } from '@/components/auth/SignOutButton';
 import { platformAdminForPage } from '@/lib/auth/platform-access';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 
@@ -22,6 +23,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
           <Link href="/platform" className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 transition-colors hover:text-white">
             Platform
           </Link>
+          <div className="ml-auto"><SignOutButton variant="button" /></div>
         </div>
       </header>
       <main className="min-h-screen pb-16 pt-14">{children}</main>
