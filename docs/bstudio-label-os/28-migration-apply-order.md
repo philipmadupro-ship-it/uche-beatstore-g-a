@@ -1,4 +1,4 @@
-# 28 — Migration apply order, 136 … 200
+# 28 — Migration apply order, 136 … 201
 
 **Written 2026-11-07 for LABEL-78. Documentation only; neither `supabase/apply/pending.sql` nor any migration file was touched.** **Update, same day: the owner has since applied everything below to PRODUCTION (§0). This file now records what was done and the order it followed.** The ledger of record stays `supabase/MIGRATIONS.md`; if the two disagree, the ledger wins and this file is stale.
 
@@ -17,9 +17,9 @@ So 001–196 are in effect (177, 185, 188 never used). §1 to §8 below are kept
 |---|---|---|
 | 001–129 | **Applied on production** (owner's SQL-editor bundle, 2026-09-29, verify table all `applied`). 096–099 and 117/118 are two-file pairs; both sides are legitimate | `MIGRATIONS.md` "Applied status" |
 | 130–135 | **Pending.** Artist workspace phase 3 (130–132), linked material (133), contact roles (134), label pitch notes (135). `supabase/apply/pending.sql` carries exactly these (plus 112–129 as already-applied, idempotent rows) | `MIGRATIONS.md`, `pending.sql` |
-| 136–196 | **Applied on production 2026-11-07** (§0; 191 is PORTAL-UP, not Label OS). Historical wording "not applied anywhere" was stale. **197–200 are on the branch and NOT applied** (owner pastes them, §7) | `MIGRATIONS.md`, doc 23 standing requirements |
+| 136–196 | **Applied on production 2026-11-07** (§0; 191 is PORTAL-UP, not Label OS). Historical wording "not applied anywhere" was stale. **197–201 are on the branch and NOT applied** (owner pastes them, §7) | `MIGRATIONS.md`, doc 23 standing requirements |
 
-Files on disk in 136–200: 63 (59 in 136–196, plus 197–200). **Not on disk, never to be bundled:** 177 (released, LABEL-59 needed none), 185 (released, LABEL-68 moved to 194), 188 (released, LABEL-74/75 took 195). The 096/097/098/099 and 117/118 pairs are outside this range.
+Files on disk in 136–201: 64 (59 in 136–196, plus 197–201). **Not on disk, never to be bundled:** 177 (released, LABEL-59 needed none), 185 (released, LABEL-68 moved to 194), 188 (released, LABEL-74/75 took 195). The 096/097/098/099 and 117/118 pairs are outside this range.
 
 The execution log (2026-10-19 10:05 entry) says a go-live session on branch `release/label-os-into-main` builds `supabase/apply/labelos-go-live.sql` (130–135, 136–172, 189–190, with a verify table). **That file lives on `main` (go-live branch), not on the phase-2 branch** (`ls supabase/apply` here shows only `editor/`, `pending.sql`, `verify.sql`). Reconcile with that branch's version before anyone pastes anything. Everything merged after 2026-10-19 (173+ except 189/190/192, and 191) is outside any bundle that existed at the time.
 
@@ -49,6 +49,7 @@ Replacements must come **after** what they replace, and the *latest* definition 
 | 170→**195** | `labelos_platform_create_licensee` | 195: `org.created` insert becomes audit-class |
 | 172→**192**→**196** | `labelos_validate_org_settings_patch`, `labelos_audit_org_settings` | 192 introduces the validator (rules moved out of 172) and re-points 172's function at it; 196 adds `artwork_min_px` (600–10000) to the validator |
 | 189→**192**→**197** | `labelos_setup_org` | 192 drops 189's 3-argument function and creates the 4-argument one with `p_settings`. 189 must run first (192 `DROP`s it) |
+| 186/187→**201** | consent decide / veto functions | 201 replaces the best-effort `recordEvent` + put-back for `listing.consent_decided`, `listing.vetoed`, `listing.veto_lifted` with `SECURITY DEFINER` functions (new, nothing earlier is redefined); needs 186 and 187 first |
 | 174→**200** | `parties_confirmation_reset` | 200 adds `email` to the fields that clear `details_confirmed_by/_at` (SQL now agrees with `clearsConfirmation`) |
 | 179/180→**198** | `earnings_imports` uniqueness, `labelos_earnings_import` | 198: one LIVE import per file (partial unique index), a voided file imports fresh |
 | 176→178 | `contracts_guard` | 178 freezes `sent_document_sha256`, `sent_document_ref`, `sent_snapshot` |
@@ -130,6 +131,7 @@ Dependencies were derived by scanning each file for tables and functions created
 | 198 | Review G15: voided earnings import can be re-imported | 179, 180 | replaces 179's `earnings_imports_one_per_file` constraint with a partial unique index and redefines 180's `labelos_earnings_import`; **not applied** |
 | 199 | Review G16: press share create / revoke are audit-class | 146, 184 | adds `labelos_audit_press_share_create` / `_revoke`; **not applied** |
 | 200 | Review G14: party e-mail change clears confirmation | 174 | redefines 174's `parties_confirmation_reset`; **not applied** |
+| 201 | Review G17: store-consent verbs are audit class | 146, 186, 187 | adds `labelos_audit_consent_decide` and `labelos_audit_listing_veto` so the consent change and its `activity_events` row commit together; takes the same release lock as 187's `labelos_audit_release_store`; **not applied** |
 
 ## 5. Things that change behaviour when a migration lands
 
@@ -162,7 +164,7 @@ Dependencies were derived by scanning each file for tables and functions created
 | 5 | 179–184 | Finance, marketing, press |
 | 6 | 187 | The atomic audit family; needs 186 and 176 |
 | 7 | 189, 190, 192, 193, 194, 195, 196 | Setup, team accounts, lifecycle, creative gate, guards, settings key |
-| 3rd (pending) | 197–200 | 198–200 are review fixes G15 / G16 / G14 (see §4); paste in numeric order after 197. 197 is the G12 fix (`labelos_setup_org`: atomic `org.created`, adoption of an unfinished operator-created org). Not applied. Needs 170, 192, 195. Paste it BEFORE deploying the code that redirects an unfinished owner to `/setup` |
+| 3rd (pending) | 197–201 | 198–201 are review fixes G15 / G16 / G14 / G17 (see §4); paste in numeric order after 197. 197 is the G12 fix (`labelos_setup_org`: atomic `org.created`, adoption of an unfinished operator-created org). Not applied. Needs 170, 192, 195. Paste it BEFORE deploying the code that redirects an unfinished owner to `/setup` |
 | — | 191 | Independent; apply with the portal-upload code, any time after 129 |
 
 The ledger's own wording (186 "ships in a later paste than 130–173 and 189–192"; 193 "second paste after go-live") fits this split if a first go-live paste ended at 173 plus 189–192. If the go-live branch already did that, continue from paste 4 for what it did not carry, still in numeric order.
