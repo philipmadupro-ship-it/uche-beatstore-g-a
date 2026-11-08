@@ -251,7 +251,7 @@ test('4 · the owner edits the draft in the page', async ({ browser, baseURL }) 
 test('5 · the artist reads her own sent contract only, in the page and on her own JWT', async ({ browser, baseURL }) => {
   const rows = await (async () => {
     const ctx = await browser.newContext();
-    const r = (await rest(ctx.request, 'GET', `contracts?select=id,title&org_id=eq.${ORG}&order=created_at`)) as Row[];
+    const r = (await rest(ctx.request, 'GET', `contracts?select=id,title,version&org_id=eq.${ORG}&order=created_at`)) as Row[];
     await ctx.close();
     return r;
   })();
@@ -265,8 +265,29 @@ test('5 · the artist reads her own sent contract only, in the page and on her o
   await expect(page.getByTestId('contracts-empty')).toBeVisible(); // a draft is not hers to read yet
   await expect(page.getByTestId('contract-new')).toHaveCount(0);
 
-  // Sending for signature is LABEL-58; here the service key moves the draft to `sent`.
-  await rest(ctx.request, 'PATCH', `contracts?id=in.(${nova.id},${kilo.id})`, { status: 'sent' });
+  // The owner sends both through the real route, which freezes the PDF the artist then reads.
+  const ownerCtx = await as(browser, baseURL!, owner.id, owner.email);
+  // The route refuses a contract with empty merge fields (422), so they are filled through the real edit route first.
+  const FILL = { minimum_delivery: '3', delivery_date: '2026-12-31', exclusivity: 'exclusive', option_periods: '2', notice_days: '30', governing_law: 'England' };
+  for (const c of [nova, kilo]) {
+    const [{ fields: have }] = (await rest(ownerCtx.request, 'GET', `contracts?select=fields&id=eq.${c.id}`)) as Array<{ fields: Record<string, string> | null }>;
+    // Nova's contract already names both parties (test 3); Kilo's was made with none, so it gets the label and a party of its own.
+    let parties: Array<{ party_id: string; role: string }> | undefined;
+    let terms: Record<string, unknown> = {};
+    if (c === kilo) {
+      const made = await ownerCtx.request.post(`/api/org/${ORG}/parties`, { data: { kind: 'person', display_name: `Kilo ${run}`, legal_name: `Kilo Legal ${run}`, address: '3 Road, Accra' } });
+      expect(made.status(), await made.text()).toBe(201);
+      const kiloParty = ((await made.json()) as { party: { id: string } }).party.id;
+      parties = [{ party_id: LABEL_PARTY, role: 'label' }, { party_id: kiloParty, role: 'artist' }];
+      terms = { effective_date: '2026-12-01', term_months: 12, territories: ['WW'] };
+    }
+    const patched = await ownerCtx.request.patch(`/api/org/${ORG}/contracts/${c.id}`, { data: { fields: { ...(have ?? {}), ...FILL, ...(c === kilo ? { advance: '1000', royalty_rate: '20' } : {}) }, ...terms, ...(parties ? { parties } : {}) } });
+    expect(patched.status(), await patched.text()).toBe(200);
+    const [{ version }] = (await rest(ownerCtx.request, 'GET', `contracts?select=version&id=eq.${c.id}`)) as Row[];
+    const sent = await ownerCtx.request.post(`/api/org/${ORG}/contracts/${c.id}/send`, { data: { version } });
+    expect(sent.status(), await sent.text()).toBe(200);
+  }
+  await ownerCtx.close();
   await page.reload();
   await expect(page.locator('[data-testid^="contract-row-"]')).toHaveCount(1);
   await page.locator('[data-testid^="contract-row-"]').first().click();
