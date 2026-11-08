@@ -44,6 +44,16 @@ describe('runSetup', () => {
     expect(s.calls).toHaveLength(1);
   });
 
+  it('an adopted operator-created org gets the team and roster steps like a new one', async () => {
+    const s = server({
+      'POST /api/org/setup': () => ({ body: { org: { id: ORG }, home: '/o/x', created: false, adopted: true } }),
+      'POST /contacts': () => ({ status: 201, body: { contact: { id: 'c1' } } }),
+    });
+    const run = await runSetup(label({ roster: [{ name: 'Nova', email: '' }] }), s.fetchFn);
+    expect(run.status).toBe('created');
+    expect(s.calls.length).toBeGreaterThan(1);
+  });
+
   it('sends the settings with the org and then roster, team and release in that order', async () => {
     const s = server({
       'POST /api/org/setup': () => created,
