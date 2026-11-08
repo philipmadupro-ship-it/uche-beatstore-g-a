@@ -99,10 +99,20 @@ export function nonMemberLanding(input: { labelOsEnabled: boolean; metadata: unk
   return setupHref(faceFromMetadata(input.metadata));
 }
 
+/**
+ * Has this org's owner still to run the wizard? True for an operator-created
+ * licensee (console: an entitlement row with `setup_done = false`); an org
+ * without a row, or one already set up, is done. Only the owner is sent: other
+ * members of an unfinished org just work in it.
+ */
+export function needsSetup(input: { role: string; setupDone?: boolean; viewerIsProducer?: boolean }): boolean {
+  return input.role === 'owner' && input.setupDone === false && !input.viewerIsProducer;
+}
+
 export const BUYER_HOME = '/store/account/me';
 
 export type SetupOrgResult =
-  | { status: 'created' | 'exists'; orgId: string; slug: string; kind: 'artist' | 'label' }
+  | { status: 'created' | 'exists' | 'adopted'; orgId: string; slug: string; kind: 'artist' | 'label' }
   | { status: 'schema_missing' }
   | { status: 'failed'; error: string };
 
@@ -126,7 +136,7 @@ export function interpretSetupResult(data: unknown, error: RpcError): SetupOrgRe
       (d.kind === 'artist' || d.kind === 'label') &&
       typeof d.created === 'boolean'
     ) {
-      return { status: d.created ? 'created' : 'exists', orgId: d.org_id, slug: d.slug, kind: d.kind };
+      return { status: d.created ? 'created' : d.adopted === true ? 'adopted' : 'exists', orgId: d.org_id, slug: d.slug, kind: d.kind };
     }
   }
   return { status: 'failed', error: `unexpected ${SETUP_ORG_RPC} answer` };

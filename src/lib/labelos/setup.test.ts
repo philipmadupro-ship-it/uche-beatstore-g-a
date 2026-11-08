@@ -6,6 +6,7 @@ import {
   interpretSetupResult,
   isSetupFace,
   kindForFace,
+  needsSetup,
   nonMemberLanding,
   setupHref,
 } from './setup';
@@ -68,6 +69,10 @@ describe('interpretSetupResult', () => {
     });
     expect(interpretSetupResult({ org_id: ORG, slug: 'nova', kind: 'label', created: false }, null).status).toBe('exists');
   });
+  it('adopted is its own status', () => {
+    expect(interpretSetupResult({ org_id: ORG, slug: 'x', kind: 'label', created: false, adopted: true }, null).status).toBe('adopted');
+    expect(interpretSetupResult({ org_id: ORG, slug: 'x', kind: 'label', created: false, adopted: false }, null).status).toBe('exists');
+  });
   it('missing schema degrades', () => {
     for (const code of ['PGRST202', '42883']) expect(interpretSetupResult(null, { code, message: 'x' }).status).toBe('schema_missing');
     expect(interpretSetupResult(null, { message: 'function labelos_setup_org does not exist' }).status).toBe('schema_missing');
@@ -79,5 +84,15 @@ describe('interpretSetupResult', () => {
     for (const d of [null, [], { org_id: 'nope', slug: 'a', kind: 'artist', created: true }, { org_id: ORG, slug: '', kind: 'artist', created: true }, { org_id: ORG, slug: 'a', kind: 'producer', created: true }]) {
       expect(interpretSetupResult(d, null).status).toBe('failed');
     }
+  });
+});
+
+describe('needsSetup', () => {
+  it('only the owner of an org whose setup is not done, and never the producer', () => {
+    expect(needsSetup({ role: 'owner', setupDone: false })).toBe(true);
+    expect(needsSetup({ role: 'owner', setupDone: true })).toBe(false);
+    expect(needsSetup({ role: 'owner' })).toBe(false);
+    expect(needsSetup({ role: 'admin', setupDone: false })).toBe(false);
+    expect(needsSetup({ role: 'owner', setupDone: false, viewerIsProducer: true })).toBe(false);
   });
 });

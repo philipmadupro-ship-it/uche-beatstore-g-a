@@ -83,6 +83,8 @@ export const NO_EVENT_HANDLERS: Readonly<Record<string, string>> = {
     'Same handler as POST on this route (part upload verb alias). The event is written by …/upload/complete.',
   '[orgId]/upload/part/route.ts:PUT':
     'Same handler as POST on this route (part upload verb alias). The event is written by …/upload/complete.',
+  'setup/route.ts:POST':
+    'The events are written by labelos_setup_org itself (migration 197): org.created for a new org, org.settings_changed when an operator-created org is adopted, both audit-class and in the same transaction as the change. The route writes none.',
   '[orgId]/overview/seen/route.ts:POST':
     'Moves the signed-in member’s own “last looked at the Overview” mark (org_overview_seen, one row per org and member). A personal read marker, not something the org did; recording it would put every visit in the feed it is meant to summarise.',
   '[orgId]/upload/abort/route.ts:POST':

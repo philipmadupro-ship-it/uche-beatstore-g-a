@@ -36,7 +36,9 @@ export async function runSetup(draft: WizardDraft, fetchFn: FetchLike): Promise<
   if (!made.ok || !home || typeof org?.id !== 'string') {
     return { status: 'failed', error: errorOf(made.data, 'Could not set up the organization. Try again.') };
   }
-  if (made.data.created !== true) return { status: 'exists', home };
+  // `adopted` (migration 197): an operator-created org this account owns just finished its setup, so the
+  // team, roster and release steps run on it exactly as on a new org.
+  if (made.data.created !== true && made.data.adopted !== true) return { status: 'exists', home };
 
   const orgId = org.id;
   const base = `/api/org/${orgId}`;
