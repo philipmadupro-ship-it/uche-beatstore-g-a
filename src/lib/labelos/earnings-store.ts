@@ -371,9 +371,14 @@ export type ImportHeader = { period_id: string | null; source: string; file_name
 
 export type ImportOutcome =
   | { ok: true; id: string; created: boolean }
-  | { ok: false; code: 'recoup_conflict' | 'period_closed' | 'refused'; message: string };
+  | { ok: false; code: 'recoup_conflict' | 'period_closed' | 'refused' | 'voided_file'; message: string };
+
+/** 179's `earnings_imports_one_per_file` still stands (migration 198 not applied): a voided file's hash is taken for good. */
+export const VOIDED_FILE_MESSAGE =
+  'This file was imported and then voided, and this database cannot import it again until migration 198 is applied. Until then, change the file by one byte (for example, save it again with a trailing newline) and import that copy.';
 
 function mapWriteError(error: NonNullable<DbError>): ImportOutcome | null {
+  if (error.code === '23505' && /earnings_imports_one_per_file/.test(error.message)) return { ok: false, code: 'voided_file', message: VOIDED_FILE_MESSAGE };
   if (/recoup_exceeds|line_not_waiting/.test(error.message) || error.code === '40001') {
     return { ok: false, code: 'recoup_conflict', message: 'Advances or lines changed while this was running. Nothing was written; try again.' };
   }

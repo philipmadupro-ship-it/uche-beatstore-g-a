@@ -42,6 +42,7 @@
  *   earningsImportVoid   earnings.import_voided (181; releases the import's allocations and recoupments)
  *   advanceCreate | advanceUpdate | advanceVoid   advance.created | updated | voided (182, LABEL-64)
  *   periodClose | periodReopen   period.closed | period.reopened (182; reopen is owner-only, checked again in SQL)
+ *   pressShareCreate | pressShareRevoke   press_kit.shared | press_kit.share_revoked (199, review G16)
  *   digestChannelSet | digestChannelRemove   digest.channel_set | digest.channel_removed (187)
  *
  * Accepting an invitation (`member.joined`) is 138's
@@ -130,6 +131,9 @@ export const AUDIT_RPCS = {
   advanceVoid: 'labelos_audit_advance_void',
   periodClose: 'labelos_audit_period_close',
   periodReopen: 'labelos_audit_period_reopen',
+  // Migration 199 (review G16): a press-kit share link is made / revoked with its event.
+  pressShareCreate: 'labelos_audit_press_share_create',
+  pressShareRevoke: 'labelos_audit_press_share_revoke',
   digestChannelSet: 'labelos_audit_digest_channel_set',
   digestChannelRemove: 'labelos_audit_digest_channel_remove',
 } as const;
@@ -403,6 +407,20 @@ export type AuditRpcArgs = {
   periodClose: { p_org: string; p_actor: string; p_period: string; p_payload: EventPayload };
   /** 182: owner only. Answers { reopened } or { error: not_found | not_owner | not_closed }. */
   periodReopen: { p_org: string; p_actor: string; p_period: string; p_payload: EventPayload };
+  /** 199: only the token's SHA-256 reaches the database. Answers { share } or { error: not_found | full }. */
+  pressShareCreate: {
+    p_org: string;
+    p_actor: string;
+    p_kit: string;
+    p_token_hash: string;
+    p_label: string;
+    p_expires_at: string | null;
+    p_max: number;
+    p_ctx: { artist_id: string | null; project_id: string | null };
+    p_payload: EventPayload;
+  };
+  /** 199: answers { share: { id } } or { error: not_found } (unknown, other kit, or already revoked). */
+  pressShareRevoke: { p_org: string; p_actor: string; p_kit: string; p_share: string; p_ctx: { artist_id: string | null; project_id: string | null }; p_payload: EventPayload };
   digestChannelSet: { p_org: string; p_actor: string; p_cipher: string; p_payload: EventPayload };
   /** 187: answers { configured: false, changed }. */
   digestChannelRemove: { p_org: string; p_actor: string; p_payload: EventPayload };

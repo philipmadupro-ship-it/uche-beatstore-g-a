@@ -160,8 +160,7 @@ export const SELF_CORRECTABLE = [
 /**
  * Does this write change what the person confirmed (a field they can correct) or the account (or the address
  * a signing link goes to) they confirmed as? Then the "confirmed" stamp is cleared with it (migration 174's
- * `parties_confirmation_reset` is the same rule in the database, except `email`: the database twin does not
- * list it yet, so only writes through the app's routes clear the stamp for an email change).
+ * `parties_confirmation_reset` is the same rule in the database; 200 added `email` to its list).
  */
 export function clearsConfirmation(columns: Record<string, unknown>): boolean {
   return [...SELF_CORRECTABLE, 'user_id', 'email'].some((key) => key in columns);

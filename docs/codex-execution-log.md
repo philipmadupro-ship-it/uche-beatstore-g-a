@@ -9653,3 +9653,9 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Paste 2: a `scripts/ops/bundle-migrations.sh` bundle from `claude/happy-bardeen-rnosf3`: 174, 175, 176, 178, 186, 179, 180, 181, 182, 183, 184, 187, 193, 194, 195, 196. No verify table exists for that range; "0 errors" is the evidence.
   - Recorded in `supabase/MIGRATIONS.md` (rows 130–196 applied; row 159 added, it was missing), `CLAUDE.md`, doc 27 and doc 28 §0. `pending.sql` untouched. Follow-up: a post-hoc verify table for 174–196.
   - Also in #186: LABEL-67's pipeline counts changed before merge (every song in the reader's artist scope, numbers only); #184's PR body is stale.
+- 2026-11-07 — Migrations 198–200 (review fixes G15, G16, G14; branch `fix/migrations-198-200`, NOT applied).
+  - 198: a voided earnings import's file can be imported again (partial unique index `WHERE status <> 'void'`; `labelos_earnings_import` looks only at live imports). The imports route imports it fresh; without 198 the unique violation is mapped to 409 `voided_file` naming 198.
+  - 199: press share create / revoke are audit class through `labelos_audit_press_share_create` / `_revoke` (change + event in one transaction, hash only); verbs added to `AUDIT_VERBS`; routes use `auditRpc` with the old path as fallback while 199 is unapplied (undone if the event cannot be written).
+  - 200: `parties_confirmation_reset` lists `email`, so SQL and TS `clearsConfirmation` agree.
+  - 197 left to G12b. `supabase/apply/pending.sql` untouched.
+
