@@ -41,6 +41,7 @@ describe('decodeLibraryView', () => {
       types: new Set(['beat', 'remix']),
       offlineOnly: true,
       genres: new Set(['Trap', 'R&B']),
+      tags: new Set(['Ready to send', 'Dark']),
       statuses: new Set(['maq', 'finished']),
       triage: new Set(['listed', 'needs_price']),
       bpmMin: 120,
@@ -55,6 +56,15 @@ describe('decodeLibraryView', () => {
     expect(back.browse).toBe('all');
     expect(back.sort).toBe('rating');
     expect(serializeFilters(back.filters)).toEqual(serializeFilters(filters));
+  });
+
+  it('writes tags as repeated tag= keys and reads them back', () => {
+    const s = base();
+    s.filters.tags = new Set(['Ready to send', 'Lo-fi, chill']);
+    const qs = encodeLibraryView(s);
+    expect(new URLSearchParams(qs).getAll('tag')).toEqual(['Ready to send', 'Lo-fi, chill']);
+    expect(hasLibraryViewParams(`?${qs}`)).toBe(true);
+    expect([...decodeLibraryView(qs).filters.tags]).toEqual(['Ready to send', 'Lo-fi, chill']);
   });
 
   it('round-trips a URL through the leading ? that location.search carries', () => {

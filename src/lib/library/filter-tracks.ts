@@ -16,6 +16,7 @@
 import type { LibraryFilters } from '@/components/library/FilterBar';
 import { matchesRating } from '@/lib/library/rating-filter';
 import { triageStage, type TriageTrack } from '@/lib/library/triage';
+import { matchesTagFilter } from '@/lib/library/tag-filter';
 
 export interface FilterableTrack extends TriageTrack {
   id: string;
@@ -57,5 +58,8 @@ export function matchesLibraryFilters(
     );
     if (!has) return false;
   }
+  // Every other tag (status, mood, instruments, the producer's own) — by name,
+  // not category: see lib/library/tag-filter.
+  if (!matchesTagFilter(t.track_tags, filters.tags)) return false;
   return true;
 }

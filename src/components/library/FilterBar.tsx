@@ -3,6 +3,7 @@
 import { ChevronDown, X, Check } from 'lucide-react';
 import type { RatingMatch } from '@/lib/library/rating-filter';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
+import { TAG_FACET_GROUPS, TAG_FACET_GROUP_LABELS, type TagFacetOptions } from '@/lib/library/tag-filter';
 import { TRIAGE_STAGE_LABELS, TRIAGE_STAGE_ORDER, type TriageStage } from '@/lib/library/triage';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,9 @@ export interface LibraryFilters {
   offlineOnly: boolean;
   // Genre chips (first-class)
   genres: Set<string>;
+  /** Every other tag — status ("Ready to send"), mood, instruments and the
+   *  producer's own. Any of a group, all of the groups: see lib/library/tag-filter. */
+  tags: Set<string>;
   // State chips (first-class)
   statuses: Set<string>;
   /**
@@ -54,6 +58,7 @@ export const DEFAULT_FILTERS: LibraryFilters = {
   types: new Set(),
   offlineOnly: false,
   genres: new Set(),
+  tags: new Set(),
   statuses: new Set(),
   triage: new Set(),
   bpmMin: null,
@@ -69,6 +74,7 @@ export function hasActiveFilters(f: LibraryFilters): boolean {
     f.types.size > 0 ||
     f.offlineOnly ||
     f.genres.size > 0 ||
+    f.tags.size > 0 ||
     f.statuses.size > 0 ||
     f.triage.size > 0 ||
     f.bpmMin != null ||
@@ -84,6 +90,7 @@ export function activeFilterCount(f: LibraryFilters): number {
     f.types.size > 0,
     f.offlineOnly,
     f.genres.size > 0,
+    f.tags.size > 0,
     f.statuses.size > 0,
     f.triage.size > 0,
     f.bpmMin != null || f.bpmMax != null,
@@ -99,6 +106,7 @@ export function serializeFilters(f: LibraryFilters): Record<string, unknown> {
     types: Array.from(f.types),
     offlineOnly: f.offlineOnly,
     genres: Array.from(f.genres),
+    tags: Array.from(f.tags),
     statuses: Array.from(f.statuses),
     triage: Array.from(f.triage),
     bpmMin: f.bpmMin,
@@ -116,6 +124,7 @@ type SerializedLibraryFilters = {
   types?: unknown;
   offlineOnly?: unknown;
   genres?: unknown;
+  tags?: unknown;
   statuses?: unknown;
   triage?: unknown;
   bpmMin?: unknown;
@@ -140,6 +149,10 @@ export function deserializeFilters(raw: unknown): LibraryFilters {
     types,
     offlineOnly: r.offlineOnly === true,
     genres: new Set<string>(Array.isArray(r.genres) ? r.genres : []),
+    // Absent in views saved before the Tags facet existed — reads as none.
+    tags: new Set<string>(
+      (Array.isArray(r.tags) ? r.tags : []).filter((t): t is string => typeof t === 'string' && t.trim() !== ''),
+    ),
     statuses: new Set<string>(Array.isArray(r.statuses) ? r.statuses : []),
     // Drop unknown stage names — a saved view from an older build (or a
     // hand-edited row) must not smuggle a value the filter can never match,
@@ -168,6 +181,12 @@ interface FilterBarProps {
    * sits behind each option before you pick it. Omit to render bare labels.
    */
   triageCounts?: Record<TriageStage, number> | null;
+  /**
+   * What the Tags menu offers, with per-tag counts over the loaded list
+   * (`buildTagFacetOptions`). Omit and the menu still lists the whole taxonomy,
+   * just without counts or the producer's own tags.
+   */
+  tagOptions?: TagFacetOptions | null;
 }
 
 const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
@@ -179,15 +198,16 @@ const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
   { value: 'topline', label: 'Toplines' },
 ];
 
-export function FilterBar({ filters, onChange, embedded = false, triageCounts = null }: FilterBarProps) {
+export function FilterBar({ filters, onChange, embedded = false, triageCounts = null, tagOptions = null }: FilterBarProps) {
   const set = (partial: Partial<LibraryFilters>) => onChange({ ...filters, ...partial });
 
-  const toggleIn = (key: 'genres' | 'statuses' | 'keys', value: string) => {
+  const toggleIn = (key: 'genres' | 'tags' | 'statuses' | 'keys', value: string) => {
     const next = new Set(filters[key]);
     if (next.has(value)) next.delete(value); else next.add(value);
     set({ [key]: next } as Partial<LibraryFilters>);
   };
   const toggleGenre  = (g: string) => toggleIn('genres', g);
+  const toggleTag    = (t: string) => toggleIn('tags', t);
   const toggleStatus = (v: string) => toggleIn('statuses', v);
   const toggleKey    = (k: string) => toggleIn('keys', k);
   const toggleTriage = (s: TriageStage) => {
@@ -239,6 +259,39 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
               <MenuItem key={g} label={g} selected={filters.genres.has(g)} onClick={() => toggleGenre(g)} />
             ))}
           </MenuList>
+        )}
+      </FacetMenu>
+
+      <FacetMenu label="Tags" count={filters.tags.size} width={248}>
+        {() => (
+          <div className="max-h-[min(60vh,360px)] overflow-y-auto p-1">
+            {TAG_FACET_GROUPS.map((group) => {
+              // Taxonomy groups always list; "Your tags" only when there are some.
+              const options = tagOptions?.[group]
+                ?? (group === 'custom' ? [] : TAG_TAXONOMY[group].map((tag) => ({ tag, count: -1 })));
+              if (options.length === 0) return null;
+              return (
+                <div key={group} role="group" aria-label={TAG_FACET_GROUP_LABELS[group]}>
+                  <p className="px-2.5 pb-1 pt-2 font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">
+                    {TAG_FACET_GROUP_LABELS[group]}
+                  </p>
+                  {options.map(({ tag, count }) => (
+                    <MenuItem
+                      key={tag}
+                      label={count >= 0 ? `${tag} · ${count}` : tag}
+                      selected={[...filters.tags].some((s) => s.trim().toLowerCase() === tag.trim().toLowerCase())}
+                      onClick={() => toggleTag(
+                        // Toggle whichever spelling is already selected, so a
+                        // saved lower-case tag and the taxonomy's capitalised
+                        // one cannot both end up in the set.
+                        [...filters.tags].find((s) => s.trim().toLowerCase() === tag.trim().toLowerCase()) ?? tag,
+                      )}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         )}
       </FacetMenu>
 
@@ -405,6 +458,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
           {Array.from(filters.types).map((v) => <Chip key={v} label={typeLabelOf(v)} onRemove={() => toggleType(v)} />)}
           {filters.offlineOnly && <Chip label="Offline" onRemove={() => set({ offlineOnly: false })} />}
           {Array.from(filters.genres).map((g) => <Chip key={g} label={g} onRemove={() => toggleGenre(g)} />)}
+          {Array.from(filters.tags).map((t) => <Chip key={`tag-${t}`} label={t} onRemove={() => toggleTag(t)} />)}
           {Array.from(filters.statuses).map((v) => {
             const opt = STATUS_OPTIONS.find((o) => o.value === v);
             return <Chip key={v} label={opt?.label ?? v} onRemove={() => toggleStatus(v)} />;
@@ -416,7 +470,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
           {Array.from(filters.keys).map((k) => <Chip key={k} label={k} onRemove={() => toggleKey(k)} />)}
           {filters.rating != null && <Chip label={filters.rating === 0 ? 'Unrated' : `★ ${filters.ratingMatch === 'exact' ? '=' : '≥'} ${filters.rating}`} onRemove={() => set({ rating: null })} />}
           <button
-            onClick={() => onChange({ ...DEFAULT_FILTERS, genres: new Set(), statuses: new Set(), keys: new Set() })}
+            onClick={() => onChange({ ...DEFAULT_FILTERS, types: new Set(), genres: new Set(), tags: new Set(), statuses: new Set(), triage: new Set(), keys: new Set() })}
             className="ml-1 font-mono text-[9px] text-white/60 transition-colors hover:text-white"
           >Clear all</button>
         </div>

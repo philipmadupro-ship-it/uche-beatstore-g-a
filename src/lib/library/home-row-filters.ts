@@ -43,6 +43,7 @@ export function filtersForHomeRow(
     ...current,
     types: new Set(current.types),
     genres: new Set(current.genres),
+    tags: new Set(current.tags),
     statuses: new Set(current.statuses),
     keys: new Set(current.keys),
     triage: new Set(current.triage),
