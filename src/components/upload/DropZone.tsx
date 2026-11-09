@@ -6,18 +6,15 @@ import { useDropzone, type FileRejection } from 'react-dropzone';
 import { AlertTriangle, Upload, CheckCircle2, Loader2, FileAudio, X } from 'lucide-react';
 import { analyzeAudio } from '@/lib/audio/analyze.client';
 import { useUploadManager } from '@/lib/upload/manager';
-import {
-  readUploadTypeDraft,
-  uploadFileExtension,
-  uploadRejectionMessage,
-  writeUploadTypeDraft,
-} from '@/lib/upload/dropzone-draft';
-import type { TrackType } from '@/lib/types';
+import { uploadFileExtension, uploadRejectionMessage } from '@/lib/upload/dropzone-draft';
+import { useUploadPreset } from '@/lib/upload/preset-store';
+import { applyUploadPreset, presetCount } from '@/lib/upload/preset';
+import { UploadOptions, UPLOAD_TYPE_OPTIONS } from '@/components/upload/UploadOptions';
+import { toast } from '@/hooks/useToast';
 
 interface DropZoneProps {
   playlistId?: string;
   onUploadSuccess?: () => void;
-  defaultType?: TrackType;
   /** Surfaces react-dropzone's open() so an external button (e.g. the
    *  library hero's "Upload beat") can launch the file picker directly. */
   openRef?: React.MutableRefObject<(() => void) | null>;
@@ -28,15 +25,6 @@ interface DropZoneProps {
    *  permanent dashed rectangle for it. */
   variant?: 'full' | 'hidden';
 }
-
-const TYPE_PICKER: { value: TrackType; label: string }[] = [
-  { value: 'beat',         label: 'Beat' },
-  { value: 'instrumental', label: 'Instrumental' },
-  { value: 'song',         label: 'Song' },
-  { value: 'remix',        label: 'Remix' },
-  { value: 'loop',         label: 'Loop' },
-  { value: 'topline',      label: 'Topline' },
-];
 
 // Format badge colours — warm neutrals for the standard formats,
 // slightly brighter for the lossless ones so the producer knows at
@@ -105,10 +93,13 @@ interface FileCard {
   scale?: string | null;
 }
 
-export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumental', openRef, variant = 'full' }: DropZoneProps) {
+export function DropZone({ playlistId, onUploadSuccess, openRef, variant = 'full' }: DropZoneProps) {
   const reducedMotion = useReducedMotion();
   const enqueue = useUploadManager((s) => s.enqueue);
-  const [selectedType, setSelectedType] = useState<TrackType>(() => readUploadTypeDraft(defaultType));
+  // Type + the other upload options live in a shared store so the Library's
+  // "Upload options" button (the drop zone is hidden there) can set them.
+  const selectedType = useUploadPreset((s) => s.type);
+  const setSelectedType = useUploadPreset((s) => s.setType);
   const [cards, setCards] = useState<FileCard[]>([]);
   const mountedRef = useRef(false);
   const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -120,10 +111,6 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
       if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
     };
   }, []);
-
-  useEffect(() => {
-    writeUploadTypeDraft(selectedType);
-  }, [selectedType]);
 
   const safeSetCards = useCallback((next: SetStateAction<FileCard[]>) => {
     if (mountedRef.current) setCards(next);
@@ -161,6 +148,11 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
     }));
     safeSetCards([...rejectedCards, ...initial]);
 
+    // Snapshot the options at drop time: changing them while these files are
+    // still uploading must not re-tag files the producer already dropped.
+    const { status, tags, destination } = useUploadPreset.getState();
+    const preset = { status, tags, destination };
+
     // Enqueue FIRST, analyse alongside.
     //
     // This used to `await Promise.all(accepted.map(analyzeAudio))` and only
@@ -195,9 +187,26 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
         type: selectedType,
         projectId: playlistId ?? null,
         analysis,
-        onSuccess: () => {
+        onSuccess: (track) => {
           patchCard({ done: true });
-          onUploadSuccess?.();
+          const trackId = typeof track?.id === 'string' ? track.id : null;
+          if (!trackId || presetCount(preset) === 0) {
+            onUploadSuccess?.();
+            return;
+          }
+          // Apply the options, THEN refresh, so the library shows the tags.
+          // A page that already uploads into a project/playlist keeps its own.
+          void applyUploadPreset(trackId, preset, { skipDestination: !!playlistId })
+            .then(({ failed }) => {
+              if (failed.length > 0) {
+                toast.warning(
+                  'Uploaded, but some options were not applied',
+                  `${file.name.replace(/\.[^.]+$/, '')}: ${failed.join(', ')}`,
+                );
+              }
+            })
+            .catch(() => undefined)
+            .finally(() => onUploadSuccess?.());
         },
       });
       patchCard({ queued: true });
@@ -313,10 +322,10 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
 
   return (
     <div className="space-y-3">
-      {/* Type picker */}
-      <div className="flex items-center gap-1.5">
+      {/* Type picker + the other upload options */}
+      <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[10px] font-mono uppercase tracking-widest text-white/40 mr-1">Upload as</span>
-        {TYPE_PICKER.map((opt) => (
+        {UPLOAD_TYPE_OPTIONS.map((opt) => (
           <button
             key={opt.value}
             type="button"
@@ -330,6 +339,7 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
             {opt.label}
           </button>
         ))}
+        <UploadOptions className="ml-auto" />
       </div>
       <p id="upload-dropzone-help" className="sr-only">
         Upload WAV, FLAC, AIFF, MP3, M4A, or OGG audio files up to 500 MB.

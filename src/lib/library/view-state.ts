@@ -49,12 +49,13 @@ export function encodeLibraryView(state: LibraryViewState): string {
   if (state.sort !== DEFAULT_LIBRARY_SORT) p.set('sort', state.sort);
 
   const f = serializeFilters(state.filters) as {
-    types: string[]; genres: string[]; statuses: string[]; triage: string[]; keys: string[];
+    types: string[]; genres: string[]; tags: string[]; statuses: string[]; triage: string[]; keys: string[];
     offlineOnly: boolean; bpmMin: number | null; bpmMax: number | null;
     scale: string; rating: number | null; ratingMatch: string;
   };
   for (const v of f.types) p.append('type', v);
   for (const v of f.genres) p.append('genre', v);
+  for (const v of f.tags) p.append('tag', v);
   for (const v of f.statuses) p.append('status', v);
   for (const v of f.triage) p.append('stage', v);
   for (const v of f.keys) p.append('key', v);
@@ -85,6 +86,7 @@ export function decodeLibraryView(search: string): LibraryViewState {
   const filters = deserializeFilters({
     types: p.getAll('type'),
     genres: p.getAll('genre').filter(Boolean),
+    tags: p.getAll('tag').filter(Boolean),
     statuses: p.getAll('status').filter((s) => (STATUSES as readonly string[]).includes(s)),
     triage: p.getAll('stage'),
     keys: p.getAll('key').filter(Boolean),
@@ -105,6 +107,6 @@ export function decodeLibraryView(search: string): LibraryViewState {
 /** True when the query string carries anything the codec understands. */
 export function hasLibraryViewParams(search: string): boolean {
   const p = new URLSearchParams(search);
-  return ['view', 'sort', 'type', 'genre', 'status', 'stage', 'key', 'offline', 'bpmMin', 'bpmMax', 'scale', 'rating']
+  return ['view', 'sort', 'type', 'genre', 'tag', 'status', 'stage', 'key', 'offline', 'bpmMin', 'bpmMax', 'scale', 'rating']
     .some((k) => p.has(k));
 }
