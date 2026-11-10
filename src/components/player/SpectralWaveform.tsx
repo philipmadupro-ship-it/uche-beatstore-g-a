@@ -150,6 +150,7 @@ export function SpectralWaveform({
   const levelRef = useRef(0);
   const bassRef = useRef(0);
   const [motionEnergy, setMotionEnergy] = useState(0);
+  const motionEnergyRef = useRef(0);
   // Synced in an effect rather than during render: writing a ref mid-render is
   // unsafe under concurrent rendering, where a render can be discarded.
   useEffect(() => { posRef.current = pos; }, [pos]);
@@ -177,14 +178,14 @@ export function SpectralWaveform({
      * moved. See `loudnessRange` for the measurement.
      */
     const range = loudnessRange(db ?? []);
+    let highPeak = 0;
+    for (const sample of bands?.high ?? []) if (Number.isFinite(sample)) highPeak = Math.max(highPeak, Math.abs(sample));
     const levelAt = (p: number): number => (db?.length ? levelAtProgress(db, p, range) : 0);
     const bassAt = (p: number): number => (bands?.low?.length ? bassAtProgress(bands.low, p) : 0);
     const highAt = (p: number): number => {
       if (!bands?.high?.length) return 0;
       const value = bands.high[Math.min(bands.high.length - 1, Math.max(0, Math.round(p * (bands.high.length - 1))))] ?? 0;
-      let peak = 0;
-      for (const sample of bands.high) if (Number.isFinite(sample)) peak = Math.max(peak, Math.abs(sample));
-      return peak > 0 ? Math.min(1, Math.abs(value) / peak) : 0;
+      return highPeak > 0 ? Math.min(1, Math.abs(value) / highPeak) : 0;
     };
 
     let raf = 0;
@@ -211,7 +212,13 @@ export function SpectralWaveform({
       bassRef.current += (bassTarget > bassRef.current ? 0.62 : 0.15) * (bassTarget - bassRef.current);
       const bass = prefersReducedMotion || !isPlaying ? 0 : bassRef.current;
       const high = highAt(p);
-      if (!prefersReducedMotion && isPlaying) setMotionEnergy((current) => current + (level - current) * 0.35);
+      if (!prefersReducedMotion && isPlaying) {
+        motionEnergyRef.current += (level - motionEnergyRef.current) * 0.35;
+        setMotionEnergy(motionEnergyRef.current);
+      } else if (motionEnergyRef.current !== 0) {
+        motionEnergyRef.current = 0;
+        setMotionEnergy(0);
+      }
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
