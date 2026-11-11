@@ -250,7 +250,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       const playlistRow = playlist as PlaylistRow | null;
       const junctionRows = (junction ?? []) as TrackJunctionRow[];
       const trackIds = junctionRows.map((j) => j.track_id);
-      let tracks: (ReturnType<typeof publicShareTrack> & { tags?: ShareTrackTag[] })[] = [];
+      let tracks: (ReturnType<typeof publicShareTrack> & { track_tags?: ShareTrackTag[] })[] = [];
       let stems: ReturnType<typeof redactStems> = [];
       if (trackIds.length) {
         const [tracksRes, stemsRes] = await Promise.all([

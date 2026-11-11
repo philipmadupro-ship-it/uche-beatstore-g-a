@@ -52,10 +52,10 @@ export async function loadShareTrackTags(
   return out;
 }
 
-/** Attach `tags` to each public track; a track with none gets an empty list. */
+/** Attach `track_tags` (the library API's own name for them) to each public track; a track with none gets an empty list. */
 export function withShareTags<T extends { id: string }>(
   tracks: T[],
   tags: Map<string, ShareTrackTag[]>,
-): (T & { tags: ShareTrackTag[] })[] {
-  return tracks.map((t) => ({ ...t, tags: tags.get(t.id) ?? [] }));
+): (T & { track_tags: ShareTrackTag[] })[] {
+  return tracks.map((t) => ({ ...t, track_tags: tags.get(t.id) ?? [] }));
 }

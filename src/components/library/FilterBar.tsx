@@ -187,6 +187,12 @@ interface FilterBarProps {
    * just without counts or the producer's own tags.
    */
   tagOptions?: TagFacetOptions | null;
+  /**
+   * Recipient mode, for the share pages: the same bar without the facets that
+   * only mean something to the owner (State, Stage, Rating, Offline). Type,
+   * Genre, Tags and the BPM / scale / key facets stay exactly as they are.
+   */
+  recipient?: boolean;
 }
 
 const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
@@ -198,7 +204,7 @@ const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
   { value: 'topline', label: 'Toplines' },
 ];
 
-export function FilterBar({ filters, onChange, embedded = false, triageCounts = null, tagOptions = null }: FilterBarProps) {
+export function FilterBar({ filters, onChange, embedded = false, triageCounts = null, tagOptions = null, recipient = false }: FilterBarProps) {
   const set = (partial: Partial<LibraryFilters>) => onChange({ ...filters, ...partial });
 
   const toggleIn = (key: 'genres' | 'tags' | 'statuses' | 'keys', value: string) => {
@@ -220,7 +226,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
     filters.bpmMin != null || filters.bpmMax != null,
     filters.keys.size > 0,
     filters.scale !== 'all',
-    filters.rating != null,
+    !recipient && filters.rating != null,
   ].filter(Boolean).length;
 
   const typeLabelOf = (v: LibraryTrackType) => TYPE_OPTIONS.find((t) => t.value === v)?.label ?? v;
@@ -295,7 +301,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
         )}
       </FacetMenu>
 
-      <FacetMenu label="State" count={filters.statuses.size}>
+      {!recipient && <FacetMenu label="State" count={filters.statuses.size}>
         {() => (
           <MenuList>
             {STATUS_OPTIONS.map(({ value, label }) => (
@@ -303,9 +309,9 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
             ))}
           </MenuList>
         )}
-      </FacetMenu>
+      </FacetMenu>}
 
-      <FacetMenu label="Stage" count={filters.triage.size} width={200}>
+      {!recipient && <FacetMenu label="Stage" count={filters.triage.size} width={200}>
         {() => (
           <MenuList>
             {TRIAGE_STAGE_ORDER.map((stage) => (
@@ -318,7 +324,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
             ))}
           </MenuList>
         )}
-      </FacetMenu>
+      </FacetMenu>}
 
       <FacetMenu label="Advanced" count={advancedCount} width={288}>
         {() => (
@@ -360,6 +366,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
               </div>
             </div>
 
+            {!recipient && (
             <div>
               <FacetLabel>Rating</FacetLabel>
               <div className="flex items-center gap-2">
@@ -409,6 +416,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
                 >Unrated</button>
               </div>
             </div>
+            )}
 
             <div>
               <FacetLabel>Key</FacetLabel>
@@ -431,7 +439,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
         )}
       </FacetMenu>
 
-      <button
+      {!recipient && <button
         onClick={() => set({ offlineOnly: !filters.offlineOnly })}
         aria-pressed={filters.offlineOnly}
         className={`tap min-h-8 rounded-full border px-3 py-1 text-[11px] font-medium backdrop-blur-md transition-colors ${
@@ -439,7 +447,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
             ? 'border-white/25 bg-white/[0.13] text-white'
             : 'border-white/10 bg-white/[0.04] text-white/60 hover:border-white/20 hover:text-white/80'
         }`}
-      >Offline</button>
+      >Offline</button>}
     </>
   );
 

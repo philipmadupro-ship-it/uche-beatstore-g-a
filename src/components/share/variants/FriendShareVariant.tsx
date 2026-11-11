@@ -3,8 +3,7 @@
 import type { ReactNode } from 'react';
 
 import { SkipForward, SkipBack } from 'lucide-react';
-import type { ShareRowDownload } from '@/components/share/ShareTrackRow';
-import { ShareTrackList } from '@/components/share/ShareTrackList';
+import { ShareTrackList, type ShareRowDownload } from '@/components/share/ShareTrackList';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 
 interface CreatorProfile {
@@ -134,7 +133,6 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
                 onPlay={onPlay}
                 download={rowDownload}
                 compact
-                listClassName="max-h-[70vh] overflow-y-auto"
               />
             </div>
           </div>

@@ -37,7 +37,7 @@ describe('loadShareTrackTags', () => {
 
   it('withShareTags gives every track a list', () => {
     const out = withShareTags([{ id: 'a' }, { id: 'b' }], new Map([['a', [{ tag: 'Trap', category: 'genre' }]]]));
-    expect(out[0].tags).toHaveLength(1);
-    expect(out[1].tags).toEqual([]);
+    expect(out[0].track_tags).toHaveLength(1);
+    expect(out[1].track_tags).toEqual([]);
   });
 });

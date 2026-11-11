@@ -48,16 +48,24 @@ interface Props {
    * its play button would. Without one, only the row already playing can seek.
    */
   onPlay?: () => void;
+  /**
+   * Playback state from an engine other than the global player store (a share
+   * page runs its own). Without it the row reads the store, exactly as before.
+   */
+  controlled?: { isCurrent: boolean; progress: number; onSeek: (fraction: number) => void };
 }
 
-function RowWaveformImpl({ trackId, peaksUrl, title, onPlay }: Props) {
+function RowWaveformImpl({ trackId, peaksUrl, title, onPlay, controlled }: Props) {
   const [peaks, setPeaks] = useState<number[] | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const gradientId = svgSafeId(useId());
 
-  const isCurrent = usePlayer((s) => s.currentTrack?.id === trackId);
-  const progress = usePlayer((s) => (s.currentTrack?.id === trackId ? s.progress : 0));
-  const seekTo = usePlayer((s) => s.seekTo);
+  const storeIsCurrent = usePlayer((s) => s.currentTrack?.id === trackId);
+  const storeProgress = usePlayer((s) => (s.currentTrack?.id === trackId ? s.progress : 0));
+  const storeSeekTo = usePlayer((s) => s.seekTo);
+  const isCurrent = controlled ? controlled.isCurrent : storeIsCurrent;
+  const progress = controlled ? controlled.progress : storeProgress;
+  const seekTo = controlled ? controlled.onSeek : storeSeekTo;
 
   // Lazy, one-shot load when the row first comes near the viewport.
   useEffect(() => {
