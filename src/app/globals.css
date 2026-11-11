@@ -1041,6 +1041,12 @@ input[type=range]::-webkit-slider-thumb {
 [data-theme="de-roche-archive"] .labelos-shell [class*="border-white/3"] { border-color: var(--border-strong); }
 [data-theme="de-roche-archive"] .labelos-shell [class*="bg-white/["] { background-color: color-mix(in srgb, var(--text-primary) 7%, transparent); }
 [data-theme="de-roche-archive"] .labelos-shell [class*="bg-white/["]:is(:hover, [class*="hover:bg-white"]:hover) { background-color: color-mix(in srgb, var(--text-primary) 12%, transparent); }
+/* Near-black surfaces written as literals (the active nav item, roster cards, panels) are not tokens, so they stayed
+ * dark while their text was re-pointed to the dark text token: about 1.03:1. Point them at the surface tokens.
+ * lib/ui/archive-theme-surfaces.test.ts fails a new literal that is not listed here. */
+[data-theme="de-roche-archive"] .labelos-shell [class*="bg-[#0D0D0A]"] { background-color: var(--surface-primary); }
+[data-theme="de-roche-archive"] .labelos-shell [class*="bg-[#090907]"] { background-color: var(--background-primary); }
+[data-theme="de-roche-archive"] .labelos-shell [class*="bg-[#101010]"]:hover { background-color: var(--surface-hover); }
 /* Signal colours written as literals on dark: darker steps of the same hues so they read on paper. */
 [data-theme="de-roche-archive"] .labelos-shell [class*="text-[#6DC6A4]"] { color: var(--labelos-ok); }
 [data-theme="de-roche-archive"] .labelos-shell [class*="text-[#c8a47a]"] { color: var(--labelos-accent); }

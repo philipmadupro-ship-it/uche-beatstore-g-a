@@ -24,6 +24,7 @@ import {
   type OutreachChange, type OutreachStage, type PublicPressView,
 } from './press';
 import { hashPressToken, newPressToken } from './press-token';
+import { recordEvent } from './activity';
 
 export const NEEDS_184 = 'Press kits need migration 184 applied on Supabase.';
 export class PressNotReadyError extends Error {
@@ -196,32 +197,57 @@ export async function removePhoto(admin: AdminClient, org: string, kitId: string
 export type ShareRow = { id: string; label: string; expires_at: string | null; revoked_at: string | null; view_count: number; last_viewed_at: string | null; created_at: string };
 const SHARE_COLUMNS = 'id, label, expires_at, revoked_at, view_count, last_viewed_at, created_at';
 
-/** Makes a grant; the opaque token is returned ONCE and only its hash is stored. */
-export async function createShare(
-  admin: AdminClient, org: string, kitId: string, userId: string, body: { label: string; expires_at?: string | null },
-): Promise<{ share: ShareRow; token: string } | 'full'> {
+export type ShareEventCtx = { actor: { orgId: string; userId: string }; subject: { type: 'release'; id: string; releaseId: string; artistId: string | null; projectId: string | null } };
+
+/** The one place a share token is minted: the opaque token is returned ONCE, only its hash is ever stored or sent to the database. */
+export function mintShareToken(): { token: string; tokenHash: string } {
+  const token = newPressToken();
+  return { token, tokenHash: hashPressToken(token) };
+}
+
+/**
+ * FALLBACK for a database without migration 199: insert, then the audit event, and remove the link again if the
+ * event cannot be written. With 199 the route uses `labelos_audit_press_share_create` (one transaction) instead.
+ */
+export async function createShareLegacy(
+  admin: AdminClient, org: string, kitId: string, userId: string, body: { label: string; expires_at?: string | null }, tokenHash: string, ev: ShareEventCtx,
+): Promise<ShareRow | 'full'> {
   const live = await admin.from('press_kit_shares').select('id', { count: 'exact', head: true }).eq('org_id', org).eq('kit_id', kitId).is('revoked_at', null);
   check('shares count', live.error);
   if ((live.count ?? 0) >= PRESS_LIMITS.shares) return 'full';
-  const token = newPressToken();
   const res = await admin
     .from('press_kit_shares')
-    .insert({ org_id: org, kit_id: kitId, token_hash: hashPressToken(token), label: body.label, expires_at: body.expires_at ?? null, created_by: userId })
+    .insert({ org_id: org, kit_id: kitId, token_hash: tokenHash, label: body.label, expires_at: body.expires_at ?? null, created_by: userId })
     .select(SHARE_COLUMNS)
     .single();
   check('share create', res.error);
-  return { share: res.data as ShareRow, token };
+  const share = res.data as ShareRow;
+  try {
+    await recordEvent(admin, ev.actor, 'press_kit.shared', ev.subject, { shareId: share.id, expires: !!share.expires_at });
+  } catch (err) {
+    await admin.from('press_kit_shares').delete().eq('org_id', org).eq('id', share.id);
+    throw err;
+  }
+  return share;
 }
 
-/** Revokes once: a second call (or an unknown id) answers null. */
-export async function revokeShare(admin: AdminClient, org: string, kitId: string, shareId: string, userId: string): Promise<ShareRow | null> {
+/** FALLBACK for a database without migration 199 (see `createShareLegacy`): revokes once, then the audit event, put back if it fails. */
+export async function revokeShareLegacy(admin: AdminClient, org: string, kitId: string, shareId: string, userId: string, ev: ShareEventCtx): Promise<{ id: string } | null> {
   const res = await admin
     .from('press_kit_shares')
     .update({ revoked_at: new Date().toISOString(), revoked_by: userId })
     .eq('org_id', org).eq('kit_id', kitId).eq('id', shareId).is('revoked_at', null)
-    .select(SHARE_COLUMNS);
+    .select('id');
   check('share revoke', res.error);
-  return ((res.data ?? []) as ShareRow[])[0] ?? null;
+  const row = ((res.data ?? []) as { id: string }[])[0] ?? null;
+  if (!row) return null;
+  try {
+    await recordEvent(admin, ev.actor, 'press_kit.share_revoked', ev.subject, { shareId: row.id });
+  } catch (err) {
+    await admin.from('press_kit_shares').update({ revoked_at: null, revoked_by: null }).eq('org_id', org).eq('id', row.id);
+    throw err;
+  }
+  return row;
 }
 
 // ── Outreach ─────────────────────────────────────────────────────────────

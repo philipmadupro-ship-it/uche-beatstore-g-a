@@ -30,6 +30,7 @@ const IMPORT_ID = '90000000-0000-4000-8000-000000000001';
 let current: string | null = null;
 let db: MemoryDb;
 let rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
+let rpcOverride: { data: unknown; error: { code: string; message: string } | null } | null = null;
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/server', () => ({
@@ -51,6 +52,7 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'eyJtest';
   current = null;
   rpcCalls = [];
+  rpcOverride = null;
   db = {
     tables: {
       organizations: [{ id: L, kind: 'label', deleted_at: null }, { id: L2, kind: 'label', deleted_at: null }],
@@ -88,8 +90,9 @@ beforeEach(() => {
     rpc: {
       labelos_earnings_import: (args, tables) => {
         rpcCalls.push({ name: 'import', args });
+        if (rpcOverride) return rpcOverride;
         const header = args.p_import as Record<string, unknown>;
-        tables.earnings_imports.push({ id: IMPORT_ID, org_id: L, file_sha256: header.file_sha256 });
+        tables.earnings_imports.push({ id: IMPORT_ID, org_id: L, file_sha256: header.file_sha256, status: 'imported' });
         return { data: { id: IMPORT_ID, created: true }, error: null };
       },
     },
@@ -196,17 +199,26 @@ describe('POST /imports', () => {
     expect(db.tables.activity_events.filter((e) => e.verb === 'earnings.imported')).toHaveLength(1);
   });
 
-  it('the same file after its import was voided is not "the original stands": it says the import was voided (409), nothing written', async () => {
+  it('the same file after its import was voided imports fresh (198): the voided one does not stand, a new import is written', async () => {
     await importsPost(FIN);
     rpcCalls = [];
     db.tables.earnings_imports[0].status = 'void';
     const again = await importsPost(FIN);
+    expect(again.status).toBe(201);
+    expect(await again.json()).toMatchObject({ created: true });
+    expect(rpcCalls).toHaveLength(1);
+  });
+
+  it('on a database without 198 the unique file hash still refuses a voided file: 409 voided_file, naming the migration', async () => {
+    await importsPost(FIN);
+    rpcCalls = [];
+    db.tables.earnings_imports[0].status = 'void';
+    rpcOverride = { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint "earnings_imports_one_per_file"' } };
+    const again = await importsPost(FIN);
     expect(again.status).toBe(409);
     const body = await again.json();
     expect(body).toMatchObject({ code: 'voided_file' });
-    expect(body.error).toMatch(/voided/i);
-    expect(body.error).not.toMatch(/original import stands/i);
-    expect(rpcCalls).toHaveLength(0);
+    expect(body.error).toMatch(/198/);
   });
 
   it('refuses a file with a bad row, naming the line, and writes nothing', async () => {

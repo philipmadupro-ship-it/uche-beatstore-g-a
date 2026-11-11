@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { cleanEnv } from '@/lib/stripe/payments-config';
 
 const log = createLogger('fulfillment.email-outbox');
 type AdminClient = ReturnType<typeof createServiceClient>;
@@ -16,6 +17,9 @@ type EmailJob = {
   attempts: number;
 };
 
+/** Matches the 10-minute stale-lock window in claim_fulfillment_email_jobs (migration 103). */
+const STALE_LOCK_MS = 10 * 60_000;
+
 type Attachment = { filename: string; content: string };
 
 async function sendEmail(input: {
@@ -24,10 +28,11 @@ async function sendEmail(input: {
   html: string;
   attachments?: Attachment[];
 }) {
-  if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  const apiKey = cleanEnv(process.env.RESEND_API_KEY);
+  if (!apiKey) throw new Error('RESEND_API_KEY not configured');
+  const resend = new Resend(apiKey);
   const { error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+    from: cleanEnv(process.env.RESEND_FROM_EMAIL) || 'onboarding@resend.dev',
     ...input,
   });
   if (error) throw error;
@@ -47,18 +52,41 @@ export async function deliverFulfillmentEmail(input: {
   const { admin } = input;
   let jobId: string | null = null;
 
+  // The webhook's own attempt HOLDS the job (status 'processing', locked_at
+  // now): claim_fulfillment_email_jobs skips a processing row for 10 minutes,
+  // so the 15-minute cron cannot send the same email while this one is in
+  // flight. A failed send below releases it back to 'failed' for the cron.
   try {
     const { data: existing, error: selectError } = await admin
       .from('fulfillment_email_jobs')
-      .select('id, status')
+      .select('id, status, locked_at')
       .eq('kind', input.kind)
       .eq('reference_id', input.referenceId)
       .maybeSingle();
     if (selectError) throw selectError;
     if (existing?.status === 'sent') return { sent: false, alreadySent: true };
-    jobId = existing?.id ?? null;
 
-    if (!jobId) {
+    if (existing) {
+      const lockedAt = existing.locked_at ? Date.parse(existing.locked_at) : 0;
+      if (existing.status === 'processing' && Date.now() - lockedAt < STALE_LOCK_MS) {
+        return { sent: false, alreadySent: false, inFlight: true };
+      }
+      // Compare-and-set: only take it if it is still waiting (or its lock is
+      // stale). Losing means the cron claimed it first.
+      const now = new Date().toISOString();
+      let take = admin
+        .from('fulfillment_email_jobs')
+        .update({ status: 'processing', locked_at: now, updated_at: now })
+        .eq('id', existing.id);
+      take = existing.status === 'processing'
+        ? take.eq('status', 'processing')
+        : take.in('status', ['pending', 'failed']);
+      const { data: taken, error: takeError } = await take.select('id');
+      if (takeError) throw takeError;
+      if (!taken || taken.length === 0) return { sent: false, alreadySent: false, inFlight: true };
+      jobId = existing.id;
+    } else {
+      const now = new Date().toISOString();
       const { data: inserted, error: insertError } = await admin
         .from('fulfillment_email_jobs')
         .insert({
@@ -69,6 +97,9 @@ export async function deliverFulfillmentEmail(input: {
           buyer_email: input.to,
           subject: input.subject,
           html: input.html,
+          status: 'processing',
+          locked_at: now,
+          attempts: 1,
         })
         .select('id')
         .single();

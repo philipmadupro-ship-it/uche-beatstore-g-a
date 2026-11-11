@@ -80,6 +80,8 @@ import { createLogger } from '@/lib/log';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+// First listen of a listen-only member cuts the lossy full-length copy with ffmpeg (up to 240 s; LABEL-72).
+export const maxDuration = 300;
 
 const log = createLogger('api.org.audio');
 

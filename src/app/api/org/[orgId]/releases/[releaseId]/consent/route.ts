@@ -24,7 +24,12 @@
  * says yes.
  *
  * AUDIT. The answer is an audit act (`listing.consent_decided`), and a `no`
- * that unlists also records `release.store_unlisted`. A `no` is the safe
+ * that unlists also records `release.store_unlisted`. With migration 201 each
+ * answer is ONE database function (`labelos_audit_consent_decide`): the consent
+ * row, the unlisting and both events commit together, so an event that cannot
+ * be written leaves nothing behind and there is nothing to put back (the promoted
+ * public previews, which are storage, are deleted after it commits). Without 201
+ * the previous path runs, described next. A `no` is the safe
  * direction: if its event cannot be written the answer STANDS (the release is
  * already private) and the caller is told it was not recorded. A `yes` is
  * put back exactly as it was if its event cannot be written — a yes that is
@@ -39,10 +44,11 @@ import { readBody, isUUID } from '@/lib/validate';
 import { OrgListingConsentBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { recordEvent } from '@/lib/labelos/activity';
+import { recordEvent, type EventPayload } from '@/lib/labelos/activity';
+import { auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { releaseEventSubject } from '@/lib/labelos/releases';
 import { loadListingRelease, readPlayback } from '@/lib/labelos/store-listing-store';
-import { planDecision } from '@/lib/labelos/store-consent';
+import { planDecision, type ConsentState } from '@/lib/labelos/store-consent';
 import { NEEDS_186, answerableFor, enforceRefusal, insertProposals, loadCreditedArtists, readConsents, restoreConsent, setConsent, takeOffStore } from '@/lib/labelos/store-consent-store';
 import { deletePromotedPreviews } from '@/lib/storage/store-release-media';
 
@@ -96,9 +102,57 @@ export async function PUT(req: NextRequest, { params }: Params) {
     let unlisted = false;
     let unrecorded = false;
 
+    const unlistPayload = { reason: 'artist_declined', askedToDeletePreviews: false, deletePreviews: true };
+    const ctx = { release_artist_id: release.contact_id, project_id: release.project_id };
+    let rpcMissing = false;
+    let viaRpc = false;
+    /**
+     * One call to 201's function. `from` null = enforce a no that already stands. Returns what happened, or 'missing'
+     * when migration 201 is not applied (the caller then uses the previous path), or a Response for a failure.
+     */
+    const decideAtomic = async (row: (typeof rows)[number], from: ConsentState | null, to: 'yes' | 'no', payload: EventPayload) => {
+      const rpc = await auditRpc(admin, 'consentDecide', {
+        p_org: org,
+        p_actor: userId,
+        p_release: release.id,
+        p_artist: row.artist_contact_id,
+        p_from: from,
+        p_to: to,
+        p_ctx: ctx,
+        p_payload: payload,
+        p_unlist_payload: unlistPayload,
+      });
+      if (rpc.error) {
+        if (isMissingAuditRpc(rpc.error)) return 'missing' as const;
+        log.error('consent decide failed', { releaseId, decision, error: rpc.error.message });
+        return json(500, { error: 'Could not record your answer; nothing was changed. Try again.' });
+      }
+      const out = rpc.data as { changed?: boolean; unlisted?: boolean; error?: string } | null;
+      // Gone (or no longer a no, for an enforce) between the read and the call: nothing to apply.
+      if (out?.error) return { changed: false, unlisted: false };
+      return { changed: out?.changed === true, unlisted: out?.unlisted === true };
+    };
+
     for (const row of rows) {
       const plan = planDecision(row.state, decision);
       if (!plan.ok) return json(plan.status, { error: plan.error, ...(plan.field ? { field: plan.field } : {}) });
+      if (!rpcMissing && (plan.change === 'set' || decision === 'no')) {
+        const done = await decideAtomic(row, plan.change === 'set' ? plan.from : null, plan.change === 'set' ? plan.to : 'no', plan.change === 'set' ? { decision: plan.to, from: plan.from, withdrew: plan.withdraw } : {});
+        if (done instanceof Response) return done;
+        if (done !== 'missing') {
+          viaRpc = true;
+          if (done.changed) changed += 1;
+          if (done.unlisted) unlisted = true;
+          // Someone answered in the meantime and ours was not applied: still make sure a no that stands has the release off.
+          if (plan.change === 'set' && !done.changed && decision === 'no') {
+            const again = await decideAtomic(row, null, 'no', {});
+            if (again instanceof Response) return again;
+            if (again !== 'missing' && again.unlisted) unlisted = true;
+          }
+          continue;
+        }
+        rpcMissing = true;
+      }
       if (plan.change === 'set') {
         const set = await setConsent(admin, row, plan.from, plan.to, userId, now);
         if (set.error) {
@@ -130,9 +184,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     // A no (also one given a moment ago whose unlisting did not finish) takes the release off the store now. The
     // update itself is conditional on the release being listed, so it needs no read of that flag first: a listing
-    // that landed after this request began is taken off too.
+    // that landed after this request began is taken off too. With migration 201 the unlisting and its event already
+    // happened inside the function; only the storage (the promoted public previews) is left.
     const refusing = decision === 'no';
-    if (refusing) {
+    if (refusing && viaRpc) {
+      if (unlisted) await deletePromotedPreviews(release.id).catch((e) => log.error('preview delete failed', { releaseId, error: errorMessage(e) }));
+    } else if (refusing) {
       const playback = await readPlayback(admin, release.id);
       const off = await takeOffStore(admin, org, release.id, playback.schemaReady);
       if (off.error) {

@@ -13,7 +13,7 @@ import Stripe from 'stripe';
 let _stripe: Stripe | null = null;
 export function getStripe(): Stripe {
   if (_stripe) return _stripe;
-  const key = process.env.STRIPE_SECRET_KEY;
+  const key = process.env.STRIPE_SECRET_KEY?.trim();
   if (!key) {
     throw new Error('STRIPE_SECRET_KEY not configured');
   }
@@ -26,5 +26,5 @@ export function getStripe(): Stripe {
 }
 
 export function isStripeConfigured(): boolean {
-  return !!process.env.STRIPE_SECRET_KEY && !!process.env.STRIPE_WEBHOOK_SECRET;
+  return !!process.env.STRIPE_SECRET_KEY?.trim() && !!process.env.STRIPE_WEBHOOK_SECRET?.trim();
 }

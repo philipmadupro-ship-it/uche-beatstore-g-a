@@ -310,6 +310,29 @@ describe('share links', () => {
     expect((await call(PRM, 'DELETE', 'shares/[shareId]/', { shareId: id })).status).toBe(404);
     expect((await (await get(PRM)).json()).shares[0].state).toBe('revoked');
   });
+  it('makes and revokes a link through the audit functions (199): the event is audit class and the change rolls back with it', async () => {
+    const id = (await (await addShare(PRM)).json()).share.id;
+    expect(db.tables.activity_events.filter((e) => e.verb === 'press_kit.shared')[0]).toMatchObject({ audit: true, visibility: 'internal' });
+    expect((await call(PRM, 'DELETE', 'shares/[shareId]/', { shareId: id })).status).toBe(200);
+    expect(db.tables.activity_events.filter((e) => e.verb === 'press_kit.share_revoked')[0]).toMatchObject({ audit: true, payload: { shareId: id } });
+  });
+  it('a link whose audit event cannot be written is not made, and a revoke whose event cannot be written does not stand', async () => {
+    const id = (await (await addShare(PRM)).json()).share.id;
+    db.rpc = auditRpcMemory({ failAudit: () => true });
+    expect((await addShare(PRM, { label: 'Second' })).status).toBe(500);
+    expect(db.tables.press_kit_shares).toHaveLength(1);
+    expect((await call(PRM, 'DELETE', 'shares/[shareId]/', { shareId: id })).status).toBe(500);
+    expect(db.tables.press_kit_shares[0].revoked_at).toBeNull();
+  });
+  it('without migration 199 the old path still works, undone if its event cannot be written', async () => {
+    db.rpc = {};
+    const made = await addShare(PRM);
+    expect(made.status).toBe(201);
+    const id = (await made.json()).share.id;
+    expect(db.tables.activity_events.filter((e) => e.verb === 'press_kit.shared')[0]).toMatchObject({ audit: true });
+    expect((await call(PRM, 'DELETE', 'shares/[shareId]/', { shareId: id })).status).toBe(200);
+    expect(db.tables.press_kit_shares[0].revoked_at).toBeTruthy();
+  });
   it('only pr.write makes a link', async () => {
     expect((await addShare(MKT)).status).toBe(403);
     expect((await addShare(X)).status).toBe(404);
