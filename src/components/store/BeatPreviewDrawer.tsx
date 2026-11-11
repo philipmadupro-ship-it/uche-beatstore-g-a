@@ -6,7 +6,7 @@ import {
   ExternalLink, Music, ChevronRight, ShoppingBag, Play, Pause, X,
 } from 'lucide-react';
 import { LicenseSelector } from '@/components/store/LicenseSelector';
-import { SpectralWaveform } from '@/components/player/SpectralWaveform';
+import { LaneScrubber } from '@/components/visuals/LaneScrubber';
 import { AudioVisualizer } from '@/components/visuals/AudioVisualizer';
 import { AsciiCoverArt } from '@/components/player/AsciiCoverArt';
 import { useAudioReactivity } from '@/hooks/useAudioReactivity';
@@ -232,7 +232,7 @@ export function BeatPreviewDrawer({
               label={track.title}
               className="mb-3"
             />
-            <SpectralWaveform
+            <LaneScrubber
               trackId={track.id}
               audioUrl={track.audio_url}
               publicAnalysisUrl={publicAnalysisUrl}
@@ -244,7 +244,7 @@ export function BeatPreviewDrawer({
               label={track.title}
               durationSeconds={dur}
             />
-            {/* No time row here — SpectralWaveform renders its own
+            {/* No time row here — LaneScrubber renders its own
                 elapsed/remaining pair. Keeping this one produced two stacked
                 rows showing the same elapsed value with different right-hand
                 figures (remaining vs total). */}

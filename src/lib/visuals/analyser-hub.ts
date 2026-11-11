@@ -225,3 +225,7 @@ export function __resetHubForTests(): void {
 }
 
 export { BAND_COUNT };
+
+// Listen from the moment this module loads: the engine mounts only once a track
+// is chosen, which can be AFTER the very tap that starts playback.
+installGestureUnlock();

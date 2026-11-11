@@ -96,3 +96,96 @@ for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', wid
     });
   });
 }
+
+
+for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', width: 390, height: 844 }]) {
+  test.describe(`lane scrubber @${vp.name}`, () => {
+    test.use({ viewport: { width: vp.width, height: vp.height } });
+
+    test('fixed playhead, three lanes drawn, drag / tap / arrow keys seek, audio keeps playing', async ({ page }) => {
+      await openAndPlay(page);
+      await expect.poll(() => audioTime(page), { timeout: 10_000 }).toBeGreaterThan(0.5);
+      const slider = page.locator('[role="dialog"] [data-lane-scrubber]').first();
+      await expect(slider).toBeVisible();
+      await expect(slider).toHaveAttribute('role', 'slider');
+      // Painted (non-background pixels) and moving while playing.
+      const cv = slider.locator('canvas');
+      const snap = () => cv.evaluate((c: HTMLCanvasElement) => c.toDataURL());
+      const a = await snap();
+      await page.waitForTimeout(500);
+      expect(await snap()).not.toBe(a);
+      await page.screenshot({ path: `e2e-artifacts/store-visuals/scrubber-${vp.name}.png` });
+
+      // Arrow keys step 5 s.
+      await slider.focus();
+      const before = await audioTime(page);
+      await page.keyboard.press('ArrowRight');
+      await expect.poll(() => audioTime(page)).toBeGreaterThan(before + 3.5);
+      // Drag the waveform left (later in the track).
+      const box = (await slider.boundingBox())!;
+      const t0 = await audioTime(page);
+      await page.mouse.move(box.x + box.width * 0.7, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2, { steps: 6 });
+      await page.mouse.up();
+      await expect.poll(() => audioTime(page)).toBeGreaterThan(t0 + 1);
+      // Tap right of the playhead jumps ahead; the element still advances.
+      const t1 = await audioTime(page);
+      await page.mouse.click(box.x + box.width * 0.9, box.y + box.height / 2);
+      await expect.poll(() => audioTime(page)).toBeGreaterThan(t1 + 1);
+      const t2 = await audioTime(page);
+      await page.waitForTimeout(600);
+      expect(await audioTime(page)).toBeGreaterThan(t2);
+    });
+  });
+}
+
+test('element swap: a captured player moving to an uncapturable source keeps playing', async ({ page }) => {
+  // Track 2's preview lives on an origin that sends no CORS headers: it cannot be
+  // analysed, so the engine must replace the captured element, not go silent.
+  await page.route(/\/api\/store(\?.*)?$/, async (route) => {
+    const res = await route.fetch();
+    const json = await res.json();
+    const list: Array<Record<string, unknown>> = json.tracks ?? json.data ?? [];
+    if (list[1]) list[1].audio_url = 'https://cdn.other.test/previews/t2.wav';
+    await route.fulfill({ response: res, json });
+  });
+  // A browser rejects a CORS-mode fetch to an origin that sends no CORS headers;
+  // Playwright's route.fulfill does not enforce that, so model it directly. The
+  // media element itself still loads through the route below (no CORS needed).
+  await page.addInitScript(() => {
+    const real = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      const u = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      return u.includes('cdn.other.test') ? Promise.reject(new TypeError('Failed to fetch')) : real(input, init);
+    };
+  });
+  await page.route('https://cdn.other.test/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'audio/wav', headers: { 'accept-ranges': 'bytes' }, body: WAV }));
+  await stubAudio(page);
+  await page.goto('/store');
+  const cards = page.locator('[id^="beat-"]');
+  await cards.first().waitFor({ state: 'visible', timeout: 15_000 });
+
+  // Track 1: same-origin, captured.
+  await cards.nth(0).click();
+  await page.locator('[role="dialog"]').getByRole('button', { name: 'Play', exact: true }).first().click();
+  await expect.poll(() => audioTime(page), { timeout: 10_000 }).toBeGreaterThan(0.5);
+  await expect(canvas(page)).toHaveAttribute('data-source', 'live', { timeout: 5_000 });
+  await page.evaluate(() => { (window as unknown as { __first: Element | null }).__first = document.querySelector('audio'); });
+  await page.keyboard.press('Escape');
+
+  // Track 2: uncapturable source.
+  await cards.nth(1).click();
+  await page.locator('[role="dialog"]').getByRole('button', { name: 'Play', exact: true }).first().click();
+  await expect.poll(() => page.evaluate(() => document.querySelector('audio')?.getAttribute('src') ?? ''), { timeout: 10_000 }).toContain('cdn.other.test');
+  const swapped = await page.evaluate(() => (window as unknown as { __first: Element }).__first !== document.querySelector('audio'));
+  expect(swapped).toBe(true); // a fresh element, since the captured one could not play this
+  await expect.poll(() => audioTime(page), { timeout: 10_000 }).toBeGreaterThan(0.5);
+  const t = await audioTime(page);
+  await page.waitForTimeout(700);
+  expect(await audioTime(page)).toBeGreaterThan(t); // audio advancing
+  expect(await page.evaluate(() => { const e = document.querySelector('audio')!; return e.muted || e.paused || e.volume === 0; })).toBe(false);
+  // The visual falls back to the track's peaks.
+  await expect(canvas(page)).toHaveAttribute('data-source', 'peaks', { timeout: 5_000 });
+});
