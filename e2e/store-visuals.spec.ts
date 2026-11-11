@@ -206,3 +206,17 @@ test('element swap: a captured player moving to an uncapturable source keeps pla
   // The visual falls back to the track's peaks.
   await expect(canvas(page)).toHaveAttribute('data-source', 'peaks', { timeout: 5_000 });
 });
+
+test.describe('scrubber close-up @2x', () => {
+  test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+
+  test('the scrubber alone, playing and paused, for judging line detail and glow', async ({ page }) => {
+    await openAndPlay(page);
+    await expect.poll(() => audioTime(page), { timeout: 10_000 }).toBeGreaterThan(2.2);
+    const slider = page.locator('[role="dialog"] [data-band-scrubber]').first();
+    await slider.screenshot({ path: 'e2e-artifacts/store-visuals/scrubber-closeup-2x-playing.png' });
+    await page.locator('[role="dialog"]').getByRole('button', { name: 'Pause', exact: true }).first().click();
+    await page.waitForTimeout(400);
+    await slider.screenshot({ path: 'e2e-artifacts/store-visuals/scrubber-closeup-2x-paused.png' });
+  });
+});
