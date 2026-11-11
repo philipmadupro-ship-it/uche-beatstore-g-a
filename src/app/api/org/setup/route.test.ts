@@ -44,14 +44,15 @@ describe('POST /api/org/setup', () => {
     expect(admin.rpcs).toEqual([]);
   });
 
-  it('creates an independent artist org from the session user, and records org.created', async () => {
+  it('creates an independent artist org from the session user, ; org.created is the SQL function\'s, not the route\'s', async () => {
     const res = await post({ face: 'independent', name: '  Nova  ' });
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ org: { id: ORG, slug: 'nova', kind: 'artist' }, home: '/o/nova', created: true });
     expect(admin.rpcs).toEqual([
       { name: 'labelos_setup_org', args: { p_user: USER, p_kind: 'artist', p_name: 'Nova', p_settings: {} } },
     ]);
-    expect(admin.chains.some((c) => c.table === 'activity_events')).toBe(true);
+    // org.created is written inside labelos_setup_org (migration 197), in the same transaction: never by the route.
+    expect(admin.chains.some((c) => c.table === 'activity_events')).toBe(false);
   });
 
   it('the wizard\'s settings are stored with the org: only what differs from the defaults, and named in the event', async () => {
@@ -67,8 +68,15 @@ describe('POST /api/org/setup', () => {
       p_name: 'Nova',
       p_settings: { departments_off: ['finance', 'pr'], contract_types: ['licence'] },
     });
-    const event = admin.chains.find((c) => c.table === 'activity_events');
-    expect(JSON.stringify(event)).toContain('contract_types');
+    expect(admin.chains.some((c) => c.table === 'activity_events')).toBe(false);
+  });
+
+  it('an operator-created org the caller owns is adopted: 200, adopted, no event from the route', async () => {
+    rpcAnswer = { data: { org_id: ORG, slug: 'nova', kind: 'label', created: false, adopted: true }, error: null };
+    const res = await post({ face: 'label', name: 'Nova' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ org: { id: ORG, slug: 'nova', kind: 'label' }, home: '/o/nova', created: false, adopted: true });
+    expect(admin.chains.some((c) => c.table === 'activity_events')).toBe(false);
   });
 
   it('the settings screen\'s lockout rule holds here too: 422, nothing created', async () => {

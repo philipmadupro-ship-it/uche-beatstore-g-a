@@ -12,9 +12,13 @@
  *
  * Store owner only (same 404 as the list). An audit act on both sides:
  * `listing.vetoed` / `listing.veto_lifted` in the label org, and a copy in the
- * artist org's feed, best effort. A veto is the safe direction — if its event
- * cannot be written it stands and the caller is told; lifting one is put back
- * if its event cannot be written. Migration 186 missing: 503 naming it.
+ * artist org's feed. With migration 201 each is ONE database function
+ * (`labelos_audit_listing_veto`): the veto row and both events commit together,
+ * so an event that cannot be written leaves no change behind. Without 201 the
+ * previous path runs: a veto is the safe direction — if its event cannot be
+ * written it stands and the caller is told; lifting one is put back if its
+ * event cannot be written; the artist-side copy is best effort. Migration 186
+ * missing: 503 naming it.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOrgMember } from '@/lib/auth/org-access';
@@ -24,6 +28,7 @@ import { OrgConnectedReleaseBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { recordEvent } from '@/lib/labelos/activity';
+import { auditRpc, isMissingAuditRpc } from '@/lib/labelos/audit-rpc';
 import { releaseEventSubject } from '@/lib/labelos/releases';
 import { planVeto } from '@/lib/labelos/store-consent';
 import { NEEDS_186, readVeto } from '@/lib/labelos/store-consent-store';
@@ -67,6 +72,26 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (plan.change === 'none') return json(200, { listed: want === 'allow', changed: false });
 
     const label = { orgId: org, userId };
+    const listedAfter = plan.change !== 'veto';
+    const rpc = await auditRpc(admin, 'listingVeto', {
+      p_org: org,
+      p_actor: userId,
+      p_release: release.id,
+      p_veto: plan.change === 'veto',
+      p_label_payload: { listed: listedAfter },
+      p_artist_ctx: { artist_id: release.contact_id, project_id: release.project_id },
+      p_artist_payload: { listed: listedAfter },
+    });
+    if (!rpc.error) {
+      const out = rpc.data as { changed?: boolean; error?: string } | null;
+      if (out?.error === 'not_found' || out?.error === 'not_connected') return NOT_FOUND();
+      return json(200, { listed: listedAfter, changed: out?.changed !== false });
+    }
+    if (!isMissingAuditRpc(rpc.error)) {
+      log.error('veto failed', { releaseId, error: rpc.error.message });
+      return json(500, { error: plan.change === 'veto' ? 'Could not take the release off the store' : 'Could not allow the release again' });
+    }
+    // Migration 201 is not applied: change, then event, put back on failure (the lift) as before.
     if (plan.change === 'veto') {
       const { error } = await admin.from('store_listing_vetoes').upsert({ release_id: release.id, org_id: org, vetoed_by: userId }, { onConflict: 'release_id', ignoreDuplicates: true });
       if (error) {

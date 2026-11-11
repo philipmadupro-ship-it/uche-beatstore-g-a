@@ -903,6 +903,8 @@ export type OrgShell = {
   /** The modules the org is licensed for (LABEL-47); the nav hides the rest. */
   modules: Module[];
   viewerIsProducer: boolean;
+  /** False while an operator-created org's owner has not run the wizard (LABEL-48); absent = done. */
+  setupDone?: boolean;
 };
 
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -940,6 +942,7 @@ export async function orgShellFor(slug: string): Promise<OrgShell | null> {
       capabilities: [...membership.capabilities],
       modules: [...membership.entitlements.modules],
       viewerIsProducer,
+      setupDone: membership.entitlements.setupDone,
     };
   } catch (err) {
     log.error('org shell read failed', { error: err instanceof Error ? err.message : String(err) });

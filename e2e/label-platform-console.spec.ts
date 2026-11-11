@@ -10,6 +10,8 @@
  *   2. The invitee accepts at /join/<token> and owns the org: there is no Legal
  *      queue in the nav, its page and route are 404, and the console is 404
  *      to them although they are an org owner.
+ *      Before it has run the wizard the owner is sent to /setup, which adopts the org
+ *      (migration 197): no second org, setup_done true, one audit event.
  *   3. The operator switches contracts on in the console: the legal queue is
  *      there on the owner's next request. The seat cap answers 409.
  *   4. At 390 px the operator creates an INDEPENDENT licensee; no sideways scroll.
@@ -109,6 +111,28 @@ test('1–3 · create a label licensee in the console, its owner joins, modules 
   await expect(op2.getByRole('status')).toContainText(`You are now a member of ${NAME}`);
   const [m] = await rest(page.request, 'GET', `org_members?org_id=eq.${orgId}&user_id=eq.${ARTIST_A_ID}&select=role,scope,invited_by`);
   expect(m).toEqual({ role: 'owner', scope: 'org', invited_by: PRODUCER_ID });
+
+  // setup_done is false, so the owner is sent to the wizard (not into an unconfigured org) and it ADOPTS this org.
+  await op2.goto(`/o/${SLUG}`);
+  await expect(op2).toHaveURL(/\/setup$/);
+  await expect(op2.getByTestId('wizard-next')).toBeVisible();
+  const adopt = await op2.request.post('/api/org/setup', { data: { face: 'label', name: 'Ignored wizard name' } });
+  expect(adopt.status()).toBe(200);
+  expect(await adopt.json()).toMatchObject({ org: { id: orgId, slug: SLUG }, home: `/o/${SLUG}`, created: false, adopted: true });
+  const [done] = await rest(page.request, 'GET', `org_entitlements?org_id=eq.${orgId}&select=setup_done`);
+  expect(done.setup_done).toBe(true);
+  // No second org was made for the owner, the operator's name is kept, and a repeat answers the same org.
+  expect(await rest(page.request, 'GET', `org_members?user_id=eq.${ARTIST_A_ID}&role=eq.owner&select=org_id`)).toHaveLength(1);
+  expect(await rest(page.request, 'GET', `organizations?id=eq.${orgId}&select=name`)).toEqual([{ name: NAME }]);
+  const again = await op2.request.post('/api/org/setup', { data: { face: 'label', name: 'Again' } });
+  expect(await again.json()).toMatchObject({ org: { id: orgId }, created: false });
+  expect(await rest(page.request, 'GET', `activity_events?org_id=eq.${orgId}&actor_id=eq.${ARTIST_A_ID}&verb=eq.org.settings_changed&select=audit,payload`)).toEqual([
+    { audit: true, payload: { source: 'setup', adopted: true, settings: [] } },
+  ]);
+  await op2.goto(`/o/${SLUG}`);
+  await expect(op2).toHaveURL(new RegExp(`/o/${SLUG}$`));
+  await page.reload();
+  await expect(card.getByText('Not set up yet')).toHaveCount(0);
 
   // Without contracts: no Legal queue entry, page and route 404 — for the org's own OWNER.
   await op2.goto(`/o/${SLUG}`);

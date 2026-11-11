@@ -161,8 +161,12 @@ ${orgRows}
       IF v_res ->> 'slug' <> r.slug THEN
         UPDATE public.organizations SET slug = r.slug WHERE id = v_org;
       END IF;
-      PERFORM public.labelos_audit_insert(v_org, (v_ids ->> r.owner_tag)::uuid, 'org.created', 'org', v_org,
-        jsonb_build_object('kind', r.kind, 'source', 'seed-test-accounts', 'settings', '[]'::jsonb));
+      -- Migration 197 writes org.created inside labelos_setup_org; before it, nothing does. Only add it when absent,
+      -- so the seed is right whether it is pasted before or after 197.
+      IF NOT EXISTS (SELECT 1 FROM public.activity_events WHERE org_id = v_org AND verb = 'org.created') THEN
+        PERFORM public.labelos_audit_insert(v_org, (v_ids ->> r.owner_tag)::uuid, 'org.created', 'org', v_org,
+          jsonb_build_object('kind', r.kind, 'source', 'seed-test-accounts', 'settings', '[]'::jsonb));
+      END IF;
     END IF;
     v_orgs := v_orgs || jsonb_build_object(r.key, v_org);
   END LOOP;

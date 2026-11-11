@@ -147,7 +147,9 @@ test('1 · the manager lists Ari’s release from the page; Ari is asked, the ma
   const listed = (await events(request, ids.release!)).find((e) => e.verb === 'release.store_listed')!;
   expect(listed).toMatchObject({ audit: true, actor_id: BUYER_ID });
   // Silence is not a no: it serves while the artist decides.
-  expect(await publicStatus(request)).toBe(200);
+  // The public route reads the store-owner org pair through a 30 s in-process cache (STORE_OWNER_CACHE_MS), so an org
+  // pair created moments ago can answer 404 until it expires. Wait past the TTL instead of reading the first answer.
+  await expect.poll(() => publicStatus(request), { timeout: 45_000, intervals: [1_000, 2_000, 5_000] }).toBe(200);
   await mgr.close();
 });
 
@@ -229,7 +231,9 @@ test('4 · Ari says yes at 390 px; the manager can list again and it is public a
   await page2.getByTestId('release-store-list').click({ timeout: 90_000 });
   await expect(card).toHaveAttribute('data-listed', 'true', { timeout: 60_000 });
   await expect(page2.getByTestId('release-store-consent')).toHaveAttribute('data-status', 'agreed');
-  expect(await publicStatus(request)).toBe(200);
+  // The public route reads the store-owner org pair through a 30 s in-process cache (STORE_OWNER_CACHE_MS), so an org
+  // pair created moments ago can answer 404 until it expires. Wait past the TTL instead of reading the first answer.
+  await expect.poll(() => publicStatus(request), { timeout: 45_000, intervals: [1_000, 2_000, 5_000] }).toBe(200);
   await mgr.close();
 });
 

@@ -728,3 +728,140 @@ describe('put-backs never re-open a refused release; caches never hold a governe
   });
 });
 
+
+/**
+ * Migration 201 (review G17): with the functions present the routes make the change and its events in ONE database
+ * call. The in-memory functions below behave like the SQL ones (compare-and-set, the unlisting and the events in the
+ * same step, nothing written when the call fails); the route's only job is to plan, call and relay.
+ */
+describe('with migration 201 the consent change and its event are one call', () => {
+  type Rows = Record<string, Record<string, unknown>[]>;
+  let rpcCalls: string[] = [];
+  let rpcFail: string | null = null;
+
+  const event = (t: Rows, org: unknown, actor: unknown, verb: string, release: unknown, extra: Record<string, unknown>, payload: unknown, visibility: string) =>
+    t.activity_events.push({ org_id: org, actor_id: actor, verb, subject_type: 'release', subject_id: release, release_id: release, payload, audit: true, visibility, ...extra });
+
+  beforeEach(() => {
+    rpcCalls = [];
+    rpcFail = null;
+    db.rpc = {
+      labelos_audit_consent_decide: (a, t) => {
+        rpcCalls.push('consent');
+        if (rpcFail === 'consent') return { data: null, error: { message: 'boom', code: 'XX000' } };
+        const rel = t.releases.find((r) => r.id === a.p_release && r.org_id === a.p_org);
+        if (!rel) return { data: { error: 'not_found' }, error: null };
+        let changed = false;
+        let unlisted = false;
+        const c = t.listing_consents.find((x) => x.release_id === a.p_release && x.artist_contact_id === a.p_artist);
+        if (a.p_from !== null) {
+          if (c && c.state === a.p_from) {
+            Object.assign(c, { state: a.p_to, decided_by: a.p_actor, decided_at: '2026-11-08T00:00:00Z' });
+            changed = true;
+            event(t, a.p_org, a.p_actor, 'listing.consent_decided', a.p_release, { artist_id: a.p_artist }, a.p_payload, 'internal');
+          }
+        } else if (!c || c.state !== 'no') return { data: { error: 'no_row' }, error: null };
+        if (a.p_to === 'no' && rel.store_listed && c?.state === 'no') {
+          Object.assign(rel, { store_listed: false, store_listed_at: null, store_playback: 'preview' });
+          unlisted = true;
+          event(t, a.p_org, a.p_actor, 'release.store_unlisted', a.p_release, {}, a.p_unlist_payload, 'artist');
+        }
+        return { data: { changed, unlisted }, error: null };
+      },
+      labelos_audit_listing_veto: (a, t) => {
+        rpcCalls.push('veto');
+        if (rpcFail === 'veto') return { data: null, error: { message: 'boom', code: 'XX000' } };
+        const rel = t.releases.find((r) => r.id === a.p_release);
+        if (!rel) return { data: { error: 'not_found' }, error: null };
+        const had = t.store_listing_vetoes.some((v) => v.release_id === a.p_release);
+        if (a.p_veto === had) return { data: { changed: false }, error: null };
+        t.store_listing_vetoes = t.store_listing_vetoes.filter((v) => v.release_id !== a.p_release);
+        if (a.p_veto) t.store_listing_vetoes.push({ release_id: a.p_release, org_id: a.p_org, vetoed_by: a.p_actor });
+        const verb = a.p_veto ? 'listing.vetoed' : 'listing.veto_lifted';
+        event(t, a.p_org, a.p_actor, verb, a.p_release, {}, a.p_label_payload, 'internal');
+        event(t, rel.org_id, a.p_actor, verb, a.p_release, {}, a.p_artist_payload, 'internal');
+        return { data: { changed: true }, error: null };
+      },
+    };
+    mem = memoryAdmin(db);
+  });
+
+  it('a no unlists in the same call: one function, both events, the previews go afterwards', async () => {
+    await list(AR, P, RP, { listed: true });
+    rpcCalls = [];
+    const res = await decide(AU1, P, RP, 'no');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ decision: 'no', changed: true, unlisted: true });
+    expect(rpcCalls).toEqual(['consent']);
+    expect(consentOf(RP, NOVA)).toMatchObject({ state: 'no', decided_by: AU1 });
+    expect(row(RP)).toMatchObject({ store_listed: false, store_playback: 'preview' });
+    expect(events('listing.consent_decided')[0].payload).toEqual({ decision: 'no', from: 'proposed', withdrew: true });
+    expect(events('release.store_unlisted')[0].payload).toMatchObject({ reason: 'artist_declined' });
+    expect(del).toHaveBeenCalledWith(RP);
+    // Re-listing still needs this artist's yes.
+    expect((await list(AR, P, RP, { listed: true })).status).toBe(409);
+  });
+
+  it('a yes is one call and a repeat writes nothing', async () => {
+    await list(AR, P, RP, { listed: true });
+    rpcCalls = [];
+    expect((await decide(AU1, P, RP, 'yes')).status).toBe(200);
+    expect(rpcCalls).toEqual(['consent']);
+    expect(consentOf(RP, NOVA)).toMatchObject({ state: 'yes' });
+    expect(events('listing.consent_decided')).toHaveLength(1);
+    rpcCalls = [];
+    const again = await decide(AU1, P, RP, 'yes');
+    expect(await again.json()).toMatchObject({ changed: false });
+    expect(rpcCalls).toEqual([]);
+    expect(events('listing.consent_decided')).toHaveLength(1);
+  });
+
+  it('a repeated no on a release that is back on the store enforces it through the function', async () => {
+    await list(AR, P, RP, { listed: true });
+    await decide(AU1, P, RP, 'no');
+    Object.assign(row(RP), { store_listed: true, store_listed_at: '2026-11-01T00:00:00Z' });
+    rpcCalls = [];
+    const res = await decide(AU1, P, RP, 'no');
+    expect(await res.json()).toMatchObject({ changed: false, unlisted: true });
+    expect(rpcCalls).toEqual(['consent']);
+    expect(row(RP).store_listed).toBe(false);
+    expect(events('listing.consent_decided')).toHaveLength(1);
+  });
+
+  it('a database error is a 500 with nothing changed and no fallback write', async () => {
+    await list(AR, P, RP, { listed: true });
+    rpcFail = 'consent';
+    const res = await decide(AU1, P, RP, 'no');
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toMatch(/nothing was changed/i);
+    expect(consentOf(RP, NOVA)).toMatchObject({ state: 'proposed' });
+    expect(row(RP).store_listed).toBe(true);
+    expect(events('listing.consent_decided')).toHaveLength(0);
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it('the veto and its lift are one call each, with both feeds written', async () => {
+    Object.assign(row(RA), { store_listed: true, store_listed_at: '2026-10-10T00:00:00Z' });
+    const res = await call('veto', 'PUT', PU, { orgId: L, releaseId: RA }, { listed: false });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ listed: false, changed: true });
+    expect(rpcCalls).toEqual(['veto']);
+    expect(db.tables.store_listing_vetoes).toEqual([expect.objectContaining({ release_id: RA, org_id: L, vetoed_by: PU })]);
+    expect(events('listing.vetoed').map((e) => e.org_id).sort()).toEqual([A, L].sort());
+    expect((await publicDetail(RA)).status).toBe(404);
+    const allow = await call('veto', 'PUT', PU, { orgId: L, releaseId: RA }, { listed: true });
+    expect(await allow.json()).toMatchObject({ listed: true, changed: true });
+    expect(db.tables.store_listing_vetoes).toHaveLength(0);
+    expect(events('listing.veto_lifted')).toHaveLength(2);
+  });
+
+  it('a failing veto call leaves no veto and the release serving', async () => {
+    Object.assign(row(RA), { store_listed: true, store_listed_at: '2026-10-10T00:00:00Z' });
+    rpcFail = 'veto';
+    const res = await call('veto', 'PUT', PU, { orgId: L, releaseId: RA }, { listed: false });
+    expect(res.status).toBe(500);
+    expect(db.tables.store_listing_vetoes).toHaveLength(0);
+    expect(events('listing.vetoed')).toHaveLength(0);
+    expect((await publicDetail(RA)).status).toBe(200);
+  });
+});
