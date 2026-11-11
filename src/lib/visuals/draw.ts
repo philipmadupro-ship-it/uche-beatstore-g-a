@@ -8,8 +8,34 @@
 import { BAND_COUNT, historyRow, polar, project, type Camera, type History } from './geometry';
 import type { VisualMode } from './modes';
 
-export const MINT = '#6DC6A4';
-export const TAN = '#c8a47a';
+/**
+ * Every colour and line weight a draw function uses comes from here, so a
+ * different family (e.g. a single-accent "lab / HUD" look) is a new theme
+ * object, not an edit to the draw functions.
+ */
+export interface VisualTheme {
+  background: string;
+  /** Main line colour (the live / newest trace). */
+  accent: string;
+  /** Everything else: older rows, grids, unlit bars. */
+  secondary: string;
+  /** Hairline width in CSS px, and the faint halo width. */
+  line: number;
+  glow: number;
+  /** Top of the meter gradient (peak colour); the accent is the body. */
+  peak: string;
+}
+
+export const DEFAULT_THEME: VisualTheme = {
+  background: '#090907',
+  accent: '#6DC6A4',
+  secondary: '#ffffff',
+  line: 1,
+  glow: 3,
+  peak: '#ffffff',
+};
+
+export interface Rect { x: number; y: number; w: number; h: number }
 
 export interface DrawState {
   /** Smoothed bands, 0..1, length BAND_COUNT. */
@@ -23,7 +49,7 @@ export interface DrawState {
   progress: number;
   /** True when drawing live analyser data rather than precomputed peaks. */
   live: boolean;
-  background: string;
+  theme: VisualTheme;
 }
 
 const p = { x: 0, y: 0, s: 1 };
@@ -36,14 +62,14 @@ function clear(ctx: CanvasRenderingContext2D, w: number, h: number, bg: string) 
 }
 
 /** Stroke the current path twice: a faint wide halo, then the 1px line. */
-function strokeGlow(ctx: CanvasRenderingContext2D, color: string, alpha: number, glow: boolean) {
+function strokeGlow(ctx: CanvasRenderingContext2D, color: string, alpha: number, glow: boolean, t: VisualTheme) {
   if (glow) {
     ctx.globalAlpha = alpha * 0.18;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = t.glow;
     ctx.stroke();
   }
   ctx.globalAlpha = alpha;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = t.line;
   ctx.strokeStyle = color;
   ctx.stroke();
 }
@@ -51,7 +77,7 @@ function strokeGlow(ctx: CanvasRenderingContext2D, color: string, alpha: number,
 const cam: Camera = { width: 0, height: 0, distance: 2.6, heightScale: 0.34, horizon: 0.9 };
 
 export function drawTerrain(ctx: CanvasRenderingContext2D, w: number, h: number, s: DrawState, compact: boolean) {
-  clear(ctx, w, h, s.background);
+  clear(ctx, w, h, s.theme.background);
   cam.width = w; cam.height = h;
   cam.heightScale = compact ? 0.42 : 0.36;
   const rows = s.history.rows.length;
@@ -73,7 +99,7 @@ export function drawTerrain(ctx: CanvasRenderingContext2D, w: number, h: number,
     // occlusion fill below the ridge
     ctx.lineTo(p.x, h); ctx.lineTo(0, h); ctx.closePath();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = s.background;
+    ctx.fillStyle = s.theme.background;
     ctx.fill();
     // re-trace just the ridge for the stroke
     ctx.beginPath();
@@ -83,20 +109,19 @@ export function drawTerrain(ctx: CanvasRenderingContext2D, w: number, h: number,
       project(cam, x, row[i] * edge, z, p);
       if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
     }
-    ctx.strokeStyle = age === 0 ? MINT : 'rgba(255,255,255,0.85)';
-    strokeGlow(ctx, age === 0 ? MINT : '#ffffff', 0.12 + 0.62 * near * near, age === 0);
+    strokeGlow(ctx, age === 0 ? s.theme.accent : s.theme.secondary, 0.12 + 0.62 * near * near, age === 0, s.theme);
   }
   ctx.globalAlpha = 1;
 }
 
 export function drawCurve(ctx: CanvasRenderingContext2D, w: number, h: number, s: DrawState, compact: boolean) {
-  clear(ctx, w, h, s.background);
+  clear(ctx, w, h, s.theme.background);
   const pad = compact ? 8 : 14;
   const base = h - pad - 4;
   const amp = (h - pad * 2 - 8) * 0.95;
   // faint octave grid
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = s.theme.line;
+  ctx.strokeStyle = s.theme.secondary;
   ctx.globalAlpha = 0.05;
   ctx.beginPath();
   for (let i = 1; i < 6; i += 1) { const x = pad + ((w - pad * 2) * i) / 6; ctx.moveTo(x, pad); ctx.lineTo(x, base); }
@@ -114,18 +139,17 @@ export function drawCurve(ctx: CanvasRenderingContext2D, w: number, h: number, s
     px = x; py = y;
   }
   ctx.lineTo(px, py);
-  ctx.strokeStyle = MINT;
-  strokeGlow(ctx, MINT, 0.95, true);
+  strokeGlow(ctx, s.theme.accent, 0.95, true, s.theme);
   // soft area under the line
   ctx.lineTo(w - pad, base); ctx.lineTo(pad, base); ctx.closePath();
   ctx.globalAlpha = 0.05;
-  ctx.fillStyle = MINT;
+  ctx.fillStyle = s.theme.accent;
   ctx.fill();
   ctx.globalAlpha = 1;
 }
 
 export function drawOrbit(ctx: CanvasRenderingContext2D, w: number, h: number, s: DrawState, compact: boolean) {
-  clear(ctx, w, h, s.background);
+  clear(ctx, w, h, s.theme.background);
   const cx = w / 2, cy = h / 2;
   const maxR = Math.min(w, h) / 2 - 6;
   const inner = maxR * 0.22;
@@ -144,9 +168,8 @@ export function drawOrbit(ctx: CanvasRenderingContext2D, w: number, h: number, s
       if (i === 0) ctx.moveTo(q.x, q.y); else ctx.lineTo(q.x, q.y);
     }
     ctx.closePath();
-    const c = ring === 0 ? MINT : '#ffffff';
-    ctx.strokeStyle = c;
-    strokeGlow(ctx, c, ring === 0 ? 0.9 : 0.4 - ring * 0.12, ring === 0);
+    const c = ring === 0 ? s.theme.accent : s.theme.secondary;
+    strokeGlow(ctx, c, ring === 0 ? 0.9 : 0.4 - ring * 0.12, ring === 0, s.theme);
   }
   // fine petals: spokes from the inner circle to the outer curve
   ctx.beginPath();
@@ -158,9 +181,9 @@ export function drawOrbit(ctx: CanvasRenderingContext2D, w: number, h: number, s
     polar(k, spokes, inner + v * (maxR - inner), cx, cy, q);
     ctx.lineTo(q.x, q.y);
   }
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = s.theme.secondary;
   ctx.globalAlpha = 0.16;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = s.theme.line;
   ctx.stroke();
   // inner ring
   ctx.beginPath();
@@ -170,28 +193,28 @@ export function drawOrbit(ctx: CanvasRenderingContext2D, w: number, h: number, s
   ctx.globalAlpha = 1;
 }
 
-let gradCache: { ctx: CanvasRenderingContext2D; pad: number; h: number; g: CanvasGradient } | null = null;
-function meterGradient(ctx: CanvasRenderingContext2D, pad: number, h: number): CanvasGradient {
-  if (gradCache && gradCache.ctx === ctx && gradCache.pad === pad && gradCache.h === h) return gradCache.g;
+let gradCache: { ctx: CanvasRenderingContext2D; pad: number; h: number; t: VisualTheme; g: CanvasGradient } | null = null;
+function meterGradient(ctx: CanvasRenderingContext2D, pad: number, h: number, t: VisualTheme): CanvasGradient {
+  if (gradCache && gradCache.ctx === ctx && gradCache.pad === pad && gradCache.h === h && gradCache.t === t) return gradCache.g;
   const g = ctx.createLinearGradient(0, pad, 0, h - pad);
-  g.addColorStop(0, '#ffffff');
-  g.addColorStop(0.35, MINT);
-  g.addColorStop(1, 'rgba(109,198,164,0.55)');
-  gradCache = { ctx, pad, h, g };
+  g.addColorStop(0, t.peak);
+  g.addColorStop(0.35, t.accent);
+  g.addColorStop(1, t.accent);
+  gradCache = { ctx, pad, h, t, g };
   return g;
 }
 
 /** Many thin horizontal bars stacked vertically; L and R side by side. */
 export function drawMeters(ctx: CanvasRenderingContext2D, w: number, h: number, s: DrawState, compact: boolean) {
-  clear(ctx, w, h, s.background);
+  clear(ctx, w, h, s.theme.background);
   const pad = compact ? 10 : 18;
   const gap = compact ? 10 : 22;
   const meterW = (w - pad * 2 - gap) / 2;
   const step = compact ? 3 : 4; // px per bar slot
   const bars = Math.max(8, Math.floor((h - pad * 2) / step));
   const levels = [s.left, s.right];
-  ctx.lineWidth = 1;
-  const grad = meterGradient(ctx, pad, h);
+  ctx.lineWidth = s.theme.line;
+  const grad = meterGradient(ctx, pad, h, s.theme);
   for (let m = 0; m < 2; m += 1) {
     const x0 = pad + m * (meterW + gap);
     const lit = Math.round(Math.min(1, levels[m] * 1.15) * bars);
@@ -199,7 +222,7 @@ export function drawMeters(ctx: CanvasRenderingContext2D, w: number, h: number, 
       const y = h - pad - i * step - 0.5;
       const on = i < lit;
       ctx.globalAlpha = on ? 0.95 : 0.07;
-      ctx.strokeStyle = on ? grad : '#ffffff';
+      ctx.strokeStyle = on ? grad : s.theme.secondary;
       ctx.beginPath();
       ctx.moveTo(x0, y);
       ctx.lineTo(x0 + meterW, y);
@@ -207,6 +230,22 @@ export function drawMeters(ctx: CanvasRenderingContext2D, w: number, h: number, 
     }
   }
   ctx.globalAlpha = 1;
+}
+
+/**
+ * Draw one mode inside a rectangle of the canvas (clipped, origin moved), so a
+ * layout can place several framed panels, each a different mode or data slice.
+ */
+export function drawPanel(
+  mode: VisualMode, ctx: CanvasRenderingContext2D, rect: Rect, s: DrawState, compact: boolean,
+) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.w, rect.h);
+  ctx.clip();
+  ctx.translate(rect.x, rect.y);
+  drawMode(mode, ctx, rect.w, rect.h, s, compact);
+  ctx.restore();
 }
 
 export function drawMode(

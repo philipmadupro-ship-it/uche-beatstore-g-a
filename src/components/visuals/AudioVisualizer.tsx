@@ -12,14 +12,14 @@
  *  - rAF runs ONLY while playing AND visible AND the tab is shown.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useVisualPeaks } from '@/hooks/useVisualPeaks';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { cn } from '@/lib/utils';
 import {
   BAND_COUNT, bandsFromPeaks, createHistory, fillHistoryFromPeaks, meanOf, pushHistory, smoothDecay,
 } from '@/lib/visuals/geometry';
-import { drawMode, type DrawState } from '@/lib/visuals/draw';
+import { DEFAULT_THEME, drawMode, type DrawState, type VisualTheme } from '@/lib/visuals/draw';
 import { readBands, type LiveFrame } from '@/lib/visuals/analyser-hub';
 import type { VisualMode } from '@/lib/visuals/modes';
 
@@ -36,14 +36,20 @@ interface Props {
   isPlaying: boolean;
   compact?: boolean;
   height?: number;
+  /** Colours + line weights; defaults to the store's mint-on-black. */
+  theme?: VisualTheme;
   background?: string;
   label?: string;
   className?: string;
 }
 
 export function AudioVisualizer({
-  mode, trackId, peaksUrl, progress, isPlaying, compact = false, height, background = '#090907', label, className,
+  mode, trackId, peaksUrl, progress, isPlaying, compact = false, height, theme: themeProp, background, label, className,
 }: Props) {
+  const theme = useMemo(
+    () => ({ ...(themeProp ?? DEFAULT_THEME), ...(background ? { background } : {}) }),
+    [themeProp, background],
+  );
   const reduced = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -65,10 +71,10 @@ export function AudioVisualizer({
     if (!stateRef.current) {
       stateRef.current = {
         bands: new Float32Array(BAND_COUNT), history: createHistory(HISTORY_ROWS, BAND_COUNT),
-        left: 0, right: 0, progress: 0, live: false, background,
+        left: 0, right: 0, progress: 0, live: false, theme,
       };
     }
-    stateRef.current.background = background;
+    stateRef.current.theme = theme;
     return stateRef.current;
   };
 
@@ -96,7 +102,7 @@ export function AudioVisualizer({
     if (canvasRef.current) canvasRef.current.dataset.source = 'peaks';
     paint();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paint, background]);
+  }, [paint, theme]);
 
   // Size + dpr (capped at 2).
   useEffect(() => {
@@ -176,7 +182,7 @@ export function AudioVisualizer({
     <div
       ref={wrapRef}
       className={cn('relative w-full overflow-hidden rounded-xl', className)}
-      style={{ height: height ?? (compact ? 120 : 220), background }}
+      style={{ height: height ?? (compact ? 120 : 220), background: theme.background }}
       role="img"
       aria-label={label ? `${label} audio visual` : 'Audio visual'}
     >
