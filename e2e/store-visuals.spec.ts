@@ -220,3 +220,30 @@ test.describe('scrubber close-up @2x', () => {
     await slider.screenshot({ path: 'e2e-artifacts/store-visuals/scrubber-closeup-2x-paused.png' });
   });
 });
+
+for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', width: 390, height: 844 }]) {
+  test.describe(`now playing fold @${vp.name}`, () => {
+    test.use({ viewport: { width: vp.width, height: vp.height } });
+
+    test('where the scrubber sits when Now Playing opens, and scrolled into view', async ({ page }) => {
+      await openAndPlay(page);
+      await expect.poll(() => audioTime(page), { timeout: 10_000 }).toBeGreaterThan(0.5);
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: 'Open Now Playing' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Now playing' });
+      await expect(dialog).toBeVisible();
+      await page.waitForTimeout(600);
+      const m = await page.evaluate(() => {
+        const sc = document.querySelector('[role="dialog"][aria-label="Now playing"] [data-band-scrubber]')!.getBoundingClientRect();
+        const dl = document.querySelector('[role="dialog"][aria-label="Now playing"]')!.getBoundingClientRect();
+        return { vh: window.innerHeight, scrubTop: Math.round(sc.top), scrubBottom: Math.round(sc.bottom), dialogTop: Math.round(dl.top), dialogBottom: Math.round(dl.bottom) };
+      });
+      console.log(`FOLD@${vp.name} ${JSON.stringify(m)} fullyVisibleOnOpen=${m.scrubBottom <= Math.min(m.vh, m.dialogBottom)}`);
+      await page.screenshot({ path: `e2e-artifacts/store-visuals/nowplaying-open-${vp.name}.png` });
+      await dialog.locator('[data-band-scrubber]').scrollIntoViewIfNeeded();
+      await dialog.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: `e2e-artifacts/store-visuals/nowplaying-scrubber-visible-${vp.name}.png` });
+    });
+  });
+}
