@@ -14,11 +14,24 @@ function wav(seconds = 12, rate = 22050): Buffer {
   buf.write('fmt ', 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
   buf.writeUInt32LE(rate, 24); buf.writeUInt32LE(rate * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34);
   buf.write('data', 36); buf.writeUInt32LE(n * 2, 40);
+  let seed = 1;
+  const noise = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 2147483648 - 1; };
+  let lp = 0;
   for (let i = 0; i < n; i += 1) {
     const t = i / rate;
-    const kick = Math.sin(2 * Math.PI * (60 + 90 * Math.exp(-(t % 0.5) * 18)) * t) * Math.exp(-(t % 0.5) * 7);
-    const lead = 0.35 * Math.sin(2 * Math.PI * (440 + 220 * Math.sin(t * 2)) * t);
-    buf.writeInt16LE(Math.round((0.6 * kick + lead) * 0.6 * 32767), 44 + i * 2);
+    const beat = t % 0.5;
+    // low: kick
+    const kick = Math.sin(2 * Math.PI * (55 + 90 * Math.exp(-beat * 18)) * t) * Math.exp(-beat * 7);
+    // mid: minor chord stabs on the off-beat
+    const stab = (t + 0.25) % 0.5;
+    const env = Math.exp(-stab * 5);
+    const chord = (Math.sin(2 * Math.PI * 220 * t) + Math.sin(2 * Math.PI * 261.6 * t) + Math.sin(2 * Math.PI * 329.6 * t)) / 3 * env;
+    // high: hi-hats, high-passed noise bursts every 1/8
+    const hat = (t % 0.25);
+    const raw = noise();
+    const hp = raw - lp; lp += 0.35 * (raw - lp);
+    const hats = hp * Math.exp(-hat * 38) * (Math.floor(t / 0.25) % 2 ? 1 : 0.6);
+    buf.writeInt16LE(Math.round(Math.max(-1, Math.min(1, 0.75 * kick + 0.5 * chord + 0.35 * hats)) * 0.8 * 32767), 44 + i * 2);
   }
   return buf;
 }
