@@ -9,19 +9,18 @@ const log = createLogger('api.store.contact');
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { isValidEmail } from '@/lib/validate';
 import { normalizeEmail } from '@/lib/contacts/email';
+import { cleanEnv, emailFailureHint, fromDomain, RESEND_SANDBOX_SENDER } from '@/lib/stripe/payments-config';
 
 /**
  * POST /api/store/contact
  *
  * Public (no auth) — visitor-submitted contact form on the /store page.
  * Forwards the message to the creator's contact_email via Resend.
- * Falls back to RESEND_FROM_EMAIL if the creator hasn't set one.
+ * Falls back to the owner's login email if the creator hasn't set one.
  *
  * Rate-limiting is not implemented here; Vercel's built-in DDoS
  * protection + Resend's own limits are the safety net.
  */
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,8 +40,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message too long' }, { status: 400 });
     }
 
-    // Resolve the creator's contact_email (if configured)
-    let toEmail: string = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    // Constructed per request: `new Resend(undefined)` throws at import time,
+    // which made every request to this route fail before any code ran.
+    const apiKey = cleanEnv(process.env.RESEND_API_KEY);
+    if (!apiKey) {
+      log.error('RESEND_API_KEY is not set — store contact messages cannot be delivered', {});
+      return NextResponse.json({ error: 'Messaging is unavailable right now. Please try again later.' }, { status: 503 });
+    }
+    const resend = new Resend(apiKey);
+    const fromAddress = cleanEnv(process.env.RESEND_FROM_EMAIL) || RESEND_SANDBOX_SENDER;
+
+    // Resolve who receives it: the creator's contact_email, else the owner's
+    // login email. Never the no-reply sender, which nobody reads.
+    let toEmail: string | null = null;
     // Also the seller the CRM lead belongs to. Single-producer app, so the one
     // creator_profiles row is the owner — but contacts.user_id must be set
     // either way: mig 097 made null-owner contact rows unreadable.
@@ -58,9 +68,27 @@ export async function POST(req: NextRequest) {
           .maybeSingle();
         if (profile?.contact_email) toEmail = profile.contact_email;
         sellerUserId = (profile as { user_id?: string | null } | null)?.user_id ?? null;
-      } catch {
-        // Non-fatal: fall back to env
+
+        if (!toEmail) {
+          const { data: anyProfile } = await admin
+            .from('creator_profiles')
+            .select('user_id')
+            .limit(1)
+            .maybeSingle();
+          sellerUserId = sellerUserId ?? (anyProfile as { user_id?: string | null } | null)?.user_id ?? null;
+          if (sellerUserId) {
+            const { data: userRes } = await admin.auth.admin.getUserById(sellerUserId);
+            toEmail = userRes?.user?.email ?? null;
+          }
+        }
+      } catch (err) {
+        log.warn('store contact recipient lookup failed', { error: errorMessage(err) });
       }
+    }
+    if (!toEmail && fromDomain(fromAddress) !== 'resend.dev') toEmail = fromAddress;
+    if (!toEmail) {
+      log.error('store contact has nowhere to go — set contact_email on the creator profile', {});
+      return NextResponse.json({ error: 'Messaging is unavailable right now. Please try again later.' }, { status: 503 });
     }
 
     const subjectLine = subject?.trim()
@@ -68,7 +96,7 @@ export async function POST(req: NextRequest) {
       : `[Store Contact] Message from ${name}`;
 
     const { error: resendError } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+      from: fromAddress,
       to: toEmail,
       replyTo: email,
       subject: subjectLine,
@@ -102,7 +130,18 @@ export async function POST(req: NextRequest) {
       `,
     });
 
-    if (resendError) throw resendError;
+    if (resendError) {
+      const message = errorMessage(resendError);
+      log.error('store contact send failed — the visitor\'s message was NOT delivered', {
+        error: message,
+        hint: emailFailureHint(message),
+        from_domain: fromDomain(fromAddress),
+      });
+      return NextResponse.json(
+        { error: 'We could not send your message right now. Please try again later.' },
+        { status: 502 },
+      );
+    }
 
     // Upsert the enquiry into the producer's CRM. Non-fatal, but no longer
     // silent — this was inert for the same three reasons as the free-download

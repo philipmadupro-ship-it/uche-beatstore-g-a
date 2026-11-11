@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { cleanEnv } from '@/lib/stripe/payments-config';
 
 const log = createLogger('fulfillment.email-outbox');
 type AdminClient = ReturnType<typeof createServiceClient>;
@@ -24,10 +25,11 @@ async function sendEmail(input: {
   html: string;
   attachments?: Attachment[];
 }) {
-  if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  const apiKey = cleanEnv(process.env.RESEND_API_KEY);
+  if (!apiKey) throw new Error('RESEND_API_KEY not configured');
+  const resend = new Resend(apiKey);
   const { error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+    from: cleanEnv(process.env.RESEND_FROM_EMAIL) || 'onboarding@resend.dev',
     ...input,
   });
   if (error) throw error;
