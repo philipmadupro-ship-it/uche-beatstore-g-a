@@ -1,19 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advancePosition, compactReadout, envFollow, laneEnergies, laneLayout, normaliseSeries, scrubFraction, seriesPeakAt,
-  tapFraction,
+  advancePosition, bandEnergies, envFollow, normaliseSeries, scrubFraction, seriesPeakAt, tapFraction,
 } from './lanes';
-
-describe('laneLayout', () => {
-  it('stacks high/mid/low with the mid lane widest and nothing overlapping', () => {
-    const l = laneLayout(200, 4);
-    expect(l[1].half).toBeGreaterThan(l[0].half);
-    expect(l[1].half).toBeGreaterThan(l[2].half);
-    expect(l[0].cy + l[0].half).toBeLessThan(l[1].cy - l[1].half);
-    expect(l[1].cy + l[1].half).toBeLessThan(l[2].cy - l[2].half);
-    expect(l[2].cy + l[2].half).toBeLessThanOrEqual(200);
-  });
-});
 
 describe('normaliseSeries / seriesPeakAt', () => {
   it('scales to the series peak and lifts the body', () => {
@@ -30,16 +18,17 @@ describe('normaliseSeries / seriesPeakAt', () => {
   });
 });
 
-describe('laneEnergies', () => {
-  it('routes low / mid / high bands to the right lane (high, mid, low order)', () => {
+describe('bandEnergies', () => {
+  it('routes low / mid / high bands to red / green / blue order (low, mid, high)', () => {
     const bands = new Float32Array(64);
-    bands[3] = 1; // low
-    const e = laneEnergies(bands, new Float32Array(3));
-    expect(e[2]).toBeGreaterThan(0.5); // low lane is index 2
-    expect(e[0]).toBe(0); expect(e[1]).toBe(0);
-    bands.fill(0); bands[60] = 1;
-    laneEnergies(bands, e);
+    bands[3] = 1;
+    const e = bandEnergies(bands, new Float32Array(3));
     expect(e[0]).toBeGreaterThan(0.5);
+    expect(e[1]).toBe(0); expect(e[2]).toBe(0);
+    bands.fill(0); bands[60] = 1;
+    bandEnergies(bands, e);
+    expect(e[2]).toBeGreaterThan(0.5);
+    expect(e[0]).toBe(0);
   });
 });
 
@@ -79,11 +68,4 @@ describe('scrub / tap', () => {
     expect(tapFraction(0.3, 400, 400, 14, 100)).toBeCloseTo(0.3 + 0.07);
   });
   it('is safe with no duration', () => { expect(scrubFraction(0.4, 50, 400, 14, 0)).toBe(0.4); });
-});
-
-describe('compactReadout', () => {
-  it('formats dB, whole Hz and the note', () => {
-    expect(compactReadout(-11.6, 235)).toBe('−11.6 dB · 235 Hz · A#3');
-    expect(compactReadout(-12, null)).toBe('−12 dB');
-  });
 });

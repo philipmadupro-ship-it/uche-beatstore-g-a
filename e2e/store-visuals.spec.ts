@@ -99,13 +99,13 @@ for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', wid
 
 
 for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', width: 390, height: 844 }]) {
-  test.describe(`lane scrubber @${vp.name}`, () => {
+  test.describe(`band scrubber @${vp.name}`, () => {
     test.use({ viewport: { width: vp.width, height: vp.height } });
 
-    test('fixed playhead, three lanes drawn, drag / tap / arrow keys seek, audio keeps playing', async ({ page }) => {
+    test('fixed playhead, one waveform drawn, drag / tap / arrow keys seek, audio keeps playing', async ({ page }) => {
       await openAndPlay(page);
       await expect.poll(() => audioTime(page), { timeout: 10_000 }).toBeGreaterThan(0.5);
-      const slider = page.locator('[role="dialog"] [data-lane-scrubber]').first();
+      const slider = page.locator('[role="dialog"] [data-band-scrubber]').first();
       await expect(slider).toBeVisible();
       await expect(slider).toHaveAttribute('role', 'slider');
       // Painted (non-background pixels) and moving while playing.
@@ -114,7 +114,7 @@ for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', wid
       const a = await snap();
       await page.waitForTimeout(500);
       expect(await snap()).not.toBe(a);
-      await page.screenshot({ path: `e2e-artifacts/store-visuals/scrubber-${vp.name}.png` });
+      await page.screenshot({ path: `e2e-artifacts/store-visuals/scrubber-playing-${vp.name}.png` });
 
       // Arrow keys step 5 s.
       await slider.focus();
@@ -136,6 +136,10 @@ for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', wid
       const t2 = await audioTime(page);
       await page.waitForTimeout(600);
       expect(await audioTime(page)).toBeGreaterThan(t2);
+      // Paused: a static frame of the same scrubber.
+      await page.locator('[role="dialog"]').getByRole('button', { name: 'Pause', exact: true }).first().click();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `e2e-artifacts/store-visuals/scrubber-paused-${vp.name}.png` });
     });
   });
 }

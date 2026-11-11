@@ -1,33 +1,9 @@
 /**
- * Pure maths for the three-lane scrolling scrubber: lane layout, series
- * normalisation and bucket-peak lookup, per-lane live energy, envelope
- * following, position extrapolation, scrub/tap mapping and the readout text.
+ * Pure maths for the scrolling band scrubber: series normalisation and bucket-peak lookup, per-band live energy, envelope
+ * following, position extrapolation, scrub/tap mapping.
  */
 
 import { clamp01 } from './geometry';
-import { hzToNote, MIN_DB } from '@/lib/audio/pitch';
-
-/** Top to bottom: highs, mids (the main lane), lows. */
-export const LANE_ORDER = ['high', 'mid', 'low'] as const;
-export type LaneName = (typeof LANE_ORDER)[number];
-
-/** Share of the usable height for each lane, top to bottom. Mids are widest. */
-export const LANE_SHARE = [0.27, 0.46, 0.27] as const;
-
-export interface LaneBox { cy: number; half: number }
-
-/** Centre line and maximum half-height of each lane, with `gap` px between lanes. */
-export function laneLayout(height: number, gap = 4, out: LaneBox[] = [{ cy: 0, half: 0 }, { cy: 0, half: 0 }, { cy: 0, half: 0 }]): LaneBox[] {
-  const usable = Math.max(0, height - gap * 2);
-  let y = 0;
-  for (let i = 0; i < 3; i += 1) {
-    const h = usable * LANE_SHARE[i];
-    out[i].cy = y + h / 2;
-    out[i].half = (h / 2) * 0.94;
-    y += h + gap;
-  }
-  return out;
-}
 
 /**
  * Normalise a series to 0..1 against its own peak and lift the quiet body with
@@ -61,14 +37,15 @@ export function seriesPeakAt(series: ArrayLike<number>, f0: number, f1: number):
 }
 
 /**
- * Live energy per lane (0..1) from the log-spaced analyser bands. With 64 bands
- * over 30 Hz–16 kHz the 200 Hz and 1.5 kHz crossovers fall near bands 19 and 40.
+ * Live energy per band (0..1), order low, mid, high, from the log-spaced
+ * analyser bands. With 64 bands over 30 Hz–16 kHz the 200 Hz and 1.5 kHz
+ * crossovers fall near bands 19 and 40.
  */
-export function laneEnergies(bands: ArrayLike<number>, out: Float32Array): Float32Array {
+export function bandEnergies(bands: ArrayLike<number>, out: Float32Array): Float32Array {
   const n = bands.length;
   const lowEnd = Math.round(n * 0.3);
   const midEnd = Math.round(n * 0.62);
-  const ranges: Array<[number, number]> = [[midEnd, n], [lowEnd, midEnd], [0, lowEnd]]; // high, mid, low
+  const ranges: Array<[number, number]> = [[0, lowEnd], [lowEnd, midEnd], [midEnd, n]];
   for (let l = 0; l < 3; l += 1) {
     const [a, b] = ranges[l];
     let sum = 0;
@@ -114,14 +91,4 @@ export function scrubFraction(startPos: number, dxPx: number, widthPx: number, v
 export function tapFraction(pos: number, xPx: number, widthPx: number, visibleSeconds: number, durationSeconds: number): number {
   if (widthPx <= 0 || durationSeconds <= 0) return clamp01(pos);
   return clamp01(pos + ((xPx / widthPx) - 0.5) * (visibleSeconds / durationSeconds));
-}
-
-/** `−11.6 dB · 235 Hz · A#3`. Real minus sign so figures align in tabular-nums. */
-export function compactReadout(db: number, hz: number | null): string {
-  const r = Math.round(db * 10) / 10;
-  const dbPart = db <= MIN_DB ? '−∞ dB' : `${r < 0 ? '−' : ''}${Math.abs(r)} dB`;
-  if (hz == null) return dbPart;
-  const note = hzToNote(hz);
-  const hzPart = `${Math.round(hz)} Hz`;
-  return note ? `${dbPart} · ${hzPart} · ${note.label}` : `${dbPart} · ${hzPart}`;
 }

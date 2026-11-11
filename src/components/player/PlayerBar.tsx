@@ -11,7 +11,7 @@ import {
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { MarqueeText } from './MarqueeText';
 import { SimpleAudioEngine } from './SimpleAudioEngine';
-import { LaneScrubber } from '@/components/visuals/LaneScrubber';
+import { BandScrubber } from '@/components/visuals/BandScrubber';
 import { AudioVisualizer } from '@/components/visuals/AudioVisualizer';
 import { VisualizerModeSwitch } from '@/components/visuals/VisualizerModeSwitch';
 import { useVisualizerMode } from '@/hooks/useVisualizerMode';
@@ -583,7 +583,7 @@ export function PlayerBar({
                   className="mb-3"
                 />
                 <VisualizerModeSwitch mode={visualMode} onChange={setVisualMode} className="mb-4" />
-                <LaneScrubber
+                <BandScrubber
                   trackId={currentTrack.id}
                   audioUrl={currentTrack.audio_url}
                   peaksUrl={currentTrack.peaks_url}

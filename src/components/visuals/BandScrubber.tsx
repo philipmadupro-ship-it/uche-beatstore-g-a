@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * Three-lane scrolling scrubber (highs / mids / lows) with a FIXED centre
- * playhead: the waveform scrolls past it. Soft white blobs on near-black;
- * the part under the playhead swells with each band's LIVE energy from the
- * shared analyser (precomputed values when none is available).
+ * Scrolling scrubber: ONE mirrored waveform on ONE centre line with a FIXED
+ * centre playhead; the waveform scrolls past it. Lows red, mids green, highs
+ * blue, mixed additively so strong overlaps burn white. The part under the
+ * playhead swells with each band's LIVE energy from the shared analyser
+ * (precomputed band data when none is available).
  *
  * Drop-in for SpectralWaveform: same props. Drag/swipe scrubs, tap/click jumps,
  * arrow keys step 5 s, `role="slider"` with aria values.
@@ -17,9 +18,9 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { keyboardSeekFraction } from '@/lib/audio/seek-accessibility';
 import { cn } from '@/lib/utils';
 import { clamp01, BAND_COUNT } from '@/lib/visuals/geometry';
-import { DEFAULT_LANE_THEME, drawLanes, type LaneState, type LaneTheme } from '@/lib/visuals/lane-draw';
+import { DEFAULT_WAVE_THEME, drawBandWaveform, type WaveState, type WaveTheme } from '@/lib/visuals/band-draw';
 import {
-  advancePosition, compactReadout, envFollow, laneEnergies, normaliseSeries, scrubFraction, seriesPeakAt, tapFraction,
+  advancePosition, bandEnergies, envFollow, normaliseSeries, scrubFraction, seriesPeakAt, tapFraction,
 } from '@/lib/visuals/lanes';
 import { readBands, type LiveFrame } from '@/lib/visuals/analyser-hub';
 
@@ -41,7 +42,7 @@ interface Props {
   durationSeconds: number;
   height?: number;
   visibleSeconds?: number;
-  theme?: LaneTheme;
+  theme?: WaveTheme;
   className?: string;
 }
 
@@ -50,9 +51,9 @@ function fmtTime(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 }
 
-export function LaneScrubber({
+export function BandScrubber({
   trackId, audioUrl, peaksUrl, publicAnalysisUrl, progress, isPlaying, canSeek, onSeek, label, durationSeconds,
-  height = 132, visibleSeconds = DEFAULT_VISIBLE_SECONDS, theme = DEFAULT_LANE_THEME, className,
+  height = 132, visibleSeconds = DEFAULT_VISIBLE_SECONDS, theme = DEFAULT_WAVE_THEME, className,
 }: Props) {
   const reduced = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -60,14 +61,14 @@ export function LaneScrubber({
   const [width, setWidth] = useState(0);
   const [dragging, setDragging] = useState(false);
 
-  const { bands, db, hz, status } = useSpectralPeaks(trackId, audioUrl, ANALYSIS_SLICES, undefined, publicAnalysisUrl);
+  const { bands, status } = useSpectralPeaks(trackId, audioUrl, ANALYSIS_SLICES, undefined, publicAnalysisUrl);
   const { peaks, source: peaksSource } = useVisualPeaks(trackId, peaksUrl, ANALYSIS_SLICES);
 
-  // Normalised series, top to bottom: high, mid, low. Real 3-band data when the
-  // analysis exists; otherwise the amplitude peaks stand in for every lane
-  // (scaled, honestly the same shape) so the control is never empty.
-  const series = useMemo<LaneState['series']>(() => {
-    if (bands) return [normaliseSeries(bands.high), normaliseSeries(bands.mid), normaliseSeries(bands.low)];
+  // Normalised series, order low, mid, high. Real 3-band data when the analysis
+  // exists; otherwise the amplitude peaks stand in for every band (the same
+  // shape, so it reads white) and the control is never empty.
+  const series = useMemo<WaveState['series']>(() => {
+    if (bands) return [normaliseSeries(bands.low), normaliseSeries(bands.mid), normaliseSeries(bands.high)];
     const p = normaliseSeries(peaks);
     return [p, p, p];
   }, [bands, peaks]);
@@ -78,7 +79,7 @@ export function LaneScrubber({
   const smoothRef = useRef(pos);
   const overrideRef = useRef<{ pos: number; until: number } | null>(null);
   const visibleRef = useRef(true);
-  const stateRef = useRef<LaneState | null>(null);
+  const stateRef = useRef<WaveState | null>(null);
   const scratch = useRef({ bands: new Float32Array(BAND_COUNT), energy: new Float32Array(3), frame: { silent: false, left: 0, right: 0 } as LiveFrame });
   useEffect(() => { posRef.current = pos; }, [pos]);
 
@@ -146,7 +147,7 @@ export function LaneScrubber({
       s.pos = smoothRef.current = currentPos();
       energyAt(s.pos);
       s.live.fill(0);
-      drawLanes(ctx, width, height, s);
+      drawBandWaveform(ctx, width, height, s);
       return;
     }
 
@@ -161,10 +162,10 @@ export function LaneScrubber({
       smoothRef.current = advancePosition(smoothRef.current, target, durationSeconds > 0 ? dt / durationSeconds : 0, true);
       s.pos = smoothRef.current;
       // Live band energy; precomputed values at the playhead when no analyser.
-      if (readBands(sc.bands, sc.frame) && !sc.frame.silent) laneEnergies(sc.bands, sc.energy);
+      if (readBands(sc.bands, sc.frame) && !sc.frame.silent) bandEnergies(sc.bands, sc.energy);
       else energyAt(s.pos);
       for (let l = 0; l < 3; l += 1) s.live[l] = envFollow(s.live[l], sc.energy[l], dt);
-      drawLanes(ctx, width, height, s);
+      drawBandWaveform(ctx, width, height, s);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
@@ -213,12 +214,6 @@ export function LaneScrubber({
     seekTo(next);
   };
 
-  const readout = useMemo(() => {
-    if (!db || db.length === 0) return null;
-    const i = Math.min(db.length - 1, Math.max(0, Math.round(pos * (db.length - 1))));
-    return compactReadout(db[i], hz?.[i] ?? null);
-  }, [db, hz, pos]);
-
   const elapsed = pos * durationSeconds;
   const remaining = Math.max(0, durationSeconds - elapsed);
 
@@ -234,8 +229,8 @@ export function LaneScrubber({
         aria-valuenow={Math.round(pos * 100)}
         aria-valuetext={`${fmtTime(elapsed)} elapsed of ${fmtTime(durationSeconds)}`}
         aria-busy={status === 'analyzing' || undefined}
-        data-lane-scrubber
-        data-lane-source={lowFi ? 'peaks' : 'bands'}
+        data-band-scrubber
+        data-band-source={lowFi ? 'peaks' : 'bands'}
         data-peaks-source={peaksSource}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
@@ -250,15 +245,6 @@ export function LaneScrubber({
         style={{ height }}
       >
         <canvas ref={canvasRef} aria-hidden className="block h-full w-full" style={{ width: '100%', height: '100%' }} />
-
-        {readout && (
-          <div
-            aria-live="off"
-            className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] tabular-nums tracking-[0.08em] text-white/40"
-          >
-            {readout}
-          </div>
-        )}
 
         {/* Fixed centre playhead: thin, full height. */}
         <span aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/80" />
