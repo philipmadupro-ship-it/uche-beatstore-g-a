@@ -99,6 +99,12 @@ describe('POST /api/store/contact', () => {
     expect(JSON.stringify(call?.[1])).not.toContain('ada@example.com');
   });
 
+  it('caps name and subject length', async () => {
+    expect((await POST(req({ ...valid, name: 'a'.repeat(121) }))).status).toBe(400);
+    expect((await POST(req({ ...valid, subject: 's'.repeat(201) }))).status).toBe(400);
+    expect((await POST(req({ ...valid, name: 'a'.repeat(120), subject: 's'.repeat(200) }))).status).toBe(200);
+  });
+
   it('still validates input', async () => {
     expect((await POST(req({ name: 'a', email: 'nope', message: 'x' }))).status).toBe(400);
     expect((await POST(req({ email: 'a@b.co' }))).status).toBe(400);

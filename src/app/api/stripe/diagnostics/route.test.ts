@@ -72,6 +72,13 @@ describe('GET /api/stripe/diagnostics', () => {
     expect(hints).toMatch(/TEST-mode endpoint/);
   });
 
+  it('trims a publishable key pasted with a newline before comparing modes', async () => {
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_live_abc\n';
+    const body = await (await GET()).json();
+    expect(body.stripe.publishable_key_mode).toBe('live');
+    expect(body.hints.join(' ')).not.toMatch(/PUBLISHABLE_KEY is/);
+  });
+
   it('flags the Resend sandbox sender', async () => {
     delete process.env.RESEND_FROM_EMAIL;
     const body = await (await GET()).json();

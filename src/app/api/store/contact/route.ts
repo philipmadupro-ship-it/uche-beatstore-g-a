@@ -18,8 +18,7 @@ import { cleanEnv, emailFailureHint, fromDomain, RESEND_SANDBOX_SENDER } from '@
  * Forwards the message to the creator's contact_email via Resend.
  * Falls back to the owner's login email if the creator hasn't set one.
  *
- * Rate-limiting is not implemented here; Vercel's built-in DDoS
- * protection + Resend's own limits are the safety net.
+ * Rate-limited per IP (rateLimitDurable, 5 per minute).
  */
 
 export async function POST(req: NextRequest) {
@@ -35,6 +34,12 @@ export async function POST(req: NextRequest) {
     }
     if (!isValidEmail(email)) {
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
+    }
+    if (String(name).length > 120) {
+      return NextResponse.json({ error: 'Name too long' }, { status: 400 });
+    }
+    if (String(subject ?? '').length > 200) {
+      return NextResponse.json({ error: 'Subject too long' }, { status: 400 });
     }
     if (String(message).length > 2000) {
       return NextResponse.json({ error: 'Message too long' }, { status: 400 });

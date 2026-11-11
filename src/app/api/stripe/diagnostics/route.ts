@@ -89,7 +89,7 @@ export async function GET() {
 
   const secretMode = stripeKeyMode(process.env.STRIPE_SECRET_KEY);
   const publishableMode = stripeKeyMode(
-    (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '').replace(/^pk_/, 'sk_'),
+    cleanEnv(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).replace(/^pk_/, 'sk_'),
   );
   const webhookSecret = webhookSecretStatus(process.env.STRIPE_WEBHOOK_SECRET);
   const out: StripeDiagnostics = {
