@@ -16,7 +16,9 @@ import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier } from '@/components/store/LicenseSelector';
 import type { Track as CartTrack } from '@/lib/types';
 import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
-import { ShareTrackRow, ShareTrackListHeader, type ShareRowDownload } from '@/components/share/ShareTrackRow';
+import type { ShareRowDownload } from '@/components/share/ShareTrackRow';
+import { ShareTrackList } from '@/components/share/ShareTrackList';
+import { SHARE_CONTROLS_MIN_TRACKS } from '@/lib/share/track-list';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { resolveCreatorLink } from '@/lib/store/social-links';
 
@@ -79,6 +81,8 @@ interface Track {
   wav_url?: string | null;
   stems_status?: CartTrack['stems_status'] | null;
   created_at?: string | null;
+  peaks_url?: string | null;
+  tags?: { tag: string; category?: string | null }[] | null;
 }
 
 interface Project {
@@ -407,7 +411,8 @@ export function ClientShareVariant({
         <section className="mb-14">
           <div className="flex items-center justify-between mb-4">
             <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80">
-              Tracks · {tracks.length}
+              {/* A long list carries its own "N of M" count above the rows. */}
+              {tracks.length < SHARE_CONTROLS_MIN_TRACKS ? `Tracks · ${tracks.length}` : 'Tracks'}
             </p>
             {discount && (
               <span className="text-[9px] font-mono text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/20 px-2 py-0.5 rounded-full">
@@ -416,94 +421,84 @@ export function ClientShareVariant({
             )}
           </div>
 
-          <div className="space-y-2">
-            <ShareTrackListHeader hasDownload={rowDownload?.allowed} hasTrailing trailingLabel={shareToken && resolvedTiers.length > 0 ? 'License' : undefined} />
-
-            {tracks.length === 0 ? (
-              <div className="px-5 py-12 text-center text-[11px] text-white/60">
-                No tracks in this selection yet.
-              </div>
-            ) : (
-              tracks.map((t) => {
-                const isCurrent = playingId === t.id;
-                const leasePrice = resolvePrice(shareLeasePrice, t.lease_price_usd, creatorLeasePrice, discount);
-                const exclPrice = resolvePrice(shareExclusivePrice, t.exclusive_price_usd, creatorExclusivePrice, discount);
-                // Original (pre-discount) prices for strikethrough
-                const leaseOrig = discount && leasePrice != null ? leasePrice / (1 - discount / 100) : null;
-                const exclOrig = discount && exclPrice != null ? exclPrice / (1 - discount / 100) : null;
-                const inCart = cartItems.some((ci) => ci.track.id === t.id);
-
-                return (
-                  <ShareTrackRow
-                    key={t.id}
-                    track={t}
-                    active={isCurrent}
-                    isPlaying={!!isPlaying}
-                    onPlay={() => onPlay(t)}
-                    onOpenDetails={() => setSelectedTrackForDetails(t)}
-                    download={rowDownload}
-                    titleBadge={inCart ? (
+          <ShareTrackList
+            tracks={tracks}
+            playingId={playingId}
+            isPlaying={isPlaying}
+            onPlay={onPlay}
+            download={rowDownload}
+            hasTrailing
+            trailingLabel={shareToken && resolvedTiers.length > 0 ? 'License' : undefined}
+            rowExtras={(t) => {
+              const leasePrice = resolvePrice(shareLeasePrice, t.lease_price_usd, creatorLeasePrice, discount);
+              const exclPrice = resolvePrice(shareExclusivePrice, t.exclusive_price_usd, creatorExclusivePrice, discount);
+              // Original (pre-discount) prices for strikethrough
+              const leaseOrig = discount && leasePrice != null ? leasePrice / (1 - discount / 100) : null;
+              const exclOrig = discount && exclPrice != null ? exclPrice / (1 - discount / 100) : null;
+              const inCart = cartItems.some((ci) => ci.track.id === t.id);
+              return {
+                onOpenDetails: () => setSelectedTrackForDetails(t),
+                titleBadge: inCart ? (
                       <span className="text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/20 px-1.5 py-0.5 rounded-full shrink-0">
                         In cart
                       </span>
-                    ) : null}
-                    trailing={
-                      <>
-                      {shareToken && resolvedTiers.length > 0 ? (
-                        (() => {
-                          const selTier = resolvedTiers.find((r) => r.id === selectedLicenseId) ?? resolvedTiers[0];
-                          const price = selTier?.is_exclusive ? exclPrice : leasePrice;
-                          const origPrice = selTier?.is_exclusive ? exclOrig : leaseOrig;
-                          if (price == null) return (
-                            <button
-                              onClick={() => setSelectedTrackForDetails(t)}
-                              className="text-white/30 group-hover:text-white transition-colors p-1"
-                            >
-                              <ChevronRight size={14} />
-                            </button>
-                          );
-                          const isExcl = selTier?.is_exclusive ?? false;
-                          return (
-                            <button
-                              onClick={() => handleAddToCart(t)}
-                              className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg border transition-colors ${
-                                isExcl
-                                  ? 'bg-white/[0.07] border-white/20 hover:border-white/20 hover:bg-white/10'
-                                  : 'bg-white/[0.04] border-white/20 hover:border-white/20 hover:bg-white/[0.05]'
-                              }`}
-                            >
-                              <span className={`text-[8px] font-mono uppercase tracking-wider ${isExcl ? 'text-white/80' : 'text-white/60'}`}>
-                                {selTier?.name ?? 'Add'}
-                              </span>
-                              <span className="flex items-center gap-1 leading-none">
-                                {origPrice && (
-                                  <span className="text-[8px] font-mono text-white/30 line-through tabular-nums">
-                                    ${Math.round(origPrice)}
-                                  </span>
-                                )}
-                                <span className={`text-[11px] font-mono font-bold tabular-nums ${isExcl ? 'text-white' : 'text-white'}`}>
-                                  ${Math.round(price)}
-                                </span>
-                              </span>
-                            </button>
-                          );
-                        })()
-                      ) : (
-                        <button
-                          onClick={() => setSelectedTrackForDetails(t)}
-                          className="text-white/30 group-hover:text-white transition-colors p-1"
-                        >
-                          <ChevronRight size={14} />
-                        </button>
-                      )}
+                    ) : null,
+                trailing: (
 
-                      </>
-                    }
-                  />
-                );
-              })
-            )}
-          </div>
+                        <>
+                        {shareToken && resolvedTiers.length > 0 ? (
+                          (() => {
+                            const selTier = resolvedTiers.find((r) => r.id === selectedLicenseId) ?? resolvedTiers[0];
+                            const price = selTier?.is_exclusive ? exclPrice : leasePrice;
+                            const origPrice = selTier?.is_exclusive ? exclOrig : leaseOrig;
+                            if (price == null) return (
+                              <button
+                                onClick={() => setSelectedTrackForDetails(t)}
+                                className="text-white/30 group-hover:text-white transition-colors p-1"
+                              >
+                                <ChevronRight size={14} />
+                              </button>
+                            );
+                            const isExcl = selTier?.is_exclusive ?? false;
+                            return (
+                              <button
+                                onClick={() => handleAddToCart(t)}
+                                className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg border transition-colors ${
+                                  isExcl
+                                    ? 'bg-white/[0.07] border-white/20 hover:border-white/20 hover:bg-white/10'
+                                    : 'bg-white/[0.04] border-white/20 hover:border-white/20 hover:bg-white/[0.05]'
+                                }`}
+                              >
+                                <span className={`text-[8px] font-mono uppercase tracking-wider ${isExcl ? 'text-white/80' : 'text-white/60'}`}>
+                                  {selTier?.name ?? 'Add'}
+                                </span>
+                                <span className="flex items-center gap-1 leading-none">
+                                  {origPrice && (
+                                    <span className="text-[8px] font-mono text-white/30 line-through tabular-nums">
+                                      ${Math.round(origPrice)}
+                                    </span>
+                                  )}
+                                  <span className={`text-[11px] font-mono font-bold tabular-nums ${isExcl ? 'text-white' : 'text-white'}`}>
+                                    ${Math.round(price)}
+                                  </span>
+                                </span>
+                              </button>
+                            );
+                          })()
+                        ) : (
+                          <button
+                            onClick={() => setSelectedTrackForDetails(t)}
+                            className="text-white/30 group-hover:text-white transition-colors p-1"
+                          >
+                            <ChevronRight size={14} />
+                          </button>
+                        )}
+
+                        </>
+                ),
+              };
+            }}
+          />
         </section>
 
         {/* ── License tiers ── */}

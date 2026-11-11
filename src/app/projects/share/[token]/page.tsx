@@ -23,6 +23,7 @@ import { RapperShareVariant } from '@/components/share/variants/RapperShareVaria
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 import { ShareActions } from '@/components/share/ShareActions';
+import { ShareTransportProvider } from '@/components/share/ShareTransport';
 import { downloadFilename } from '@/lib/share/download-filename';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
@@ -74,6 +75,8 @@ interface ShareTrack {
   bpm: number | null;
   key: string | null;
   scale: string | null;
+  created_at?: string | null;
+  tags?: { tag: string; category: string | null }[];
 }
 
 interface ShareProject {
@@ -671,12 +674,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   const rowDownload = share
     ? { allowed: share.allow_downloads === true, onDownload: downloadTrack, downloadingId }
     : undefined;
+  const transportValue = {
+    currentTime,
+    duration,
+    seekToFraction: (fraction: number) => seek(fraction * (duration || 0)),
+  };
   const shareActions = share ? (
     <ShareActions
-      tracks={tracks}
       allowDownloads={share.allow_downloads === true}
-      onDownload={downloadTrack}
-      downloadingId={downloadingId}
       fullPlayback={share.full_playback !== false}
       collaboration={share.role === 'viewer' ? null : {
         role: share.role,
@@ -688,7 +693,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
 
   if (!workspace && share?.recipient_kind === 'client' && displayProject) {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
         {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <ClientShareVariant
@@ -719,13 +724,13 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           waveRef={waveRef}
           onSeek={(seconds) => seek(seconds)}
         />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (!workspace && share?.recipient_kind === 'producer' && displayProject) {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
       {purchaseBannerNode}
       {/* The page's ONE audio engine draws its waveform inside the variant's
           vinyl, so the disc, the waveform and the sound share a single clock.
@@ -751,13 +756,13 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           }
         }}
       />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (!workspace && share?.recipient_kind === 'rapper' && displayProject) {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
       {purchaseBannerNode}
       {/* The page's ONE audio engine draws its waveform inside the variant's
           vinyl, so the disc, the waveform and the sound share a single clock.
@@ -783,13 +788,13 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           }
         }}
       />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (!workspace && share?.recipient_kind === 'friend' && displayProject) {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
       {purchaseBannerNode}
       {/* The page's ONE audio engine draws its waveform inside the variant's
           vinyl, so the disc, the waveform and the sound share a single clock.
@@ -815,7 +820,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           }
         }}
       />
-      </>
+      </ShareTransportProvider>
     );
   }
 

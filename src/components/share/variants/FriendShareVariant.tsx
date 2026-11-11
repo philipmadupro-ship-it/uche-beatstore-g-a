@@ -3,7 +3,8 @@
 import type { ReactNode } from 'react';
 
 import { SkipForward, SkipBack } from 'lucide-react';
-import { ShareTrackRow, type ShareRowDownload } from '@/components/share/ShareTrackRow';
+import type { ShareRowDownload } from '@/components/share/ShareTrackRow';
+import { ShareTrackList } from '@/components/share/ShareTrackList';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 
 interface CreatorProfile {
@@ -121,22 +122,20 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
 
         {/* Tracks list */}
         {tracks.length > 1 && (
-          <div className="w-full bg-[#0e0c09] border border-white/10 rounded-2xl overflow-hidden max-h-96 overflow-y-auto">
+          <div className="w-full bg-[#0e0c09] border border-white/10 rounded-2xl overflow-hidden">
             <div className="px-4 py-2.5 border-b border-white/10">
               <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/40">{tracks.length} tracks</p>
             </div>
-            <div className="space-y-2 p-2">
-              {tracks.map((t) => (
-                <ShareTrackRow
-                  key={t.id}
-                  track={t}
-                  active={playingId === t.id}
-                  isPlaying={!!isPlaying}
-                  onPlay={() => onPlay(t)}
-                  download={rowDownload}
-                  compact
-                />
-              ))}
+            <div className="p-2">
+              <ShareTrackList
+                tracks={tracks}
+                playingId={playingId}
+                isPlaying={isPlaying}
+                onPlay={onPlay}
+                download={rowDownload}
+                compact
+                listClassName="max-h-[70vh] overflow-y-auto"
+              />
             </div>
           </div>
         )}

@@ -11,6 +11,7 @@ import { signedSharePeaksUrl } from '@/lib/share-media-token';
 import { isFullPlayback, writeWithPlayback } from '@/lib/share/playback';
 import { sharePlaybackUrl } from '@/lib/share/playback-url';
 import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
+import { loadShareTrackTags, withShareTags } from '@/lib/share/track-tags';
 import {
   isWellFormedShareToken,
   resolveShareToken,
@@ -99,7 +100,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       const [tracksRes, stemsRes] = await Promise.all([
         supabaseAdmin
           .from('tracks')
-          .select('id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics')
+          .select('id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics, created_at')
           .in('id', share.track_ids),
         supabaseAdmin
           .from('stems')
@@ -107,7 +108,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           .in('track_id', share.track_ids)
       ]);
       const tracks = (tracksRes.data || []) as LocalShareTrack[];
-      const safeTracks = tracks.map((track) => toPublicShareTrack(track, token, isFullPlayback(share)));
+      const safeTracks = withShareTags(
+        tracks.map((track) => toPublicShareTrack(track, token, isFullPlayback(share))),
+        await loadShareTrackTags(supabaseAdmin, tracks.map((t) => t.id)),
+      );
       const stems = share.allow_downloads
         ? ((stemsRes.data || []) as LocalStem[]).map((stem) => ({
             track_id: stem.track_id,

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { SkipBack, SkipForward, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
-import { ShareTrackRow, type ShareRowDownload } from '@/components/share/ShareTrackRow';
+import { SkipBack, SkipForward, Copy, Check } from 'lucide-react';
+import type { ShareRowDownload } from '@/components/share/ShareTrackRow';
+import { ShareTrackList } from '@/components/share/ShareTrackList';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 
 /**
@@ -83,7 +84,6 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
   const displayName = creator?.display_name || project.name;
   const [bpmCopied, setBpmCopied] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
-  const [trackListExpanded, setTrackListExpanded] = useState(false);
 
   const isMinor = currentTrack?.scale === 'minor';
   const compatibleKeys = getCompatibleKeys(currentTrack?.key, currentTrack?.scale);
@@ -113,7 +113,6 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
     if (idx >= 0 && idx < tracks.length - 1) onPlay(tracks[idx + 1]);
   };
 
-  const visibleTracks = trackListExpanded ? tracks : tracks.slice(0, 6);
 
   return (
     <div className="min-h-screen bg-[#090907] text-white font-sans flex flex-col relative overflow-hidden">
@@ -286,32 +285,17 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                   Pack · {tracks.length}
                 </p>
               </div>
-              <div className="space-y-2 p-2">
-                {visibleTracks.map((t) => (
-                  <ShareTrackRow
-                    key={t.id}
-                    track={t}
-                    active={playingId === t.id}
-                    isPlaying={!!isPlaying}
-                    onPlay={() => onPlay(t)}
-                    download={rowDownload}
-                    compact
-                  />
-                ))}
+              <div className="p-2">
+                <ShareTrackList
+                  tracks={tracks}
+                  playingId={playingId}
+                  isPlaying={isPlaying}
+                  onPlay={onPlay}
+                  download={rowDownload}
+                  compact
+                  listClassName="max-h-[70vh] overflow-y-auto"
+                />
               </div>
-
-              {tracks.length > 6 && (
-                <button
-                  onClick={() => setTrackListExpanded((v) => !v)}
-                  className="w-full flex items-center justify-center gap-2 py-3 text-[10px] font-mono text-white/60 hover:text-white border-t border-white/10 transition-colors"
-                >
-                  {trackListExpanded ? (
-                    <><ChevronUp size={12} /> Show less</>
-                  ) : (
-                    <><ChevronDown size={12} /> {tracks.length - 6} more loops</>
-                  )}
-                </button>
-              )}
             </div>
           </div>
         </div>

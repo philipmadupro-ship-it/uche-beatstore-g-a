@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Download, Loader2, Music } from 'lucide-react';
 import { PauseGlyph, PlayGlyph } from '@/components/player/TransportIcons';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
@@ -45,6 +45,15 @@ interface Props {
    * the BPM | key | type line instead, so the title keeps the width.
    */
   compact?: boolean;
+  /**
+   * The row's waveform (`ShareRowWaveform`). A slot rather than a child
+   * component so the row has no idea how it is drawn. On a phone and in a
+   * compact list it takes its own line under the row; from md up it sits
+   * between the title and the time.
+   */
+  waveform?: ReactNode;
+  /** Genre / mood chips under the BPM | key line. */
+  tags?: string[];
 }
 
 function fmt(seconds: number): string {
@@ -52,8 +61,10 @@ function fmt(seconds: number): string {
 }
 
 /** Column heads for a list of {@link ShareTrackRow}s; same widths as the row. */
-export function ShareTrackListHeader({ hasDownload, hasTrailing, trailingLabel, compact }: {
+export function ShareTrackListHeader({ hasDownload, hasTrailing, trailingLabel, compact, hasWaveform }: {
   hasDownload?: boolean;
+  /** The rows carry a waveform column. */
+  hasWaveform?: boolean;
   /** The rows have a trailing slot; reserve its width even when it has no label. */
   hasTrailing?: boolean;
   trailingLabel?: string;
@@ -67,6 +78,7 @@ export function ShareTrackListHeader({ hasDownload, hasTrailing, trailingLabel, 
     >
       <span className="w-12 shrink-0" />
       <span className="min-w-0 flex-1">Title</span>
+      {hasWaveform && <span className="w-[220px] shrink-0 lg:w-[300px]" />}
       <span className="w-[72px] shrink-0 text-right">Time</span>
       {hasDownload && <span className="w-8 shrink-0" />}
       {(hasTrailing || trailingLabel) && <span className="w-[140px] shrink-0 text-right">{trailingLabel}</span>}
@@ -88,8 +100,8 @@ export function ShareTrackListHeader({ hasDownload, hasTrailing, trailingLabel, 
  * The row is a `div` holding sibling buttons, never one inside another (a
  * button inside a button is invalid HTML).
  */
-export function ShareTrackRow({
-  track, active, isPlaying, onPlay, download, onOpenDetails, titleBadge, trailing, compact,
+function ShareTrackRowImpl({
+  track, active, isPlaying, onPlay, download, onOpenDetails, titleBadge, trailing, compact, waveform, tags,
 }: Props) {
   const showPause = active && isPlaying;
   const keyLabel = track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null;
@@ -136,6 +148,18 @@ export function ShareTrackRow({
         ))}
         {cells.length === 0 ? <span>—</span> : null}
       </span>
+      {tags && tags.length > 0 ? (
+        <span data-testid="share-track-tags" className="mt-1.5 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="truncate rounded-lg border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-[0.14em] text-white/55"
+            >
+              {tag}
+            </span>
+          ))}
+        </span>
+      ) : null}
     </span>
   );
 
@@ -143,7 +167,7 @@ export function ShareTrackRow({
     <div
       data-testid="share-track-row"
       data-active={active || undefined}
-      className={`group relative flex min-h-[64px] items-center gap-3 rounded-xl border px-2 py-2 transition-colors md:gap-4 md:px-3 ${
+      className={`group relative flex min-h-[64px] flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-2 py-2 transition-colors md:gap-x-4 md:px-3 ${
         active
           ? 'border-white/30 bg-white/[0.08]'
           : 'border-white/[0.06] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.05]'
@@ -182,6 +206,15 @@ export function ShareTrackRow({
         </button>
       )}
 
+      {waveform && (
+        <div
+          data-testid="share-row-waveform-slot"
+          className={`order-last basis-full ${compact ? '' : 'md:order-none md:w-[220px] md:shrink-0 md:basis-auto lg:w-[300px]'}`}
+        >
+          {waveform}
+        </div>
+      )}
+
       {!compact && (
         <span className="hidden w-[72px] shrink-0 text-right text-[11px] font-mono tabular-nums text-white/40 md:block">
           {duration ?? '—'}
@@ -207,3 +240,5 @@ export function ShareTrackRow({
     </div>
   );
 }
+
+export const ShareTrackRow = memo(ShareTrackRowImpl);

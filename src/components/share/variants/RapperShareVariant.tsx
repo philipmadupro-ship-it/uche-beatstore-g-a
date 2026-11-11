@@ -2,7 +2,8 @@
 
 import { useState, type ReactNode } from 'react';
 import { Edit3 } from 'lucide-react';
-import { ShareTrackRow, type ShareRowDownload } from '@/components/share/ShareTrackRow';
+import type { ShareRowDownload } from '@/components/share/ShareTrackRow';
+import { ShareTrackList } from '@/components/share/ShareTrackList';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
 
@@ -194,19 +195,15 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
           {tracks.length > 1 && (
             <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
               <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3">Workspace Tracks</p>
-              <div className="max-h-80 space-y-2 overflow-y-auto">
-                {tracks.map((t) => (
-                  <ShareTrackRow
-                    key={t.id}
-                    track={t}
-                    active={playingId === t.id}
-                    isPlaying={!!isPlaying}
-                    onPlay={() => onPlay(t)}
-                    download={rowDownload}
-                    compact
-                  />
-                ))}
-              </div>
+              <ShareTrackList
+                tracks={tracks}
+                playingId={playingId}
+                isPlaying={isPlaying}
+                onPlay={onPlay}
+                download={rowDownload}
+                compact
+                listClassName="max-h-[70vh] overflow-y-auto"
+              />
             </div>
           )}
 

@@ -153,10 +153,20 @@ async function stubLegacyShare(page: Page, o: Opts): Promise<Harness> {
   return h;
 }
 
+/** The row a track's own controls live on. */
+const rowOf = (page: Page, title: string) => page.getByTestId('share-track-row').filter({ hasText: title });
+
+/**
+ * Downloads are on each track's own row; there is no second list at the bottom
+ * (ShareActions keeps only the playback label, the downloads-off notice and the
+ * collaboration entry).
+ */
 async function expectDownloadWorks(page: Page, h: Harness, password?: string) {
   const actions = page.getByTestId('share-actions');
   await expect(actions).toBeVisible();
-  const button = actions.getByRole('button', { name: 'Download Track One' });
+  await expect(actions.getByRole('button', { name: /^Download / })).toHaveCount(0);
+  await expect(actions.getByText('Downloads', { exact: true })).toHaveCount(0);
+  const button = rowOf(page, 'Track One').getByRole('button', { name: 'Download Track One' });
   await button.scrollIntoViewIfNeeded();
   const [download] = await Promise.all([page.waitForEvent('download'), button.click()]);
   expect(download.suggestedFilename()).toBe('Track One.wav');
@@ -170,7 +180,7 @@ async function expectDownloadsOff(page: Page, h: Harness) {
   const actions = page.getByTestId('share-actions');
   await expect(actions).toBeVisible();
   await expect(actions.getByText('Downloads are off for this link.')).toBeVisible();
-  await expect(actions.getByRole('button', { name: /^Download / })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Download / })).toHaveCount(0);
   expect(h.downloads).toHaveLength(0);
 }
 
@@ -181,11 +191,8 @@ async function expectDownloadsOff(page: Page, h: Harness) {
  * blob: URL it made from the fetched file, so the play() source cannot name
  * the track; the fetch of track two plus a play() after the click does.
  */
-async function expectPlays(page: Page, h: Harness, kind: Kind) {
-  const row = kind === 'client'
-    // The client row's play control is the cover button at the row's start.
-    ? page.locator('div.group', { hasText: 'Track Two' }).locator('button').first()
-    : page.locator('button', { hasText: 'Track Two' }).first();
+async function expectPlays(page: Page, h: Harness) {
+  const row = rowOf(page, 'Track Two').getByTestId('share-track-play');
   await row.scrollIntoViewIfNeeded();
   await page.evaluate(() => { (window as unknown as { __played: string[] }).__played = []; });
   await row.click();
@@ -211,7 +218,7 @@ for (const kind of ['producer', 'rapper', 'friend'] as const) {
       // The page's engine draws into the container under the vinyl.
       await expect.poll(() => wave.evaluate((el) => el.childElementCount > 0)).toBe(true);
 
-      await expectPlays(page, h, kind);
+      await expectPlays(page, h);
       // Playing Track Two moves the disc and keeps one waveform on the page.
       await expect(disc).toHaveAttribute('data-spinning', 'true');
       await expect(page.getByTestId('share-vinyl-wave')).toHaveCount(1);
@@ -220,7 +227,7 @@ for (const kind of ['producer', 'rapper', 'friend'] as const) {
     test('Download is on the beat\'s own row', async ({ page }) => {
       const h = await stubProjectShare(page, { kind, allowDownloads: true, fullPlayback: true });
       await page.goto(`/projects/share/${TOKEN}`);
-      const row = page.getByTestId('share-track-row').filter({ hasText: 'Track Two' });
+      const row = rowOf(page, 'Track Two');
       await row.scrollIntoViewIfNeeded();
       const [download] = await Promise.all([
         page.waitForEvent('download'),
@@ -245,7 +252,7 @@ for (const kind of KINDS) {
     test('downloads on + full track: player loads, playback says full, download saves the master', async ({ page }) => {
       const h = await stubProjectShare(page, { kind, allowDownloads: true, fullPlayback: true });
       await page.goto(`/projects/share/${TOKEN}`);
-      await expectPlays(page, h, kind);
+      await expectPlays(page, h);
       await expect(page.getByTestId('share-playback-mode')).toHaveText(/Full track/);
       await expectDownloadWorks(page, h);
     });
@@ -253,7 +260,7 @@ for (const kind of KINDS) {
     test('downloads off + 1:15 preview: no download control, playback says preview', async ({ page }) => {
       const h = await stubProjectShare(page, { kind, allowDownloads: false, fullPlayback: false });
       await page.goto(`/projects/share/${TOKEN}`);
-      await expectPlays(page, h, kind);
+      await expectPlays(page, h);
       await expect(page.getByTestId('share-playback-mode')).toHaveText(/Preview · 1:15/);
       await expectDownloadsOff(page, h);
     });
@@ -263,7 +270,7 @@ for (const kind of KINDS) {
       await page.goto(`/projects/share/${TOKEN}`);
       await page.getByPlaceholder(/password/i).fill('studio');
       await page.keyboard.press('Enter');
-      await expectPlays(page, h, kind);
+      await expectPlays(page, h);
       await expectDownloadWorks(page, h, 'studio');
     });
 
@@ -290,7 +297,7 @@ for (const kind of KINDS) {
     test('downloads on: download works; full track labelled', async ({ page }) => {
       const h = await stubLegacyShare(page, { kind, allowDownloads: true, fullPlayback: true });
       await page.goto(`/share/${TOKEN}`);
-      await expectPlays(page, h, kind);
+      await expectPlays(page, h);
       await expect(page.getByTestId('share-playback-mode')).toHaveText(/Full track/);
       await expectDownloadWorks(page, h);
     });

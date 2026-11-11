@@ -17,6 +17,7 @@ import { RapperShareVariant } from '@/components/share/variants/RapperShareVaria
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 import { ShareActions } from '@/components/share/ShareActions';
+import { ShareTransportProvider } from '@/components/share/ShareTransport';
 import { downloadFilename } from '@/lib/share/download-filename';
 import { toast } from '@/hooks/useToast';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -427,20 +428,29 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       )
     : null;
 
+  // Download on each track's own row, and the playhead / seek the row waveforms borrow.
+  const rowDownload = share
+    ? { allowed: allowDownloads, onDownload: downloadTrack, downloadingId }
+    : undefined;
+  const transportValue = {
+    currentTime,
+    duration,
+    seekToFraction: (fraction: number) => {
+      if (ws.current && duration > 0) ws.current.seekTo(Math.max(0, Math.min(1, fraction)));
+    },
+  };
+
   // The producer's options, honoured in every variant (ShareActions).
   const shareActions = share ? (
     <ShareActions
-      tracks={tracks}
       allowDownloads={allowDownloads}
-      onDownload={downloadTrack}
-      downloadingId={downloadingId}
       fullPlayback={fullPlayback}
     />
   ) : null;
 
   if (share?.recipient_kind === 'client') {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
         {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <FallbackAudio
@@ -457,6 +467,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         <ClientShareVariant
           project={projectMock}
           actions={shareActions}
+          rowDownload={rowDownload}
           tracks={tracks}
           creator={creator}
           licenses={[]}
@@ -481,13 +492,13 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             }
           }}
         />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (share?.recipient_kind === 'producer') {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
         {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <FallbackAudio
@@ -504,6 +515,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         <ProducerShareVariant
           project={projectMock}
           actions={shareActions}
+          rowDownload={rowDownload}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}
@@ -513,13 +525,13 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             if (idx >= 0) selectTrack(idx);
           }}
         />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (share?.recipient_kind === 'rapper') {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
         {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <FallbackAudio
@@ -536,6 +548,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         <RapperShareVariant
           project={projectMock}
           actions={shareActions}
+          rowDownload={rowDownload}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}
@@ -545,13 +558,13 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             if (idx >= 0) selectTrack(idx);
           }}
         />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (share?.recipient_kind === 'friend') {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
         {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <FallbackAudio
@@ -568,6 +581,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         <FriendShareVariant
           project={projectMock}
           actions={shareActions}
+          rowDownload={rowDownload}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}
@@ -577,7 +591,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             if (idx >= 0) selectTrack(idx);
           }}
         />
-      </>
+      </ShareTransportProvider>
     );
   }
 

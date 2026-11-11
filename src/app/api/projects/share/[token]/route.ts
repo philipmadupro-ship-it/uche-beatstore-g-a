@@ -13,6 +13,7 @@ import { signedSharePeaksUrl } from '@/lib/share-media-token';
 import { isFullPlayback } from '@/lib/share/playback';
 import { sharePlaybackUrl } from '@/lib/share/playback-url';
 import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
+import { loadShareTrackTags, withShareTags, type ShareTrackTag } from '@/lib/share/track-tags';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -87,6 +88,7 @@ interface TrackRow {
   description?: string | null;
   lease_price_usd?: number | null;
   exclusive_price_usd?: number | null;
+  created_at?: string | null;
 }
 
 interface TrackJunctionRow {
@@ -224,7 +226,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (failure) return shareGateResponse(failure);
 
     const CREATOR_FIELDS = 'display_name, bio, hero_image_url, credits, license_lease_price_usd, license_exclusive_price_usd, license_notes, instagram_handle, twitter_handle, spotify_url, soundcloud_url, website_url, contact_email';
-    const TRACK_FIELDS = 'id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics, description, lease_price_usd, exclusive_price_usd';
+    const TRACK_FIELDS = 'id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics, description, lease_price_usd, exclusive_price_usd, created_at';
 
     async function fetchCreator(userId: string) {
       const { data } = await admin.from('creator_profiles').select(CREATOR_FIELDS).eq('user_id', userId).maybeSingle();
@@ -248,7 +250,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       const playlistRow = playlist as PlaylistRow | null;
       const junctionRows = (junction ?? []) as TrackJunctionRow[];
       const trackIds = junctionRows.map((j) => j.track_id);
-      let tracks: ReturnType<typeof publicShareTrack>[] = [];
+      let tracks: (ReturnType<typeof publicShareTrack> & { tags?: ShareTrackTag[] })[] = [];
       let stems: ReturnType<typeof redactStems> = [];
       if (trackIds.length) {
         const [tracksRes, stemsRes] = await Promise.all([
@@ -261,6 +263,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           .map((j) => byId.get(j.track_id))
           .filter((track): track is TrackRow => Boolean(track))
           .map((track) => publicShareTrack(track, token, isFullPlayback(share)));
+        tracks = withShareTags(tracks, await loadShareTrackTags(admin, tracks.map((t) => t.id)));
       }
       const creator = playlistRow?.user_id ? await fetchCreator(playlistRow.user_id) : null;
       const playlistPublic = redactUserId(playlistRow);
@@ -330,7 +333,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const tracks = trackIds.length
       ? junctionRows.map((j) => byId.get(j.track_id)).filter((track): track is TrackRow => Boolean(track))
       : [];
-    const safeTracks = tracks.map((track) => publicShareTrack(track, token, isFullPlayback(share)));
+    const safeTracks = withShareTags(
+      tracks.map((track) => publicShareTrack(track, token, isFullPlayback(share))),
+      await loadShareTrackTags(admin, tracks.map((t) => t.id)),
+    );
 
     const projectPublic = redactUserId(projectRow);
 
