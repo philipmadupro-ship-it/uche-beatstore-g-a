@@ -27,7 +27,7 @@
  * Headless: renders only a hidden <audio>. Mount once, near the PlayerBar.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { playbackAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
@@ -38,9 +38,19 @@ import { useSessionContext } from '@/hooks/useSessionContext';
 import { previewAdjustment } from '@/lib/audio/session-match';
 import { seekSeconds } from '@/lib/audio/waveform-path';
 import { classifyPlayRejection, holdsSource } from '@/lib/audio/play-rejection';
+import {
+  attachElement, isCaptured, markOriginBad, probeCors, releaseHubElement, sourceClass,
+} from '@/lib/visuals/analyser-hub';
+import { canCapture, crossOriginFor } from '@/lib/visuals/analysable';
 
 export function SimpleAudioEngine() {
   const audioRef = useRef<HTMLAudioElement>(null);
+  // Bumped to swap in a FRESH <audio>. A captured element (Web Audio) can never
+  // be released, and one playing a non-CORS cross-origin source is silent, so
+  // whenever capture could break playback we replace the element instead.
+  const [epoch, setEpoch] = useState(0);
+  const liveEl = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => { liveEl.current = audioRef.current; }, [epoch]);
 
   const {
     currentTrack, isPlaying, volume, muted, duckGain, seekTarget,
@@ -89,6 +99,23 @@ export function SimpleAudioEngine() {
     }
   }, [setBuffering, setPlaybackError, setPlaying]);
 
+  const remountElement = useCallback(() => {
+    const a = audioRef.current;
+    if (a) releaseHubElement(a);
+    const s = usePlayer.getState();
+    resumeRef.current = { trackId: s.currentTrack?.id, fraction: s.progress };
+    setEpoch((e) => e + 1);
+  }, []);
+
+  /** Capture for the visuals only when that can't silence this source. */
+  const maybeCapture = useCallback((a: HTMLAudioElement) => {
+    const src = a.getAttribute('src');
+    if (!src) return;
+    const cls = sourceClass(src);
+    const safe = cls === 'same-origin' || (cls === 'cors-ok' && a.crossOrigin === 'anonymous');
+    if (safe && !isCaptured(a)) attachElement(a, remountElement);
+  }, [remountElement]);
+
   // ── Load source when the track changes ────────────────────────────────
   // Latency-critical: nothing async may sit between the tap and play().
   // Awaiting IndexedDB before setting src added tens/hundreds of ms per tap
@@ -130,6 +157,13 @@ export function SimpleAudioEngine() {
     if (!holdsSource(a, instant)) {
       setBuffering(true);
       setPlaybackError(null);
+      // CORS-safe analysis (lib/visuals/analysable): a captured element must
+      // never be handed a source that would play silent — replace it instead.
+      const cls = sourceClass(instant);
+      if (cls === 'unknown') probeCors(instant);
+      if (isCaptured(a) && !canCapture(cls)) { remountElement(); return; }
+      const co = crossOriginFor(cls);
+      if (co) a.crossOrigin = co; else a.removeAttribute('crossorigin'); // BEFORE src
       a.src = instant;
       a.load();
     }
@@ -151,6 +185,7 @@ export function SimpleAudioEngine() {
           if (a.currentTime > 0 && Number.isFinite(a.duration) && a.duration > 0) {
             resumeRef.current = { trackId, fraction: a.currentTime / a.duration };
           }
+          if (isCaptured(a)) a.crossOrigin = 'anonymous'; // blob: is same-origin, harmless
           a.src = blob;
           a.load();
           resume();
@@ -166,7 +201,7 @@ export function SimpleAudioEngine() {
       if (onMeta) a.removeEventListener('loadedmetadata', onMeta);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackId, url]);
+  }, [trackId, url, epoch]);
 
   // ── Hand-over on unmount ──────────────────────────────────────────────
   // A media element removed from the document pauses itself, but the store
@@ -177,8 +212,8 @@ export function SimpleAudioEngine() {
   // unmount runs this cleanup too, with the element still in place, at the
   // exact moment the first track starts (the bar mounts with it).
   useEffect(() => {
-    const a = audioRef.current;
     return () => {
+      const a = liveEl.current;
       if (!a || a.isConnected) return;
       const s = usePlayer.getState();
       if (s.isPlaying || s.isBuffering) usePlayer.setState({ isPlaying: false, isBuffering: false });
@@ -196,7 +231,7 @@ export function SimpleAudioEngine() {
       a.pause();
       setBuffering(false);
     }
-  }, [isPlaying, trackId, setBuffering, setPlaybackError, onPlayRejected]);
+  }, [isPlaying, trackId, epoch, setBuffering, setPlaybackError, onPlayRejected]);
 
   // ── Session tempo (time-stretch, pitch preserved) ─────────────────────
   // Applied in its own effect, after the source effect, because loading a new
@@ -219,14 +254,14 @@ export function SimpleAudioEngine() {
     el.preservesPitch = true;
     el.mozPreservesPitch = true;
     el.webkitPreservesPitch = true;
-  }, [adjustment, trackId, url]);
+  }, [adjustment, trackId, url, epoch]);
 
   // ── Volume (× duck × loudness normalization) ──────────────────────────
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
     a.volume = outputVolume({ volume, muted }, duckGain, normGain);
-  }, [volume, muted, duckGain, normGain]);
+  }, [volume, muted, duckGain, normGain, epoch]);
 
   // ── Seek — consume seekTarget (0..1) from the store ───────────────────
   useEffect(() => {
@@ -239,10 +274,11 @@ export function SimpleAudioEngine() {
     const seconds = seekSeconds(seekTarget, a.duration, currentTrack?.duration_seconds);
     if (seconds != null) a.currentTime = seconds;
     usePlayer.setState({ seekTarget: null });
-  }, [seekTarget, currentTrack?.duration_seconds]);
+  }, [seekTarget, currentTrack?.duration_seconds, epoch]);
 
   return (
     <audio
+      key={epoch}
       ref={audioRef}
       hidden
       preload="auto"
@@ -257,7 +293,8 @@ export function SimpleAudioEngine() {
       }}
       onWaiting={() => setBuffering(true)}
       onCanPlay={() => setBuffering(false)}
-      onPlaying={() => {
+      onPlaying={(e) => {
+        maybeCapture(e.currentTarget);
         setBuffering(false);
         setPlaybackError(null);
         setPlaying(true);
@@ -267,7 +304,16 @@ export function SimpleAudioEngine() {
         setBuffering(false);
         next();
       }}
-      onError={() => {
+      onError={(e) => {
+        // A CORS-fetched source that errors must not cost the listener the
+        // track: mark the origin bad and reload on a plain element.
+        const el = e.currentTarget;
+        const failed = el.getAttribute('src');
+        if (failed && el.crossOrigin === 'anonymous' && !failed.startsWith('blob:')) {
+          markOriginBad(failed);
+          remountElement();
+          return;
+        }
         setBuffering(false);
         setPlaybackError('Preview stream unavailable. Try another beat.');
         setPlaying(false);

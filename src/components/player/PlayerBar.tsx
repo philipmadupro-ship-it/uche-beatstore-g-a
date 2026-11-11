@@ -12,6 +12,9 @@ import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { MarqueeText } from './MarqueeText';
 import { SimpleAudioEngine } from './SimpleAudioEngine';
 import { SpectralWaveform } from './SpectralWaveform';
+import { AudioVisualizer } from '@/components/visuals/AudioVisualizer';
+import { VisualizerModeSwitch } from '@/components/visuals/VisualizerModeSwitch';
+import { useVisualizerMode } from '@/hooks/useVisualizerMode';
 import { AsciiCoverArt } from './AsciiCoverArt';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
@@ -125,6 +128,7 @@ export function PlayerBar({
   // rather than a second decode. Called before the early return below because
   // hooks must run unconditionally. Same hook as the store preview drawer, so
   // both surfaces react identically by construction rather than by coincidence.
+  const [visualMode, setVisualMode] = useVisualizerMode();
   const publicAnalysisUrl = publicStore ? publicAnalysisSource(currentTrack?.id, currentTrack?.audio_url) : null;
   const { level: nowPlayingLevel, bass: nowPlayingBass } = useAudioReactivity(
     currentTrack?.id ?? null,
@@ -564,6 +568,21 @@ export function PlayerBar({
               {/* Spectral waveform — its own lane, coloured by real low/mid/high
                   band energy. Doubles as the scrubber (click, drag, keyboard). */}
               <div className="mt-5">
+                {/* Audio-reactive line visual. Live from the shared analyser
+                    while playing; a static picture of the track's own peaks
+                    before play or when the source can't be analysed. */}
+                <AudioVisualizer
+                  mode={visualMode}
+                  trackId={currentTrack.id}
+                  peaksUrl={currentTrack.peaks_url}
+                  progress={progress}
+                  isPlaying={isPlaying}
+                  background="#14110d"
+                  height={200}
+                  label={currentTrack.title || 'current track'}
+                  className="mb-3"
+                />
+                <VisualizerModeSwitch mode={visualMode} onChange={setVisualMode} className="mb-4" />
                 <SpectralWaveform
                   trackId={currentTrack.id}
                   audioUrl={currentTrack.audio_url}
