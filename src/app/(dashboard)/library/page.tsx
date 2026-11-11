@@ -54,6 +54,9 @@ import { gridTemplate, resolveColumns } from '@/lib/library/columns';
 import { useLibraryColumns } from '@/hooks/useLibraryColumns';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { ColumnPicker } from '@/components/library/ColumnPicker';
+import { keyRank } from '@/lib/library/key-rank';
+import { LibraryToolbar } from '@/components/library/LibraryToolbar';
+import { TrackListHeader } from '@/components/library/TrackListHeader';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import type { TrackStatsMap } from '@/lib/library/track-stats';
 import { RowCallbackCache } from '@/lib/ui/stable-row-callbacks';
@@ -80,25 +83,6 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'plays', label: 'Most played' },
   { value: 'store_order', label: 'Store Order ↕' },
 ];
-
-// Circle-of-fifths ordering — sorting by key alphabetically would
-// scatter compatible keys. This puts harmonically related keys near
-// each other (C / G / D / A / E / B / F# / C# / G# / D# / A# / F).
-const KEY_ORDER: Record<string, number> = {
-  C: 0, G: 1, D: 2, A: 3, E: 4, B: 5,
-  'F#': 6, 'C#': 7, 'G#': 8, 'D#': 9, 'A#': 10, F: 11,
-  // Flat aliases — Postgres / Essentia sometimes emits these instead
-  // of sharps. Map them to the equivalent sharp slot so a mixed
-  // dataset still sorts coherently.
-  Db: 7, Eb: 9, Gb: 6, Ab: 8, Bb: 10,
-};
-function keyRank(t: { key?: string | null; scale?: string | null }): number {
-  if (!t.key) return 999;
-  const base = KEY_ORDER[t.key] ?? 998;
-  // Minor sits after major in each slot so a key listing groups
-  // C major then C minor, D major then D minor, etc.
-  return base * 2 + (t.scale === 'minor' ? 1 : 0);
-}
 
 // The API's rich track select inlines `track_tags(tag, category)` as a join —
 // extend Track locally rather than growing the shared type for one filtering
@@ -1434,38 +1418,14 @@ export default function LibraryPage() {
             have neither control, which is why it grew its own chip strip with
             a hardcoded subset of the vocabulary. One toolbar, both views, so
             the filter you set in one is the filter that applies in the other. */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6">
-          <div className="relative flex-1 min-w-[160px] sm:max-w-sm">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-            <input
-              placeholder="Search tracks"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white/[0.03] border border-white/[0.06] rounded-full pl-8 pr-3 py-2 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-white/[0.12] transition-colors"
-            />
-          </div>
-          {/* Wraps below sm — same trap as the contacts toolbar: an `ml-auto` group
-              with nowrap keeps its full intrinsic width inside a wrapping
-              parent, so trailing controls (here the sort Dropdown, at x=420
-              on a 375px screen) fall outside the viewport with nothing to
-              scroll, making them unreachable rather than merely off-screen. */}
-          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-            <button
-              onClick={() => setShowFilters((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-medium transition-colors ${
-                showFilters || hasActiveFilters(filters)
-                  ? 'bg-white/15 border border-white/40 text-white'
-                  : 'bg-white/[0.04] border border-white/[0.06] text-white/60 hover:text-white hover:bg-white/[0.08]'
-              }`}
-            >
-              <SlidersHorizontal size={11} />
-              Filters
-              {hasActiveFilters(filters) && (
-                <span className="w-4 h-4 rounded-full border border-white/20 text-white/70 text-[9px] font-bold flex items-center justify-center leading-none">
-                  {activeFilterCount(filters)}
-                </span>
-              )}
-            </button>
+        <LibraryToolbar
+          search={search}
+          onSearch={setSearch}
+          showFilters={showFilters}
+          onToggleFilters={() => setShowFilters((v) => !v)}
+          filtersActive={hasActiveFilters(filters)}
+          filterCount={activeFilterCount(filters)}
+        >
             {/* Column config sits with the other list controls rather than in
                 settings: it is a per-task adjustment, not a preference you set
                 once and forget. Only meaningful for the table, so it is hidden
@@ -1512,8 +1472,7 @@ export default function LibraryPage() {
                 <Disc3 size={13} />
               </button>
             </div>
-          </div>
-        </div>
+        </LibraryToolbar>
 
         {showFilters && !isMobileViewport && (
           <FilterBar filters={filters} onChange={setFilters} triageCounts={triageCounts} tagOptions={tagOptions} />
@@ -1610,11 +1569,12 @@ export default function LibraryPage() {
             {/* Header mirrors the Store list product row rather than the
                 old table grid: cover/play, title/meta, vibe, time,
                 rating/offline, actions. */}
-            <div
-              style={{ '--track-row-cols': gridTemplate(activeColumns) } as React.CSSProperties}
-              className="track-row-dynamic hidden md:grid items-center gap-4 border border-transparent px-3 h-8 text-[9px] font-mono uppercase tracking-wider"
-            >
-              <span className="text-center flex items-center justify-center text-white/30">
+            <TrackListHeader
+              columns={activeColumns}
+              sortMode={sortMode}
+              onSort={setSortMode}
+              leading={(
+                <>
                 {sortMode === 'store_order' ? (
                   <Store size={10} className="text-white" />
                 ) : selectMode ? (
@@ -1645,31 +1605,9 @@ export default function LibraryPage() {
                 ) : (
                   ''
                 )}
-              </span>
-              {/* Headers come from the configured columns, so the header and
-                  the rows can never disagree about what is displayed. */}
-              {activeColumns.map((col) => {
-                const alignCls = col.align === 'right' ? 'flex justify-end' : 'block';
-                if (!col.sort) {
-                  return <span key={col.id} className={`${alignCls} truncate text-white/40`}>{col.label}</span>;
-                }
-                const isActive = sortMode === col.sort;
-                return (
-                  <button
-                    key={col.id}
-                    onClick={() => setSortMode(col.sort!)}
-                    aria-label={`Sort by ${col.label}`}
-                    className={`flex items-center gap-1 truncate transition-colors hover:text-white ${
-                      col.align === 'right' ? 'justify-end' : ''
-                    } ${isActive ? 'text-white' : 'text-white/40'}`}
-                  >
-                    {col.label}
-                    <span className="text-[9px]">{isActive ? (sortMode === 'bpm-desc' ? '↓' : '↑') : ''}</span>
-                  </button>
-                );
-              })}
-              <span />
-            </div>
+                </>
+              )}
+            />
             {/* Owns ↑/↓ for moving between rows. Wraps the rows only — not the
                 sort header above — so arrows on a column header never move
                 the list. A labelled group rather than a listbox: every row

@@ -2,8 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { Edit3 } from 'lucide-react';
-import type { ShareRowDownload } from '@/components/share/ShareTrackRow';
-import { ShareTrackList } from '@/components/share/ShareTrackList';
+import { ShareTrackList, type ShareRowDownload } from '@/components/share/ShareTrackList';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
 
@@ -202,7 +201,6 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
                 onPlay={onPlay}
                 download={rowDownload}
                 compact
-                listClassName="max-h-[70vh] overflow-y-auto"
               />
             </div>
           )}

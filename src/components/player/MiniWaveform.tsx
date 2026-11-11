@@ -42,24 +42,9 @@ interface Props {
    * When isActive is true the click seeks instead (via seekTo in the store).
    */
   onPlay?: () => void;
-  /**
-   * Controlled mode, for surfaces that run their own audio engine (the share
-   * pages). When `progress` is given the bars are painted from it and a seek
-   * goes to `onSeek` (a 0..1 fraction) instead of the global player store.
-   * Without them the component behaves exactly as before.
-   */
-  progress?: number;
-  onSeek?: (fraction: number) => void;
-  /** Controlled mode: the active track's length, for keyboard seeking and the aria text. */
-  durationSeconds?: number | null;
-  /** Accessible name for the seek slider in controlled mode. */
-  label?: string;
 }
 
-export function MiniWaveform({
-  trackId, peaksUrl, height = 40, isActive, onPlay,
-  progress: progressProp, onSeek, durationSeconds, label,
-}: Props) {
+export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fallbackBars = useMemo(() => syntheticVisualPeaks(trackId, BAR_COUNT), [trackId]);
   const loadKey = `${trackId}:${peaksUrl ?? ''}`;
@@ -68,11 +53,7 @@ export function MiniWaveform({
   const dawBars = useMemo(() => buildDawWaveformBars(bars), [bars]);
   const peaksLoaded = loadedBars?.key === loadKey;
 
-  const store = usePlayer();
-  const { currentTrack } = store;
-  const progress = progressProp ?? store.progress;
-  const seekTo = onSeek ?? store.seekTo;
-  const trackSeconds = durationSeconds !== undefined ? durationSeconds : currentTrack?.duration_seconds;
+  const { currentTrack, progress, seekTo } = usePlayer();
 
   // Lazy-load peaks via IntersectionObserver — fires only when the card
   // enters the viewport so we don't hammer the CDN on initial mount.
@@ -118,16 +99,16 @@ export function MiniWaveform({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (!isActive) return;
-      const nextFraction = keyboardSeekFraction(e.key, progress, trackSeconds);
+      const nextFraction = keyboardSeekFraction(e.key, progress, currentTrack?.duration_seconds);
       if (nextFraction == null) return;
       e.preventDefault();
       seekTo(nextFraction);
     },
-    [trackSeconds, isActive, progress, seekTo],
+    [currentTrack?.duration_seconds, isActive, progress, seekTo],
   );
 
   const fillPct = isActive ? progress * 100 : 0;
-  const currentSeconds = trackSeconds ? Math.round(trackSeconds * progress) : 0;
+  const currentSeconds = currentTrack?.duration_seconds ? Math.round(currentTrack.duration_seconds * progress) : 0;
 
   return (
     <div
@@ -138,7 +119,7 @@ export function MiniWaveform({
       style={{ height }}
       className={`relative w-full overflow-hidden rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-white/60 ${isActive ? 'cursor-col-resize' : onPlay ? 'cursor-pointer' : 'cursor-default'}`}
       role={isActive ? 'slider' : undefined}
-      aria-label={isActive ? `Seek ${label ?? currentTrack?.title ?? 'current track'}` : undefined}
+      aria-label={isActive ? `Seek ${currentTrack?.title ?? 'current track'}` : undefined}
       aria-valuenow={isActive ? Math.round(progress * 100) : undefined}
       aria-valuemin={isActive ? 0 : undefined}
       aria-valuemax={isActive ? 100 : undefined}

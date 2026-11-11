@@ -16,9 +16,8 @@ import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier } from '@/components/store/LicenseSelector';
 import type { Track as CartTrack } from '@/lib/types';
 import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
-import type { ShareRowDownload } from '@/components/share/ShareTrackRow';
-import { ShareTrackList } from '@/components/share/ShareTrackList';
-import { SHARE_CONTROLS_MIN_TRACKS } from '@/lib/share/track-list';
+import { ShareTrackList, type ShareRowDownload } from '@/components/share/ShareTrackList';
+import { SHARE_TOOLBAR_MIN_TRACKS } from '@/lib/share/track-list';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { resolveCreatorLink } from '@/lib/store/social-links';
 
@@ -82,7 +81,7 @@ interface Track {
   stems_status?: CartTrack['stems_status'] | null;
   created_at?: string | null;
   peaks_url?: string | null;
-  tags?: { tag: string; category?: string | null }[] | null;
+  track_tags?: { tag: string; category?: string | null }[] | null;
 }
 
 interface Project {
@@ -412,7 +411,7 @@ export function ClientShareVariant({
           <div className="flex items-center justify-between mb-4">
             <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80">
               {/* A long list carries its own "N of M" count above the rows. */}
-              {tracks.length < SHARE_CONTROLS_MIN_TRACKS ? `Tracks · ${tracks.length}` : 'Tracks'}
+              {tracks.length < SHARE_TOOLBAR_MIN_TRACKS ? `Tracks · ${tracks.length}` : 'Tracks'}
             </p>
             {discount && (
               <span className="text-[9px] font-mono text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/20 px-2 py-0.5 rounded-full">
@@ -427,23 +426,14 @@ export function ClientShareVariant({
             isPlaying={isPlaying}
             onPlay={onPlay}
             download={rowDownload}
-            hasTrailing
-            trailingLabel={shareToken && resolvedTiers.length > 0 ? 'License' : undefined}
-            rowExtras={(t) => {
+            buy={shareToken && resolvedTiers.length > 0 ? (t) => {
               const leasePrice = resolvePrice(shareLeasePrice, t.lease_price_usd, creatorLeasePrice, discount);
               const exclPrice = resolvePrice(shareExclusivePrice, t.exclusive_price_usd, creatorExclusivePrice, discount);
               // Original (pre-discount) prices for strikethrough
               const leaseOrig = discount && leasePrice != null ? leasePrice / (1 - discount / 100) : null;
               const exclOrig = discount && exclPrice != null ? exclPrice / (1 - discount / 100) : null;
               const inCart = cartItems.some((ci) => ci.track.id === t.id);
-              return {
-                onOpenDetails: () => setSelectedTrackForDetails(t),
-                titleBadge: inCart ? (
-                      <span className="text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/20 px-1.5 py-0.5 rounded-full shrink-0">
-                        In cart
-                      </span>
-                    ) : null,
-                trailing: (
+              return (
 
                         <>
                         {shareToken && resolvedTiers.length > 0 ? (
@@ -495,9 +485,8 @@ export function ClientShareVariant({
                         )}
 
                         </>
-                ),
-              };
-            }}
+              );
+            } : undefined}
           />
         </section>
 

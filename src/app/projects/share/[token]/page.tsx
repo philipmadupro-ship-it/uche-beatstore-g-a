@@ -76,7 +76,7 @@ interface ShareTrack {
   key: string | null;
   scale: string | null;
   created_at?: string | null;
-  tags?: { tag: string; category: string | null }[];
+  track_tags?: { tag: string; category: string | null }[];
 }
 
 interface ShareProject {
