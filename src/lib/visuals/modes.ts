@@ -1,15 +1,15 @@
-export const VISUAL_MODES = ['terrain', 'curve', 'orbit', 'meters'] as const;
+/** Order is the switcher order: orbit and terrain first. */
+export const VISUAL_MODES = ['orbit', 'terrain', 'curve'] as const;
 export type VisualMode = (typeof VISUAL_MODES)[number];
 
 export const VISUAL_MODE_LABELS: Record<VisualMode, string> = {
+  orbit: 'Orbit',
   terrain: 'Terrain',
   curve: 'Curve',
-  orbit: 'Orbit',
-  meters: 'Meters',
 };
 
 export const VISUAL_MODE_STORAGE_KEY = 'antigravity-visual-mode';
-export const DEFAULT_VISUAL_MODE: VisualMode = 'terrain';
+export const DEFAULT_VISUAL_MODE: VisualMode = 'orbit';
 
 export function parseVisualMode(value: unknown): VisualMode {
   return typeof value === 'string' && (VISUAL_MODES as readonly string[]).includes(value)

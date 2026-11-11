@@ -80,7 +80,7 @@ for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', wid
       await page.getByRole('button', { name: 'Open Now Playing' }).click();
       const group = page.getByRole('radiogroup', { name: 'Visual style' });
       await expect(group).toBeVisible();
-      for (const mode of ['Terrain', 'Curve', 'Orbit', 'Meters']) {
+      for (const mode of ['Orbit', 'Terrain', 'Curve']) {
         await group.getByRole('radio', { name: mode }).click();
         await page.waitForTimeout(500);
         await expect(group.getByRole('radio', { name: mode })).toHaveAttribute('aria-checked', 'true');
@@ -89,7 +89,7 @@ for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', wid
       }
       // Choice is remembered.
       await page.reload();
-      expect(await page.evaluate(() => localStorage.getItem('antigravity-visual-mode'))).toBe('meters');
+      expect(await page.evaluate(() => localStorage.getItem('antigravity-visual-mode'))).toBe('curve');
     });
 
     test('reduced motion draws a static frame and playback still works', async ({ page }) => {

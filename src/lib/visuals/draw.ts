@@ -15,24 +15,21 @@ import type { VisualMode } from './modes';
  */
 export interface VisualTheme {
   background: string;
-  /** Main line colour (the live / newest trace). */
+  /** Main line colour (the live / newest trace): white. */
   accent: string;
   /** Everything else: older rows, grids, unlit bars. */
   secondary: string;
   /** Hairline width in CSS px, and the faint halo width. */
   line: number;
   glow: number;
-  /** Top of the meter gradient (peak colour); the accent is the body. */
-  peak: string;
 }
 
 export const DEFAULT_THEME: VisualTheme = {
   background: '#090907',
-  accent: '#6DC6A4',
-  secondary: '#ffffff',
+  accent: '#ffffff',
+  secondary: '#bdbdb8',
   line: 1,
   glow: 3,
-  peak: '#ffffff',
 };
 
 export interface Rect { x: number; y: number; w: number; h: number }
@@ -41,9 +38,6 @@ export interface DrawState {
   /** Smoothed bands, 0..1, length BAND_COUNT. */
   bands: Float32Array;
   history: History;
-  /** Smoothed stereo peaks 0..1. */
-  left: number;
-  right: number;
   /** Smoothed meter ladder levels [left, right] for hold/decay. */
   /** Playhead 0..1, used for a tiny marker on static frames. */
   progress: number;
@@ -193,45 +187,6 @@ export function drawOrbit(ctx: CanvasRenderingContext2D, w: number, h: number, s
   ctx.globalAlpha = 1;
 }
 
-let gradCache: { ctx: CanvasRenderingContext2D; pad: number; h: number; t: VisualTheme; g: CanvasGradient } | null = null;
-function meterGradient(ctx: CanvasRenderingContext2D, pad: number, h: number, t: VisualTheme): CanvasGradient {
-  if (gradCache && gradCache.ctx === ctx && gradCache.pad === pad && gradCache.h === h && gradCache.t === t) return gradCache.g;
-  const g = ctx.createLinearGradient(0, pad, 0, h - pad);
-  g.addColorStop(0, t.peak);
-  g.addColorStop(0.35, t.accent);
-  g.addColorStop(1, t.accent);
-  gradCache = { ctx, pad, h, t, g };
-  return g;
-}
-
-/** Many thin horizontal bars stacked vertically; L and R side by side. */
-export function drawMeters(ctx: CanvasRenderingContext2D, w: number, h: number, s: DrawState, compact: boolean) {
-  clear(ctx, w, h, s.theme.background);
-  const pad = compact ? 10 : 18;
-  const gap = compact ? 10 : 22;
-  const meterW = (w - pad * 2 - gap) / 2;
-  const step = compact ? 3 : 4; // px per bar slot
-  const bars = Math.max(8, Math.floor((h - pad * 2) / step));
-  const levels = [s.left, s.right];
-  ctx.lineWidth = s.theme.line;
-  const grad = meterGradient(ctx, pad, h, s.theme);
-  for (let m = 0; m < 2; m += 1) {
-    const x0 = pad + m * (meterW + gap);
-    const lit = Math.round(Math.min(1, levels[m] * 1.15) * bars);
-    for (let i = 0; i < bars; i += 1) {
-      const y = h - pad - i * step - 0.5;
-      const on = i < lit;
-      ctx.globalAlpha = on ? 0.95 : 0.07;
-      ctx.strokeStyle = on ? grad : s.theme.secondary;
-      ctx.beginPath();
-      ctx.moveTo(x0, y);
-      ctx.lineTo(x0 + meterW, y);
-      ctx.stroke();
-    }
-  }
-  ctx.globalAlpha = 1;
-}
-
 /**
  * Draw one mode inside a rectangle of the canvas (clipped, origin moved), so a
  * layout can place several framed panels, each a different mode or data slice.
@@ -254,7 +209,6 @@ export function drawMode(
   switch (mode) {
     case 'curve': return drawCurve(ctx, w, h, s, compact);
     case 'orbit': return drawOrbit(ctx, w, h, s, compact);
-    case 'meters': return drawMeters(ctx, w, h, s, compact);
     default: return drawTerrain(ctx, w, h, s, compact);
   }
 }

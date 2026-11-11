@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Thin-line, audio-reactive visual (terrain / curve / orbit / meters) on a
+ * Thin-line, audio-reactive visual (orbit / terrain / curve) on a
  * canvas. Reusable: give it a track id, its peaks URL and the playback state.
  *
  *  - Live: reads the shared analyser (lib/visuals/analyser-hub) while the player
@@ -17,7 +17,7 @@ import { useVisualPeaks } from '@/hooks/useVisualPeaks';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { cn } from '@/lib/utils';
 import {
-  BAND_COUNT, bandsFromPeaks, createHistory, fillHistoryFromPeaks, meanOf, pushHistory, smoothDecay,
+  BAND_COUNT, bandsFromPeaks, createHistory, fillHistoryFromPeaks, pushHistory, smoothDecay,
 } from '@/lib/visuals/geometry';
 import { DEFAULT_THEME, drawMode, type DrawState, type VisualTheme } from '@/lib/visuals/draw';
 import { readBands, type LiveFrame } from '@/lib/visuals/analyser-hub';
@@ -61,7 +61,7 @@ export function AudioVisualizer({
   const peaksRef = useRef<number[]>(peaks);
   const modeRef = useRef(mode);
   const stateRef = useRef<DrawState | null>(null);
-  const scratch = useRef({ target: new Float32Array(BAND_COUNT), tmp: new Float32Array(BAND_COUNT), frame: { silent: false, left: 0, right: 0 } as LiveFrame });
+  const scratch = useRef({ target: new Float32Array(BAND_COUNT), tmp: new Float32Array(BAND_COUNT), frame: { silent: false } as LiveFrame });
 
   progressRef.current = progress;
   peaksRef.current = peaks;
@@ -71,7 +71,7 @@ export function AudioVisualizer({
     if (!stateRef.current) {
       stateRef.current = {
         bands: new Float32Array(BAND_COUNT), history: createHistory(HISTORY_ROWS, BAND_COUNT),
-        left: 0, right: 0, progress: 0, live: false, theme,
+        progress: 0, live: false, theme,
       };
     }
     stateRef.current.theme = theme;
@@ -96,8 +96,6 @@ export function AudioVisualizer({
     bandsFromPeaks(peaksRef.current, progressRef.current, sc.target);
     s.bands.set(sc.target);
     fillHistoryFromPeaks(peaksRef.current, progressRef.current, s.history, sc.tmp);
-    s.left = meanOf(s.bands) * 1.6;
-    s.right = s.left * 0.94;
     s.live = false;
     if (canvasRef.current) canvasRef.current.dataset.source = 'peaks';
     paint();
@@ -158,14 +156,6 @@ export function AudioVisualizer({
       const analysed = readBands(sc.target, sc.frame) && !sc.frame.silent;
       if (!analysed) bandsFromPeaks(peaksRef.current, progressRef.current, sc.target);
       smoothDecay(s.bands, sc.target);
-      if (analysed) {
-        s.left += (sc.frame.left - s.left) * (sc.frame.left > s.left ? 0.6 : 0.15);
-        s.right += (sc.frame.right - s.right) * (sc.frame.right > s.right ? 0.6 : 0.15);
-      } else {
-        const m = meanOf(s.bands) * 1.6;
-        s.left += (m - s.left) * 0.3;
-        s.right += (m * 0.94 - s.right) * 0.3;
-      }
       s.live = analysed;
       const c = canvasRef.current;
       const src = analysed ? 'live' : 'peaks';

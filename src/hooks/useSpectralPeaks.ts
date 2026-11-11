@@ -54,6 +54,8 @@ type Status = 'idle' | 'analyzing' | 'ready' | 'unavailable';
 
 export interface SpectralPeaksResult {
   bands: SpectralBands | null;
+  /** Per-slice true peak amplitude (linear), aligned to `bands`. Drives the scrubber's waveform. */
+  amp: number[] | null;
   /** Per-slice level in dBFS, aligned to `bands`. Drives the readout. */
   db: number[] | null;
   /** Per-slice dominant frequency; null entries where the audio has no pitch. */
@@ -63,6 +65,8 @@ export interface SpectralPeaksResult {
 
 /** Everything we cache per track — bands plus the readout series. */
 interface AnalysisResult extends SpectralBands {
+  /** True sample peak (abs) per slice of the unfiltered mono mix, linear. */
+  amp: number[];
   db: number[];
   hz: (number | null)[];
 }
@@ -117,6 +121,39 @@ export function resolveAnalysisUrl(audioUrl: string, publicFallback?: string | n
     return `/api/audio?src=${encodeURIComponent(direct)}`;
   }
   return null;
+}
+
+/** Peak |sample| per slice (a true peak, not an average). */
+function slicePeak(channel: Float32Array, sliceCount: number): number[] {
+  const out: number[] = new Array(sliceCount).fill(0);
+  if (channel.length === 0) return out;
+  const per = channel.length / sliceCount;
+  for (let i = 0; i < sliceCount; i++) {
+    const start = Math.floor(i * per);
+    const end = Math.min(channel.length, Math.max(start + 1, Math.floor((i + 1) * per)));
+    let peak = 0;
+    for (let j = start; j < end; j++) {
+      const v = Math.abs(channel[j]);
+      if (v > peak) peak = v;
+    }
+    out[i] = peak;
+  }
+  return out;
+}
+
+/** Resample a peak series by the PEAK of each bucket (never an average). */
+function resamplePeakSeries(values: number[], target: number): number[] {
+  const out: number[] = new Array(target).fill(0);
+  if (values.length === 0) return out;
+  const ratio = values.length / target;
+  for (let i = 0; i < target; i++) {
+    const start = Math.floor(i * ratio);
+    const end = Math.max(start + 1, Math.floor((i + 1) * ratio));
+    let peak = 0;
+    for (let j = start; j < end && j < values.length; j++) if (values[j] > peak) peak = values[j];
+    out[i] = peak;
+  }
+  return out;
 }
 
 function sliceRms(channel: Float32Array, sliceCount: number): number[] {
@@ -190,6 +227,9 @@ export function parseBandsSidecar(file: Partial<BandsSidecar> | null): AnalysisR
     mid: mid.map(num),
     high: high.map(num),
     db: db.map(num),
+    // A sidecar carries RMS dB, not true peaks: its level in linear terms is the
+    // best amplitude it can give (and it is only 512 slices — coarse).
+    amp: db.map((v) => Math.pow(10, num(v) / 20)),
     hz: Array.isArray(hz) && hz.length === low.length
       ? hz.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : null))
       : new Array<number | null>(low.length).fill(null),
@@ -218,6 +258,7 @@ export function useSpectralPeaks(
 ): SpectralPeaksResult {
   const [bands, setBands] = useState<SpectralBands | null>(null);
   const [db, setDb] = useState<number[] | null>(null);
+  const [amp, setAmp] = useState<number[] | null>(null);
   const [hz, setHz] = useState<(number | null)[] | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   // Guards against a resolved analysis for a previous track landing after the
@@ -239,11 +280,12 @@ export function useSpectralPeaks(
         high: resampleSeries(r.high, slices),
       });
       setDb(resampleSeries(r.db, slices));
+      setAmp(r.amp.length === slices ? r.amp : resamplePeakSeries(r.amp, slices));
       setHz(stretchNullable(r.hz, slices));
     };
 
     if (!trackId || !audioUrl || !key) {
-      setBands(null); setDb(null); setHz(null);
+      setBands(null); setDb(null); setHz(null); setAmp(null);
       setStatus('idle');
       return;
     }
@@ -256,7 +298,7 @@ export function useSpectralPeaks(
     }
 
     if (failed.has(key)) {
-      setBands(null); setDb(null); setHz(null);
+      setBands(null); setDb(null); setHz(null); setAmp(null);
       setStatus('unavailable');
       return;
     }
@@ -293,13 +335,13 @@ export function useSpectralPeaks(
 
     const analysisUrl = resolveAnalysisUrl(audioUrl, publicFallback);
     if (!analysisUrl) {
-      setBands(null); setDb(null); setHz(null);
+      setBands(null); setDb(null); setHz(null); setAmp(null);
       setStatus('unavailable');
       return;
     }
 
     setStatus('analyzing');
-    setBands(null); setDb(null); setHz(null);
+    setBands(null); setDb(null); setHz(null); setAmp(null);
 
     runLocalAnalysis();
 
@@ -352,7 +394,7 @@ export function useSpectralPeaks(
         // ~350px and rendered as chunky blocks rather than a waveform. 4096
         // gives ~22 slices/sec — roughly one per column at that zoom. Cost is
         // an RMS pass per band (cheap); pitch stays at PITCH_SLICES.
-        const CACHE_SLICES = 4096;
+        const CACHE_SLICES = 16384;
         // Level and pitch come from the UNFILTERED signal — the readout should
         // report what you actually hear, not the energy of one band. Reuses the
         // buffer we already decoded, so this costs no extra network or decode.
@@ -362,6 +404,7 @@ export function useSpectralPeaks(
           low: sliceRms(low, CACHE_SLICES),
           mid: sliceRms(mid, CACHE_SLICES),
           high: sliceRms(high, CACHE_SLICES),
+          amp: slicePeak(mono, CACHE_SLICES),
           db: levelRms.map(rmsToDb),
           // Pitch is the expensive part (autocorrelation), so it runs at a
           // quarter resolution and is stretched — a readout does not need
@@ -380,7 +423,7 @@ export function useSpectralPeaks(
         if (cancelled) return;
         failed.add(cacheKey);
         if (activeTrackRef.current !== cacheKey) return;
-        setBands(null); setDb(null); setHz(null);
+        setBands(null); setDb(null); setHz(null); setAmp(null);
         setStatus('unavailable');
       }
       })();
@@ -392,5 +435,5 @@ export function useSpectralPeaks(
     };
   }, [trackId, audioUrl, sliceCount, publicFallback]);
 
-  return { bands, db, hz, status };
+  return { bands, amp, db, hz, status };
 }

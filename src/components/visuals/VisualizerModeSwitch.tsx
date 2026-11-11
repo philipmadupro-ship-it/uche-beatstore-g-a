@@ -31,7 +31,7 @@ export function VisualizerModeSwitch({ mode, onChange, className }: Props) {
       role="radiogroup"
       aria-label="Visual style"
       onKeyDown={onKeyDown}
-      className={cn('grid grid-cols-4 gap-1.5', className)}
+      className={cn('grid grid-cols-3 gap-1.5', className)}
     >
       {VISUAL_MODES.map((m) => {
         const selected = m === mode;
@@ -45,7 +45,7 @@ export function VisualizerModeSwitch({ mode, onChange, className }: Props) {
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(m)}
             className={cn(
-              'rounded-lg border px-0.5 py-1 font-mono text-[9px] uppercase tracking-[0.06em] transition-colors',
+              'rounded-lg border px-1 py-1 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors',
               selected
                 ? 'border-white/30 bg-white/[0.14] text-white'
                 : 'border-white/10 bg-white/[0.06] text-white/60 hover:border-white/20 hover:bg-white/[0.10]',

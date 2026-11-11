@@ -578,7 +578,7 @@ export function PlayerBar({
                   progress={progress}
                   isPlaying={isPlaying}
                   background="#14110d"
-                  height={200}
+                  height={visualMode === 'curve' ? 150 : 250}
                   label={currentTrack.title || 'current track'}
                   className="mb-3"
                 />

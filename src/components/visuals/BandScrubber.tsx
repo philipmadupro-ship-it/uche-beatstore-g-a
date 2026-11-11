@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * Scrolling scrubber: ONE mirrored waveform on ONE centre line with a FIXED
- * centre playhead; the waveform scrolls past it. Lows red, mids green, highs
- * blue, mixed additively so strong overlaps burn white. The part under the
- * playhead swells with each band's LIVE energy from the shared analyser
- * (precomputed band data when none is available).
+ * Scrolling scrubber: a dense, monochrome, mirrored waveform on ONE centre line
+ * with a FIXED centre playhead; the waveform scrolls past it. One column per
+ * ~2.5 px, each the bucket-peak of the real amplitude. Band energy changes
+ * brightness and glow only. The glow under the playhead swells with LIVE
+ * energy from the shared analyser (precomputed band data when none).
  *
  * Drop-in for SpectralWaveform: same props. Drag/swipe scrubs, tap/click jumps,
  * arrow keys step 5 s, `role="slider"` with aria values.
@@ -18,14 +18,14 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { keyboardSeekFraction } from '@/lib/audio/seek-accessibility';
 import { cn } from '@/lib/utils';
 import { clamp01, BAND_COUNT } from '@/lib/visuals/geometry';
-import { DEFAULT_WAVE_THEME, drawBandWaveform, type WaveState, type WaveTheme } from '@/lib/visuals/band-draw';
+import { DEFAULT_WAVE_THEME, GLOW_SCALE, drawWaveform, type GlowTarget, type WaveState, type WaveTheme } from '@/lib/visuals/wave-draw';
 import {
   advancePosition, bandEnergies, envFollow, normaliseSeries, scrubFraction, seriesPeakAt, tapFraction,
 } from '@/lib/visuals/lanes';
 import { readBands, type LiveFrame } from '@/lib/visuals/analyser-hub';
 
-const ANALYSIS_SLICES = 4096;
-const DEFAULT_VISIBLE_SECONDS = 14;
+const ANALYSIS_SLICES = 16384;
+const DEFAULT_VISIBLE_SECONDS = 16;
 const TAP_SLOP_PX = 5;
 
 interface Props {
@@ -53,7 +53,7 @@ function fmtTime(seconds: number): string {
 
 export function BandScrubber({
   trackId, audioUrl, peaksUrl, publicAnalysisUrl, progress, isPlaying, canSeek, onSeek, label, durationSeconds,
-  height = 132, visibleSeconds = DEFAULT_VISIBLE_SECONDS, theme = DEFAULT_WAVE_THEME, className,
+  height = 140, visibleSeconds = DEFAULT_VISIBLE_SECONDS, theme = DEFAULT_WAVE_THEME, className,
 }: Props) {
   const reduced = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -61,18 +61,28 @@ export function BandScrubber({
   const [width, setWidth] = useState(0);
   const [dragging, setDragging] = useState(false);
 
-  const { bands, status } = useSpectralPeaks(trackId, audioUrl, ANALYSIS_SLICES, undefined, publicAnalysisUrl);
+  const { bands, amp, status } = useSpectralPeaks(trackId, audioUrl, ANALYSIS_SLICES, undefined, publicAnalysisUrl);
   const { peaks, source: peaksSource } = useVisualPeaks(trackId, peaksUrl, ANALYSIS_SLICES);
 
-  // Normalised series, order low, mid, high. Real 3-band data when the analysis
-  // exists; otherwise the amplitude peaks stand in for every band (the same
-  // shape, so it reads white) and the control is never empty.
-  const series = useMemo<WaveState['series']>(() => {
-    if (bands) return [normaliseSeries(bands.low), normaliseSeries(bands.mid), normaliseSeries(bands.high)];
-    const p = normaliseSeries(peaks);
-    return [p, p, p];
-  }, [bands, peaks]);
-  const lowFi = !bands;
+  // Full-resolution data, best first: the TRUE per-slice peak of the audio that
+  // is actually playing (analysis at 16 384 slices); else the stored peaks file
+  // (1 000 points for the whole track — coarse, never interpolated, only
+  // bucket-peak resampled); else a deterministic placeholder. Brightness comes
+  // from the band energies; they never colour anything.
+  const wave = useMemo(() => {
+    const ampSeries = amp ?? peaks;
+    const norm = normaliseSeries(ampSeries, 0.78);
+    let energy: ArrayLike<number> = norm;
+    if (bands) {
+      const lo = normaliseSeries(bands.low); const mi = normaliseSeries(bands.mid); const hi = normaliseSeries(bands.high);
+      const n = Math.min(lo.length, mi.length, hi.length);
+      const e = new Float32Array(n);
+      for (let i = 0; i < n; i += 1) e[i] = Math.max(lo[i], mi[i], hi[i]);
+      energy = e;
+    }
+    return { amp: norm, energy };
+  }, [amp, bands, peaks]);
+  const lowFi = !amp;
 
   const pos = clamp01(progress);
   const posRef = useRef(pos);
@@ -80,7 +90,8 @@ export function BandScrubber({
   const overrideRef = useRef<{ pos: number; until: number } | null>(null);
   const visibleRef = useRef(true);
   const stateRef = useRef<WaveState | null>(null);
-  const scratch = useRef({ bands: new Float32Array(BAND_COUNT), energy: new Float32Array(3), frame: { silent: false, left: 0, right: 0 } as LiveFrame });
+  const glowRef = useRef<GlowTarget | null>(null);
+  const scratch = useRef({ bands: new Float32Array(BAND_COUNT), energy: new Float32Array(3), frame: { silent: false } as LiveFrame });
   useEffect(() => { posRef.current = pos; }, [pos]);
 
   useEffect(() => {
@@ -112,6 +123,15 @@ export function BandScrubber({
     dprRef.current = dpr;
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
+    if (!glowRef.current) {
+      const gc = document.createElement('canvas');
+      const gx = gc.getContext('2d');
+      if (gx) glowRef.current = { canvas: gc, ctx: gx };
+    }
+    if (glowRef.current) {
+      glowRef.current.canvas.width = Math.max(1, Math.ceil(width * GLOW_SCALE));
+      glowRef.current.canvas.height = Math.max(1, Math.ceil(height * GLOW_SCALE));
+    }
   }, [width, height]);
 
   // Paint. Static (paused / reduced motion): once per change. Playing + visible: rAF.
@@ -126,15 +146,12 @@ export function BandScrubber({
     ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
 
     if (!stateRef.current) {
-      stateRef.current = { series, pos, durationSeconds, visibleSeconds, live: new Float32Array(3), theme };
+      stateRef.current = { amp: wave.amp, energy: wave.energy, pos, durationSeconds, visibleSeconds, live: 0, theme };
     }
     const s = stateRef.current;
-    s.series = series; s.durationSeconds = durationSeconds; s.visibleSeconds = visibleSeconds; s.theme = theme;
+    s.amp = wave.amp; s.energy = wave.energy; s.durationSeconds = durationSeconds; s.visibleSeconds = visibleSeconds; s.theme = theme;
     const sc = scratch.current;
-
-    const energyAt = (p: number) => {
-      for (let l = 0; l < 3; l += 1) sc.energy[l] = seriesPeakAt(series[l], p - 0.002, p + 0.002);
-    };
+    const glow = glowRef.current;
 
     const currentPos = () => {
       const o = overrideRef.current;
@@ -145,9 +162,8 @@ export function BandScrubber({
 
     if (!live) {
       s.pos = smoothRef.current = currentPos();
-      energyAt(s.pos);
-      s.live.fill(0);
-      drawBandWaveform(ctx, width, height, s);
+      s.live = 0;
+      drawWaveform(ctx, width, height, s, glow);
       return;
     }
 
@@ -158,19 +174,25 @@ export function BandScrubber({
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       if (document.hidden || !visibleRef.current) return;
-      const target = currentPos();
-      smoothRef.current = advancePosition(smoothRef.current, target, durationSeconds > 0 ? dt / durationSeconds : 0, true);
+      const posTarget = currentPos();
+      smoothRef.current = advancePosition(smoothRef.current, posTarget, durationSeconds > 0 ? dt / durationSeconds : 0, true);
       s.pos = smoothRef.current;
-      // Live band energy; precomputed values at the playhead when no analyser.
-      if (readBands(sc.bands, sc.frame) && !sc.frame.silent) bandEnergies(sc.bands, sc.energy);
-      else energyAt(s.pos);
-      for (let l = 0; l < 3; l += 1) s.live[l] = envFollow(s.live[l], sc.energy[l], dt);
-      drawBandWaveform(ctx, width, height, s);
+      // Live band energy under the playhead; the precomputed energy there when
+      // no analyser is available.
+      let target: number;
+      if (readBands(sc.bands, sc.frame) && !sc.frame.silent) {
+        bandEnergies(sc.bands, sc.energy);
+        target = Math.max(sc.energy[0], sc.energy[1], sc.energy[2]);
+      } else {
+        target = seriesPeakAt(wave.energy, s.pos - 0.002, s.pos + 0.002);
+      }
+      s.live = envFollow(s.live, target, dt);
+      drawWaveform(ctx, width, height, s, glow);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, width, height, series, durationSeconds, visibleSeconds, theme, staticPos]);
+  }, [live, width, height, wave, durationSeconds, visibleSeconds, theme, staticPos]);
 
   // ── Interaction ───────────────────────────────────────────────────
   const gesture = useRef<{ x0: number; pos0: number; moved: boolean; id: number } | null>(null);
@@ -230,7 +252,7 @@ export function BandScrubber({
         aria-valuetext={`${fmtTime(elapsed)} elapsed of ${fmtTime(durationSeconds)}`}
         aria-busy={status === 'analyzing' || undefined}
         data-band-scrubber
-        data-band-source={lowFi ? 'peaks' : 'bands'}
+        data-band-source={lowFi ? 'peaks' : 'analysis'}
         data-peaks-source={peaksSource}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}

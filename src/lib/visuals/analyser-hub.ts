@@ -30,12 +30,7 @@ const UNLOCK_EVENTS = ['pointerdown', 'touchend', 'keydown', 'click'] as const;
 interface Graph {
   ctx: AudioContext;
   analyser: AnalyserNode;
-  split: ChannelSplitterNode;
-  left: AnalyserNode;
-  right: AnalyserNode;
   freq: Uint8Array<ArrayBuffer>;
-  tl: Uint8Array<ArrayBuffer>;
-  tr: Uint8Array<ArrayBuffer>;
 }
 
 let graph: Graph | null = null;
@@ -64,18 +59,7 @@ function ensureGraph(): Graph | null {
     const analyser = ctx.createAnalyser();
     analyser.fftSize = FFT_SIZE;
     analyser.smoothingTimeConstant = 0; // smoothing is ours (geometry.smoothDecay)
-    const split = ctx.createChannelSplitter(2);
-    const left = ctx.createAnalyser();
-    const right = ctx.createAnalyser();
-    left.fftSize = right.fftSize = 512;
-    split.connect(left, 0);
-    split.connect(right, 1);
-    graph = {
-      ctx, analyser, split, left, right,
-      freq: new Uint8Array(analyser.frequencyBinCount),
-      tl: new Uint8Array(left.fftSize),
-      tr: new Uint8Array(right.fftSize),
-    };
+    graph = { ctx, analyser, freq: new Uint8Array(analyser.frequencyBinCount) };
     // Page teardown: release the audio device.
     window.addEventListener('pagehide', () => { void ctx.close().catch(() => {}); }, { once: true });
     return graph;
@@ -143,7 +127,6 @@ export function attachElement(el: HTMLMediaElement): boolean {
     const node = g.ctx.createMediaElementSource(el);
     node.connect(g.ctx.destination); // audible path never depends on the analysers
     node.connect(g.analyser);
-    node.connect(g.split);
     everCaptured.add(el);
     source = { el, node };
     return true;
@@ -191,7 +174,7 @@ export function analyserLive(): boolean {
   return !!graph && !!source && graph.ctx.state === 'running';
 }
 
-export interface LiveFrame { silent: boolean; left: number; right: number }
+export interface LiveFrame { silent: boolean }
 
 /**
  * Fill `bands` (log-spaced, 0..1) from the live FFT. Returns false when there
@@ -204,17 +187,7 @@ export function readBands(bands: Float32Array, frame: LiveFrame): boolean {
   g.analyser.getByteFrequencyData(g.freq);
   logBands(g.freq, bands, g.ctx.sampleRate);
   frame.silent = isFlat(g.freq);
-  g.left.getByteTimeDomainData(g.tl);
-  g.right.getByteTimeDomainData(g.tr);
-  frame.left = peakOfBytes(g.tl);
-  frame.right = peakOfBytes(g.tr);
   return true;
-}
-
-function peakOfBytes(b: Uint8Array): number {
-  let p = 0;
-  for (let i = 0; i < b.length; i += 1) { const v = Math.abs(b[i] - 128); if (v > p) p = v; }
-  return p / 128;
 }
 
 /** Test seam: forget all module state. */
