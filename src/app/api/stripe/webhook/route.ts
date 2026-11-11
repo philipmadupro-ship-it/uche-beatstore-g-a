@@ -14,6 +14,12 @@ import { renderContractPdf } from '@/lib/contracts/pdf';
 import { uploadContractPdf } from '@/lib/storage/upload';
 import { deliverFulfillmentEmail } from '@/lib/fulfillment/email-outbox';
 import { normalizeEmail, normalizeEmailOrNull } from '@/lib/contacts/email';
+import {
+  cleanEnv,
+  deliveryRecipient,
+  deliverySkipReason,
+  emailFailureHint,
+} from '@/lib/stripe/payments-config';
 import { linkBuyerToCrm } from '@/lib/contacts/link-buyer';
 import {
   legacyLicenseFileTypes,
@@ -563,7 +569,15 @@ async function runFulfillment(params: {
   }
 
   // 4. Delivery email — guarded by fulfillment_email_sent flag to prevent duplicates
-  if (process.env.RESEND_API_KEY && meta.buyer_email) {
+  if (lineItems.length === 0) {
+    log.error('purchase has no line items — checkout metadata.cart_items was missing or unreadable', { purchaseId });
+  }
+  const recipient = deliveryRecipient(meta.buyer_email, session.customer_email);
+  const skipReason = deliverySkipReason(recipient);
+  if (skipReason) {
+    // The buyer has PAID. Say loudly why they are not getting a link.
+    log.error('delivery email skipped', { purchaseId, reason: skipReason, session_id: session.id });
+  } else if (recipient) {
     try {
       // Re-fetch the flag in case a concurrent execution already sent the email
       const { data: purchaseRow } = await admin
@@ -624,7 +638,7 @@ async function runFulfillment(params: {
           referenceId: purchaseId,
           sellerUserId: meta.seller_user_id || null,
           stripeSessionId: session.id,
-          to: meta.buyer_email,
+          to: recipient,
           subject: held.subject,
           html: held.html,
         });
@@ -632,7 +646,7 @@ async function runFulfillment(params: {
           .from('license_purchases')
           .update({ fulfillment_email_sent: true })
           .eq('id', purchaseId);
-        log.info('held-purchase email sent', { purchaseId, to: meta.buyer_email });
+        log.info('held-purchase email sent', { purchaseId });
         return;
       }
 
@@ -642,7 +656,7 @@ async function runFulfillment(params: {
         referenceId: purchaseId,
         sellerUserId: meta.seller_user_id || null,
         stripeSessionId: session.id,
-        to: meta.buyer_email,
+        to: recipient,
         subject: `Your license${lineItems.length > 1 ? 's are' : ' is'} ready`,
         attachments: contractPdfBuffer
           ? [{
@@ -690,9 +704,15 @@ async function runFulfillment(params: {
         .update({ fulfillment_email_sent: true })
         .eq('id', purchaseId);
 
-      log.info('delivery email sent', { purchaseId, to: meta.buyer_email });
+      log.info('delivery email sent', { purchaseId });
     } catch (err) {
-      log.warn('delivery email failed', { purchaseId, error: errorMessage(err) });
+      const message = errorMessage(err);
+      log.error('delivery email failed', {
+        purchaseId,
+        error: message,
+        hint: emailFailureHint(message),
+        retry: 'queued in fulfillment_email_jobs; /api/cron/process-fulfillment-emails retries it, or use /api/sales/resend',
+      });
     }
   }
 }
@@ -760,7 +780,11 @@ async function runProjectFulfillment(params: {
   }
 
   // 2. Delivery email (no per-row email flag on project_access_links; rely on event dedup)
-  if (process.env.RESEND_API_KEY && meta.buyer_email) {
+  const projectRecipient = deliveryRecipient(meta.buyer_email, session.customer_email);
+  const projectSkip = deliverySkipReason(projectRecipient);
+  if (projectSkip) {
+    log.error('project delivery email skipped', { accessId, reason: projectSkip, session_id: session.id });
+  } else if (projectRecipient) {
     try {
       // Fetch project name for nicer email
       let projName = 'Project';
@@ -782,7 +806,7 @@ async function runProjectFulfillment(params: {
         referenceId: accessId,
         sellerUserId: meta.seller_user_id || null,
         stripeSessionId: session.id,
-        to: meta.buyer_email,
+        to: projectRecipient,
         subject: `Your project "${projName}" is ready`,
         html: `
           <div style="font-family: sans-serif; background: #090907; color: #FFFFFF; padding: 40px; border-radius: 20px; max-width: 560px;">
@@ -805,9 +829,15 @@ async function runProjectFulfillment(params: {
         `,
       });
 
-      log.info('project delivery email sent', { accessId, projectId, to: meta.buyer_email });
+      log.info('project delivery email sent', { accessId, projectId });
     } catch (err) {
-      log.warn('project delivery email failed', { accessId, error: errorMessage(err) });
+      const message = errorMessage(err);
+      log.error('project delivery email failed', {
+        accessId,
+        error: message,
+        hint: emailFailureHint(message),
+        retry: 'queued in fulfillment_email_jobs; /api/cron/process-fulfillment-emails retries it',
+      });
     }
   }
 }
@@ -817,8 +847,17 @@ async function runProjectFulfillment(params: {
 export async function POST(req: NextRequest) {
   // ── Signature verification ────────────────────────────────────────────────
   const signature = req.headers.get('stripe-signature');
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!signature || !secret) {
+  // Dashboard pastes carry stray whitespace; a secret with a trailing newline
+  // fails every verification with no other symptom.
+  const secret = cleanEnv(process.env.STRIPE_WEBHOOK_SECRET);
+  if (!secret) {
+    log.error('STRIPE_WEBHOOK_SECRET is not set — every Stripe event is rejected and NO purchase is recorded or emailed', {
+      hint: 'Set the LIVE endpoint signing secret (whsec_…) in Vercel and redeploy.',
+    });
+    return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
+  }
+  if (!signature) {
+    log.warn('webhook called without a stripe-signature header');
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
   }
 
@@ -829,7 +868,23 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, secret) as WebhookEvent;
   } catch (err) {
-    log.warn('signature verification failed', { error: errorMessage(err) });
+    // livemode is read from the UNVERIFIED body, for diagnosis only: a live
+    // event failing against a test-mode secret (or the reverse) is the usual
+    // reason a freshly switched account sells but never fulfils.
+    let eventLivemode: boolean | null = null;
+    try {
+      const peek = JSON.parse(rawBody) as { livemode?: unknown };
+      if (typeof peek.livemode === 'boolean') eventLivemode = peek.livemode;
+    } catch {
+      /* not JSON */
+    }
+    log.error('signature verification failed — nothing recorded or emailed for this event', {
+      error: errorMessage(err),
+      event_livemode: eventLivemode,
+      hint: eventLivemode === true
+        ? 'Live event rejected: STRIPE_WEBHOOK_SECRET is probably the TEST endpoint secret. Copy the signing secret of the LIVE endpoint.'
+        : 'Check STRIPE_WEBHOOK_SECRET matches this endpoint (each endpoint has its own whsec_).',
+    });
     return NextResponse.json({ error: 'Bad signature' }, { status: 400 });
   }
 

@@ -44,8 +44,9 @@ vi.mock('@/lib/auth/ownership', () => ({
 }));
 
 vi.mock('resend', () => ({ Resend: class { emails = { send: mockResendSend } } }));
+const mockLog = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }));
 vi.mock('@/lib/log', () => ({
-  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+  createLogger: () => mockLog,
 }));
 vi.mock('@/lib/env', () => ({ getAppUrl: () => 'https://example.test' }));
 vi.mock('@/lib/contracts/pdf', () => ({
@@ -122,6 +123,9 @@ beforeEach(() => {
   mockResendSend.mockReset();
   mockRenderContractPdf.mockReset();
   mockUploadContractPdf.mockReset();
+  mockLog.info.mockReset();
+  mockLog.warn.mockReset();
+  mockLog.error.mockReset();
   process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
   delete process.env.RESEND_API_KEY;
   delete process.env.RESEND_FROM_EMAIL;
@@ -946,5 +950,116 @@ describe('POST /api/stripe/webhook — fulfillment branches', () => {
     expect(statusUpdate!.payload).toMatchObject({ status: 'disputed', download_unlocked: false });
     // Disputes don't auto-relist (the sale may still be contested).
     expect(writes.find((w) => w.table === 'tracks' && w.op === 'update')).toBeUndefined();
+  });
+});
+
+describe('POST /api/stripe/webhook — live-mode failures are visible', () => {
+  function installTrackPurchaseTables() {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'processed_stripe_events') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })) })) })),
+          insert: vi.fn(() => ({ select: vi.fn(() => Promise.resolve({ error: null, count: null })) })),
+        };
+      }
+      if (table === 'abandoned_carts') return { update: vi.fn(() => resolvedEq({ error: null })) };
+      if (table === 'license_purchases') {
+        let n = 0;
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(() => Promise.resolve(
+                n++ === 0 ? { data: null, error: null } : { data: { fulfillment_email_sent: false }, error: null },
+              )),
+            })),
+          })),
+          upsert: vi.fn(() => ({ select: vi.fn(() => Promise.resolve({ data: [{ id: 'purchase_1' }], error: null })) })),
+          update: vi.fn(() => resolvedEq({ error: null })),
+        };
+      }
+      if (table === 'tracks') return { select: vi.fn(() => ({ in: vi.fn(() => Promise.resolve({ data: [], error: null })) })) };
+      throw new Error(`Unexpected table ${table}`);
+    });
+    mockRenderContractPdf.mockResolvedValue(Buffer.from('pdf'));
+    mockUploadContractPdf.mockResolvedValue(null);
+  }
+
+  it('logs an error, not silence, when the signing secret is not configured', async () => {
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(400);
+    expect(mockLog.error).toHaveBeenCalledWith(expect.stringMatching(/STRIPE_WEBHOOK_SECRET/), expect.anything());
+  });
+
+  it('a bad signature logs which mode the event came from, so a test/live secret mix-up is obvious', async () => {
+    mockConstructEvent.mockImplementation(() => { throw new Error('No signatures found matching the expected signature'); });
+    const res = await POST(req(JSON.stringify({ id: 'evt_1', livemode: true })));
+    expect(res.status).toBe(400);
+    const call = mockLog.error.mock.calls.find((c) => /signature verification failed/.test(String(c[0])));
+    expect(call).toBeTruthy();
+    expect(call![1]).toMatchObject({ event_livemode: true });
+    expect(JSON.stringify(call![1])).not.toMatch(/whsec_/);
+  });
+
+  it('trims a signing secret pasted with a trailing newline', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test\n';
+    mockConstructEvent.mockReturnValue({ id: 'evt_x', type: 'ping', data: { object: {} } });
+    mockFrom.mockImplementation(() => { throw new Error('no db for ping'); });
+    await POST(req('{}'));
+    expect(mockConstructEvent.mock.calls[0][2]).toBe('whsec_test');
+  });
+
+  it('still emails the buyer when metadata lost buyer_email but Stripe has customer_email', async () => {
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.RESEND_FROM_EMAIL = 'sales@example.test';
+    const ev = checkoutCompletedEvent({
+      customer_email: 'Buyer@Example.test',
+      metadata: { cart_items: JSON.stringify([{ track_id: 'track_1', license_id: 'lease', license_type: 'lease' }]) },
+    });
+    mockConstructEvent.mockReturnValue(ev);
+    installTrackPurchaseTables();
+    mockResendSend.mockResolvedValue({ data: { id: 'e1' }, error: null });
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    expect(mockResendSend).toHaveBeenCalledTimes(1);
+    expect(mockResendSend.mock.calls[0][0].to).toBe('buyer@example.test');
+  });
+
+  it('says so, with a reason, when the delivery email is skipped for a missing RESEND_API_KEY', async () => {
+    mockConstructEvent.mockReturnValue(checkoutCompletedEvent());
+    installTrackPurchaseTables();
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    expect(mockResendSend).not.toHaveBeenCalled();
+    const call = mockLog.error.mock.calls.find((c) => /delivery email skipped/.test(String(c[0])));
+    expect(call?.[1]).toMatchObject({ reason: 'resend_api_key_missing', purchaseId: 'purchase_1' });
+    expect(JSON.stringify(call?.[1])).not.toContain('buyer@example.test');
+  });
+
+  it('says so when no recipient can be found at all', async () => {
+    process.env.RESEND_API_KEY = 're_test';
+    mockConstructEvent.mockReturnValue(checkoutCompletedEvent({
+      customer_email: null,
+      metadata: { cart_items: JSON.stringify([{ track_id: 'track_1', license_id: 'lease', license_type: 'lease' }]) },
+    }));
+    installTrackPurchaseTables();
+    await POST(req('{}'));
+    expect(mockResendSend).not.toHaveBeenCalled();
+    const call = mockLog.error.mock.calls.find((c) => /delivery email skipped/.test(String(c[0])));
+    expect(call?.[1]).toMatchObject({ reason: 'no_buyer_email' });
+  });
+
+  it('logs a failed Resend send as an error with a hint and no full address', async () => {
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.RESEND_FROM_EMAIL = 'sales@example.test';
+    mockConstructEvent.mockReturnValue(checkoutCompletedEvent());
+    installTrackPurchaseTables();
+    mockResendSend.mockResolvedValue({ data: null, error: { name: 'validation_error', message: 'The example.test domain is not verified' } });
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    const call = mockLog.error.mock.calls.find((c) => /delivery email failed/.test(String(c[0])));
+    expect(call).toBeTruthy();
+    expect(call![1].hint).toMatch(/verif/i);
+    expect(JSON.stringify(call![1])).not.toContain('buyer@example.test');
   });
 });
