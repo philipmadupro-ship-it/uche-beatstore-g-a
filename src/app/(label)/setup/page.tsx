@@ -8,9 +8,13 @@
  * buyer page. Behind LABEL_OS_ENABLED (the proxy 404s it while off).
  *
  * Signed out → /login; already a member → /o; the producer → /library.
+ * An owner whose org the platform operator created and who has not run the wizard
+ * stays: the wizard adopts that org (migration 197) and /o/<slug> sends them here.
  */
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/auth/ownership';
+import { unfinishedOwnedOrg } from '@/lib/labelos/setup-adopt-store';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { SETUP_PATH, faceFromMetadata, isSetupFace } from '@/lib/labelos/setup';
@@ -27,11 +31,13 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
 
   const { data: profile } = await supabase.from('creator_profiles').select('user_id').eq('user_id', user.id).maybeSingle();
   if (profile) redirect('/library');
-  if (await hasAnyLabelOsMembership(supabase, user.id)) redirect('/o');
+  // An owner of an operator-created org that is not set up yet stays here: the wizard adopts that org.
+  const unfinished = await unfinishedOwnedOrg(createServiceClient(), user.id);
+  if (!unfinished && (await hasAnyLabelOsMembership(supabase, user.id))) redirect('/o');
 
   const { type } = await searchParams;
   const asked = Array.isArray(type) ? type[0] : type;
-  const initialFace = isSetupFace(asked) ? asked : faceFromMetadata(user.user_metadata);
+  const initialFace = unfinished ? (unfinished.kind === 'label' ? 'label' : 'independent') : isSetupFace(asked) ? asked : faceFromMetadata(user.user_metadata);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--background-primary)] px-4 py-10 text-white">

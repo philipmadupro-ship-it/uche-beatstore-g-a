@@ -47,7 +47,7 @@ const base = (): Record<string, Row[]> => ({
     { id: 't-other', title: 'Secret', org_id: O1 },
   ],
   parties: [
-    { id: 'party-me', org_id: O1, user_id: ME },
+    { id: 'party-me', org_id: O1, user_id: ME, details_confirmed_by: ME, user_linked_by: 'boss' },
     { id: 'party-you', org_id: O1, user_id: 'you' },
   ],
   track_collaborators: [
@@ -135,6 +135,14 @@ describe('loadMySessions', () => {
     const t = base();
     t.contract_signatures.push({ contract_id: 'k1', party_id: 'party-me', document_sha256: 'a'.repeat(64) });
     expect(asksOf(await loadMySessions(ME, [proj('p1', O1, 'N')], fake(t))).join()).not.toContain('contract');
+  });
+
+  it('no contract ask where in-app signing would refuse: unconfirmed details, a self-made link, an unknown linker (maySignAs)', async () => {
+    for (const patch of [{ details_confirmed_by: null }, { user_linked_by: ME }, { user_linked_by: null }]) {
+      const t = base();
+      Object.assign(t.parties[0], patch);
+      expect(asksOf(await loadMySessions(ME, [proj('p1', O1, 'N')], fake(t))).join()).not.toContain('contract');
+    }
   });
 
   it('degrades where the contract tables are not applied: credits and splits remain, no error', async () => {

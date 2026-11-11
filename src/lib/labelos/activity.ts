@@ -258,6 +258,8 @@ export const AUDIT_VERBS: readonly Verb[] = [
   'statement.approved',
   'statement.issued',
   'statement.voided',
+  'press_kit.shared',
+  'press_kit.share_revoked',
   'statement.exported',
   'payment.recorded',
   'payment.voided',

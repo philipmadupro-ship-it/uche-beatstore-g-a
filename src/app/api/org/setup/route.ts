@@ -16,6 +16,10 @@
  *    the same insert. One self-served org per account: a second call answers
  *    the first org with 200 (settings ignored: they are not an edit), not a
  *    new one. A self-served org has no entitlement row: every module, no caps.
+ *  - `org.created` (audit-class) is written by the function itself (migration 197), in the
+ *    same transaction as the org: the route writes no event. An operator-created licensee
+ *    that has not been set up is ADOPTED by its owner (setup_done true, settings merged,
+ *    its name kept) instead of getting a second org; the answer is 200, `created: false`.
  *  - The answer is `{ org: { id, slug, kind }, home, created }`; `home` is
  *    where the page sends the caller next. Roster artists, invitations, team
  *    logins and the first draft release are separate requests to their own
@@ -30,7 +34,6 @@ import { sessionIdentity } from '@/lib/auth/org-access';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { OrgSetupBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
-import { recordEvent } from '@/lib/labelos/activity';
 import {
   SETUP_NOT_READY,
   SETUP_ORG_RPC,
@@ -88,26 +91,12 @@ export async function POST(req: NextRequest) {
     if (result.status === 'schema_missing') return NextResponse.json({ error: SETUP_NOT_READY }, { status: 503 });
     if (result.status === 'failed') throw new Error(result.error);
 
-    if (result.status === 'created') {
-      // Audit-class since LABEL-75 (kept for the life of the org); still best effort here: the org exists either way.
-      try {
-        await recordEvent(
-          admin,
-          { orgId: result.orgId, userId: session.userId },
-          'org.created',
-          { type: 'org', id: result.orgId },
-          { kind: result.kind, source: 'setup', settings: settings.keys },
-        );
-      } catch (err) {
-        log.warn('org.created event not recorded', { orgId: result.orgId, error: errorMessage(err) });
-      }
-    }
-
     return NextResponse.json(
       {
         org: { id: result.orgId, slug: result.slug, kind: result.kind },
         home: `/o/${result.slug}`,
         created: result.status === 'created',
+        ...(result.status === 'adopted' ? { adopted: true } : {}),
       },
       { status: result.status === 'created' ? 201 : 200, headers: { 'Cache-Control': 'no-store' } },
     );

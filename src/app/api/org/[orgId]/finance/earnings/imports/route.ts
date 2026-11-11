@@ -43,10 +43,6 @@ const json = (status: number, body: Record<string, unknown>) => NextResponse.jso
 const SAME_FILE_MESSAGE =
   'This file was imported before, so nothing changed. The original import stands with the options it was made with (service, currency, income class, rounding); a change to those options does not re-import it.';
 
-/** A voided import keeps its file hash (one import per file), so the same bytes cannot be imported again. Say so; the old text would claim an import stands that does not. */
-const VOIDED_FILE_MESSAGE =
-  'This file was imported and then voided, so it cannot be imported again as it is. If the import was voided because of a wrong option, change the file by one byte (for example, save it again with a trailing newline) and import that copy.';
-
 type Params = { params: Promise<{ orgId: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -96,13 +92,14 @@ export async function POST(req: NextRequest, { params }: Params) {
   const sha = createHash('sha256').update(bytes).digest('hex');
 
   try {
-    // Same file, same organization → the original import, nothing written, nothing recorded.
-    const existing = await access.admin.from('earnings_imports').select('id, status').eq('org_id', access.orgId).eq('file_sha256', sha).maybeSingle();
+    // Same file, same organization → the original import, nothing written, nothing recorded. A VOIDED import
+    // no longer stands (migration 198): the same bytes import fresh. Where 198 is not applied the database still
+    // refuses that, and the write answers 409 `voided_file` below.
+    const existing = await access.admin.from('earnings_imports').select('id, status').eq('org_id', access.orgId).eq('file_sha256', sha).neq('status', 'void').maybeSingle();
     if (existing.error && !['PGRST205', '42P01'].includes(existing.error.code ?? '')) throw new Error(existing.error.message);
     if (existing.error) throw new EarningsNotReadyError();
     if (existing.data) {
-      const row = existing.data as { id: string; status?: string };
-      if (row.status === 'void') return json(409, { error: VOIDED_FILE_MESSAGE, code: 'voided_file', import_id: row.id });
+      const row = existing.data as { id: string };
       return json(200, { created: false, import_id: row.id, message: SAME_FILE_MESSAGE });
     }
 
@@ -144,7 +141,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       built.lines,
       run,
     );
-    if (!outcome.ok) return json(outcome.code === 'recoup_conflict' ? 409 : 422, { error: outcome.message, code: outcome.code });
+    if (!outcome.ok) return json(outcome.code === 'recoup_conflict' || outcome.code === 'voided_file' ? 409 : 422, { error: outcome.message, code: outcome.code });
     if (!outcome.created) return json(200, { created: false, import_id: outcome.id, message: SAME_FILE_MESSAGE });
 
     const waiting = run.lines.filter((l) => l.reviewReason !== null).length;

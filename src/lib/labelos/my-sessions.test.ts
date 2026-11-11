@@ -60,11 +60,15 @@ describe('what counts as an ask', () => {
     }
   });
   it('contract: sent, theirs, not yet signed on the current document', () => {
-    const c = { id: '1', title: 'T', status: 'sent', track_id: null, party_user_id: 'me', signedCurrent: false };
+    const c = { id: '1', title: 'T', status: 'sent', track_id: null, party_user_id: 'me', party_confirmed_by: 'me', party_linked_by: 'boss', signedCurrent: false };
     expect(contractNeedsSigning(c, 'me')).toBe(true);
     expect(contractNeedsSigning({ ...c, signedCurrent: true }, 'me')).toBe(false);
     expect(contractNeedsSigning({ ...c, status: 'draft' }, 'me')).toBe(false);
     expect(contractNeedsSigning({ ...c, status: 'signed' }, 'me')).toBe(false);
     expect(contractNeedsSigning({ ...c, party_user_id: 'x' }, 'me')).toBe(false);
+    // The same identity rule as maySignAs: confirmed by them, linked by someone else.
+    expect(contractNeedsSigning({ ...c, party_confirmed_by: null }, 'me')).toBe(false);
+    expect(contractNeedsSigning({ ...c, party_linked_by: 'me' }, 'me')).toBe(false);
+    expect(contractNeedsSigning({ ...c, party_linked_by: null }, 'me')).toBe(false);
   });
 });

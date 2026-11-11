@@ -89,7 +89,11 @@ SELECT public.check_eq('all five functions exist',
      AND proname NOT LIKE 'labelos\_audit\_statement\_%' AND proname NOT LIKE 'labelos\_audit\_payment\_%'
      AND proname NOT LIKE 'labelos\_audit\_earnings\_%'
      -- 182 (LABEL-64) adds the advances ledger and the period close; checked in 182's own file.
-     AND proname NOT LIKE 'labelos\_audit\_advance\_%' AND proname NOT LIKE 'labelos\_audit\_period\_%'), 5);
+     AND proname NOT LIKE 'labelos\_audit\_advance\_%' AND proname NOT LIKE 'labelos\_audit\_period\_%'
+     -- 199 (review G16) adds press share create / revoke; checked in 199's own file.
+     AND proname NOT LIKE 'labelos\_audit\_press\_%'
+     -- 201 (review G17) adds the consent decision and the listing veto; checked in 201's own file.
+     AND proname NOT LIKE 'labelos\_audit\_consent\_%' AND proname <> 'labelos_audit_listing_veto'), 5);
 SELECT public.check_eq('the private event helper has no caller but its owner',
   (SELECT (has_function_privilege('service_role', p.oid, 'EXECUTE'), has_function_privilege('authenticated', p.oid, 'EXECUTE'))::text
    FROM pg_proc p WHERE p.proname = 'labelos_audit_insert'),

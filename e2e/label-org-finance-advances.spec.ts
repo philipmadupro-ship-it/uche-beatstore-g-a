@@ -19,6 +19,7 @@ import { test, expect, type APIRequestContext, type Browser, type BrowserContext
 import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { ANON_KEY, ARTIST_A_ID, ARTIST_B_ID, BUYER_ID, PRODUCER_ID, SERVICE_KEY, sessionCookie, userToken } from '../scripts/local-db/jwt.mjs';
+import { circulateSplitSheet } from './support/real-flows';
 
 const REST = 'http://127.0.0.1:54321/rest/v1';
 const run = randomUUID().slice(0, 6);
@@ -116,12 +117,10 @@ test('1 · the owner records and corrects advances on the page', async ({ browse
   const post = (data: unknown) => ctx.request.post(`/api/org/${ORG}/finance/payees`, { data });
   expect((await post({ party_id: P_NOVA, artist_contact_id: NOVA })).status()).toBe(201);
   expect((await post({ party_id: P_PAT, artist_contact_id: null })).status()).toBe(201);
-  const [sheet] = (await rest(request, 'POST', 'split_sheets', { org_id: ORG, track_id: SONG, kind: 'master', version: 1 })) as Row[];
-  await rest(request, 'POST', 'split_lines', [
-    { split_sheet_id: sheet.id, party_id: P_NOVA, role: 'master_owner', share: 70, position: 0 },
-    { split_sheet_id: sheet.id, party_id: P_PAT, role: 'master_owner', share: 30, position: 1 },
+  await circulateSplitSheet(ctx.request, ORG, SONG, 'master', [
+    { party_id: P_NOVA, role: 'master_owner', share: 70 },
+    { party_id: P_PAT, role: 'master_owner', share: 30 },
   ]);
-  await rest(request, 'PATCH', `split_sheets?id=eq.${sheet.id}`, { status: 'circulated', circulated_at: new Date().toISOString() });
   payeeNova = String(((await rest(request, 'GET', `payees?select=id&party_id=eq.${P_NOVA}`)) as Row[])[0].id);
 
   const page = await ctx.newPage();
