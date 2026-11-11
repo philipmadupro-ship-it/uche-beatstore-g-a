@@ -17,7 +17,7 @@ So 001–196 are in effect (177, 185, 188 never used). §1 to §8 below are kept
 |---|---|---|
 | 001–129 | **Applied on production** (owner's SQL-editor bundle, 2026-09-29, verify table all `applied`). 096–099 and 117/118 are two-file pairs; both sides are legitimate | `MIGRATIONS.md` "Applied status" |
 | 130–135 | **Pending.** Artist workspace phase 3 (130–132), linked material (133), contact roles (134), label pitch notes (135). `supabase/apply/pending.sql` carries exactly these (plus 112–129 as already-applied, idempotent rows) | `MIGRATIONS.md`, `pending.sql` |
-| 136–196 | **Applied on production 2026-11-07** (§0; 191 is PORTAL-UP, not Label OS). Historical wording "not applied anywhere" was stale. **197–201 are on the branch and NOT applied** (owner pastes them, §7) | `MIGRATIONS.md`, doc 23 standing requirements |
+| 136–196 | **Applied on production 2026-11-07** (§0; 191 is PORTAL-UP, not Label OS). Historical wording "not applied anywhere" was stale. **197–201 applied on production 2026-11-11** (owner pasted the 197–200 bundle, then 201; both 0 errors) | `MIGRATIONS.md`, doc 23 standing requirements |
 
 Files on disk in 136–201: 64 (59 in 136–196, plus 197–201). **Not on disk, never to be bundled:** 177 (released, LABEL-59 needed none), 185 (released, LABEL-68 moved to 194), 188 (released, LABEL-74/75 took 195). The 096/097/098/099 and 117/118 pairs are outside this range.
 

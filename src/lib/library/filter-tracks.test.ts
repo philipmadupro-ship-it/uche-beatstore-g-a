@@ -3,7 +3,7 @@ import type { LibraryFilters } from '@/components/library/FilterBar';
 import { matchesLibraryFilters, type FilterableTrack } from './filter-tracks';
 
 const none = (): LibraryFilters => ({
-  types: new Set(), offlineOnly: false, genres: new Set(), statuses: new Set(), triage: new Set(),
+  types: new Set(), offlineOnly: false, genres: new Set(), tags: new Set(), statuses: new Set(), triage: new Set(),
   bpmMin: null, bpmMax: null, keys: new Set(), scale: 'all', rating: null, ratingMatch: 'atLeast',
 });
 const ctx = { cachedIds: new Set<string>(['cached']), hasDefaultPrice: true };
@@ -49,6 +49,17 @@ describe('matchesLibraryFilters', () => {
     expect(pass({ genres: new Set(['Drill', 'Trap']) })).toBe(true);
     // A mood tag named like a genre is not a genre.
     expect(pass({ genres: new Set(['Dark']) }, track({ track_tags: [{ tag: 'Dark', category: 'mood' }] }))).toBe(false);
+  });
+
+  it('tags: finds any tag category by name, not just genre', () => {
+    const tagged = track({ track_tags: [{ tag: 'ready to send', category: 'custom' }, { tag: 'Dark', category: 'mood' }] });
+    expect(pass({ tags: new Set(['Ready to send']) }, tagged)).toBe(true);
+    expect(pass({ tags: new Set(['Ready to send']) })).toBe(false);
+    expect(pass({ tags: new Set(['Dark', 'Ready to send']) }, tagged)).toBe(true);
+    expect(pass({ tags: new Set(['Dark', 'Needs mix']) }, tagged)).toBe(false);
+    // Genre and tags combine (all of the facets).
+    expect(pass({ genres: new Set(['Trap']), tags: new Set(['Dark']) }, track({ track_tags: [{ tag: 'Trap', category: 'genre' }, { tag: 'Dark', category: 'mood' }] }))).toBe(true);
+    expect(pass({ genres: new Set(['Drill']), tags: new Set(['Dark']) }, tagged)).toBe(false);
   });
 
   it('a track with no default price reads as needs_price (stage filter uses the context)', () => {

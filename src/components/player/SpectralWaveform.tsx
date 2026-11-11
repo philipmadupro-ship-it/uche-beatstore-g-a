@@ -26,7 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSpectralPeaks } from '@/hooks/useSpectralPeaks';
 import { useVisualPeaks } from '@/hooks/useVisualPeaks';
 import {
-  buildAmplitudeBars, buildSpectralBars, loudnessRange, levelAtProgress, type SpectralBar,
+  buildAmplitudeBars, buildSpectralBars, loudnessRange, levelAtProgress, bassAtProgress, type SpectralBar,
 } from '@/lib/audio/spectral-peaks';
 import { formatReadout } from '@/lib/audio/pitch';
 import { keyboardSeekFraction } from '@/lib/audio/seek-accessibility';
@@ -148,6 +148,9 @@ export function SpectralWaveform({
   const posRef = useRef(pos);
   const smoothPosRef = useRef(pos);
   const levelRef = useRef(0);
+  const bassRef = useRef(0);
+  const [motionEnergy, setMotionEnergy] = useState(0);
+  const motionEnergyRef = useRef(0);
   // Synced in an effect rather than during render: writing a ref mid-render is
   // unsafe under concurrent rendering, where a render can be discarded.
   useEffect(() => { posRef.current = pos; }, [pos]);
@@ -175,7 +178,15 @@ export function SpectralWaveform({
      * moved. See `loudnessRange` for the measurement.
      */
     const range = loudnessRange(db ?? []);
+    let highPeak = 0;
+    for (const sample of bands?.high ?? []) if (Number.isFinite(sample)) highPeak = Math.max(highPeak, Math.abs(sample));
     const levelAt = (p: number): number => (db?.length ? levelAtProgress(db, p, range) : 0);
+    const bassAt = (p: number): number => (bands?.low?.length ? bassAtProgress(bands.low, p) : 0);
+    const highAt = (p: number): number => {
+      if (!bands?.high?.length) return 0;
+      const value = bands.high[Math.min(bands.high.length - 1, Math.max(0, Math.round(p * (bands.high.length - 1))))] ?? 0;
+      return highPeak > 0 ? Math.min(1, Math.abs(value) / highPeak) : 0;
+    };
 
     let raf = 0;
 
@@ -196,7 +207,18 @@ export function SpectralWaveform({
       const targetLevel = levelAt(p);
       const k = targetLevel > levelRef.current ? 0.55 : 0.12;
       levelRef.current += (targetLevel - levelRef.current) * k;
-      const level = prefersReducedMotion ? 0 : levelRef.current;
+      const level = prefersReducedMotion || !isPlaying ? 0 : levelRef.current;
+      const bassTarget = bassAt(p);
+      bassRef.current += (bassTarget > bassRef.current ? 0.62 : 0.15) * (bassTarget - bassRef.current);
+      const bass = prefersReducedMotion || !isPlaying ? 0 : bassRef.current;
+      const high = highAt(p);
+      if (!prefersReducedMotion && isPlaying) {
+        motionEnergyRef.current += (level - motionEnergyRef.current) * 0.35;
+        setMotionEnergy(motionEnergyRef.current);
+      } else if (motionEnergyRef.current !== 0) {
+        motionEnergyRef.current = 0;
+        setMotionEnergy(0);
+      }
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
@@ -213,7 +235,7 @@ export function SpectralWaveform({
       // Seconds represented by one column, used to map x <-> time.
       const secondsPerColumn = visibleSeconds / columns;
       // How far the reactive bloom reaches either side of the playhead.
-      const bloomPx = width * 0.14;
+      const bloomPx = width * 0.22;
 
       for (let x = 0; x < columns; x++) {
         const px = x * COLUMN_WIDTH;
@@ -239,7 +261,7 @@ export function SpectralWaveform({
           // swell reads as the waveform pulsing rather than a bump sliding
           // along it.
           const falloff = 0.5 + 0.5 * Math.cos((dist / bloomPx) * Math.PI);
-          half *= 1 + level * 0.38 * falloff;
+          half *= 1 + (level * 0.5 + bass * 0.32) * falloff;
         }
         // Clamp INSIDE the panel. An earlier tuning allowed 1.35x maxHalf,
         // which exceeds the panel height, so the playhead column pegged at full
@@ -269,7 +291,7 @@ export function SpectralWaveform({
         // peak. Lightened toward white rather than a fixed colour so it keeps
         // the column's own hue.
         const coreHalf = half * 0.42;
-        ctx.fillStyle = lighten(bar.color, 0.45);
+        ctx.fillStyle = lighten(bar.color, 0.34 + high * 0.28);
         ctx.fillRect(px, centreY - coreHalf, COLUMN_WIDTH + 0.15, coreHalf * 2);
       }
 
@@ -281,7 +303,7 @@ export function SpectralWaveform({
         const g = ctx.createRadialGradient(headX, centreY, 0, headX, centreY, bloomPx * 1.9);
         g.addColorStop(0, headBar.color);
         g.addColorStop(1, 'transparent');
-        ctx.globalAlpha = 0.22 * level;
+        ctx.globalAlpha = 0.28 * Math.max(level, bass * 0.85);
         ctx.fillStyle = g;
         ctx.fillRect(headX - bloomPx * 1.6, 0, bloomPx * 3.2, height);
       }
@@ -292,7 +314,7 @@ export function SpectralWaveform({
 
     raf = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(raf);
-  }, [bars, db, width, height, prefersReducedMotion, durationSeconds, visibleSeconds]);
+  }, [bars, bands, db, width, height, prefersReducedMotion, durationSeconds, visibleSeconds, isPlaying]);
 
   // ── Interaction ─────────────────────────────────────────────────
   // Seeking maps through the visible WINDOW, not the full width: with the
@@ -369,7 +391,7 @@ export function SpectralWaveform({
           'focus-visible:ring-1 focus-visible:ring-white/60',
           canSeek ? 'cursor-pointer' : 'cursor-not-allowed opacity-70',
         )}
-        style={{ height }}
+        style={{ height, '--wave-level': motionEnergy } as React.CSSProperties}
       >
         <canvas ref={canvasRef} aria-hidden className="block h-full w-full" />
 
@@ -386,10 +408,10 @@ export function SpectralWaveform({
           </div>
         )}
 
-        {/* Playhead — a thin full-height line, no glow. */}
+        {/* A bright, needle-thin transport marker keeps the play position precise. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-white/80"
+          className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-white/90 shadow-[0_0_12px_rgba(245,193,115,0.72)]"
         />
         <span
           aria-hidden
