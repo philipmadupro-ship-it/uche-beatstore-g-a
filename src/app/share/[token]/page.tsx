@@ -99,6 +99,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const [allowDownloads, setAllowDownloads] = useState(true);
   const [fullPlayback, setFullPlayback] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requiresPassword, setRequiresPassword] = useState(false);
@@ -226,7 +227,8 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
 
       const w = WaveSurferLib.create({
         container: waveRef.current,
-        waveColor: 'rgba(255,255,255,0.1)',
+        // Opaque: the played layer is filled source-in and keeps the bars' alpha.
+        waveColor: '#2A2A28',
         progressColor: '#FFFFFF',
         cursorColor: 'rgba(255,255,255,0.8)',
         barWidth: 3,
@@ -445,6 +447,43 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       )
     : null;
 
+  // One zip of the whole share. Without a password it is a plain navigation, so
+  // the browser streams the archive straight to disk; a locked share has to send
+  // the password header, which means fetching it (and holding it) in the page.
+  const downloadAll = async () => {
+    const url = `/api/share/${params.token}/download-all`;
+    const pw = password;
+    if (!pw) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+    setDownloadingAll(true);
+    try {
+      const response = await fetch(url, { headers: { 'x-share-password': pw } });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Download unavailable');
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = downloadFilename(response.headers.get('content-disposition'), 'share');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      toast.error('Download failed', downloadError instanceof Error ? downloadError.message : 'Download unavailable');
+    } finally {
+      setDownloadingAll(false);
+    }
+  };
+
   // Download on each track's own row, and the playhead / seek the row waveforms borrow.
   const rowDownload = share
     ? { allowed: allowDownloads, onDownload: downloadTrack, downloadingId }
@@ -504,6 +543,8 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
           project={projectMock}
           options={shareOptions}
           rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
           tracks={tracks}
           creator={creator}
           licenses={[]}
@@ -551,7 +592,10 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         <ProducerShareVariant
           project={projectMock}
           options={shareOptions}
+          waveRef={waveRef}
           rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}
@@ -584,7 +628,10 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         <RapperShareVariant
           project={projectMock}
           options={shareOptions}
+          waveRef={waveRef}
           rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}
@@ -617,7 +664,10 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         <FriendShareVariant
           project={projectMock}
           options={shareOptions}
+          waveRef={waveRef}
           rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}

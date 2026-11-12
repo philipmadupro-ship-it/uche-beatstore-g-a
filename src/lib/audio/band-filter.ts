@@ -31,22 +31,17 @@ export interface BiquadCoefficients {
 export type FilterKind = 'lowpass' | 'bandpass' | 'highpass';
 
 /**
- * Crossovers. These mirror the client implementation exactly — changing one
- * without changing the other shifts every waveform's colour.
+ * The ONE source of the band crossovers (waveform colouring, the browser
+ * analysis and the server sidecar all read these).
  *
- * Q values match Web Audio's behaviour at the client call sites: the lowpass
- * and highpass were created without setting `.Q`, so they used the spec
- * default of 1; the bandpass explicitly set 0.7.
+ * Low is a kick / 808 band, so the split sits at 250 Hz (Mixxx uses 600 Hz; for
+ * hip-hop the body of an 808 lives well under 250). Everything from 250 Hz to
+ * 4 kHz is "mid" — vocals, snares, chords. Above 4 kHz is "high": hats and air.
  */
-/**
- * Serato's crossovers: red below ~200Hz, green ~200Hz-1.5kHz, blue above.
- * Green is where vocals and snares live, which is why the mid band is a WIDE
- * bandpass (low Q) centred in that span rather than a narrow peak — a narrow
- * peak samples one frequency and misses most of the voice.
- */
-export const LOW_CUTOFF_HZ = 200;
-export const MID_CENTER_HZ = 550;
-export const HIGH_CUTOFF_HZ = 1500;
+export const CROSSOVER_LOW_HZ = 250;
+export const CROSSOVER_HIGH_HZ = 4000;
+/** Butterworth Q for each 2nd-order section; two cascaded give a 4th-order slope. */
+export const BUTTERWORTH_Q = Math.SQRT1_2;
 export const DEFAULT_Q = 1;
 export const BANDPASS_Q = 0.5;
 
@@ -124,6 +119,62 @@ export function applyBiquad(
 }
 
 /**
+ * Like `applyBiquad`, but the filter starts SETTLED on the first sample (as if
+ * that value had been playing forever) instead of from silence. Without this a
+ * track that starts at a non-zero level, or a high-pass fed a step, rings or
+ * ramps at the very start.
+ */
+export function applyBiquadSettled(
+  input: Float32Array,
+  output: Float32Array,
+  c: BiquadCoefficients,
+): Float32Array {
+  if (input.length === 0) return output;
+  const x0 = input[0];
+  // DC gain of the section: low-pass passes the level (1), high/band-pass block it (0).
+  const dc = (c.b0 + c.b1 + c.b2) / (1 + c.a1 + c.a2);
+  const y0 = Number.isFinite(dc) ? dc * x0 : 0;
+  let x1 = x0, x2 = x0, y1 = y0, y2 = y0;
+  for (let i = 0; i < input.length; i++) {
+    const x = input[i];
+    const y = c.b0 * x + c.b1 * x1 + c.b2 * x2 - c.a1 * y1 - c.a2 * y2;
+    x2 = x1; x1 = x;
+    y2 = y1; y1 = y;
+    output[i] = y;
+  }
+  return output;
+}
+
+export type BandName = 'low' | 'mid' | 'high';
+
+/**
+ * One band of the three-way split, as TWO cascaded 2nd-order sections
+ * (4th-order overall). `scratch` and `output` are caller-owned and must be the
+ * input's length; `input` is not modified.
+ *   low  = low-pass 250 Hz (twice)
+ *   mid  = high-pass 250 Hz, then low-pass 4 kHz
+ *   high = high-pass 4 kHz (twice)
+ */
+export function filterBand(
+  band: BandName,
+  input: Float32Array,
+  scratch: Float32Array,
+  output: Float32Array,
+  sampleRate: number,
+): Float32Array {
+  const q = BUTTERWORTH_Q;
+  const lp = (f: number) => biquadCoefficients('lowpass', f, sampleRate, q);
+  const hp = (f: number) => biquadCoefficients('highpass', f, sampleRate, q);
+  const [first, second] = band === 'low'
+    ? [lp(CROSSOVER_LOW_HZ), lp(CROSSOVER_LOW_HZ)]
+    : band === 'mid'
+      ? [hp(CROSSOVER_LOW_HZ), lp(CROSSOVER_HIGH_HZ)]
+      : [hp(CROSSOVER_HIGH_HZ), hp(CROSSOVER_HIGH_HZ)];
+  applyBiquadSettled(input, scratch, first);
+  return applyBiquadSettled(scratch, output, second);
+}
+
+/**
  * RMS per slice.
  *
  * Bands use RMS while the amplitude waveform uses absolute-max — that
@@ -157,7 +208,8 @@ export interface BandEnergies {
 }
 
 /**
- * Split a mono signal into low/mid/high and reduce each to per-slice RMS.
+ * Split a mono signal into low/mid/high (4th-order, see `filterBand`) and
+ * reduce each to per-slice RMS.
  *
  * Allocates two scratch buffers total regardless of band count — a 3-minute
  * master at 22 kHz is ~4M samples, so allocating per band would churn ~48 MB
@@ -168,18 +220,13 @@ export function extractBandEnergies(
   sampleRate: number,
   sliceCount: number,
 ): BandEnergies {
+  const scratch = new Float32Array(mono.length);
   const filtered = new Float32Array(mono.length);
-
-  const run = (kind: FilterKind, freq: number, q: number): number[] => {
-    applyBiquad(mono, filtered, biquadCoefficients(kind, freq, sampleRate, q));
+  const run = (band: BandName): number[] => {
+    filterBand(band, mono, scratch, filtered, sampleRate);
     return sliceRms(filtered, sliceCount);
   };
-
-  return {
-    low: run('lowpass', LOW_CUTOFF_HZ, DEFAULT_Q),
-    mid: run('bandpass', MID_CENTER_HZ, BANDPASS_Q),
-    high: run('highpass', HIGH_CUTOFF_HZ, DEFAULT_Q),
-  };
+  return { low: run('low'), mid: run('mid'), high: run('high') };
 }
 
 /**

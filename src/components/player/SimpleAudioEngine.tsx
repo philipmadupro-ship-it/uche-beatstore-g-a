@@ -27,7 +27,7 @@
  * Headless: renders only a hidden <audio>. Mount once, near the PlayerBar.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { playbackAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
@@ -38,9 +38,20 @@ import { useSessionContext } from '@/hooks/useSessionContext';
 import { previewAdjustment } from '@/lib/audio/session-match';
 import { seekSeconds } from '@/lib/audio/waveform-path';
 import { classifyPlayRejection, holdsSource } from '@/lib/audio/play-rejection';
+import {
+  attachElement, disableCapture, ensureRunning, installGestureUnlock, isCaptured, markOriginBad, probeCors,
+  releaseHubElement, sourceClass,
+} from '@/lib/visuals/analyser-hub';
+import { canCapture, crossOriginFor } from '@/lib/visuals/analysable';
 
 export function SimpleAudioEngine() {
   const audioRef = useRef<HTMLAudioElement>(null);
+  // Bumped to swap in a FRESH <audio>. A captured element (Web Audio) can never
+  // be released, and one playing a non-CORS cross-origin source is silent, so
+  // whenever capture could break playback we replace the element instead.
+  const [epoch, setEpoch] = useState(0);
+  const liveEl = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => { liveEl.current = audioRef.current; }, [epoch]);
 
   const {
     currentTrack, isPlaying, volume, muted, duckGain, seekTarget,
@@ -89,6 +100,48 @@ export function SimpleAudioEngine() {
     }
   }, [setBuffering, setPlaybackError, setPlaying]);
 
+  // The origin whose CORS-mode load failed; its plain-element retry loads
+  // without `crossOrigin`. The origin is only marked bad if that retry works.
+  const retryPlainRef = useRef<string | null>(null);
+  // Set when audio was interrupted and the player is paused with a message;
+  // cleared when the listener taps play.
+  const interruptedRef = useRef(false);
+
+  // Lift the Web Audio context inside the user's first gesture (iOS needs it).
+  useEffect(() => { installGestureUnlock(); }, []);
+
+  /**
+   * Replace the <audio> element (a captured one can never be released).
+   * `trackChanged`: the store's progress still belongs to the OLD track, so the
+   * new element starts at 0. `interrupted`: the audio was already silent, so
+   * show a paused player with a clear message instead of a `play()` outside a
+   * gesture that iOS may refuse.
+   */
+  const remountElement = useCallback((opts: { trackChanged: boolean; interrupted?: boolean }) => {
+    const a = audioRef.current;
+    if (a) releaseHubElement(a);
+    const s = usePlayer.getState();
+    resumeRef.current = opts.trackChanged
+      ? { trackId: undefined, fraction: 0 }
+      : { trackId: s.currentTrack?.id, fraction: s.progress };
+    if (opts.interrupted) {
+      interruptedRef.current = true;
+      usePlayer.setState({ isPlaying: false, isBuffering: false, playbackError: 'Audio was interrupted. Tap play to continue.' });
+    }
+    setEpoch((e) => e + 1);
+  }, []);
+
+  /** Capture for the visuals only when that cannot silence this source. */
+  const maybeCapture = useCallback((a: HTMLAudioElement) => {
+    const src = a.getAttribute('src');
+    if (!src) return;
+    const cls = sourceClass(src);
+    const safe = cls === 'same-origin' || (cls === 'cors-ok' && a.crossOrigin === 'anonymous');
+    if (!safe) return;
+    if (!isCaptured(a)) { attachElement(a); return; }
+    ensureRunning(() => remountElement({ trackChanged: false, interrupted: true }));
+  }, [remountElement]);
+
   // ── Load source when the track changes ────────────────────────────────
   // Latency-critical: nothing async may sit between the tap and play().
   // Awaiting IndexedDB before setting src added tens/hundreds of ms per tap
@@ -129,7 +182,20 @@ export function SimpleAudioEngine() {
     // unrelated re-renders.
     if (!holdsSource(a, instant)) {
       setBuffering(true);
-      setPlaybackError(null);
+      if (!interruptedRef.current) setPlaybackError(null);
+      // CORS-safe analysis (lib/visuals/analysable): a captured element must
+      // never be handed a source that would play silent — replace it instead.
+      const cls = sourceClass(instant);
+      if (cls === 'unknown') probeCors(instant);
+      if (isCaptured(a) && !canCapture(cls)) {
+        // Unavoidable: a captured element would play this silent. Never capture
+        // again this session; the fresh element starts the NEW track at 0.
+        disableCapture();
+        remountElement({ trackChanged: true });
+        return;
+      }
+      const co = retryPlainRef.current === instant ? null : crossOriginFor(cls);
+      if (co) a.crossOrigin = co; else a.removeAttribute('crossorigin'); // BEFORE src
       a.src = instant;
       a.load();
     }
@@ -151,6 +217,7 @@ export function SimpleAudioEngine() {
           if (a.currentTime > 0 && Number.isFinite(a.duration) && a.duration > 0) {
             resumeRef.current = { trackId, fraction: a.currentTime / a.duration };
           }
+          if (isCaptured(a)) a.crossOrigin = 'anonymous'; // blob: is same-origin, harmless
           a.src = blob;
           a.load();
           resume();
@@ -166,7 +233,7 @@ export function SimpleAudioEngine() {
       if (onMeta) a.removeEventListener('loadedmetadata', onMeta);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackId, url]);
+  }, [trackId, url, epoch]);
 
   // ── Hand-over on unmount ──────────────────────────────────────────────
   // A media element removed from the document pauses itself, but the store
@@ -177,8 +244,8 @@ export function SimpleAudioEngine() {
   // unmount runs this cleanup too, with the element still in place, at the
   // exact moment the first track starts (the bar mounts with it).
   useEffect(() => {
-    const a = audioRef.current;
     return () => {
+      const a = liveEl.current;
       if (!a || a.isConnected) return;
       const s = usePlayer.getState();
       if (s.isPlaying || s.isBuffering) usePlayer.setState({ isPlaying: false, isBuffering: false });
@@ -190,13 +257,14 @@ export function SimpleAudioEngine() {
     const a = audioRef.current;
     if (!a) return;
     if (isPlaying) {
+      interruptedRef.current = false;
       setPlaybackError(null);
       a.play().catch(onPlayRejected);
     } else {
       a.pause();
       setBuffering(false);
     }
-  }, [isPlaying, trackId, setBuffering, setPlaybackError, onPlayRejected]);
+  }, [isPlaying, trackId, epoch, setBuffering, setPlaybackError, onPlayRejected]);
 
   // ── Session tempo (time-stretch, pitch preserved) ─────────────────────
   // Applied in its own effect, after the source effect, because loading a new
@@ -219,14 +287,14 @@ export function SimpleAudioEngine() {
     el.preservesPitch = true;
     el.mozPreservesPitch = true;
     el.webkitPreservesPitch = true;
-  }, [adjustment, trackId, url]);
+  }, [adjustment, trackId, url, epoch]);
 
   // ── Volume (× duck × loudness normalization) ──────────────────────────
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
     a.volume = outputVolume({ volume, muted }, duckGain, normGain);
-  }, [volume, muted, duckGain, normGain]);
+  }, [volume, muted, duckGain, normGain, epoch]);
 
   // ── Seek — consume seekTarget (0..1) from the store ───────────────────
   useEffect(() => {
@@ -239,10 +307,11 @@ export function SimpleAudioEngine() {
     const seconds = seekSeconds(seekTarget, a.duration, currentTrack?.duration_seconds);
     if (seconds != null) a.currentTime = seconds;
     usePlayer.setState({ seekTarget: null });
-  }, [seekTarget, currentTrack?.duration_seconds]);
+  }, [seekTarget, currentTrack?.duration_seconds, epoch]);
 
   return (
     <audio
+      key={epoch}
       ref={audioRef}
       hidden
       preload="auto"
@@ -256,18 +325,44 @@ export function SimpleAudioEngine() {
         if (isPlaying) setBuffering(true);
       }}
       onWaiting={() => setBuffering(true)}
-      onCanPlay={() => setBuffering(false)}
-      onPlaying={() => {
+      onCanPlay={(e) => {
+        setBuffering(false);
+        // The plain retry worked where CORS mode failed: now the origin is bad.
+        const el = e.currentTarget;
+        const r = retryPlainRef.current;
+        if (r && el.getAttribute('src') === r && !el.crossOrigin) markOriginBad(r);
+      }}
+      onPlaying={(e) => {
         setBuffering(false);
         setPlaybackError(null);
         setPlaying(true);
+        // Last: capture can replace the element, and that must win.
+        maybeCapture(e.currentTarget);
       }}
       onPause={() => setBuffering(false)}
       onEnded={() => {
         setBuffering(false);
         next();
       }}
-      onError={() => {
+      onError={(e) => {
+        // A CORS-fetched source that errors must not cost the listener the
+        // track: retry the same source on a plain element. Only if THAT plays
+        // is the origin marked bad (see onCanPlay) — an error can be anything.
+        const el = e.currentTarget;
+        const failed = el.getAttribute('src');
+        if (failed && el.crossOrigin === 'anonymous' && !failed.startsWith('blob:') && retryPlainRef.current !== failed) {
+          retryPlainRef.current = failed;
+          if (isCaptured(el)) {
+            disableCapture();
+            remountElement({ trackChanged: false });
+            return;
+          }
+          el.removeAttribute('crossorigin');
+          el.src = failed;
+          el.load();
+          if (usePlayer.getState().isPlaying) el.play().catch(onPlayRejected);
+          return;
+        }
         setBuffering(false);
         setPlaybackError('Preview stream unavailable. Try another beat.');
         setPlaying(false);

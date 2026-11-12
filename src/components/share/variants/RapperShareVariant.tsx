@@ -44,9 +44,12 @@ interface Props {
   waveRef?: React.RefObject<HTMLDivElement | null>;
   /** Download on the row itself, beside the beat it belongs to. */
   rowDownload?: ShareRowDownload;
+  /** Download every track as one zip (the header's Download all). */
+  onDownloadAll?: () => void;
+  downloadingAll?: boolean;
 }
 
-export function RapperShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, options, waveRef, rowDownload }: Props) {
+export function RapperShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, options, waveRef, rowDownload, onDownloadAll, downloadingAll }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) || tracks[0];
 
   // Local state for interactive lyric session notepad
@@ -64,6 +67,8 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
       onPlay={onPlay}
       waveRef={waveRef}
       rowDownload={rowDownload}
+      onDownloadAll={onDownloadAll}
+      downloadingAll={downloadingAll}
     >
       {/* The vocalist's workspace sits under the list, for the track on the
           engine: the full Lyrics Studio (the same component as /studio) and a

@@ -113,6 +113,9 @@ interface Props {
   options: ShareFrameOptions;
   /** Download on the row itself, beside the beat it belongs to. */
   rowDownload?: ShareRowDownload;
+  /** Download every track as one zip (the header's Download all). */
+  onDownloadAll?: () => void;
+  downloadingAll?: boolean;
 }
 
 function fmt(seconds: number) {
@@ -167,6 +170,8 @@ export function ClientShareVariant({
   onSeek,
   options,
   rowDownload,
+  onDownloadAll,
+  downloadingAll,
 }: Props) {
   const { addItem, items: cartItems, setIsOpen: setCartOpen, isOpen: cartOpen } = useCart();
   const searchParams = useSearchParams();
@@ -318,6 +323,8 @@ export function ClientShareVariant({
         onPlay={onPlay}
         waveRef={waveRef}
         rowDownload={rowDownload}
+        onDownloadAll={onDownloadAll}
+        downloadingAll={downloadingAll}
         buy={shareToken && resolvedTiers.length > 0 ? (t) => {
               const leasePrice = resolvePrice(shareLeasePrice, t.lease_price_usd, creatorLeasePrice, discount);
               const exclPrice = resolvePrice(shareExclusivePrice, t.exclusive_price_usd, creatorExclusivePrice, discount);

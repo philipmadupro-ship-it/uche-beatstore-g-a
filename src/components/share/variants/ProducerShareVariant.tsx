@@ -76,12 +76,15 @@ interface Props {
   waveRef?: React.RefObject<HTMLDivElement | null>;
   /** Download on the row itself, beside the beat it belongs to. */
   rowDownload?: ShareRowDownload;
+  /** Download every track as one zip (the header's Download all). */
+  onDownloadAll?: () => void;
+  downloadingAll?: boolean;
 }
 
 /** Rows carry the type column up front: loops and stems are what a producer scans for. */
 const PRODUCER_COLUMNS = ['title', 'tags', 'waveform', 'type', 'duration'];
 
-export function ProducerShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, options, waveRef, rowDownload }: Props) {
+export function ProducerShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, options, waveRef, rowDownload, onDownloadAll, downloadingAll }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) ?? tracks[0];
   const [bpmCopied, setBpmCopied] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
@@ -115,6 +118,8 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
       onPlay={onPlay}
       waveRef={waveRef}
       rowDownload={rowDownload}
+      onDownloadAll={onDownloadAll}
+      downloadingAll={downloadingAll}
       columnIds={PRODUCER_COLUMNS}
     >
       {/* What a producer reaches for: tempo and key of the track on the engine,

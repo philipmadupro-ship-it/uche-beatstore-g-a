@@ -164,7 +164,8 @@ const rowOf = (page: Page, title: string) => page.getByTestId('share-track-row')
 async function expectDownloadWorks(page: Page, h: Harness, password?: string) {
   const actions = page.getByTestId('share-actions');
   await expect(actions).toBeVisible();
-  await expect(actions.getByRole('button', { name: /^Download / })).toHaveCount(0);
+  // No per-track list up here: the strip holds "Download all" (one zip), never a button per beat.
+  await expect(actions.getByRole('button', { name: /^Download (?!all$)/ })).toHaveCount(0);
   await expect(actions.getByText('Downloads', { exact: true })).toHaveCount(0);
   const button = rowOf(page, 'Track One').getByRole('button', { name: 'Download Track One' });
   await button.scrollIntoViewIfNeeded();
@@ -192,7 +193,7 @@ async function expectDownloadsOff(page: Page, h: Harness) {
  * the track; the fetch of track two plus a play() after the click does.
  */
 async function expectPlays(page: Page, h: Harness) {
-  const row = rowOf(page, 'Track Two').getByTestId('share-track-play');
+  const row = rowOf(page, 'Track Two').getByRole('button', { name: /Play track|Pause track/ });
   await row.scrollIntoViewIfNeeded();
   await page.evaluate(() => { (window as unknown as { __played: string[] }).__played = []; });
   await row.click();

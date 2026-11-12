@@ -134,7 +134,7 @@ export function Popover({
              it floats over; the blur is the house style on top of that, not
              a substitute for a background. The mix leans on a heavy blur so
              the panel can stay genuinely translucent and still read. */
- className="overlay-surface z-[200] rounded-xl border border-white/[0.12] ui-pop py-1"
+ className="overlay-surface z-[260] rounded-xl border border-white/[0.12] ui-pop py-1"
         >
           {typeof children === 'function' ? children(close) : children}
         </div>,
