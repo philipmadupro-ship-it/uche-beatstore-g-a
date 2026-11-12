@@ -78,7 +78,8 @@ Each variant lives in `src/components/share/variants/*` and consumes the same `/
 
 Whatever the variant, the options the producer set are honoured on the page:
 - **Playback** — **full track** (the default) or a **1:15 preview**, chosen per share. Rappers write to the whole beat; the 75 s clip is the storefront's, not the share's.
-- **Downloads** — when allowed, every track has a Download button that saves the original file; when not, the page says downloads are off.
+- **Downloads** — when allowed, every track row has its own Download button that saves the original file (there is no second list at the bottom); when not, the page says downloads are off.
+- **Finding a beat in a long share** — every variant lists tracks the way the store does (cover, title, BPM and key, genre and mood chips, a waveform you can play and seek, length). From 8 tracks up the list has search (title, tag, key, BPM), genre / mood / key / type / BPM-range filters, and a sort (share order, newest, BPM, title) with an "N of M" count; a short share shows none of it.
 - **Password / expiry / revocation** — enforced on the page, the stream and the download.
 - **Role** — commenters and editors get a "Leave feedback" / "Comment & edit" entry into the collaboration view (region-pinned comments, the editor); viewers do not.
 - **For sale** — Buy buttons on the client variant only when `sales_enabled`.

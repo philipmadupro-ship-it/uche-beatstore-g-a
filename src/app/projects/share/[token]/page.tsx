@@ -22,7 +22,7 @@ import { ProducerShareVariant } from '@/components/share/variants/ProducerShareV
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
-import { ShareActions } from '@/components/share/ShareActions';
+import { ShareTransportProvider, type ShareTransport } from '@/components/share/ShareTransport';
 import { downloadFilename } from '@/lib/share/download-filename';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
@@ -74,6 +74,8 @@ interface ShareTrack {
   bpm: number | null;
   key: string | null;
   scale: string | null;
+  created_at?: string | null;
+  track_tags?: { tag: string; category: string | null }[];
 }
 
 interface ShareProject {
@@ -218,6 +220,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // back. Viewers never need it: everything they may do is in ShareActions.
   const [workspace, setWorkspace] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   // DAW chrome activates when an editor switches into edit mode. In that
   // case PlayerCanvas owns the WaveSurfer instance — we starve the inline
@@ -230,6 +233,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // cancel on track switch, and exposes imperative play/pause/seek.
   const {
     ready,
+    playing: enginePlaying,
     currentTime,
     duration,
     play: wsPlay,
@@ -244,6 +248,11 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     resetKey: workspace ? 'workspace' : 'variant',
     peaksUrl: activeTrack?.peaks_url ?? null,
     height: 56,
+    // Opaque colours: WaveSurfer paints the played layer by filling the bars
+    // `source-in`, which keeps the bars' own alpha, so a translucent waveColor
+    // made the played part exactly as faint as the rest (no visible progress).
+    waveColor: '#3A3A38',
+    progressColor: '#FFFFFF',
     initialVolume: outputVol,
     onFinish: () => {
       // Auto-advance to next track when the current one ends.
@@ -385,6 +394,16 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     if (isPlaying) wsPlay();
     else wsPause();
   }, [isPlaying, ready, wsPlay, wsPause]);
+
+  // A click on an idle row's waveform selects that track and starts it at the
+  // clicked point: the fraction waits here until the new track has loaded.
+  const pendingSeekRef = useRef<{ trackId: string; fraction: number } | null>(null);
+  useEffect(() => {
+    const pending = pendingSeekRef.current;
+    if (!ready || !pending || pending.trackId !== activeTrack?.id) return;
+    pendingSeekRef.current = null;
+    seek(pending.fraction);
+  }, [ready, activeTrack?.id, seek]);
 
   // Volume + mute sync.
   useEffect(() => {
@@ -668,33 +687,95 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // variants continue through to the historical layout below (still
   // the default for now; we'll specialise each variant in follow-ups).
   // Every option the producer set, honoured in every variant (ShareActions).
+  // One zip of the whole share. Without a password it is a plain navigation, so
+  // the browser streams the archive straight to disk; a locked share has to send
+  // the password header, which means fetching it (and holding it) in the page.
+  const downloadAll = async () => {
+    const url = `/api/share/${token}/download-all`;
+    const pw = passwordRef.current;
+    if (!pw) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+    setDownloadingAll(true);
+    try {
+      const response = await fetch(url, { headers: { 'x-share-password': pw } });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Download unavailable');
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = downloadFilename(response.headers.get('content-disposition'), 'share');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      toast.error('Download failed', downloadError instanceof Error ? downloadError.message : 'Download unavailable');
+    } finally {
+      setDownloadingAll(false);
+    }
+  };
+
   const rowDownload = share
     ? { allowed: share.allow_downloads === true, onDownload: downloadTrack, downloadingId }
     : undefined;
-  const shareActions = share ? (
-    <ShareActions
-      tracks={tracks}
-      allowDownloads={share.allow_downloads === true}
-      onDownload={downloadTrack}
-      downloadingId={downloadingId}
-      fullPlayback={share.full_playback !== false}
-      collaboration={share.role === 'viewer' ? null : {
-        role: share.role,
-        commentCount: comments.length,
-        onOpen: () => { setIsPlaying(false); setWorkspace(true); },
-      }}
-    />
-  ) : null;
+
+  const transportValue: ShareTransport = {
+    track: activeTrack,
+    index: activeIndex,
+    count: tracks.length,
+    currentTime,
+    duration,
+    playing: enginePlaying,
+    buffering: isPlaying && !enginePlaying,
+    toggle: togglePlay,
+    prev: prevTrack,
+    next: nextTrack,
+    seekToFraction: (fraction: number) => seek(Math.max(0, Math.min(1, fraction))),
+    playAt: (trackId: string, fraction: number) => {
+      const idx = tracks.findIndex((x) => x.id === trackId);
+      if (idx < 0) return;
+      if (idx === activeIndex) {
+        seek(Math.max(0, Math.min(1, fraction)));
+        setIsPlaying(true);
+        return;
+      }
+      pendingSeekRef.current = { trackId, fraction };
+      setActiveIndex(idx);
+      setIsPlaying(true);
+    },
+  };
+  // What the header shows of the producer's options. The downloads themselves
+  // are on each row; the server's gate still decides.
+  const shareOptions = {
+    allowDownloads: share?.allow_downloads === true,
+    fullPlayback: share?.full_playback !== false,
+    collaboration: !share || share.role === 'viewer' ? null : {
+      role: share.role,
+      commentCount: comments.length,
+      onOpen: () => { setIsPlaying(false); setWorkspace(true); },
+    },
+  };
+
 
   if (!workspace && share?.recipient_kind === 'client' && displayProject) {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
         {purchaseBannerNode}
-        <div ref={waveRef} className="hidden" />
         <ClientShareVariant
           project={displayProject}
-          actions={shareActions}
+          options={shareOptions}
           rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
           tracks={tracks}
           creator={creator}
           licenses={licenses}
@@ -719,22 +800,24 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           waveRef={waveRef}
           onSeek={(seconds) => seek(seconds)}
         />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (!workspace && share?.recipient_kind === 'producer' && displayProject) {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
       {purchaseBannerNode}
       {/* The page's ONE audio engine draws its waveform inside the variant's
           vinyl, so the disc, the waveform and the sound share a single clock.
           (The variant used to mount a second, separate player there.) */}
       <ProducerShareVariant
         project={displayProject}
-        actions={shareActions}
+        options={shareOptions}
         waveRef={waveRef}
         rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -751,22 +834,24 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           }
         }}
       />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (!workspace && share?.recipient_kind === 'rapper' && displayProject) {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
       {purchaseBannerNode}
       {/* The page's ONE audio engine draws its waveform inside the variant's
           vinyl, so the disc, the waveform and the sound share a single clock.
           (The variant used to mount a second, separate player there.) */}
       <RapperShareVariant
         project={displayProject}
-        actions={shareActions}
+        options={shareOptions}
         waveRef={waveRef}
         rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -783,22 +868,24 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           }
         }}
       />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (!workspace && share?.recipient_kind === 'friend' && displayProject) {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
       {purchaseBannerNode}
       {/* The page's ONE audio engine draws its waveform inside the variant's
           vinyl, so the disc, the waveform and the sound share a single clock.
           (The variant used to mount a second, separate player there.) */}
       <FriendShareVariant
         project={displayProject}
-        actions={shareActions}
+        options={shareOptions}
         waveRef={waveRef}
         rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -815,7 +902,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           }
         }}
       />
-      </>
+      </ShareTransportProvider>
     );
   }
 

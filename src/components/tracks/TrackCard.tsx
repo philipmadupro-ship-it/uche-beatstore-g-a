@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, type ReactNode } from 'react';
 import { Track } from '@/lib/types';
 import { Star, Music, ChevronUp, ChevronDown, Check } from 'lucide-react';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
@@ -69,6 +69,31 @@ interface TrackCardProps {
   moveControls?: 'cell' | 'menu';
   isFirstInOrder?: boolean;
   isLastInOrder?: boolean;
+  /**
+   * Recipient mode, for a row on a share page. The same row, minus everything
+   * that belongs to the owner: no rating stars (the producer's private score),
+   * no ⋯ owner menu, no store price marker, no drag-out, no offline badge.
+   * What the recipient may do (a per-row Download) comes in as `rowTrailing`.
+   */
+  readOnly?: boolean;
+  /**
+   * Playback state from somewhere other than the global player store. A share
+   * page runs its own engine, so the row is told whether it is the current
+   * track, whether it is playing, how far in, and what a press or a seek does.
+   */
+  playback?: RowPlayback;
+  /** Fills the last column in `readOnly` mode (the share page's Download). */
+  rowTrailing?: ReactNode;
+  /** Width of that last column; a share page with a Buy pill widens it. */
+  trailingWidth?: string;
+}
+
+export interface RowPlayback {
+  current: boolean;
+  playing: boolean;
+  progress: number;
+  onToggle: () => void;
+  onSeek: (fraction: number) => void;
 }
 
 /**
@@ -142,6 +167,10 @@ function TrackCardImpl({
   isLastInOrder = false,
   columns,
   columnStats,
+  readOnly = false,
+  playback,
+  rowTrailing,
+  trailingWidth,
 }: TrackCardProps) {
   void index;
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
@@ -220,11 +249,12 @@ function TrackCardImpl({
     }
   };
 
-  const isCurrent = currentTrack?.id === track.id;
-  const isActive = isCurrent && isPlaying;
+  const isCurrent = playback ? playback.current : currentTrack?.id === track.id;
+  const isActive = playback ? playback.current && playback.playing : isCurrent && isPlaying;
 
   const playTrack = () => {
-    if (isCurrent) togglePlay();
+    if (playback) playback.onToggle();
+    else if (isCurrent) togglePlay();
     else if (onPlayClick) onPlayClick();
     else setTrack(track);
   };
@@ -366,9 +396,9 @@ function TrackCardImpl({
       // straight out of the browser onto the desktop / a DAW. We don't
       // mount a heavy DnD library; the dataTransfer payload is encoded
       // through lib/dnd.ts and decoded on the target.
-      draggable={draggableTrack}
+      draggable={draggableTrack && !readOnly}
       onDragStart={(e) => {
-        if (!draggableTrack) return;
+        if (!draggableTrack || readOnly) return;
         // A press on the ⋯ menu, the rename field, or a control button can
         // still land on this ancestor's `draggable`, since the browser
         // walks up to the nearest draggable element regardless of which
@@ -389,7 +419,7 @@ function TrackCardImpl({
           track.audio_url,
         );
       }}
-      style={columns ? ({ '--track-row-cols': gridTemplate(columns) } as React.CSSProperties) : undefined}
+      style={columns ? ({ '--track-row-cols': gridTemplate(columns, trailingWidth) } as React.CSSProperties) : undefined}
       className={`group relative grid min-h-[64px] grid-cols-[48px_minmax(0,1fr)_32px] items-center gap-3 rounded-xl border px-2 py-2 transition-colors cursor-pointer ${columns ? 'track-row-dynamic' : TRACK_ROW_GRID} md:gap-4 md:px-3 ${
         isCurrent
           // Playing is STATE, and state is white-at-alpha (design-direction
@@ -526,7 +556,7 @@ function TrackCardImpl({
           <span className="tabular-nums">{durationLabel}</span>
           <span aria-hidden className="h-2 w-px bg-white/15" />
           <span className="tabular-nums">{uploadDate}</span>
-          {currentRating ? (
+          {currentRating && !readOnly ? (
             <>
               <span aria-hidden className="h-2 w-px bg-white/15" />
               <span className="flex items-center gap-0.5 text-[#c8a84b]">
@@ -535,7 +565,7 @@ function TrackCardImpl({
               </span>
             </>
           ) : null}
-          {track.store_listed ? (
+          {track.store_listed && !readOnly ? (
             <>
               <span aria-hidden className="h-2 w-px bg-white/15" />
               <span className="text-[#c8a47a]">
@@ -543,7 +573,7 @@ function TrackCardImpl({
               </span>
             </>
           ) : null}
-          {isCached ? (
+          {isCached && !readOnly ? (
             <>
               <span aria-hidden className="h-2 w-px bg-white/15" />
               <span className="text-white/45">Offline</span>
@@ -560,6 +590,7 @@ function TrackCardImpl({
         columns.map((col) => {
           if (col.id === 'title') return null;
           if (col.id === 'rating') {
+            if (readOnly) return <div key={col.id} className="hidden md:block" />;
             return (
               <div
                 key={col.id}
@@ -601,7 +632,7 @@ function TrackCardImpl({
                supposed to change WHICH data shows, not how it reads. */
             return (
               <div key={col.id} className="relative z-10 hidden min-w-0 items-center gap-2 md:flex">
-                {track.store_listed ? (
+                {track.store_listed && !readOnly ? (
                   <span
                     title={track.lease_price_usd != null ? `Listed from $${track.lease_price_usd}` : 'Listed on the store'}
                     className="shrink-0 rounded border border-[#c8a47a]/25 bg-[#c8a47a]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#c8a47a]"
@@ -627,7 +658,8 @@ function TrackCardImpl({
                   trackId={track.id}
                   peaksUrl={track.peaks_url}
                   title={track.title}
-                  onPlay={onPlayClick}
+                  onPlay={playback ? playback.onToggle : onPlayClick}
+                  controlled={playback ? { isCurrent: playback.current, progress: playback.progress, onSeek: playback.onSeek } : undefined}
                 />
               </div>
             );
@@ -740,13 +772,15 @@ function TrackCardImpl({
       {/* Row actions. Grouped by frequency, destructive last, keyboard
           navigable — see components/ui/ActionMenu. */}
       <div className="relative z-20 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-        <ActionMenu
-          sections={rowMenuSections}
-          align="right"
-          label="Track actions"
-          width={248}
-          triggerClassName="flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-[#8B8273] transition-colors hover:bg-white/[0.06] hover:text-white"
-        />
+        {readOnly ? rowTrailing : (
+          <ActionMenu
+            sections={rowMenuSections}
+            align="right"
+            label="Track actions"
+            width={248}
+            triggerClassName="flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-[#8B8273] transition-colors hover:bg-white/[0.06] hover:text-white"
+          />
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { Music, Play, Pause } from 'lucide-react';
 import { WavePlayer } from '@/components/player/WavePlayer';
 import type { Track as PlayerTrack } from '@/lib/types';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface Track {
   id: string;
@@ -81,8 +82,11 @@ export function ShareWaveformVinyl({
   size = 'large',
   waveRef,
 }: Props) {
+  const reducedMotion = useReducedMotion();
   if (!track) return null;
 
+  // `isPlaying` is the ENGINE's state (the audio element's play / pause /
+  // ended / stall events), not a click: the disc must not spin over silence.
   const spinning = isPlaying && playingId === track.id;
   const dim = size === 'compact'
     ? { vinyl: 'w-44 h-44 md:w-48 md:h-48', inner: 'w-32 h-32 md:w-36 md:h-36', label: 'w-16 h-16' }
@@ -96,8 +100,12 @@ export function ShareWaveformVinyl({
           spindle hole drawn in the middle of the label so the spin
           looks anchored. */}
       <div data-testid="share-vinyl-disc" data-spinning={spinning} className={`relative ${dim.vinyl} rounded-full bg-[#0c0907] border border-black/40 shadow-[0_20px_60px_rgba(0,0,0,0.5),inset_0_0_40px_rgba(0,0,0,0.6)] flex items-center justify-center group mb-6 ${
-        spinning ? 'animate-[spin_8s_linear_infinite]' : ''
-      }`}>
+        reducedMotion ? '' : 'animate-[spin_8s_linear_infinite]'
+      }`}
+        // Paused, not removed: the disc stops where it is instead of snapping
+        // back to angle zero, and the speed is constant while it runs.
+        style={reducedMotion ? undefined : { animationPlayState: spinning ? 'running' : 'paused' }}
+      >
         {/* Concentric grooves — thin opacities so the disc doesn't read
             as a flat black circle. */}
         <div className="absolute inset-2 rounded-full border border-white/[0.025]" />

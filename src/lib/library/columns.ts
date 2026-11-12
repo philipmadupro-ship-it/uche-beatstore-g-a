@@ -164,10 +164,11 @@ export function resolveColumns(ids: unknown): LibraryColumn[] {
  *
  * The leading and trailing tracks are the cover/play control and the actions
  * menu. They are structural rather than data columns, so they are not
- * configurable and are always present.
+ * configurable and are always present. A share page widens the trailing
+ * track (`trailing`) to fit its Download / Buy controls.
  */
-export function gridTemplate(columns: LibraryColumn[]): string {
-  return ['48px', ...columns.map((c) => c.width), '32px'].join(' ');
+export function gridTemplate(columns: LibraryColumn[], trailing = '32px'): string {
+  return ['48px', ...columns.map((c) => c.width), trailing].join(' ');
 }
 
 /** Move a column, for drag-to-reorder. Out-of-range indices are no-ops. */

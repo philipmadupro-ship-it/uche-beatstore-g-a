@@ -15,9 +15,8 @@ import { ShareTrackDetailsDrawer } from '@/components/share/ShareTrackDetailsDra
 import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier } from '@/components/store/LicenseSelector';
 import type { Track as CartTrack } from '@/lib/types';
-import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
-import { ShareTrackRow, ShareTrackListHeader, type ShareRowDownload } from '@/components/share/ShareTrackRow';
-import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import type { ShareRowDownload } from '@/components/share/ShareTrackList';
+import { SharePageFrame, type ShareFrameOptions } from '@/components/share/SharePageFrame';
 import { resolveCreatorLink } from '@/lib/store/social-links';
 
 function InstagramIcon({ size = 12 }: { size?: number }) {
@@ -79,6 +78,8 @@ interface Track {
   wav_url?: string | null;
   stems_status?: CartTrack['stems_status'] | null;
   created_at?: string | null;
+  peaks_url?: string | null;
+  track_tags?: { tag: string; category?: string | null }[] | null;
 }
 
 interface Project {
@@ -108,10 +109,13 @@ interface Props {
   progressPct: number;
   waveRef: React.RefObject<HTMLDivElement | null>;
   onSeek: (seconds: number) => void;
-  /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
-  actions?: React.ReactNode;
+  /** Share options the producer set (downloads, playback, collaboration), for the header. */
+  options: ShareFrameOptions;
   /** Download on the row itself, beside the beat it belongs to. */
   rowDownload?: ShareRowDownload;
+  /** Download every track as one zip (the header's Download all). */
+  onDownloadAll?: () => void;
+  downloadingAll?: boolean;
 }
 
 function fmt(seconds: number) {
@@ -162,9 +166,12 @@ export function ClientShareVariant({
   currentTime,
   duration,
   progressPct,
+  waveRef,
   onSeek,
-  actions,
+  options,
   rowDownload,
+  onDownloadAll,
+  downloadingAll,
 }: Props) {
   const { addItem, items: cartItems, setIsOpen: setCartOpen, isOpen: cartOpen } = useCart();
   const searchParams = useSearchParams();
@@ -264,60 +271,27 @@ export function ClientShareVariant({
     setCartOpen(true);
   };
 
-  const playingTrack = tracks.find((t) => t.id === playingId) ?? null;
-  const playingIdx = tracks.findIndex((t) => t.id === playingId);
-
-  const handlePrev = () => {
-    if (playingIdx > 0) onPlay(tracks[playingIdx - 1]);
-  };
-  const handleNext = () => {
-    if (playingIdx >= 0 && playingIdx < tracks.length - 1) onPlay(tracks[playingIdx + 1]);
-  };
-
-  const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    onSeek(pct * (duration || 0));
-  };
+  const cartButton = shareToken ? (
+    <button
+      onClick={() => setCartOpen(true)}
+      className="relative inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[11px] font-medium text-white transition-all hover:border-white/[0.12] hover:bg-white/[0.08] sm:px-4"
+    >
+      <ShoppingCart size={12} aria-hidden="true" />
+      {cartCount > 0 ? (
+        <>
+          <span className="font-mono tabular-nums">${cartTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+          <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-white/20 bg-[#090907] text-[8px] font-bold leading-none text-white/70">
+            {cartCount}
+          </span>
+        </>
+      ) : (
+        'Cart'
+      )}
+    </button>
+  ) : null;
 
   return (
-    <div className="min-h-screen bg-[#090907] text-white">
-
-      {/* ── Sticky post-hero header ── */}
-      <div className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
-        headerVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
-      }`}>
-        <div className="bg-[#090907]/95 backdrop-blur-xl border-b border-white/10 px-4 md:px-8 h-13 flex items-center gap-4">
-          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white flex-1 truncate">{displayName}</span>
-          {discount && (
-            <span className="hidden sm:flex items-center gap-1 text-[9px] font-mono font-bold text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/25 px-2.5 py-1 rounded-full uppercase tracking-wider">
-              <Tag size={9} />
-              {discount}% off
-            </span>
-          )}
-          {shareToken && (
-            <button
-              onClick={() => setCartOpen(true)}
-              className="relative flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/20 hover:border-white/20 transition-colors"
-            >
-              <ShoppingCart size={13} className="text-white" />
-              {cartCount > 0 ? (
-                <>
-                  <span className="text-[11px] font-mono font-bold text-white tabular-nums">
-                    ${cartTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </span>
-                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 border border-white/20 text-white/70 text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
-                    {cartCount}
-                  </span>
-                </>
-              ) : (
-                <span className="text-[9px] text-white/60 font-mono">Cart</span>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-
+    <>
       {/* ── Purchase banner ── */}
       {bannerOpen && (
         <div className={`sticky top-0 z-50 px-4 md:px-12 py-3 border-b ${
@@ -339,60 +313,91 @@ export function ClientShareVariant({
         </div>
       )}
 
-      {/* ── Hero ── */}
-      <div ref={heroRef} className="relative w-full h-[50vh] md:h-[60vh] overflow-hidden">
-        {heroImage ? (
-          <NextImage src={heroImage} alt="" fill priority unoptimized className="object-cover" />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-white/10 via-white/[0.04] to-[#090907]" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-[#090907]" />
+      <SharePageFrame
+        project={project}
+        producerName={creator?.display_name?.trim() || null}
+        tracks={tracks}
+        options={options}
+        playingId={playingId}
+        isPlaying={isPlaying}
+        onPlay={onPlay}
+        waveRef={waveRef}
+        rowDownload={rowDownload}
+        onDownloadAll={onDownloadAll}
+        downloadingAll={downloadingAll}
+        buy={shareToken && resolvedTiers.length > 0 ? (t) => {
+              const leasePrice = resolvePrice(shareLeasePrice, t.lease_price_usd, creatorLeasePrice, discount);
+              const exclPrice = resolvePrice(shareExclusivePrice, t.exclusive_price_usd, creatorExclusivePrice, discount);
+              // Original (pre-discount) prices for strikethrough
+              const leaseOrig = discount && leasePrice != null ? leasePrice / (1 - discount / 100) : null;
+              const exclOrig = discount && exclPrice != null ? exclPrice / (1 - discount / 100) : null;
+              const inCart = cartItems.some((ci) => ci.track.id === t.id);
+              return (
 
-        {/* Discount ribbon */}
-        {discount && (
-          <div className="absolute top-6 right-6 flex items-center gap-1.5 bg-[#0e1f17]/90 backdrop-blur-sm border border-[#6DC6A4]/30 text-[#6DC6A4] px-3 py-1.5 rounded-full text-[11px] font-bold font-mono uppercase tracking-wider">
-            <Zap size={11} fill="currentColor" />
-            {discount}% off everything
-          </div>
-        )}
+                        <>
+                        {shareToken && resolvedTiers.length > 0 ? (
+                          (() => {
+                            const selTier = resolvedTiers.find((r) => r.id === selectedLicenseId) ?? resolvedTiers[0];
+                            const price = selTier?.is_exclusive ? exclPrice : leasePrice;
+                            const origPrice = selTier?.is_exclusive ? exclOrig : leaseOrig;
+                            if (price == null) return (
+                              <button
+                                onClick={() => setSelectedTrackForDetails(t)}
+                                className="text-white/30 group-hover:text-white transition-colors p-1"
+                              >
+                                <ChevronRight size={14} />
+                              </button>
+                            );
+                            const isExcl = selTier?.is_exclusive ?? false;
+                            return (
+                              <button
+                                onClick={() => handleAddToCart(t)}
+                                className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg border transition-colors ${
+                                  isExcl
+                                    ? 'bg-white/[0.07] border-white/20 hover:border-white/20 hover:bg-white/10'
+                                    : 'bg-white/[0.04] border-white/20 hover:border-white/20 hover:bg-white/[0.05]'
+                                }`}
+                              >
+                                <span className={`text-[8px] font-mono uppercase tracking-wider ${isExcl ? 'text-white/80' : 'text-white/60'}`}>
+                                  {selTier?.name ?? 'Add'}
+                                </span>
+                                <span className="flex items-center gap-1 leading-none">
+                                  {origPrice && (
+                                    <span className="text-[8px] font-mono text-white/30 line-through tabular-nums">
+                                      ${Math.round(origPrice)}
+                                    </span>
+                                  )}
+                                  <span className={`text-[11px] font-mono font-bold tabular-nums ${isExcl ? 'text-white' : 'text-white'}`}>
+                                    ${Math.round(price)}
+                                  </span>
+                                </span>
+                              </button>
+                            );
+                          })()
+                        ) : (
+                          <button
+                            onClick={() => setSelectedTrackForDetails(t)}
+                            className="text-white/30 group-hover:text-white transition-colors p-1"
+                          >
+                            <ChevronRight size={14} />
+                          </button>
+                        )}
 
-        {/* Cart button in hero */}
-        {shareToken && (
-          <button
-            onClick={() => setCartOpen(true)}
-            className="absolute top-6 left-6 relative flex items-center gap-2 px-3.5 py-2 rounded-full bg-black/40 backdrop-blur-sm border border-white/[0.12] hover:border-white/25 transition-colors"
-          >
-            <ShoppingCart size={13} className="text-white" />
-            {cartCount > 0 ? (
-              <>
-                <span className="text-[11px] font-mono font-bold text-white">${cartTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 border border-white/20 text-white/70 text-[8px] font-bold rounded-full flex items-center justify-center">
-                  {cartCount}
-                </span>
-              </>
-            ) : (
-              <span className="text-[9px] text-white/60 font-mono">Cart</span>
+                        </>
+              );
+            } : undefined}
+        headerExtras={(
+          <>
+            {discount && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#6DC6A4]/25 bg-[#0e1f17] px-2.5 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider text-[#6DC6A4]">
+                <Tag size={9} aria-hidden="true" />
+                {discount}% off
+              </span>
             )}
-          </button>
+            {cartButton}
+          </>
         )}
-
-        <div className="absolute inset-x-0 bottom-0 px-6 md:px-12 pb-10 md:pb-14">
-          <p className="text-[9px] font-mono uppercase tracking-[0.35em] text-white/80 mb-2">
-            {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'} · Curated selection
-          </p>
-          <h1 className="text-4xl md:text-6xl font-medium tracking-tight text-white leading-[1.05] max-w-3xl">
-            {displayName}
-          </h1>
-          {project.description && (
-            <p className="mt-3 text-[13px] md:text-[14px] text-white/70 max-w-xl leading-relaxed">
-              {project.description}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-5 md:px-10 pt-10 pb-36">
-
+      >
         {/* ── Bio ── */}
         {hasBio && (
           <section className="mb-14 max-w-2xl">
@@ -402,109 +407,6 @@ export function ClientShareVariant({
             </p>
           </section>
         )}
-
-        {/* ── Track list ── */}
-        <section className="mb-14">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80">
-              Tracks · {tracks.length}
-            </p>
-            {discount && (
-              <span className="text-[9px] font-mono text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/20 px-2 py-0.5 rounded-full">
-                {discount}% off all prices
-              </span>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <ShareTrackListHeader hasDownload={rowDownload?.allowed} hasTrailing trailingLabel={shareToken && resolvedTiers.length > 0 ? 'License' : undefined} />
-
-            {tracks.length === 0 ? (
-              <div className="px-5 py-12 text-center text-[11px] text-white/60">
-                No tracks in this selection yet.
-              </div>
-            ) : (
-              tracks.map((t) => {
-                const isCurrent = playingId === t.id;
-                const leasePrice = resolvePrice(shareLeasePrice, t.lease_price_usd, creatorLeasePrice, discount);
-                const exclPrice = resolvePrice(shareExclusivePrice, t.exclusive_price_usd, creatorExclusivePrice, discount);
-                // Original (pre-discount) prices for strikethrough
-                const leaseOrig = discount && leasePrice != null ? leasePrice / (1 - discount / 100) : null;
-                const exclOrig = discount && exclPrice != null ? exclPrice / (1 - discount / 100) : null;
-                const inCart = cartItems.some((ci) => ci.track.id === t.id);
-
-                return (
-                  <ShareTrackRow
-                    key={t.id}
-                    track={t}
-                    active={isCurrent}
-                    isPlaying={!!isPlaying}
-                    onPlay={() => onPlay(t)}
-                    onOpenDetails={() => setSelectedTrackForDetails(t)}
-                    download={rowDownload}
-                    titleBadge={inCart ? (
-                      <span className="text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/20 px-1.5 py-0.5 rounded-full shrink-0">
-                        In cart
-                      </span>
-                    ) : null}
-                    trailing={
-                      <>
-                      {shareToken && resolvedTiers.length > 0 ? (
-                        (() => {
-                          const selTier = resolvedTiers.find((r) => r.id === selectedLicenseId) ?? resolvedTiers[0];
-                          const price = selTier?.is_exclusive ? exclPrice : leasePrice;
-                          const origPrice = selTier?.is_exclusive ? exclOrig : leaseOrig;
-                          if (price == null) return (
-                            <button
-                              onClick={() => setSelectedTrackForDetails(t)}
-                              className="text-white/30 group-hover:text-white transition-colors p-1"
-                            >
-                              <ChevronRight size={14} />
-                            </button>
-                          );
-                          const isExcl = selTier?.is_exclusive ?? false;
-                          return (
-                            <button
-                              onClick={() => handleAddToCart(t)}
-                              className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg border transition-colors ${
-                                isExcl
-                                  ? 'bg-white/[0.07] border-white/20 hover:border-white/20 hover:bg-white/10'
-                                  : 'bg-white/[0.04] border-white/20 hover:border-white/20 hover:bg-white/[0.05]'
-                              }`}
-                            >
-                              <span className={`text-[8px] font-mono uppercase tracking-wider ${isExcl ? 'text-white/80' : 'text-white/60'}`}>
-                                {selTier?.name ?? 'Add'}
-                              </span>
-                              <span className="flex items-center gap-1 leading-none">
-                                {origPrice && (
-                                  <span className="text-[8px] font-mono text-white/30 line-through tabular-nums">
-                                    ${Math.round(origPrice)}
-                                  </span>
-                                )}
-                                <span className={`text-[11px] font-mono font-bold tabular-nums ${isExcl ? 'text-white' : 'text-white'}`}>
-                                  ${Math.round(price)}
-                                </span>
-                              </span>
-                            </button>
-                          );
-                        })()
-                      ) : (
-                        <button
-                          onClick={() => setSelectedTrackForDetails(t)}
-                          className="text-white/30 group-hover:text-white transition-colors p-1"
-                        >
-                          <ChevronRight size={14} />
-                        </button>
-                      )}
-
-                      </>
-                    }
-                  />
-                );
-              })
-            )}
-          </div>
-        </section>
 
         {/* ── License tiers ── */}
         {hasLicenseSection && (
@@ -549,85 +451,7 @@ export function ClientShareVariant({
             </div>
           </section>
         )}
-        {actions}
-      </div>
-
-      {/* ── Sticky Now-Playing bar ── */}
-      {playingTrack && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-white/[0.02] backdrop-blur-xl">
-          {/* Seek bar — full-width clickable strip at the very top of the bar */}
-          <div
-            onClick={handleSeekClick}
-            className="h-1 bg-white/20 cursor-pointer hover:h-1.5 transition-all relative"
-          >
-            <div
-              className="h-full bg-white transition-all"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-
-          <div className="max-w-5xl mx-auto px-4 md:px-8 py-3 flex items-center gap-4">
-            {/* Cover */}
-            <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-white/[0.04] border border-white/10 shrink-0">
-              <ArtworkFallback src={playingTrack.cover_url} seed={playingTrack.id} kind="track" sizes="36px" className="object-cover">
-                <Music size={12} aria-hidden="true" />
-              </ArtworkFallback>
-            </div>
-
-            {/* Track info */}
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-medium text-white truncate">{playingTrack.title}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[9px] font-mono text-white/40 tabular-nums">
-                  {fmt(currentTime)}
-                </span>
-                <span className="text-[9px] font-mono text-white/30">/</span>
-                <span className="text-[9px] font-mono text-white/40 tabular-nums">
-                  {duration > 0 ? fmt(duration) : fmt(playingTrack.duration_seconds || 0)}
-                </span>
-              </div>
-            </div>
-
-            {/* Transport */}
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                onClick={handlePrev}
-                disabled={playingIdx <= 0}
-                className="-m-1 flex size-10 items-center justify-center text-white/60 transition-colors hover:text-white disabled:opacity-30"
-              >
-                <SkipBack size={14} fill="currentColor" />
-              </button>
-              <GlassPlayButton
-                playing={isPlaying}
-                onClick={() => onPlay(playingTrack)}
-                className="-m-0.5"
-              />
-              <button
-                onClick={handleNext}
-                disabled={playingIdx >= tracks.length - 1}
-                className="-m-1 flex size-10 items-center justify-center text-white/60 transition-colors hover:text-white disabled:opacity-30"
-              >
-                <SkipForward size={14} fill="currentColor" />
-              </button>
-            </div>
-
-            {/* Cart shortcut */}
-            {shareToken && (
-              <button
-                onClick={() => setCartOpen(true)}
-                className="relative -m-0.5 flex size-10 shrink-0 items-center justify-center text-white/60 transition-colors hover:text-white"
-              >
-                <ShoppingCart size={15} />
-                {cartCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 border border-white/20 text-white/70 text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
-                    {cartCount}
-                  </span>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      </SharePageFrame>
 
       {/* ── Drawers ── */}
       {selectedTrackForDetails && (
@@ -651,7 +475,7 @@ export function ClientShareVariant({
       )}
 
       {shareToken && cartOpen && <CartDrawer shareToken={shareToken} sharePassword={sharePassword} />}
-    </div>
+    </>
   );
 }
 

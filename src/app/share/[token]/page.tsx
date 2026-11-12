@@ -16,7 +16,7 @@ import { ProducerShareVariant } from '@/components/share/variants/ProducerShareV
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
-import { ShareActions } from '@/components/share/ShareActions';
+import { ShareTransportProvider, type ShareTransport } from '@/components/share/ShareTransport';
 import { downloadFilename } from '@/lib/share/download-filename';
 import { toast } from '@/hooks/useToast';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -99,6 +99,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const [allowDownloads, setAllowDownloads] = useState(true);
   const [fullPlayback, setFullPlayback] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requiresPassword, setRequiresPassword] = useState(false);
@@ -114,6 +115,8 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [ready, setReady] = useState(false);
+  // What the audio element is actually doing (its own events), not what was asked.
+  const [enginePlaying, setEnginePlaying] = useState(false);
   const { volume, muted, output: outputVol, silent, setVolume, toggleMute } = useVolumeState();
   // Read by WaveSurfer's 'ready' handler, which is bound once per track and
   // would otherwise apply the level from when the track started loading.
@@ -129,6 +132,8 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const fallbackAudioRef = useRef<HTMLAudioElement>(null);
   const tracksRef = useRef<Track[]>([]);
   const activeIndexRef = useRef(0);
+  // A click on an idle row's waveform: the fraction waits for the new track to load.
+  const pendingSeekRef = useRef<{ trackId: string; fraction: number } | null>(null);
 
   const activeTrack = tracks[activeIndex] ?? null;
 
@@ -222,7 +227,8 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
 
       const w = WaveSurferLib.create({
         container: waveRef.current,
-        waveColor: 'rgba(255,255,255,0.1)',
+        // Opaque: the played layer is filled source-in and keeps the bars' alpha.
+        waveColor: '#2A2A28',
         progressColor: '#FFFFFF',
         cursorColor: 'rgba(255,255,255,0.8)',
         barWidth: 3,
@@ -232,6 +238,14 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         normalize: true,
       });
       ws.current = w;
+      // Engine truth for the vinyl and the transport bar.
+      const media = (w as unknown as { getMediaElement?: () => HTMLMediaElement }).getMediaElement?.();
+      if (media) {
+        const on = () => { if (!cancelled) setEnginePlaying(true); };
+        const off = () => { if (!cancelled) setEnginePlaying(false); };
+        media.addEventListener('playing', on);
+        for (const ev of ['pause', 'ended', 'waiting', 'stalled', 'emptied', 'error']) media.addEventListener(ev, off);
+      }
 
       // Decode failure (no peaks + CORS/network on an external open) → flip
       // to the plain-audio fallback so the artist still hears the beat.
@@ -246,6 +260,11 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         setDuration(w.getDuration() || 0);
         setReady(true);
         w.setVolume(outputVolRef.current);
+        const pending = pendingSeekRef.current;
+        if (pending && pending.trackId === activeTrack.id) {
+          pendingSeekRef.current = null;
+          w.seekTo(pending.fraction);
+        }
       });
       w.on('audioprocess', (t: number) => {
         if (!cancelled) setCurrentTime(t);
@@ -266,6 +285,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
 
     return () => {
       cancelled = true;
+      setEnginePlaying(false);
       try { ws.current?.destroy(); } catch {}
       ws.current = null;
     };
@@ -427,27 +447,92 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       )
     : null;
 
-  // The producer's options, honoured in every variant (ShareActions).
-  const shareActions = share ? (
-    <ShareActions
-      tracks={tracks}
-      allowDownloads={allowDownloads}
-      onDownload={downloadTrack}
-      downloadingId={downloadingId}
-      fullPlayback={fullPlayback}
-    />
-  ) : null;
+  // One zip of the whole share. Without a password it is a plain navigation, so
+  // the browser streams the archive straight to disk; a locked share has to send
+  // the password header, which means fetching it (and holding it) in the page.
+  const downloadAll = async () => {
+    const url = `/api/share/${params.token}/download-all`;
+    const pw = password;
+    if (!pw) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+    setDownloadingAll(true);
+    try {
+      const response = await fetch(url, { headers: { 'x-share-password': pw } });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Download unavailable');
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = downloadFilename(response.headers.get('content-disposition'), 'share');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      toast.error('Download failed', downloadError instanceof Error ? downloadError.message : 'Download unavailable');
+    } finally {
+      setDownloadingAll(false);
+    }
+  };
+
+  // Download on each track's own row, and the playhead / seek the row waveforms borrow.
+  const rowDownload = share
+    ? { allowed: allowDownloads, onDownload: downloadTrack, downloadingId }
+    : undefined;
+  const transportValue: ShareTransport = {
+    track: activeTrack,
+    index: activeIndex,
+    count: tracks.length,
+    currentTime,
+    duration,
+    playing: enginePlaying,
+    buffering: isPlaying && !enginePlaying,
+    toggle: togglePlay,
+    prev: prevTrack,
+    next: nextTrack,
+    seekToFraction: (fraction: number) => {
+      const f = Math.max(0, Math.min(1, fraction));
+      if (ws.current && duration > 0) ws.current.seekTo(f);
+      else if (fallbackAudioRef.current && duration > 0) fallbackAudioRef.current.currentTime = f * duration;
+    },
+    playAt: (trackId: string, fraction: number) => {
+      const idx = tracks.findIndex((x) => x.id === trackId);
+      if (idx < 0) return;
+      const f = Math.max(0, Math.min(1, fraction));
+      if (idx === activeIndex) {
+        if (ws.current && duration > 0) ws.current.seekTo(f);
+        setIsPlaying(true);
+        return;
+      }
+      pendingSeekRef.current = { trackId, fraction: f };
+      setActiveIndex(idx);
+      setIsPlaying(true);
+    },
+  };
+
+  // What the header shows of the producer's options; the downloads themselves
+  // are on each row and the server's gate still decides.
+  const shareOptions = { allowDownloads, fullPlayback, collaboration: null };
 
   if (share?.recipient_kind === 'client') {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
         {purchaseBannerNode}
-        <div ref={waveRef} className="hidden" />
         <FallbackAudio
           refEl={fallbackAudioRef}
           active={wsFailed}
           onTime={(t, d) => { setCurrentTime(t); if (d && !duration) setDuration(d); }}
           onMeta={(d) => setDuration(d)}
+          onPlayingChange={setEnginePlaying}
           onEnd={() => {
             setIsPlaying(false);
             const next = activeIndexRef.current + 1;
@@ -456,7 +541,10 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         />
         <ClientShareVariant
           project={projectMock}
-          actions={shareActions}
+          options={shareOptions}
+          rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
           tracks={tracks}
           creator={creator}
           licenses={[]}
@@ -481,20 +569,20 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             }
           }}
         />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (share?.recipient_kind === 'producer') {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
         {purchaseBannerNode}
-        <div ref={waveRef} className="hidden" />
         <FallbackAudio
           refEl={fallbackAudioRef}
           active={wsFailed}
           onTime={(t, d) => { setCurrentTime(t); if (d && !duration) setDuration(d); }}
           onMeta={(d) => setDuration(d)}
+          onPlayingChange={setEnginePlaying}
           onEnd={() => {
             setIsPlaying(false);
             const next = activeIndexRef.current + 1;
@@ -503,7 +591,11 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         />
         <ProducerShareVariant
           project={projectMock}
-          actions={shareActions}
+          options={shareOptions}
+          waveRef={waveRef}
+          rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}
@@ -513,20 +605,20 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             if (idx >= 0) selectTrack(idx);
           }}
         />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (share?.recipient_kind === 'rapper') {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
         {purchaseBannerNode}
-        <div ref={waveRef} className="hidden" />
         <FallbackAudio
           refEl={fallbackAudioRef}
           active={wsFailed}
           onTime={(t, d) => { setCurrentTime(t); if (d && !duration) setDuration(d); }}
           onMeta={(d) => setDuration(d)}
+          onPlayingChange={setEnginePlaying}
           onEnd={() => {
             setIsPlaying(false);
             const next = activeIndexRef.current + 1;
@@ -535,7 +627,11 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         />
         <RapperShareVariant
           project={projectMock}
-          actions={shareActions}
+          options={shareOptions}
+          waveRef={waveRef}
+          rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}
@@ -545,20 +641,20 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             if (idx >= 0) selectTrack(idx);
           }}
         />
-      </>
+      </ShareTransportProvider>
     );
   }
 
   if (share?.recipient_kind === 'friend') {
     return (
-      <>
+      <ShareTransportProvider value={transportValue}>
         {purchaseBannerNode}
-        <div ref={waveRef} className="hidden" />
         <FallbackAudio
           refEl={fallbackAudioRef}
           active={wsFailed}
           onTime={(t, d) => { setCurrentTime(t); if (d && !duration) setDuration(d); }}
           onMeta={(d) => setDuration(d)}
+          onPlayingChange={setEnginePlaying}
           onEnd={() => {
             setIsPlaying(false);
             const next = activeIndexRef.current + 1;
@@ -567,7 +663,11 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         />
         <FriendShareVariant
           project={projectMock}
-          actions={shareActions}
+          options={shareOptions}
+          waveRef={waveRef}
+          rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}
@@ -577,7 +677,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             if (idx >= 0) selectTrack(idx);
           }}
         />
-      </>
+      </ShareTransportProvider>
     );
   }
 
@@ -876,13 +976,14 @@ function LicenseInfoSection({ creator }: { creator: LegacyCreatorShape }) {
  * only the mounted variant binds the ref. Silent until `active` is true.
  */
 function FallbackAudio({
-  refEl, active, onTime, onMeta, onEnd,
+  refEl, active, onTime, onMeta, onEnd, onPlayingChange,
 }: {
   refEl: React.RefObject<HTMLAudioElement | null>;
   active: boolean;
   onTime: (currentTime: number, duration: number) => void;
   onMeta: (duration: number) => void;
   onEnd: () => void;
+  onPlayingChange?: (playing: boolean) => void;
 }) {
   return (
     <audio
@@ -895,7 +996,11 @@ function FallbackAudio({
         onTime(a.currentTime, isFinite(a.duration) ? a.duration : 0);
       }}
       onLoadedMetadata={(e) => { if (active) onMeta(e.currentTarget.duration || 0); }}
-      onEnded={() => { if (active) onEnd(); }}
+      onEnded={() => { if (active) { onEnd(); onPlayingChange?.(false); } }}
+      onPlaying={() => { if (active) onPlayingChange?.(true); }}
+      onPause={() => { if (active) onPlayingChange?.(false); }}
+      onWaiting={() => { if (active) onPlayingChange?.(false); }}
+      onStalled={() => { if (active) onPlayingChange?.(false); }}
     />
   );
 }

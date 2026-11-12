@@ -125,6 +125,8 @@ describe('GET /api/share/[token]', () => {
         },
       ]),
       listResult([]),
+      // track_tags, read after the tracks and stems.
+      listResult([{ track_id: 'track-1', tag: 'Trap', category: 'genre' }]),
       maybeSingleResult({ display_name: 'Seller One' }),
       updateResult(),
       insertResult(),
@@ -136,6 +138,7 @@ describe('GET /api/share/[token]', () => {
 
     expect(res.status).toBe(200);
     expect(body.tracks[0].audio_url).toMatch(/^\/api\/share\/share-token\/preview\/track-1\?/);
+    expect(body.tracks[0].track_tags).toEqual([{ tag: 'Trap', category: 'genre' }]);
     expect(body.tracks[0].peaks_url).toMatch(/^\/api\/share\/share-token\/peaks\/track-1\?/);
     expect(body.tracks[0].preview_url).toBeUndefined();
   });

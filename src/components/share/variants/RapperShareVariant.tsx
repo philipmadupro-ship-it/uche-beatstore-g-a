@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Edit3 } from 'lucide-react';
-import { ShareTrackRow, type ShareRowDownload } from '@/components/share/ShareTrackRow';
-import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
+import type { ShareRowDownload } from '@/components/share/ShareTrackList';
+import { SharePageFrame, type ShareFrameOptions } from '@/components/share/SharePageFrame';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
 
 interface CreatorProfile {
@@ -38,56 +38,42 @@ interface Props {
   onPlay: (track: Track) => void;
   playingId?: string | null;
   isPlaying?: boolean;
-  /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
-  actions?: ReactNode;
+  /** Share options the producer set (downloads, playback, collaboration), for the header. */
+  options: ShareFrameOptions;
   /** The page's one audio engine renders its waveform here, under the vinyl. */
   waveRef?: React.RefObject<HTMLDivElement | null>;
   /** Download on the row itself, beside the beat it belongs to. */
   rowDownload?: ShareRowDownload;
+  /** Download every track as one zip (the header's Download all). */
+  onDownloadAll?: () => void;
+  downloadingAll?: boolean;
 }
 
-export function RapperShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions, waveRef, rowDownload }: Props) {
+export function RapperShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, options, waveRef, rowDownload, onDownloadAll, downloadingAll }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) || tracks[0];
-  const displayName = creator?.display_name || project.name;
 
   // Local state for interactive lyric session notepad
   const [sessionNotes, setSessionNotes] = useState<string>('');
   const [editingNotepad, setEditingNotepad] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#090907] text-white font-sans flex flex-col relative overflow-hidden">
-      {/* Ambient background accent */}
-      <div
-        className="absolute w-[800px] h-[800px] rounded-full pointer-events-none opacity-[0.03] blur-[150px]"
-        style={{
-          background: 'radial-gradient(circle, #FFFFFF 0%, transparent 70%)',
-          top: '-20%',
-          right: '-10%'
-        }}
-      />
-
-      {/* Top hero — vinyl + waveform of the active track. Replaces
-          the old static cover-art block on the right; the topliner
-          wants the beat AT the top so they can listen while their
-          eyes drop down to the lyric sheet underneath. */}
-      {currentTrack && (
-        <div className="w-full px-4 sm:px-6 md:px-12 pt-10 sm:pt-12 pb-6 flex justify-center z-10">
-          <ShareWaveformVinyl
-            track={currentTrack}
-            projectCover={project.cover_url}
-            caption={displayName}
-            isPlaying={isPlaying}
-            playingId={playingId ?? null}
-            onTogglePlay={onPlay}
-            size="compact"
-            waveRef={waveRef}
-          />
-        </div>
-      )}
-
-      {/* Main layout */}
-      <div className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 md:px-12 pb-32 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 lg:gap-12 z-10">
-
+    <SharePageFrame
+      project={project}
+      producerName={creator?.display_name || null}
+      tracks={tracks}
+      options={options}
+      playingId={playingId}
+      isPlaying={isPlaying}
+      onPlay={onPlay}
+      waveRef={waveRef}
+      rowDownload={rowDownload}
+      onDownloadAll={onDownloadAll}
+      downloadingAll={downloadingAll}
+    >
+      {/* The vocalist's workspace sits under the list, for the track on the
+          engine: the full Lyrics Studio (the same component as /studio) and a
+          session notepad. */}
+      <div className="mt-12 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_400px] lg:gap-12">
         {/* Left Side: Full Lyrics Studio — same component used in /studio
             so the rapper gets rhymes / syllable count / version history
             without re-implementing any of it. Reads/writes the track's
@@ -131,11 +117,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
           )}
         </div>
 
-        {/* Right Side: Writers Session Notepad & Tracks Drawer.
-            The vinyl + player card moved to the top hero above —
-            no need to duplicate the cover art here. */}
         <div className="flex flex-col gap-8">
-
           {/* Interactive Writers Notepad — lyric sheet style */}
           <div className="bg-[#0e0c09] border border-white/10 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] flex-1 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/[0.04]">
@@ -189,30 +171,8 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
               )}
             </div>
           </div>
-
-          {/* Projects Track List (if multiple tracks) */}
-          {tracks.length > 1 && (
-            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3">Workspace Tracks</p>
-              <div className="max-h-80 space-y-2 overflow-y-auto">
-                {tracks.map((t) => (
-                  <ShareTrackRow
-                    key={t.id}
-                    track={t}
-                    active={playingId === t.id}
-                    isPlaying={!!isPlaying}
-                    onPlay={() => onPlay(t)}
-                    download={rowDownload}
-                    compact
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
         </div>
-        {actions && <div className="lg:col-span-2">{actions}</div>}
       </div>
-    </div>
+    </SharePageFrame>
   );
 }

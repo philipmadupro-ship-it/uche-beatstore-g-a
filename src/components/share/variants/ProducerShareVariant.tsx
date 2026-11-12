@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import { SkipBack, SkipForward, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
-import { ShareTrackRow, type ShareRowDownload } from '@/components/share/ShareTrackRow';
-import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
+import { useState } from 'react';
+import { Copy, Check } from 'lucide-react';
+import type { ShareRowDownload } from '@/components/share/ShareTrackList';
+import { SharePageFrame, type ShareFrameOptions } from '@/components/share/SharePageFrame';
 
 /**
  * Producer / loop-pack collab variant.
@@ -70,20 +70,24 @@ interface Props {
   onPlay: (track: Track) => void;
   playingId?: string | null;
   isPlaying?: boolean;
-  /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
-  actions?: ReactNode;
+  /** Share options the producer set (downloads, playback, collaboration), for the header. */
+  options: ShareFrameOptions;
   /** The page's one audio engine renders its waveform here, under the vinyl. */
   waveRef?: React.RefObject<HTMLDivElement | null>;
   /** Download on the row itself, beside the beat it belongs to. */
   rowDownload?: ShareRowDownload;
+  /** Download every track as one zip (the header's Download all). */
+  onDownloadAll?: () => void;
+  downloadingAll?: boolean;
 }
 
-export function ProducerShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions, waveRef, rowDownload }: Props) {
+/** Rows carry the type column up front: loops and stems are what a producer scans for. */
+const PRODUCER_COLUMNS = ['title', 'tags', 'waveform', 'type', 'duration'];
+
+export function ProducerShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, options, waveRef, rowDownload, onDownloadAll, downloadingAll }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) ?? tracks[0];
-  const displayName = creator?.display_name || project.name;
   const [bpmCopied, setBpmCopied] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
-  const [trackListExpanded, setTrackListExpanded] = useState(false);
 
   const isMinor = currentTrack?.scale === 'minor';
   const compatibleKeys = getCompatibleKeys(currentTrack?.key, currentTrack?.scale);
@@ -103,84 +107,24 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
     setTimeout(() => setKeyCopied(false), 1500);
   };
 
-  const handlePrev = () => {
-    const idx = tracks.findIndex((t) => t.id === playingId);
-    if (idx > 0) onPlay(tracks[idx - 1]);
-  };
-
-  const handleNext = () => {
-    const idx = tracks.findIndex((t) => t.id === playingId);
-    if (idx >= 0 && idx < tracks.length - 1) onPlay(tracks[idx + 1]);
-  };
-
-  const visibleTracks = trackListExpanded ? tracks : tracks.slice(0, 6);
-
   return (
-    <div className="min-h-screen bg-[#090907] text-white font-sans flex flex-col relative overflow-hidden">
-      {/* Ambient glow */}
-      <div
-        className="absolute w-[900px] h-[900px] rounded-full pointer-events-none opacity-[0.025] blur-[180px]"
-        style={{ background: 'radial-gradient(circle, #FFFFFF 0%, transparent 70%)', top: '-20%', left: '-15%' }}
-      />
-
-      <div className="max-w-5xl mx-auto w-full px-5 md:px-10 pt-12 pb-32 z-10">
-
-        {/* Header */}
-        <div className="mb-10">
-          <p className="text-[9px] font-mono uppercase tracking-[0.35em] text-white/60 mb-1">
-            Producer pack · {tracks.length} loop{tracks.length !== 1 ? 's' : ''}
-          </p>
-          <h1 className="text-3xl md:text-4xl font-bold uppercase tracking-tight text-white leading-none">
-            {displayName}
-          </h1>
-          {creator?.bio && (
-            <p className="mt-3 text-[11px] text-white/80 max-w-lg leading-relaxed">{creator.bio}</p>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-8">
-
-          {/* ── Left: player + tech spec + key chart ── */}
-          <div className="flex flex-col gap-6">
-
-            {/* Vinyl player */}
-            {currentTrack && (
-              <div className="flex flex-col items-center">
-                <ShareWaveformVinyl
-                  track={currentTrack}
-                  projectCover={project.cover_url}
-                  caption={null}
-                  isPlaying={isPlaying}
-                  playingId={playingId ?? null}
-                  onTogglePlay={onPlay}
-                  size="large"
-                  waveRef={waveRef}
-                />
-                {/* Prev / Next */}
-                {tracks.length > 1 && (
-                  <div className="flex items-center gap-4 mt-5">
-                    <button
-                      onClick={handlePrev}
-                      disabled={!playingId || tracks.findIndex((t) => t.id === playingId) <= 0}
-                      className="w-9 h-9 rounded-full border border-white/10 bg-white/[0.04] flex items-center justify-center text-white/60 hover:text-white disabled:opacity-30 transition-colors"
-                    >
-                      <SkipBack size={14} fill="currentColor" />
-                    </button>
-                    <span className="text-[10px] font-mono text-white/40">
-                      {tracks.findIndex((t) => t.id === playingId) + 1} / {tracks.length}
-                    </span>
-                    <button
-                      onClick={handleNext}
-                      disabled={!playingId || tracks.findIndex((t) => t.id === playingId) >= tracks.length - 1}
-                      className="w-9 h-9 rounded-full border border-white/10 bg-white/[0.04] flex items-center justify-center text-white/60 hover:text-white disabled:opacity-30 transition-colors"
-                    >
-                      <SkipForward size={14} fill="currentColor" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
+    <SharePageFrame
+      project={project}
+      producerName={creator?.display_name || null}
+      tracks={tracks}
+      options={options}
+      playingId={playingId}
+      isPlaying={isPlaying}
+      onPlay={onPlay}
+      waveRef={waveRef}
+      rowDownload={rowDownload}
+      onDownloadAll={onDownloadAll}
+      downloadingAll={downloadingAll}
+      columnIds={PRODUCER_COLUMNS}
+    >
+      {/* What a producer reaches for: tempo and key of the track on the engine,
+          click to copy, and the keys that mix with it. */}
+      <section aria-label="Track reference" className="mt-12 flex flex-col gap-6">
             {/* Tech spec — BPM + Key as large click-to-copy cards */}
             {currentTrack && (
               <div className="grid grid-cols-2 gap-3">
@@ -276,47 +220,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                 </p>
               </div>
             )}
-          </div>
-
-          {/* ── Right: track directory ── */}
-          <div className="flex flex-col gap-4">
-            <div className="bg-[#0e0c09] border border-white/10 rounded-2xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/60">
-                  Pack · {tracks.length}
-                </p>
-              </div>
-              <div className="space-y-2 p-2">
-                {visibleTracks.map((t) => (
-                  <ShareTrackRow
-                    key={t.id}
-                    track={t}
-                    active={playingId === t.id}
-                    isPlaying={!!isPlaying}
-                    onPlay={() => onPlay(t)}
-                    download={rowDownload}
-                    compact
-                  />
-                ))}
-              </div>
-
-              {tracks.length > 6 && (
-                <button
-                  onClick={() => setTrackListExpanded((v) => !v)}
-                  className="w-full flex items-center justify-center gap-2 py-3 text-[10px] font-mono text-white/60 hover:text-white border-t border-white/10 transition-colors"
-                >
-                  {trackListExpanded ? (
-                    <><ChevronUp size={12} /> Show less</>
-                  ) : (
-                    <><ChevronDown size={12} /> {tracks.length - 6} more loops</>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-        {actions}
-      </div>
-    </div>
+      </section>
+    </SharePageFrame>
   );
 }

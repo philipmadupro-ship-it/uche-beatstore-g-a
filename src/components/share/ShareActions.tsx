@@ -1,20 +1,12 @@
 'use client';
 
-import { Download, Loader2, Lock, MessageSquare, Edit3, Headphones } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Lock, MessageSquare, Edit3, Headphones } from 'lucide-react';
 import { playbackLabel } from '@/lib/share/playback';
 
-interface ActionTrack {
-  id: string;
-  title: string;
-}
-
 interface Props {
-  tracks: ActionTrack[];
-  /** share.allow_downloads — the server's download gate decides; this only hides the buttons. */
+  /** share.allow_downloads: the server's download gate decides; this only words the notice. */
   allowDownloads: boolean;
-  onDownload: (track: ActionTrack) => void;
-  /** Track id whose download is in flight. */
-  downloadingId?: string | null;
   /** share.full_playback: tells the listener whether they are hearing the whole beat. */
   fullPlayback: boolean;
   /**
@@ -22,78 +14,48 @@ interface Props {
    * or comments + editing (editor). Opens the collaboration view.
    */
   collaboration?: { role: 'commenter' | 'editor'; commentCount: number; onOpen: () => void } | null;
+  /** More actions that belong in the same strip (Copy link, Buy). */
+  children?: ReactNode;
 }
 
+const PILL = 'inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[11px] font-medium text-white transition-all hover:border-white/[0.12] hover:bg-white/[0.08] sm:gap-2 sm:px-4';
+
 /**
- * The share options the producer set, honoured in every recipient variant.
+ * The share options that are not per track, as the action strip of the share
+ * header: the playback-mode label, the downloads-off notice, the collaboration
+ * entry for commenter and editor roles, and whatever the page adds (Copy link,
+ * Buy).
  *
- * The variants (client / producer / rapper / friend) are skins. Downloads,
- * the playback mode and the collaboration entry are the same everywhere, so
- * they live here once. They used to exist only in the page's default layout,
- * which no share ever reaches: `recipient_kind` is NOT NULL DEFAULT 'client'.
- * So "Allow downloads" did nothing on any share.
+ * The downloads themselves are NOT here. Each track's Download button is on
+ * its own row; this block used to repeat every track under a "Downloads"
+ * heading, which on a 50-beat share was a second 50-line list to scroll past.
+ * (And until 2026-09-29 no variant had a download control at all, so "Allow
+ * downloads" did nothing on any share.)
  */
-export function ShareActions({ tracks, allowDownloads, onDownload, downloadingId, fullPlayback, collaboration }: Props) {
+export function ShareActions({ allowDownloads, fullPlayback, collaboration, children }: Props) {
   return (
-    <section
-      aria-label="Share options"
-      data-testid="share-actions"
-      className="w-full mt-10 rounded-xl border border-white/10 bg-white/[0.02] p-4 md:p-5 text-left"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
-          {allowDownloads ? 'Downloads' : 'This link'}
-        </p>
-        <span
-          data-testid="share-playback-mode"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60"
-        >
-          <Headphones size={11} aria-hidden="true" />
-          {playbackLabel(fullPlayback)}
-        </span>
-      </div>
-
-      {allowDownloads ? (
-        <ul className="mt-3 divide-y divide-white/10">
-          {tracks.map((t) => {
-            const busy = downloadingId === t.id;
-            return (
-              <li key={t.id} className="flex items-center justify-between gap-3 py-2.5">
-                <span className="min-w-0 truncate text-[11px] text-white/80">{t.title}</span>
-                <button
-                  type="button"
-                  onClick={() => onDownload(t)}
-                  disabled={busy}
-                  aria-label={`Download ${t.title}`}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white disabled:opacity-40"
-                >
-                  {busy ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Download size={12} aria-hidden="true" />}
-                  {busy ? 'Downloading' : 'Download'}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p className="mt-3 flex items-center gap-2 text-[11px] text-white/60">
-          <Lock size={11} aria-hidden="true" />
-          Downloads are off for this link.
-        </p>
-      )}
-
+    <div data-testid="share-actions" className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+      {children}
       {collaboration && (
-        <button
-          type="button"
-          onClick={collaboration.onOpen}
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white"
-        >
+        <button type="button" onClick={collaboration.onOpen} className={PILL}>
           {collaboration.role === 'editor' ? <Edit3 size={12} aria-hidden="true" /> : <MessageSquare size={12} aria-hidden="true" />}
           {collaboration.role === 'editor' ? 'Comment & edit' : 'Leave feedback'}
-          {collaboration.commentCount > 0 && (
-            <span className="text-white/40">({collaboration.commentCount})</span>
-          )}
+          {collaboration.commentCount > 0 && <span className="text-white/40">({collaboration.commentCount})</span>}
         </button>
       )}
-    </section>
+      <span
+        data-testid="share-playback-mode"
+        className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.02] px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-[0.15em] text-white/60 sm:text-[10px]"
+      >
+        <Headphones size={11} aria-hidden="true" />
+        {playbackLabel(fullPlayback)}
+      </span>
+      {!allowDownloads && (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.02] px-2.5 py-1.5 text-[9px] font-mono uppercase tracking-[0.15em] text-white/60 sm:text-[10px]">
+          <Lock size={11} aria-hidden="true" />
+          Downloads are off for this link.
+        </span>
+      )}
+    </div>
   );
 }

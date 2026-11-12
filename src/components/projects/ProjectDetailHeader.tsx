@@ -257,7 +257,7 @@ export function ProjectDetailHeader(props: Props) {
   );
 }
 
-function Fact({ children }: { children: React.ReactNode }) {
+export function Fact({ children }: { children: React.ReactNode }) {
   return (
     <span className="rounded-full bg-white/[0.02] px-2 py-1 text-[9px] font-mono tabular-nums text-white/60 sm:text-[10px]">
       {children}
