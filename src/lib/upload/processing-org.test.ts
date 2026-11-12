@@ -21,7 +21,7 @@ function chain(table: string) {
     if (table === 'upload_processing_jobs' && kinds[0] === 'select') {
       return { data: { id: 'job1', user_id: 'u1', track_id: 't1', audio_url: 'r2://masters/orgs/o1/tracks/x.wav', file_name: 'x.wav', client_analysis: null, attempts: 0 }, error: null };
     }
-    if (table === 'upload_processing_jobs' && kinds.includes('or')) return { data: { id: 'job1' }, error: null };
+    if (table === 'upload_processing_jobs' && kinds[0] === 'update' && kinds.includes('in')) return { data: [{ id: 'job1' }], error: null }; // claimJob's pending/failed CAS
     if (table === 'tracks' && kinds[0] === 'select') {
       return trackOrgError ? { data: null, error: { message: trackOrgError } } : { data: { org_id: trackOrg }, error: null };
     }
