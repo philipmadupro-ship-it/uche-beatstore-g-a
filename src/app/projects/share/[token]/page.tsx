@@ -220,6 +220,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // back. Viewers never need it: everything they may do is in ShareActions.
   const [workspace, setWorkspace] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   // DAW chrome activates when an editor switches into edit mode. In that
   // case PlayerCanvas owns the WaveSurfer instance — we starve the inline
@@ -247,6 +248,11 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     resetKey: workspace ? 'workspace' : 'variant',
     peaksUrl: activeTrack?.peaks_url ?? null,
     height: 56,
+    // Opaque colours: WaveSurfer paints the played layer by filling the bars
+    // `source-in`, which keeps the bars' own alpha, so a translucent waveColor
+    // made the played part exactly as faint as the rest (no visible progress).
+    waveColor: '#3A3A38',
+    progressColor: '#FFFFFF',
     initialVolume: outputVol,
     onFinish: () => {
       // Auto-advance to next track when the current one ends.
@@ -681,6 +687,43 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // variants continue through to the historical layout below (still
   // the default for now; we'll specialise each variant in follow-ups).
   // Every option the producer set, honoured in every variant (ShareActions).
+  // One zip of the whole share. Without a password it is a plain navigation, so
+  // the browser streams the archive straight to disk; a locked share has to send
+  // the password header, which means fetching it (and holding it) in the page.
+  const downloadAll = async () => {
+    const url = `/api/share/${token}/download-all`;
+    const pw = passwordRef.current;
+    if (!pw) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+    setDownloadingAll(true);
+    try {
+      const response = await fetch(url, { headers: { 'x-share-password': pw } });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Download unavailable');
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = downloadFilename(response.headers.get('content-disposition'), 'share');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      toast.error('Download failed', downloadError instanceof Error ? downloadError.message : 'Download unavailable');
+    } finally {
+      setDownloadingAll(false);
+    }
+  };
+
   const rowDownload = share
     ? { allowed: share.allow_downloads === true, onDownload: downloadTrack, downloadingId }
     : undefined;
@@ -731,6 +774,8 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           project={displayProject}
           options={shareOptions}
           rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
           tracks={tracks}
           creator={creator}
           licenses={licenses}
@@ -771,6 +816,8 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         options={shareOptions}
         waveRef={waveRef}
         rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -803,6 +850,8 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         options={shareOptions}
         waveRef={waveRef}
         rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -835,6 +884,8 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         options={shareOptions}
         waveRef={waveRef}
         rowDownload={rowDownload}
+          onDownloadAll={downloadAll}
+          downloadingAll={downloadingAll}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}

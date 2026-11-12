@@ -200,7 +200,7 @@ export function Dropdown<T extends string = string>({
           ref={menuRef}
           role="listbox"
           className={cn(
-            'overlay-surface fixed z-[200] py-1 rounded-xl overflow-y-auto max-h-[60vh]',
+            'overlay-surface fixed z-[260] py-1 rounded-xl overflow-y-auto max-h-[60vh]',
             'border border-white/[0.12]',
 'ui-pop',
           )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, type ReactNode } from 'react';
-import { Link2, Music } from 'lucide-react';
+import { Download, Link2, Loader2, Music } from 'lucide-react';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { Fact } from '@/components/projects/ProjectDetailHeader';
 import { ShareActions } from '@/components/share/ShareActions';
@@ -39,6 +39,9 @@ interface Props<T extends ShareListItem> {
   rowDownload?: ShareRowDownload;
   /** Client variant: a licence / Buy control per row, in the row's last column. */
   buy?: (track: T) => ReactNode;
+  /** One zip of every track; offered only when downloads are allowed (rows carry their own Download). */
+  onDownloadAll?: () => void;
+  downloadingAll?: boolean;
   /** Extra header actions (the client variant's cart button, a discount chip). */
   headerExtras?: ReactNode;
   /** Variant detail columns for the rows (title is always first). */
@@ -62,7 +65,7 @@ function shareUrl(): string {
  * variants differ in the details they hang under the list, not in the page.
  */
 export function SharePageFrame<T extends ShareListItem>({
-  project, producerName, tracks, options, playingId, isPlaying, onPlay, waveRef, rowDownload, buy, headerExtras, columnIds, children,
+  project, producerName, tracks, options, playingId, isPlaying, onPlay, waveRef, rowDownload, buy, headerExtras, columnIds, onDownloadAll, downloadingAll, children,
 }: Props<T>) {
   const transport = useShareTransport();
   const total = tracks.reduce((sum, t) => sum + (t.duration_seconds ?? 0), 0);
@@ -97,6 +100,17 @@ export function SharePageFrame<T extends ShareListItem>({
               )}
               <ShareActions allowDownloads={options.allowDownloads} fullPlayback={options.fullPlayback} collaboration={options.collaboration}>
                 {headerExtras}
+                {onDownloadAll && rowDownload?.allowed && tracks.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={onDownloadAll}
+                    disabled={downloadingAll}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[11px] font-medium text-white transition-all hover:border-white/[0.12] hover:bg-white/[0.08] disabled:opacity-40 sm:gap-2 sm:px-4"
+                  >
+                    {downloadingAll ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Download size={12} aria-hidden="true" />}
+                    Download all
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={copyLink}

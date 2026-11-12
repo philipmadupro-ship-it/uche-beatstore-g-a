@@ -39,10 +39,13 @@ interface Props {
   waveRef?: React.RefObject<HTMLDivElement | null>;
   /** Download on the row itself, beside the beat it belongs to. */
   rowDownload?: ShareRowDownload;
+  /** Download every track as one zip (the header's Download all). */
+  onDownloadAll?: () => void;
+  downloadingAll?: boolean;
 }
 
 /** Friend: just listen. The shared frame, nothing hung under it. */
-export function FriendShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, options, waveRef, rowDownload }: Props) {
+export function FriendShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, options, waveRef, rowDownload, onDownloadAll, downloadingAll }: Props) {
   return (
     <SharePageFrame
       project={project}
@@ -54,6 +57,8 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
       onPlay={onPlay}
       waveRef={waveRef}
       rowDownload={rowDownload}
+      onDownloadAll={onDownloadAll}
+      downloadingAll={downloadingAll}
     />
   );
 }

@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { TrackCard, type RowPlayback } from '@/components/tracks/TrackCard';
 import { TrackListHeader } from '@/components/library/TrackListHeader';
 import { LibraryToolbar } from '@/components/library/LibraryToolbar';
 import { FilterBar, activeFilterCount, hasActiveFilters } from '@/components/library/FilterBar';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { Drawer } from '@/components/ui/Drawer';
 import { useShareTransport } from '@/components/share/ShareTransport';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { resolveColumns } from '@/lib/library/columns';
@@ -60,6 +61,15 @@ interface Props<T extends ShareListItem> {
   emptyMessage?: string;
 }
 
+// Below `sm` the Library opens its filters in a bottom drawer; so does this.
+const MOBILE_QUERY = '(max-width: 639px)';
+function subscribeMobile(onChange: () => void) {
+  const media = window.matchMedia(MOBILE_QUERY);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+const readMobile = () => window.matchMedia(MOBILE_QUERY).matches;
+
 const DEFAULT_COLUMNS = ['title', 'tags', 'waveform', 'duration'];
 const DOWNLOAD_WIDTH = '40px';
 
@@ -83,6 +93,7 @@ export function ShareTrackList<T extends ShareListItem>({
     typeof window === 'undefined' ? DEFAULT_SHARE_VIEW : decodeShareView(window.location.search));
   const [showFilters, setShowFilters] = useState(() => hasActiveFilters(view.filters));
   const toolbar = tracks.length >= SHARE_TOOLBAR_MIN_TRACKS;
+  const isMobileViewport = useSyncExternalStore(subscribeMobile, readMobile, () => false);
 
   const effectiveView = toolbar ? view : DEFAULT_SHARE_VIEW;
   const visible = useMemo(() => filterAndSortShareTracks(tracks, effectiveView), [tracks, effectiveView]);
@@ -184,9 +195,19 @@ export function ShareTrackList<T extends ShareListItem>({
               aria-label="Sort tracks"
             />
           </LibraryToolbar>
-          {showFilters && (
+          {showFilters && !isMobileViewport && (
             <FilterBar recipient filters={view.filters} onChange={(filters) => setView((v) => ({ ...v, filters }))} tagOptions={tagOptions} />
           )}
+          <Drawer
+            open={showFilters && isMobileViewport}
+            onClose={() => setShowFilters(false)}
+            side="bottom"
+            title="Filters"
+            description={`${visible.length} track${visible.length === 1 ? '' : 's'} shown`}
+            contentClassName="pb-8"
+          >
+            <FilterBar recipient embedded filters={view.filters} onChange={(filters) => setView((v) => ({ ...v, filters }))} tagOptions={tagOptions} />
+          </Drawer>
           <p data-testid="share-list-count" role="status" aria-live="polite" className="mb-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
             {shareCountLabel(visible.length, tracks.length)}
           </p>
