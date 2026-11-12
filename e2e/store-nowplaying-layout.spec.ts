@@ -39,7 +39,7 @@ async function openNowPlaying(page: Page) {
   await card.waitFor({ state: 'visible', timeout: 15_000 });
   await card.click();
   await page.locator('[role="dialog"]').getByRole('button', { name: 'Play', exact: true }).first().click();
-  await page.waitForFunction(() => (document.querySelector('audio') as HTMLAudioElement | null)?.currentTime! > 0.3, null, { timeout: 10_000 });
+  await page.waitForFunction(() => ((document.querySelector('audio') as HTMLAudioElement | null)?.currentTime ?? 0) > 0.3, null, { timeout: 10_000 });
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Open Now Playing' }).click();
   await expect(page.getByRole('dialog', { name: 'Now playing' })).toBeVisible();

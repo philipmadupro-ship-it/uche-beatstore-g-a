@@ -21,7 +21,7 @@
  */
 
 import { BAND_COUNT, isFlat, logBands } from './geometry';
-import { classifySource, type CorsKnowledge } from './analysable';
+import { classifySource } from './analysable';
 
 const FFT_SIZE = 2048;
 const RUN_CHECK_MS = 1200;
@@ -42,7 +42,6 @@ let runTimer: ReturnType<typeof setTimeout> | null = null;
 
 const corsKnown = new Map<string, boolean>();
 const probing = new Set<string>();
-export const knownCors: CorsKnowledge = corsKnown;
 
 export function isCaptureDisabled(): boolean { return captureDisabled; }
 
@@ -167,11 +166,6 @@ export function releaseHubElement(el: HTMLMediaElement): void {
   if (runTimer) { clearTimeout(runTimer); runTimer = null; }
   try { source.node.disconnect(); } catch { /* already gone */ }
   source = null;
-}
-
-/** True once a live analyser exists and its context is running. */
-export function analyserLive(): boolean {
-  return !!graph && !!source && graph.ctx.state === 'running';
 }
 
 export interface LiveFrame { silent: boolean }

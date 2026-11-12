@@ -190,18 +190,6 @@ export function isFlat(values: ArrayLike<number>, epsilon = 1): boolean {
   return true;
 }
 
-/** RMS of unsigned-byte time-domain samples (128 = zero), as 0..1. */
-export function rmsOfBytes(time: ArrayLike<number>): number {
-  const n = time.length;
-  if (n === 0) return 0;
-  let sum = 0;
-  for (let i = 0; i < n; i += 1) {
-    const v = (time[i] - 128) / 128;
-    sum += v * v;
-  }
-  return Math.sqrt(sum / n);
-}
-
 /**
  * Fill every history row from the track's peaks at points ALONG the track
  * behind the playhead (age 0 = at `progress`, older rows earlier), so a static
@@ -220,12 +208,4 @@ export function fillHistoryFromPeaks(
     h.head = (h.head - 1 + rows) % rows;
     h.rows[h.head].set(scratch);
   }
-}
-
-export function meanOf(values: ArrayLike<number>): number {
-  const n = values.length;
-  if (n === 0) return 0;
-  let s = 0;
-  for (let i = 0; i < n; i += 1) s += values[i];
-  return s / n;
 }
