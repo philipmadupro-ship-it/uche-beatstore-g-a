@@ -55,13 +55,12 @@ interface Props<T extends ShareListItem> {
   buy?: (track: T) => ReactNode;
   /** Width of the last column when `buy` is given. */
   buyWidth?: string;
-  /** A narrow column (a variant's sidebar): title and length only. */
-  compact?: boolean;
+  /** Column ids after the title, in order (a variant's emphasis). */
+  columnIds?: string[];
   emptyMessage?: string;
 }
 
-const WIDE_COLUMNS = ['title', 'tags', 'waveform', 'duration'];
-const COMPACT_COLUMNS = ['title', 'duration'];
+const DEFAULT_COLUMNS = ['title', 'tags', 'waveform', 'duration'];
 const DOWNLOAD_WIDTH = '40px';
 
 /**
@@ -76,14 +75,14 @@ const DOWNLOAD_WIDTH = '40px';
  * when the share allows it, in the place of the owner's ⋯ menu.
  */
 export function ShareTrackList<T extends ShareListItem>({
-  tracks, playingId, isPlaying, onPlay, download, buy, buyWidth = '148px', compact, emptyMessage = 'No tracks in this selection yet.',
+  tracks, playingId, isPlaying, onPlay, download, buy, buyWidth = '148px', columnIds, emptyMessage = 'No tracks in this selection yet.',
 }: Props<T>) {
   // The list mounts after the share has loaded in the browser, never on the
   // server, so reading the URL in the initial state cannot mismatch.
   const [view, setView] = useState<ShareViewState>(() =>
     typeof window === 'undefined' ? DEFAULT_SHARE_VIEW : decodeShareView(window.location.search));
   const [showFilters, setShowFilters] = useState(() => hasActiveFilters(view.filters));
-  const toolbar = tracks.length >= SHARE_TOOLBAR_MIN_TRACKS && !compact;
+  const toolbar = tracks.length >= SHARE_TOOLBAR_MIN_TRACKS;
 
   const effectiveView = toolbar ? view : DEFAULT_SHARE_VIEW;
   const visible = useMemo(() => filterAndSortShareTracks(tracks, effectiveView), [tracks, effectiveView]);
@@ -99,14 +98,26 @@ export function ShareTrackList<T extends ShareListItem>({
     }
   }, [view, toolbar]);
 
-  const columns = useMemo(() => resolveColumns(compact ? COMPACT_COLUMNS : WIDE_COLUMNS), [compact]);
+  const columns = useMemo(() => resolveColumns(columnIds ?? DEFAULT_COLUMNS), [columnIds]);
   const trailingWidth = buy ? buyWidth : download?.allowed ? DOWNLOAD_WIDTH : '8px';
 
   // Rows are memoised: idle rows get a constant `playback`, so only the
   // playing row re-renders on each progress tick.
   const onPlayRef = useRef(onPlay);
-  useEffect(() => { onPlayRef.current = onPlay; });
+  const transport = useShareTransport();
+  // A click on an idle row's waveform selects that track and starts it at the
+  // clicked point (the page's transport does the work).
+  const seekIdleRef = useRef((id: string, f: number) => { void id; void f; });
+  useEffect(() => {
+    onPlayRef.current = onPlay;
+    seekIdleRef.current = (id, f) => transport?.playAt(id, f);
+  });
   const [playCache] = useState(() => new RowCallbackCache<T>());
+  const [seekCache] = useState(() => new RowCallbackCache<T>());
+  const seekHandler = useCallback(
+    (t: T) => seekCache.get(t.id, 'seek', t, (x) => (f: number) => seekIdleRef.current(x.id, f)),
+    [seekCache],
+  );
   const playHandler = useCallback(
     (t: T) => playCache.get(t.id, 'play', t, (x) => () => onPlayRef.current(x)),
     [playCache],
@@ -114,11 +125,10 @@ export function ShareTrackList<T extends ShareListItem>({
   const idle = useMemo(() => {
     const map = new Map<string, RowPlayback>();
     for (const t of tracks) {
-      map.set(t.id, { current: false, playing: false, progress: 0, onToggle: playHandler(t), onSeek: () => {} });
+      map.set(t.id, { current: false, playing: false, progress: 0, onToggle: playHandler(t), onSeek: seekHandler(t) });
     }
     return map;
-  }, [tracks, playHandler]);
-  const transport = useShareTransport();
+  }, [tracks, playHandler, seekHandler]);
   const playbackFor = (t: T): RowPlayback => {
     if (t.id !== playingId) return idle.get(t.id)!;
     const duration = transport?.duration || t.duration_seconds || 0;
