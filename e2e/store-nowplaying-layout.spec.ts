@@ -67,6 +67,7 @@ for (const vp of [
         return {
           vh: window.innerHeight,
           dialog: r(dlg),
+          cover: r(dlg.querySelector('div.rounded-\\[12px\\]')),
           stage: r(dlg.querySelector('[data-testid="audio-visual-canvas"]')),
           scrubber: r(dlg.querySelector('[data-band-scrubber]')),
           volume: r(dlg.querySelector('input[aria-label="Volume"]')),
@@ -79,6 +80,7 @@ for (const vp of [
       expect(m.scrubber.bottom).toBeLessThanOrEqual(limit);
       expect(m.transportBottom).toBeLessThanOrEqual(limit);
       expect(m.volume.bottom).toBeLessThanOrEqual(limit);
+      expect(m.overflow).toBe(0);
       expect(m.stage.bottom).toBeLessThan(m.scrubber.top);
       mkdirSync('screens', { recursive: true });
       await page.screenshot({ path: `screens/layout-nowplaying-${vp.name}.png` });
