@@ -173,6 +173,14 @@ async function fetchPeaks(peaksUrl: string, signal: AbortSignal): Promise<PeaksF
 export interface UseWaveSurferReturn {
   /** True once WaveSurfer has decoded and is playable. */
   ready: boolean;
+  /**
+   * What the audio element is ACTUALLY doing: true only between its `playing`
+   * event and the next `pause` / `ended` / `waiting` / `stalled` / `emptied`.
+   * Not "play was requested": a click that is still buffering, a stall and a
+   * finished track are all false. Views that must not lie about sound (the
+   * share page's spinning vinyl, its transport bar) read this.
+   */
+  playing: boolean;
   /** Current playback position in seconds. */
   currentTime: number;
   /** Total duration in seconds. Falls back to peaks-hint pre-decode. */
@@ -230,6 +238,7 @@ export function useWaveSurfer({
   const wsRef = useRef<WaveSurferType | null>(null);
   const regionsPluginRef = useRef<RegionsPluginInstance | null>(null);
   const [ready, setReady] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -349,6 +358,17 @@ export function useWaveSurfer({
       });
       wsRef.current = w;
 
+      // Engine truth for `playing`: the media element's own events.
+      const mediaHost = w as unknown as WaveSurferWithMedia & { getMediaElement?: () => HTMLMediaElement };
+      const media = mediaHost.getMediaElement?.() ?? mediaHost.mediaElement ?? mediaHost.audio;
+      if (media) {
+        const on = () => { if (!cancelled) setPlaying(true); };
+        const off = () => { if (!cancelled) setPlaying(false); };
+        media.addEventListener('playing', on);
+        for (const ev of ['pause', 'ended', 'waiting', 'stalled', 'emptied', 'error']) media.addEventListener(ev, off);
+        setPlaying(!media.paused && !media.ended && media.readyState >= 3);
+      }
+
       w.on('ready', () => {
         if (cancelled) return;
         setReady(true);
@@ -432,6 +452,7 @@ export function useWaveSurfer({
 
     return () => {
       cancelled = true;
+      setPlaying(false);
       controller.abort();
       const w = wsRef.current;
       wsRef.current = null;
@@ -509,6 +530,7 @@ export function useWaveSurfer({
 
   return {
     ready,
+    playing,
     currentTime,
     duration,
     failed,
