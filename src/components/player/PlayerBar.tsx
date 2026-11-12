@@ -15,7 +15,6 @@ import { BandScrubber } from '@/components/visuals/BandScrubber';
 import { AudioVisualizer } from '@/components/visuals/AudioVisualizer';
 import { VisualizerModeSwitch } from '@/components/visuals/VisualizerModeSwitch';
 import { useVisualizerMode } from '@/hooks/useVisualizerMode';
-import { AsciiCoverArt } from './AsciiCoverArt';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
@@ -105,6 +104,14 @@ export function PlayerBar({
   // Render-phase reset (React's "adjust state when a prop changes" pattern):
   // forget the route once it has moved, so Forward cannot reopen the overlay.
   if (nowPlayingRoute.openedOn !== nowPlayingOpenedOn) setNowPlayingOpenedOn(nowPlayingRoute.openedOn);
+  // Hero stage height: min(36vh, 320px), tracked so the numeric prop follows the viewport.
+  const [viewportH, setViewportH] = useState(() => (typeof window === 'undefined' ? 800 : window.innerHeight));
+  useEffect(() => {
+    const onResize = () => setViewportH(window.innerHeight);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const stageHeight = Math.round(Math.min(viewportH * 0.36, 320));
   const setNowPlayingOpen = (open: boolean) => setNowPlayingOpenedOn(open ? pathname : null);
   const nowPlayingPanelRef = useDialogBehavior({ open: nowPlayingOpen, onClose: () => setNowPlayingOpen(false) });
   const mounted = useSyncExternalStore(subscribeToClientSnapshot, getClientSnapshot, getServerSnapshot);
@@ -471,7 +478,7 @@ export function PlayerBar({
             aria-modal="true"
             aria-label="Now playing"
             tabIndex={-1}
-            className="relative z-10 w-full max-w-[400px] max-h-[94vh] overflow-y-auto no-scrollbar rounded-[20px] border border-white/[0.09] bg-[#14110d] shadow-[0_40px_120px_-12px_rgba(0,0,0,0.78)] px-6 pt-5 pb-6 focus:outline-none"
+            className="relative z-10 w-full max-w-[400px] max-h-[calc(100vh-2rem)] overflow-y-auto no-scrollbar rounded-[20px] border border-white/[0.09] bg-[#14110d] shadow-[0_40px_120px_-12px_rgba(0,0,0,0.78)] px-5 pt-3 pb-3 focus:outline-none"
           >
             {/* Top bar */}
             <div className="flex items-center justify-between pb-1">
@@ -494,34 +501,34 @@ export function PlayerBar({
               </button>
             </div>
 
-            {/* Cover art — clean and unobstructed. The waveform used to be
-                painted over this image; artwork and waveform are two different
-                jobs (one sells the beat, one lets you read it), so they're now
-                separate elements. */}
-            <div className="flex items-center justify-center pt-5 pb-1">
-              <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.04]">
+            {/* Visual stage — the hero. Orbit (default) and terrain are the
+                showcase modes; curve shares the same stage. */}
+            <div className="pt-2">
+              <AudioVisualizer
+                mode={visualMode}
+                trackId={currentTrack.id}
+                peaksUrl={currentTrack.peaks_url}
+                progress={progress}
+                isPlaying={isPlaying}
+                background="#14110d"
+                height={stageHeight}
+                label={currentTrack.title || 'current track'}
+                className="mb-2 overflow-hidden rounded-xl"
+              />
+              <VisualizerModeSwitch mode={visualMode} onChange={setVisualMode} className="mb-2" />
+            </div>
+
+            {/* Title row — artwork is a 56px thumbnail beside the title. */}
+            <div className="flex items-center gap-3">
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-[8px] border border-white/[0.06] bg-white/[0.04]">
                 {currentTrack.cover_url ? (
-                  <>
-                    <CoverImage
-                      src={currentTrack.cover_url}
-                      alt=""
-                      sizes="400px"
-                      className="h-full w-full object-cover"
-                    />
-                    {/* Same audio-reactive ASCII treatment as the store preview,
-                        so the card and the drawer are one visual language. */}
-                    <AsciiCoverArt
-                      src={currentTrack.cover_url}
-                      level={nowPlayingLevel}
-                      bass={nowPlayingBass}
-                      playing={isPlaying}
-                      className="absolute inset-0 h-full w-full mix-blend-screen opacity-80"
-                    />
-                  </>
+                  <CoverImage
+                    src={currentTrack.cover_url}
+                    alt=""
+                    sizes="56px"
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
-                  /* No cover: the generated artwork, not a glyph. The ASCII
-                     treatment above needs a real image to sample, so it is
-                     skipped here rather than fed a gradient it cannot read. */
                   <ArtworkFallback
                     src={null}
                     seed={currentTrack.id}
@@ -529,60 +536,45 @@ export function PlayerBar({
                     kind="track"
                     className="h-full w-full object-cover"
                   >
-                    <Music size={44} aria-hidden />
+                    <Music size={20} aria-hidden />
                   </ArtworkFallback>
                 )}
-                {playbackError && streamStatus.canAttemptPlayback && (
-                  <button
-                    onClick={togglePlay}
-                    className="absolute inset-x-3 bottom-3 rounded-lg border border-white/15 bg-black/70 px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-white backdrop-blur-sm"
-                  >
-                    Retry playback
-                  </button>
-                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="font-heading text-xl font-black text-white uppercase tracking-tighter leading-tight truncate">
+                  {currentTrack.title || 'Untitled'}
+                </h2>
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  <span className="text-[10px] font-mono text-white/60 uppercase tracking-widest">
+                    {currentTrack.type}
+                  </span>
+                  {currentTrack.bpm && (
+                    <span className="text-[10px] font-mono text-white/60 tabular-nums">· {currentTrack.bpm} BPM</span>
+                  )}
+                  {/* Only when the preview is being stretched — otherwise the
+                      tempo shown above is the tempo you are hearing. */}
+                  <SessionTempoBadge bpm={currentTrack.bpm} />
+                  {currentTrack.key && (
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-[8px] text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/40">
+                      {currentTrack.key}{currentTrack.scale === 'minor' ? 'm' : ''}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
+            {playbackError && streamStatus.canAttemptPlayback && (
+              <button
+                onClick={togglePlay}
+                className="mt-2 w-full rounded-[8px] border border-white/15 bg-white/[0.06] px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-white hover:bg-white/[0.10]"
+              >
+                Retry playback
+              </button>
+            )}
 
-            {/* Track info */}
             <div className="pb-1">
-              <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight text-center px-2 truncate">
-                {currentTrack.title || 'Untitled'}
-              </h2>
-              <div className="flex items-center justify-center gap-2 flex-wrap mt-1.5">
-                <span className="text-[10px] font-mono text-white/60 uppercase tracking-widest">
-                  {currentTrack.type}
-                </span>
-                {currentTrack.bpm && (
-                  <span className="text-[10px] font-mono text-white/60 tabular-nums">· {currentTrack.bpm} BPM</span>
-                )}
-                {/* Only when the preview is being stretched — otherwise the
-                    tempo shown above is the tempo you are hearing. */}
-                <SessionTempoBadge bpm={currentTrack.bpm} />
-                {currentTrack.key && (
-                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/40">
-                    {currentTrack.key}{currentTrack.scale === 'minor' ? 'm' : ''}
-                  </span>
-                )}
-              </div>
-
-              {/* Spectral waveform — its own lane, coloured by real low/mid/high
-                  band energy. Doubles as the scrubber (click, drag, keyboard). */}
-              <div className="mt-5">
-                {/* Audio-reactive line visual. Live from the shared analyser
-                    while playing; a static picture of the track's own peaks
-                    before play or when the source can't be analysed. */}
-                <AudioVisualizer
-                  mode={visualMode}
-                  trackId={currentTrack.id}
-                  peaksUrl={currentTrack.peaks_url}
-                  progress={progress}
-                  isPlaying={isPlaying}
-                  background="#14110d"
-                  height={visualMode === 'curve' ? 150 : 250}
-                  label={currentTrack.title || 'current track'}
-                  className="mb-3"
-                />
-                <VisualizerModeSwitch mode={visualMode} onChange={setVisualMode} className="mb-4" />
+              {/* Spectral waveform — doubles as the scrubber (click, drag,
+                  keyboard) and owns the elapsed/remaining labels. */}
+              <div className="mt-2">
                 <BandScrubber
                   trackId={currentTrack.id}
                   audioUrl={currentTrack.audio_url}
@@ -595,17 +587,13 @@ export function PlayerBar({
                   label={currentTrack.title || 'current track'}
                   durationSeconds={totalSeconds}
                 />
-                <div className="flex justify-between text-[10px] font-mono text-white/40 tabular-nums mt-1">
-                  <span>{formatTime(currentSeconds)}</span>
-                  <span>{formatTime(totalSeconds)}</span>
-                </div>
               </div>
 
               {/* Transport — all icon-only, no filled discs (design-direction.md's
                   "beat preview player" section). Play/pause reads as dominant via
                   glyph size + spacing, not a solid fill. Tap targets stay >= 40px
                   via padding even though the visual discs are smaller. */}
-              <div className="flex items-center justify-center gap-5 mt-5 mb-4">
+              <div className="flex items-center justify-center gap-5 mt-2 mb-2">
                 <button
                   onClick={toggleShuffle}
                   className={cn(
