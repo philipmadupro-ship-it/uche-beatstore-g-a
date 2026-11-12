@@ -23,7 +23,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { keyboardSeekFraction } from '@/lib/audio/seek-accessibility';
 import { cn } from '@/lib/utils';
 import { clamp01, BAND_COUNT } from '@/lib/visuals/geometry';
-import { advancePosition, bandEnergies, envFollow, scrubFraction, tapFraction } from '@/lib/visuals/scrub';
+import { advancePosition, bandEnergies, envFollow, liveBoost, pulseEnergy, scrubFraction, tapFraction } from '@/lib/visuals/scrub';
 import {
   GLOW_SCALE, PALETTES, PLAYHEAD_CSS, bandTheme, renderBandBloom, renderBandWaveform,
   stripLayout, stripX, tileCount, type BandTheme, type PaletteName, type StripLayout,
@@ -162,6 +162,7 @@ export function BandScrubber({
   const overrideRef = useRef<{ pos: number; until: number } | null>(null);
   const visibleRef = useRef(true);
   const tilesRef = useRef<TileSet | null>(null);
+  const avgRef = useRef(0);
   const dprRef = useRef(1);
   const scratch = useRef({ bands: new Float32Array(BAND_COUNT), energy: new Float32Array(3), frame: { silent: false } as LiveFrame });
   useEffect(() => { posRef.current = pos; }, [pos]);
@@ -250,10 +251,16 @@ export function BandScrubber({
 
       // 3) Live brightness under the playhead: the same layers again, additively, within the radius.
       if (liveEnergy > 0.02) {
+        const { alpha, lift } = liveBoost(liveEnergy);
+        const grow = Math.round(H * lift);
+        const boosted = (x0: number, x1: number, set: HTMLCanvasElement[]) => side(x0, x1, (k, dx) => {
+          const g = set[k];
+          if (g) ctx.drawImage(g, 0, 0, g.width, g.height, dx, -Math.floor(grow / 2), g.width, H + grow);
+        });
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = Math.min(0.25, liveEnergy * 0.25);
-        side(cx - liveR, cx, (k, dx) => ctx.drawImage(t.played[k], dx, 0));
-        side(cx, cx + liveR, (k, dx) => ctx.drawImage(t.full[k], dx, 0));
+        ctx.globalAlpha = alpha;
+        boosted(cx - liveR, cx, t.played);
+        boosted(cx, cx + liveR, t.full);
         ctx.globalCompositeOperation = 'source-over';
       }
     }
@@ -285,6 +292,7 @@ export function BandScrubber({
     if (!live) {
       smoothRef.current = currentPos();
       liveRef.current = 0;
+      avgRef.current = 0;
       paintFrame(ctx, smoothRef.current, 0);
       return;
     }
@@ -307,7 +315,9 @@ export function BandScrubber({
         const i = m ? Math.min(m.all.length - 1, Math.floor(smoothRef.current * durationSeconds * m.columnsPerSecond)) : -1;
         target = m && i >= 0 ? Math.max(m.low[i], m.mid[i], m.high[i]) / 255 : 0;
       }
-      liveRef.current = envFollow(liveRef.current, target, dt);
+      avgRef.current = envFollow(avgRef.current, target, dt, 0.5, 0.5);
+      liveRef.current = envFollow(liveRef.current, pulseEnergy(target, avgRef.current), dt);
+      canvas.dataset.live = liveRef.current.toFixed(2);
       paintFrame(ctx, smoothRef.current, liveRef.current);
     };
     raf = requestAnimationFrame(frame);

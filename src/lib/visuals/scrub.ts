@@ -61,3 +61,16 @@ export function tapFraction(pos: number, xPx: number, widthPx: number, visibleSe
   if (widthPx <= 0 || durationSeconds <= 0) return clamp01(pos);
   return clamp01(pos + ((xPx / widthPx) - 0.5) * (visibleSeconds / durationSeconds));
 }
+
+/** Live boost near the playhead: brightness up to +35%, height lift up to +6%. Hue is untouched. */
+export const BOOST_MAX_BRIGHTNESS = 0.35;
+export const BOOST_MAX_LIFT = 0.06;
+export function liveBoost(energy: number): { alpha: number; lift: number } {
+  const e = Math.max(0, Math.min(1, Number.isFinite(energy) ? energy : 0));
+  return { alpha: e * BOOST_MAX_BRIGHTNESS, lift: e * BOOST_MAX_LIFT };
+}
+
+/** Pulse = how far the instantaneous energy rises above its own slow average (kicks), 0..1. */
+export function pulseEnergy(raw: number, slowAvg: number, gain = 4): number {
+  return Math.max(0, Math.min(1, (raw - slowAvg) * gain));
+}

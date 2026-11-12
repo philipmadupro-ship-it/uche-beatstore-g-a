@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advancePosition, bandEnergies, envFollow, scrubFraction, tapFraction,
+  advancePosition, bandEnergies, envFollow, liveBoost, pulseEnergy, BOOST_MAX_BRIGHTNESS, BOOST_MAX_LIFT, scrubFraction, tapFraction,
 } from './scrub';
 
 describe('bandEnergies', () => {
@@ -53,4 +53,23 @@ describe('scrub / tap', () => {
     expect(tapFraction(0.3, 400, 400, 14, 100)).toBeCloseTo(0.3 + 0.07);
   });
   it('is safe with no duration', () => { expect(scrubFraction(0.4, 50, 400, 14, 0)).toBe(0.4); });
+});
+
+describe('liveBoost', () => {
+  it('follows the energy input and is capped at +35% brightness / +6% height', () => {
+    expect(liveBoost(0)).toEqual({ alpha: 0, lift: 0 });
+    expect(liveBoost(0.5).alpha).toBeCloseTo(0.175, 5);
+    expect(liveBoost(0.9).alpha).toBeGreaterThan(liveBoost(0.4).alpha);
+    expect(liveBoost(5)).toEqual({ alpha: BOOST_MAX_BRIGHTNESS, lift: BOOST_MAX_LIFT });
+    expect(liveBoost(NaN).alpha).toBe(0);
+  });
+});
+
+describe('pulseEnergy', () => {
+  it('is zero for a sustained level and rises on a kick above the average', () => {
+    expect(pulseEnergy(0.9, 0.9)).toBe(0);
+    expect(pulseEnergy(0.5, 0.9)).toBe(0);
+    expect(pulseEnergy(0.8, 0.4)).toBeGreaterThan(pulseEnergy(0.5, 0.4));
+    expect(pulseEnergy(1, 0)).toBe(1);
+  });
 });

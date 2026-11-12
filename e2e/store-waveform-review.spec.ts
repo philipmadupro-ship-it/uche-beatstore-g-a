@@ -86,3 +86,42 @@ test('rekordbox now playing @390 (scrubber visible)', async ({ page }) => {
   await page.waitForTimeout(1200);
   await page.screenshot({ path: 'e2e-artifacts/store-visuals/rekordbox-nowplaying-390.png' });
 });
+
+// Final review frames: the pulse near the playhead on a kick and in a quiet moment.
+test('final: close-up, reactive kick/quiet, now playing @390', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+  const page = await ctx.newPage();
+  const slider = await openAndPlay(page, 'rekordbox3band');
+  await seek(page, 34);
+  await page.waitForTimeout(900);
+  await slider.screenshot({ path: 'e2e-artifacts/store-visuals/final-closeup-2x.png' });
+  const canvas = slider.locator('canvas').first();
+  const live = () => canvas.evaluate((c) => Number((c as HTMLCanvasElement).dataset.live ?? -1));
+  // Reacts: over a few seconds the live energy swings, not a constant.
+  const seen: number[] = [];
+  for (let i = 0; i < 80; i += 1) { seen.push(await live()); await page.waitForTimeout(50); }
+  const hi = Math.max(...seen); const lo = Math.min(...seen);
+  console.log(`live energy range ${lo}..${hi}`);
+  expect(hi - lo).toBeGreaterThan(0.3);
+  const grab = async (name: string, ok: (v: number) => boolean) => {
+    for (let i = 0; i < 1500; i += 1) {
+      if (ok(await live())) { await slider.screenshot({ path: `e2e-artifacts/store-visuals/${name}.png` }); return; }
+      await page.waitForTimeout(10);
+    }
+  };
+  await grab('final-reactive-kick', (v) => v >= lo + (hi - lo) * 0.7);
+  await grab('final-reactive-quiet', (v) => v <= lo + (hi - lo) * 0.15);
+  await ctx.close();
+});
+
+test('final: now playing @390', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openAndPlay(page, 'rekordbox3band');
+  await seek(page, 34);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Open Now Playing' }).click();
+  await expect(page.getByRole('dialog', { name: 'Now playing' })).toBeVisible();
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: 'e2e-artifacts/store-visuals/final-nowplaying-390.png' });
+});

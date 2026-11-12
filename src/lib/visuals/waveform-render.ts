@@ -21,8 +21,8 @@ export interface BandPalette { low: string; mid: string; high: string }
 export type PaletteName = 'rekordbox3band' | 'rgb';
 
 export const PALETTES: Record<PaletteName, BandPalette> = {
-  /** Rekordbox 3-band: deep blue bass wings, amber mids, white highs on top. */
-  rekordbox3band: { low: '#1E5BFF', mid: '#FF9A1F', high: '#FFFFFF' },
+  /** Rekordbox 3-band layering: brown bass wings, beige body, white core on top. */
+  rekordbox3band: { low: '#8A5A35', mid: '#D8C3A0', high: '#FFFFFF' },
   /** Serato-like: red lows, green mids, blue highs. */
   rgb: { low: '#FF2D2D', mid: '#33FF66', high: '#2E7BFF' },
 };
@@ -36,6 +36,8 @@ export interface BandTheme {
   layerAlpha: number;
   /** Played side: brightness multiplier and desaturation (0..1). */
   playedBrightness: number;
+  /** The low layer's played brightness (brown must not sink into the ground). */
+  playedBrightnessLow: number;
   playedDesaturate: number;
   /** Soft one-layer bloom on the HIGH layer (alpha, 0 turns it off). */
   bloomAlpha: number;
@@ -50,6 +52,7 @@ export function bandTheme(name: PaletteName = 'rekordbox3band', over: Partial<Ba
     curve: 0.7,
     layerAlpha: 0.95,
     playedBrightness: 0.45,
+    playedBrightnessLow: 0.6,
     playedDesaturate: 0.3,
     bloomAlpha: 0.12,
     axis: 'rgba(255,255,255,0.08)',
@@ -99,7 +102,7 @@ export function playedColour(c: Rgb, desaturate: number, brightness: number): Rg
 /** CSS colour of a band in a variant. */
 export function bandCss(theme: BandTheme, band: 'low' | 'mid' | 'high', variant: 'played' | 'unplayed'): string {
   const c = parseHex(theme.palette[band]);
-  return css(variant === 'played' ? playedColour(c, theme.playedDesaturate, theme.playedBrightness) : c);
+  return css(variant === 'played' ? playedColour(c, theme.playedDesaturate, band === 'low' ? theme.playedBrightnessLow : theme.playedBrightness) : c);
 }
 
 export interface StripLayout {

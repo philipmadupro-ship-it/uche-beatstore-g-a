@@ -35,24 +35,29 @@ const model = (cols: number, lo: number, mid: number, hi: number): WaveformModel
 });
 
 describe('palettes', () => {
-  it('rekordbox3band is the default: deep blue lows, amber mids, white highs', () => {
-    expect(DEFAULT_BAND_THEME.palette).toEqual({ low: '#1E5BFF', mid: '#FF9A1F', high: '#FFFFFF' });
-    expect(PALETTES.rekordbox3band.low).toBe('#1E5BFF');
+  it('the played brown stays readable against the ground (low layer uses 60%)', () => {
+    const lum = (css: string) => { const m = css.match(/\d+/g)!.map(Number); return 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]; };
+    expect(DEFAULT_BAND_THEME.playedBrightnessLow).toBeLessThanOrEqual(0.6);
+    expect(lum(bandCss(DEFAULT_BAND_THEME, 'low', 'played'))).toBeGreaterThan(lum('rgb(13,13,10)') + 40);
+  });
+  it('rekordbox3band is the default: brown lows, beige mids, white highs', () => {
+    expect(DEFAULT_BAND_THEME.palette).toEqual({ low: '#8A5A35', mid: '#D8C3A0', high: '#FFFFFF' });
+    expect(PALETTES.rekordbox3band.low).toBe('#8A5A35');
   });
   it('the rgb palette is the Serato-like one', () => {
     expect(PALETTES.rgb).toEqual({ low: '#FF2D2D', mid: '#33FF66', high: '#2E7BFF' });
     expect(bandTheme('rgb').palette).toEqual(PALETTES.rgb);
   });
   it('the played side is darkened to 45% and desaturated by 30%', () => {
-    const c = parseHex('#FF9A1F');
+    const c = parseHex('#D8C3A0');
     const p = playedColour(c, 0.3, 0.45);
     for (let k = 0; k < 3; k += 1) expect(p[k]).toBeLessThanOrEqual(c[k] * 0.45 + 0.2);
     const sat = (v: number[]) => Math.max(...v) - Math.min(...v);
     expect(sat(p) / Math.max(...p)).toBeLessThan(sat(c) / Math.max(...c)); // less saturated
     expect(Math.max(...p)).toBeCloseTo(0.45 * (c[0] + (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] - c[0]) * 0.3), 5);
     // and the unplayed variant is the FULL colour
-    expect(bandCss(DEFAULT_BAND_THEME, 'mid', 'unplayed')).toBe('rgb(255,154,31)');
-    expect(bandCss(DEFAULT_BAND_THEME, 'mid', 'played')).not.toBe('rgb(255,154,31)');
+    expect(bandCss(DEFAULT_BAND_THEME, 'mid', 'unplayed')).toBe('rgb(216,195,160)');
+    expect(bandCss(DEFAULT_BAND_THEME, 'mid', 'played')).not.toBe('rgb(216,195,160)');
   });
 });
 
