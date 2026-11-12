@@ -22,6 +22,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z, type ZodTypeAny } from 'zod';
+import { isUUID } from '@/lib/uuid';
 
 type ReadBodyResult<T> =
   | { ok: true; data: T }
@@ -75,13 +76,10 @@ export async function readBody<S extends ZodTypeAny>(
  * webhook, checkout, share-checkout, and ownership.ts). Centralising them
  * keeps the shapes from drifting and gives us one place to unit-test.
  */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** True when `s` is a canonical RFC-4122-shaped UUID string. */
-export function isUUID(s: unknown): s is string {
-  return typeof s === 'string' && UUID_RE.test(s);
-}
+/** True when `s` is a canonical RFC-4122-shaped UUID string (defined in `lib/uuid.ts`, which client code can import). */
+export { isUUID };
 
 /** True when `s` looks like an email address (loose, intentionally). */
 export function isValidEmail(s: unknown): s is string {

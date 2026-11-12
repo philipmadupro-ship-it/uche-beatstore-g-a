@@ -8,6 +8,7 @@ import { clientIp, rateLimitDurable } from '@/lib/security/rate-limit';
 import { gatePortal } from '@/lib/artist-portal/gate';
 import { portalProjectLinks } from '@/lib/artist-portal/membership';
 import { isSchemaNotReady } from '@/lib/artists/http';
+import { PUBLIC_COMMENT_VISIBILITY, readWithoutInternal } from '@/lib/labelos/comment-visibility';
 import {
   buildPortalCommentNotification,
   PORTAL_COMMENT_COLUMNS,
@@ -56,14 +57,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const links = await portalProjectLinks(admin, portal);
     if (links.length === 0) return NextResponse.json({ comments: [] }, { headers: { 'cache-control': 'private, no-store' } });
 
-    const { data, error } = await admin
-      .from('project_comments')
-      .select(PORTAL_COMMENT_COLUMNS)
-      .in('project_id', links.map((l) => l.project_id))
-      .eq('contact_id', portal.contact_id)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: true })
-      .limit(500);
+    // A team-only note (visibility 'internal', LABEL-22) is never part of a portal thread.
+    const { data, error } = await readWithoutInternal((filter) => {
+      const q = admin
+        .from('project_comments')
+        .select(PORTAL_COMMENT_COLUMNS)
+        .in('project_id', links.map((l) => l.project_id))
+        .eq('contact_id', portal.contact_id)
+        .is('deleted_at', null);
+      return (filter ? q.eq('visibility', PUBLIC_COMMENT_VISIBILITY) : q).order('created_at', { ascending: true }).limit(500);
+    });
     if (error) throw error;
     const n = await names(admin, portal.user_id, portal.contact_id);
     return NextResponse.json(

@@ -11,7 +11,7 @@ import {
   Loader2, Music, Search, Sparkles, Shuffle, Disc3, LayoutList, LayoutGrid,
   SlidersHorizontal, Store, FolderOpen, ListMusic, BarChart2,
   ShoppingBag, ArrowRight,
-  Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown, X, Package, Tag,
+  Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown, X, Package, Tag, FolderPlus,
 } from 'lucide-react';
 import { PlayGlyph } from '@/components/player/TransportIcons';
 import Link from 'next/link';
@@ -21,11 +21,12 @@ import { DEFAULT_HOME_ROWS, type HomeRowConfig } from '@/lib/dashboard/home-conf
 import { getCached, setCached } from '@/lib/client-cache';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
+import { UploadOptions } from '@/components/upload/UploadOptions';
 import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { Track, Playlist, Project } from '@/lib/types';
 import { errorMessage } from '@/lib/errors';
-import { toast, confirmToast } from '@/hooks/useToast';
+import { toast, confirmToast, useToastStore } from '@/hooks/useToast';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { Dropdown } from '@/components/ui/Dropdown';
@@ -41,6 +42,9 @@ import { filtersForHomeRow } from '@/lib/library/home-row-filters';
 import { matchesLibraryFilters } from '@/lib/library/filter-tracks';
 import { sortForHomeRow, type LibrarySortMode } from '@/lib/library/sort-modes';
 import { decodeLibraryView, encodeLibraryView, hasLibraryViewParams } from '@/lib/library/view-state';
+import { AddToCollectionModal } from '@/components/library/AddToCollectionModal';
+import { addTracksToCollection, collectSummary, collectionHref, type CollectionKind, type CollectTarget } from '@/lib/library/collect-selection';
+import { buildTagFacetOptions } from '@/lib/library/tag-filter';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
 import { summarizeTriage, type TriageStage } from '@/lib/library/triage';
 import { SellReadinessPanel } from '@/components/library/SellReadinessPanel';
@@ -202,6 +206,7 @@ export default function LibraryPage() {
   const [filters, setFilters] = useState<LibraryFilters>(() => ({
     ...DEFAULT_FILTERS,
     genres: new Set<string>(),
+    tags: new Set<string>(),
     statuses: new Set<string>(),
     keys: new Set<string>(),
     // Fresh Set per mount — DEFAULT_FILTERS is a module-level object, so
@@ -377,6 +382,44 @@ export default function LibraryPage() {
     const what = rating === 0 ? 'Cleared rating on' : `Rated ${'★'.repeat(rating)}`;
     if (failed === 0) toast.success(`${what} ${ids.length} track${ids.length === 1 ? '' : 's'}`);
     else toast.warning(`${what} ${ids.length - failed}, ${failed} failed`);
+  };
+
+  // ── Selection → playlist / project ──────────────────────────────
+  // Which tab the modal opens on (null = closed). One sequence for both buttons
+  // and for "add to an existing one": lib/library/collect-selection.
+  const [collectKind, setCollectKind] = useState<CollectionKind | null>(null);
+  const [collecting, setCollecting] = useState(false);
+  const submitCollection = async (target: CollectTarget) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setCollecting(true);
+    try {
+      const result = await addTracksToCollection(target, ids);
+      const existing = (target.kind === 'playlist' ? playlists : projects).find((r) => r.id === result.id);
+      const label = result.created ? target.name.trim() : (existing?.name ?? '');
+      const { title, description } = collectSummary(result, label);
+      useToastStore.getState().push({
+        kind: 'success',
+        title,
+        description,
+        actions: [{ label: 'Open', onClick: () => router.push(collectionHref(result.kind, result.id)) }],
+      });
+      setCollectKind(null);
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      // The Browse rows list playlists and projects; refresh them so the new one shows.
+      fetch(target.kind === 'playlist' ? '/api/playlists' : '/api/projects')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (target.kind === 'playlist' && d?.playlists) setPlaylists(d.playlists);
+          if (target.kind === 'project' && d?.projects) setProjects(d.projects);
+        })
+        .catch(() => undefined);
+    } catch (err) {
+      toast.error('Could not add tracks', errorMessage(err));
+    } finally {
+      setCollecting(false);
+    }
   };
 
   const createPackFromSelected = () => {
@@ -592,6 +635,9 @@ export default function LibraryPage() {
     () => summarizeTriage(tracks, { hasDefaultPrice }),
     [tracks, hasDefaultPrice],
   );
+
+  // What the Tags menu offers, with counts over the loaded tracks.
+  const tagOptions = useMemo(() => buildTagFacetOptions(tracks as TrackWithInlineTags[]), [tracks]);
 
   const currentHeroTrack = currentTrack || filtered[0] || null;
   const heroCoverUrl = currentHeroTrack?.cover_url || null;
@@ -1170,7 +1216,17 @@ export default function LibraryPage() {
                       : <><Tag size={12} className="mr-1.5" /><span>Auto-tag {autoTagPlan.tracksAffected}</span></>}
                   </LiquidGlassButton>
                 )}
-                <LiquidGlassButton onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }} active={selectMode} className="ml-auto">
+                <LiquidGlassButton
+                  onClick={() => {
+                    // Only the All tracks list has checkboxes. Pressing Select on
+                    // Browse used to flip the button to "Done" and show nothing to select.
+                    if (!selectMode && effectiveBrowseMode === 'sections') setBrowseMode('all');
+                    setSelectMode((v) => !v);
+                    setSelectedIds(new Set());
+                  }}
+                  active={selectMode}
+                  className="ml-auto"
+                >
                   {selectMode ? 'Done' : 'Select'}
                 </LiquidGlassButton>
               </div>
@@ -1183,6 +1239,9 @@ export default function LibraryPage() {
           <LiquidGlassButton onClick={() => { if (uploadOpenRef.current) uploadOpenRef.current(); else window.scrollTo({ top: 9999, behavior: 'smooth' }); }}>
             <Upload size={13} /> Upload beat
           </LiquidGlassButton>
+          {/* Type, state, tags and destination for the NEXT upload — the drop zone
+              is hidden on this page, so this is where they are chosen. */}
+          <UploadOptions />
 
           {/* New Release — split button with dropdown */}
           <div className="relative">
@@ -1457,7 +1516,7 @@ export default function LibraryPage() {
         </div>
 
         {showFilters && !isMobileViewport && (
-          <FilterBar filters={filters} onChange={setFilters} triageCounts={triageCounts} />
+          <FilterBar filters={filters} onChange={setFilters} triageCounts={triageCounts} tagOptions={tagOptions} />
         )}
         <Drawer
           open={showFilters && isMobileViewport}
@@ -1467,7 +1526,7 @@ export default function LibraryPage() {
           description={`${filtered.length} track${filtered.length === 1 ? '' : 's'} shown`}
           contentClassName="pb-8"
         >
-          <FilterBar filters={filters} onChange={setFilters} embedded />
+          <FilterBar filters={filters} onChange={setFilters} embedded triageCounts={triageCounts} tagOptions={tagOptions} />
         </Drawer>
 
         {effectiveBrowseMode === 'all' && (
@@ -1769,7 +1828,7 @@ export default function LibraryPage() {
         count={selectedIds.size}
         noun={['track', 'tracks']}
         onClear={() => { setSelectedIds(new Set()); setBulkEditOpen(false); }}
-        busy={bulkDeleting || bulkEditing || packing}
+        busy={bulkDeleting || bulkEditing || packing || collecting}
         actions={[
           {
             label: bulkEditOpen ? 'Close' : 'Edit',
@@ -1782,6 +1841,8 @@ export default function LibraryPage() {
           ...(selectedIds.size < filtered.length
             ? [{ label: `Select all ${filtered.length}`, onClick: () => setSelectedIds(new Set(filtered.map((t) => t.id))) }]
             : []),
+          { label: 'New playlist', icon: <ListMusic size={11} />, onClick: () => setCollectKind('playlist') },
+          { label: 'New project', icon: <FolderPlus size={11} />, onClick: () => setCollectKind('project') },
           { label: 'Add tags', icon: <Tag size={11} />, onClick: () => setBulkTagPanel('addTags') },
           { label: 'Remove tags', icon: <Tag size={11} />, onClick: () => setBulkTagPanel('removeTags') },
           {
@@ -1904,6 +1965,18 @@ export default function LibraryPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {collectKind && selectedIds.size > 0 && (
+        <AddToCollectionModal
+          initialKind={collectKind}
+          count={selectedIds.size}
+          playlists={playlists}
+          projects={projects}
+          busy={collecting}
+          onClose={() => setCollectKind(null)}
+          onSubmit={(t) => void submitCollection(t)}
+        />
       )}
 
       {packModalOpen && (

@@ -42,6 +42,8 @@ export function uploadRowActions(status: UploadStatus): UploadRowAction[] {
 export interface FinishedUpload {
   status: UploadStatus;
   track: { id?: string } | null;
+  /** Set for an org upload (LABEL-14). */
+  org?: unknown;
 }
 
 /**
@@ -50,7 +52,12 @@ export interface FinishedUpload {
  * Only a successful upload that came back with a row id. `/complete` can
  * succeed without returning a track (the manager types it optional), and an
  * editor bound to `undefined` would PATCH `/api/tracks/undefined`.
+ *
+ * Never for an org upload (LABEL-14): the in-tray editors write through the
+ * producer's `/api/tracks/*` routes, which must not touch an org recording.
+ * The org's own editing arrives with its song views.
  */
 export function canEditUploadedTrack(u: FinishedUpload): boolean {
+  if (u.org) return false;
   return u.status === 'success' && typeof u.track?.id === 'string' && u.track.id.length > 0;
 }

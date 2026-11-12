@@ -6,7 +6,7 @@
  * controls and every click are real. Covers: owned + requested rows, filter,
  * sort, play (the preview stream is requested and the player bar names the
  * beat), keyboard selection, and Create project posting the selection and
- * showing the new playlist after the library refetch.
+ * showing the new project after the library refetch.
  */
 import { test, expect, type Page } from '@playwright/test';
 
@@ -17,7 +17,7 @@ const ASK = '33333333-3333-4333-8333-333333333333';
 const beat = (id: string, over: Record<string, unknown>) => ({
   id, title: id, cover_url: null, type: 'beat', bpm: 140, key: 'F', scale: 'minor', duration_seconds: 100,
   status: 'owned', since: '2026-09-10T00:00:00Z', license: 'lease', offer: null,
-  playable: true, canAddToProject: true, openUrl: `/store/download?session_id=${id}`, available: true, ...over,
+  listed: true, playable: true, canAddToProject: true, openUrl: `/store/download?session_id=${id}`, available: true, ...over,
 });
 
 const BEATS = [
@@ -26,7 +26,7 @@ const BEATS = [
   beat(ASK, { title: 'Asked For', status: 'requested', license: null, openUrl: null, bpm: 120, since: '2026-09-12T00:00:00Z', offer: { status: 'pending', price_usd: 300 } }),
 ];
 
-async function stub(page: Page, context: import('@playwright/test').BrowserContext) {
+async function stub(page: Page, context: import('@playwright/test').BrowserContext, beats: unknown[] = BEATS) {
   const session = {
     access_token: 'a.b.c', refresh_token: 'r', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
     token_type: 'bearer', user: { id: 'u1', email: 'rapper@example.com', aud: 'authenticated' },
@@ -52,7 +52,7 @@ async function stub(page: Page, context: import('@playwright/test').BrowserConte
       return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ playlist: playlists[0] }) });
     }
     if (req.url().includes('view=beats')) {
-      return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ email: 'rapper@example.com', beats: BEATS }) });
+      return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ email: 'rapper@example.com', beats }) });
     }
     return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ email: 'rapper@example.com', history: [], favorites: [], playlists }) });
   });
@@ -63,6 +63,15 @@ async function stub(page: Page, context: import('@playwright/test').BrowserConte
   return { posted, previewHits };
 }
 
+/** Every /api response that failed, so a page cannot quietly call an endpoint it has no right to. */
+function watchFailedApi(page: Page): string[] {
+  const failed: string[] = [];
+  page.on('response', (r) => {
+    if (r.status() >= 400 && new URL(r.url()).pathname.startsWith('/api/')) failed.push(`${r.status()} ${new URL(r.url()).pathname}`);
+  });
+  return failed;
+}
+
 const rowTitles = (page: Page) => page.locator('#my-beats-heading ~ ul > li').locator('p.truncate.font-medium, a.truncate.font-medium').allTextContents();
 
 for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
@@ -71,9 +80,13 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
 
     test('owned and requested rows; filter, sort, play, select and create a project', async ({ page, context }) => {
       const { posted, previewHits } = await stub(page, context);
+      const failedApi = watchFailedApi(page);
       await page.goto('/store/account/me');
 
       await expect(page.getByRole('heading', { name: /My beats \(3\)/ })).toBeVisible();
+      // buyer playlists are called Projects here
+      await expect(page.getByText(/^Projects \(0\)/)).toBeVisible();
+      await expect(page.getByText('My playlists')).toHaveCount(0);
       expect(await rowTitles(page)).toEqual(['Asked For', 'Cold Front', 'Night Shift']);
       await expect(page.getByText('Offer $300 · pending')).toBeVisible();
       await expect(page.getByText('Your sound ·')).toBeVisible();
@@ -114,8 +127,29 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
       await expect.poll(() => posted.length).toBe(1);
       expect(posted[0]).toEqual({ action: 'create_playlist', name: 'Mixtape', track_ids: [ASK, NIGHT] });
       await expect(form).toBeHidden();
-      // the new project shows up in My playlists after the refetch
+      // the new project shows up under Projects after the refetch
       await expect(page.getByText('Mixtape', { exact: true })).toBeVisible();
+      await expect(page.getByText(/^Projects \(1\)/)).toBeVisible();
+
+      // the buyer's page asked for nothing it may not have (it used to call the
+      // producer-only /api/profile and /api/tags/colors: two 401s per load)
+      expect(failedApi).toEqual([]);
+    });
+
+    test('a beat the store delisted (an exclusive) still plays for its owner', async ({ page, context }) => {
+      const EXCL = '44444444-4444-4444-8444-444444444444';
+      const { previewHits } = await stub(page, context, [
+        beat(EXCL, { title: 'Exclusive One', license: 'exclusive', listed: false, playable: true }),
+      ]);
+      await page.goto('/store/account/me');
+      const row = page.locator('#my-beats-heading ~ ul > li').first();
+      await expect(row.getByText('Exclusive One')).toBeVisible();
+      // /store/[id] 404s for a delisted beat, so the title must not link there
+      await expect(row.getByRole('link', { name: 'Exclusive One' })).toHaveCount(0);
+      await expect(row.getByRole('link', { name: /Open/ })).toBeVisible();
+      await page.getByRole('button', { name: 'Play Exclusive One' }).click();
+      await expect.poll(() => previewHits.some((u) => u.includes(EXCL))).toBe(true);
+      await expect(page.getByRole('button', { name: 'Pause Exclusive One' })).toBeVisible();
     });
 
     test('a buyer with nothing sees the empty state', async ({ page, context }) => {

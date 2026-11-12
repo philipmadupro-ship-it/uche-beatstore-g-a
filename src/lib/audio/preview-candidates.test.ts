@@ -27,6 +27,11 @@ describe('formats', () => {
 });
 
 describe('pickPreviewBatch', () => {
+  it('never picks an org master: its preview is private and made by the org path (LABEL-14, R-05)', () => {
+    const orgRow = row('org', { audio_url: 'r2://priv/orgs/b1410000-0000-4000-8000-000000000001/tracks/x.wav' });
+    expect(pickPreviewBatch([orgRow, row('mine')], 8).map((r) => r.id)).toEqual(['mine']);
+  });
+
   it('filters unusable rows BEFORE cutting the batch, so they cannot starve it', () => {
     const junk = Array.from({ length: 10 }, (_, i) => row(`j${i}`, { audio_url: 'https://elsewhere/no-ext', created_at: '2000-01-01' }));
     const want = row('want', { created_at: '2026-09-01' });

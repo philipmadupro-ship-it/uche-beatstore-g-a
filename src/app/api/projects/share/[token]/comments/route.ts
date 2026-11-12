@@ -14,6 +14,7 @@ import { createLogger } from '@/lib/log';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { shareCommentNotification } from '@/lib/notifications/share-comment';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
+import { PUBLIC_COMMENT_VISIBILITY } from '@/lib/labelos/comment-visibility';
 const log = createLogger('api.projects.share.token.comments');
 
 export const runtime = 'nodejs';
@@ -73,18 +74,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (!gate.ok) return gate.response;
 
     // An artist's portal conversation (contact_id set, mig 128) is between
-    // that artist and the producer — never shown to a share-link holder.
-    // Before 128 the column does not exist, and every comment is a share one.
-    const list = (portalFilter: boolean) => {
-      const q = gate.admin
+    // that artist and the producer — never shown to a share-link holder. Nor
+    // is a team-only note (visibility 'internal', mig 150, LABEL-22). Before
+    // 128 / 150 those columns do not exist, so each read steps down to the
+    // filters the database has: there is nothing to hide that it cannot hold.
+    const list = (portalFilter: boolean, visibilityFilter: boolean) => {
+      let q = gate.admin
         .from('project_comments')
         .select('id, project_id, track_id, user_id, share_token, author_name, body, parent_id, region_start, region_end, edited_at, deleted_at, created_at')
         .eq('project_id', gate.share.project_id)
         .is('deleted_at', null);
-      return (portalFilter ? q.is('contact_id', null) : q).order('created_at', { ascending: true });
+      if (portalFilter) q = q.is('contact_id', null);
+      if (visibilityFilter) q = q.eq('visibility', PUBLIC_COMMENT_VISIBILITY);
+      return q.order('created_at', { ascending: true });
     };
-    let { data, error } = await list(true);
-    if (error && isMissingSchema(error)) ({ data, error } = await list(false));
+    let { data, error } = await list(true, true);
+    if (error && isMissingSchema(error)) ({ data, error } = await list(true, false));
+    if (error && isMissingSchema(error)) ({ data, error } = await list(false, false));
     if (error) throw error;
     return NextResponse.json({ comments: data ?? [] });
   } catch (error: unknown) {

@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, ExternalLink, FileText, Heart, Layers, Lock, Mail, MessageSquare, Music, X } from 'lucide-react';
 import { PortalThread } from './PortalComments';
 import { PortalMessages } from './PortalMessages';
+import { PortalUpload } from './PortalUpload';
 import type { ArtistMessage } from '@/lib/artist-messages/messages';
 import { pulseChanges, type PulseVersions } from '@/lib/artist-portal/pulse';
 import { useVisiblePoll } from '@/hooks/useVisiblePoll';
@@ -446,7 +447,19 @@ export function ArtistPortal({ token }: { token: string }) {
   const v = state.view;
   const totalNew = v.tracks.filter((t) => t.isNew).length + v.files.filter((f) => f.isNew).length;
   const hasSongs = v.tracks.some((t) => t.type === 'song');
-  const hasFiles = v.files.length > 0;
+  const uploadProjects = v.projects.filter((p) => p.canUpload).map((p) => ({ id: p.id, name: p.name }));
+  // The Files tab is also where a contact sends their own material.
+  const hasFiles = v.files.length > 0 || uploadProjects.length > 0;
+  const addUploaded = (file: PortalFile) => setState((prev) => (prev.kind === 'ready'
+    ? {
+        ...prev,
+        view: {
+          ...prev.view,
+          files: [...prev.view.files, file],
+          projects: prev.view.projects.map((p) => (p.id === file.projectId ? { ...p, files: p.files + 1 } : p)),
+        },
+      }
+    : prev));
   // Shaped by the contact's main role (lib/artist-portal/audience): wording
   // and order only — what the portal holds is decided by the server.
   const audience = v.portal.audience ?? 'artist';
@@ -568,8 +581,18 @@ export function ArtistPortal({ token }: { token: string }) {
                   onSend={sendMessage}
                 />
               ) : tab === 'files' ? (
-                visibleFiles.length === 0 ? (
-                  <p className="py-10 text-center text-sm text-white/40">No files in this project.</p>
+                <>
+                <PortalUpload
+                  key={projectFilter ?? 'all'}
+                  token={token}
+                  projects={uploadProjects}
+                  initialProjectId={projectFilter}
+                  headers={headers}
+                  producerName={v.producer.name}
+                  onUploaded={addUploaded}
+                />
+                {visibleFiles.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-white/40">{uploadProjects.length ? 'No files yet. Send one above.' : 'No files in this project.'}</p>
                 ) : (
                   <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]" data-testid="portal-files">
                     {visibleFiles.map((f) => (
@@ -581,6 +604,7 @@ export function ArtistPortal({ token }: { token: string }) {
                           <p className="flex items-center gap-2 truncate text-sm text-white/80">
                             <span className="truncate">{f.label}</span>
                             {f.isNew && <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-[#6DC6A4]">New</span>}
+                            {f.fromYou && <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Sent by you</span>}
                           </p>
                           <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
                             {[FILE_KIND_LABEL[f.kind], formatBytes(f.sizeBytes)].filter(Boolean).join(' · ')}
@@ -609,7 +633,8 @@ export function ArtistPortal({ token }: { token: string }) {
                       </li>
                     ))}
                   </ul>
-                )
+                )}
+                </>
               ) : visible.length === 0 ? (
                 <p className="py-10 text-center text-sm text-white/40">{tab === 'songs' ? 'No songs yet.' : 'No beats here yet.'}</p>
               ) : (

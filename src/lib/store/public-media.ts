@@ -32,3 +32,16 @@ export function redactPublicTrackMedia<T extends Record<string, unknown>>(track:
     wav_url: null,
   };
 }
+
+/**
+ * Where the store player may ask for a track's analysis source. A catalogue
+ * track's id is a `tracks.id`, so its preview route is keyed by it. A track on
+ * a RELEASE page (LABEL-42) carries a release-ITEM id, which `/api/store/preview`
+ * does not know (404), so those tracks have none: their own same-origin stream
+ * is the only source.
+ */
+export function publicAnalysisUrl(trackId: string | null | undefined, audioUrl: string | null | undefined): string | null {
+  if (!trackId) return null;
+  if (typeof audioUrl === 'string' && audioUrl.startsWith('/api/store/releases/')) return null;
+  return `/api/store/preview/${encodeURIComponent(trackId)}`;
+}

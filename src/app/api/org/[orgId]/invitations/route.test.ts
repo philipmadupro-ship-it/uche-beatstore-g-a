@@ -1,0 +1,412 @@
+/**
+ * POST /api/org/[orgId]/invitations and DELETE …/[invitationId] (LABEL-08).
+ *
+ * LABEL-19: creating and revoking call one audit function each (migration
+ * 146) that does the write AND the event in one transaction, and enforces one
+ * pending invitation per address under a lock. The fake `rpc` stands in for
+ * it; the rollback and the lock are proven against Postgres in
+ * supabase/local/checks/146_labelos_audit_rpc.sql.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest, NextResponse } from 'next/server';
+import { fakeAdmin, eqs, opOf, type Answer, type Chain } from '@/lib/labelos/mocks/fake-admin';
+import { hashInvitationToken } from '@/lib/labelos/invitations';
+
+const ORG = '22222222-2222-4222-8222-222222222222';
+const INVITER = '33333333-3333-4333-8333-333333333333';
+const INV = '44444444-4444-4444-8444-444444444444';
+const C1 = '55555555-5555-4555-8555-555555555555';
+
+let denied: number | null = null;
+let orgKind = 'label';
+let allowed = true;
+let rateCalls = 0;
+let pending: unknown[] = [];
+let racePending: string | null = null;
+let revokeResult: Record<string, unknown> = { revoked_at: '2026-10-01T00:00:00Z' };
+let auditFails = false;
+let emailResult: { sent: boolean; reason?: string } = { sent: true };
+let revokeRow: { accepted_at: string | null; revoked_at: string | null } | null = null;
+let admin: ReturnType<typeof fakeAdmin>;
+/** LABEL-47: the org's licence on the access context (undefined = the default), and the seats the counts report. */
+let entitlements: { modules: Set<string>; maxSeats: number | null; maxArtists: number | null; setupDone: boolean; licensed: boolean } | undefined;
+let seatCounts = { members: 0, pending: 0 };
+const events: unknown[][] = [];
+const emails: Record<string, unknown>[] = [];
+const logged: unknown[] = [];
+
+const accessOk = () => ({
+  ok: true as const,
+  userId: INVITER,
+  admin: admin.client,
+  orgId: ORG,
+  orgKind,
+  role: 'admin',
+  scope: 'org',
+  capabilities: new Set(['members.manage']),
+  ...(entitlements ? { entitlements } : {}),
+});
+
+vi.mock('@/lib/auth/org-access', () => ({
+  requireOrgCapability: async (orgId: string, cap: string) => {
+    if (denied) return { ok: false, res: NextResponse.json({ error: 'x' }, { status: denied }) };
+    expect([orgId, cap]).toEqual([ORG, 'members.manage']);
+    return accessOk();
+  },
+  requireObjectAccess: async (opts: { table: string; id: string; cap: string; orgId: string }) => {
+    if (denied) return { ok: false, res: NextResponse.json({ error: 'x' }, { status: denied }) };
+    expect(opts).toEqual({ table: 'org_invitations', id: INV, cap: 'members.manage', orgId: ORG });
+    return { ...accessOk(), object: { table: 'org_invitations', id: INV, orgId: ORG, contactId: null, projectId: null } };
+  },
+  scopedOrgQuery: (a: { from: (t: string) => { select: (c: string) => { eq: (k: string, v: string) => unknown } } }, table: string, ctx: { orgId: string }, cols = '*') =>
+    a.from(table).select(cols).eq('org_id', ctx.orgId),
+}));
+vi.mock('@/lib/labelos/activity', () => ({
+  recordEvent: async (...args: unknown[]) => {
+    events.push(args.slice(1));
+    return { ok: true, id: 'e1' };
+  },
+}));
+vi.mock('@/lib/labelos/invitation-email', () => ({
+  inviterDisplayName: async () => 'Uche',
+  sendInvitationEmail: async (opts: Record<string, unknown>) => {
+    emails.push(opts);
+    return emailResult;
+  },
+}));
+vi.mock('@/lib/security/rate-limit', () => ({
+  rateLimitDurable: async () => {
+    rateCalls += 1;
+    return allowed;
+  },
+}));
+vi.mock('@/lib/log', () => ({
+  createLogger: () => ({ info: (...a: unknown[]) => logged.push(a), warn: (...a: unknown[]) => logged.push(a), error: (...a: unknown[]) => logged.push(a), debug: () => {} }),
+}));
+
+/** Contacts of THIS org (anything else — another org's, a producer's — is absent). */
+let orgContacts = [C1];
+
+function answer(chain: Chain): Answer {
+  if (chain.table === 'contacts') {
+    expect(eqs(chain)).toEqual({ org_id: ORG });
+    const asked = (opOf(chain, 'in')?.args[1] ?? []) as string[];
+    return { data: asked.filter((id) => orgContacts.includes(id)).map((id) => ({ id, category: 'artist', secondary_category: null })), error: null };
+  }
+  if (chain.table === 'organizations') return { data: { name: 'Night Shift' }, error: null };
+  if (chain.table === 'org_members') {
+    // The seat count (LABEL-47): this org's members whose role takes a seat.
+    expect(eqs(chain)).toEqual({ org_id: ORG });
+    expect(opOf(chain, 'neq')?.args).toEqual(['role', 'artist']);
+    return { data: null, error: null, count: seatCounts.members } as Answer;
+  }
+  if (chain.table === 'org_invitations' && opOf(chain, 'neq')) {
+    expect(eqs(chain)).toEqual({ org_id: ORG });
+    return { data: null, error: null, count: seatCounts.pending } as Answer;
+  }
+  if (chain.table === 'org_invitations') {
+    // The route never writes the table itself any more: only reads.
+    expect(opOf(chain, 'insert') ?? opOf(chain, 'update') ?? opOf(chain, 'delete')).toBeUndefined();
+    if (opOf(chain, 'maybeSingle')) return { data: revokeRow ? { id: INV, email: 'a@b.test', ...revokeRow } : null, error: null };
+    return { data: pending, error: null };
+  }
+  return { data: null, error: null };
+}
+
+function rpc(name: string, args: Record<string, unknown>): Answer {
+  if (auditFails) return { data: null, error: { message: 'audit insert refused' } };
+  if (name === 'labelos_audit_invitation_create') {
+    if (racePending) return { data: { error: 'pending', id: racePending }, error: null };
+    return {
+      data: {
+        invitation: { id: INV, email: args.p_email, role: args.p_role, functions: args.p_functions, artist_ids: args.p_artist_ids, expires_at: args.p_expires_at, accepted_at: null, revoked_at: null, created_at: 'now' },
+      },
+      error: null,
+    };
+  }
+  if (name === 'labelos_audit_invitation_revoke') return { data: revokeResult, error: null };
+  return { data: null, error: { message: `unexpected rpc ${name}` } };
+}
+
+beforeEach(() => {
+  entitlements = undefined;
+  seatCounts = { members: 0, pending: 0 };
+  orgContacts = [C1];
+  denied = null;
+  orgKind = 'label';
+  allowed = true;
+  rateCalls = 0;
+  pending = [];
+  racePending = null;
+  revokeResult = { revoked_at: '2026-10-01T00:00:00Z' };
+  auditFails = false;
+  emailResult = { sent: true };
+  revokeRow = { accepted_at: null, revoked_at: null };
+  events.length = 0;
+  emails.length = 0;
+  logged.length = 0;
+  admin = fakeAdmin({ answer, rpc });
+});
+
+async function create(body: unknown) {
+  const { POST } = await import('./route');
+  const res = await POST(new NextRequest(`https://app.test/api/org/${ORG}/invitations`, { method: 'POST', body: JSON.stringify(body) }), {
+    params: Promise.resolve({ orgId: ORG }),
+  });
+  return { status: res.status, json: await res.json() };
+}
+
+async function revoke() {
+  const { DELETE } = await import('./[invitationId]/route');
+  const res = await DELETE(new NextRequest(`https://app.test/api/org/${ORG}/invitations/${INV}`, { method: 'DELETE' }), {
+    params: Promise.resolve({ orgId: ORG, invitationId: INV }),
+  });
+  return { status: res.status, json: await res.json() };
+}
+
+const rpcArgs = () => admin.rpcs.find((r) => r.name === 'labelos_audit_invitation_create')!.args;
+
+describe('POST invitations: contact_ids (LABEL-10)', () => {
+  const FOREIGN = '66666666-6666-4666-8666-666666666666';
+
+  it('refuses a contact that is not in THIS org (another org, a producer contact, unknown) with 400 and writes nothing', async () => {
+    const r = await create({ email: 'a@b.test', role: 'artist', contact_ids: [C1, FOREIGN] });
+    expect(r.status).toBe(400);
+    expect(r.json.contact_ids).toEqual([FOREIGN]);
+    expect(admin.chains.some((c) => c.table === 'org_invitations')).toBe(false);
+    expect(rateCalls).toBe(0);
+  });
+
+  it('checks the list against the org through the scoped read, and skips the read for no contacts', async () => {
+    expect((await create({ email: 'a@b.test', role: 'member', functions: ['a_and_r'] })).status).toBe(201);
+    expect(admin.chains.some((c) => c.table === 'contacts')).toBe(false);
+  });
+});
+
+describe('POST invitations', () => {
+  it('passes through the access helper refusal (401/403)', async () => {
+    for (const s of [401, 403]) {
+      denied = s;
+      expect((await create({ email: 'a@b.test', role: 'member' })).status).toBe(s);
+    }
+    expect(admin.chains).toEqual([]);
+  });
+
+  it('creates: normalised email, hashed token, 7-day expiry, email with the join link, one audit function call', async () => {
+    const before = Date.now();
+    const r = await create({ email: '  Nova@Example.COM ', role: 'member', functions: ['a_and_r'], contact_ids: [C1] });
+    expect(r.status).toBe(201);
+    expect(r.json).toMatchObject({
+      emailSent: true,
+      invitation: { id: INV, email: 'nova@example.com', role: 'member', functions: ['a_and_r'], contact_ids: [C1] },
+    });
+
+    const row = rpcArgs();
+    expect(row).toMatchObject({ p_org: ORG, p_actor: INVITER, p_email: 'nova@example.com', p_role: 'member', p_functions: ['a_and_r'], p_artist_ids: [C1] });
+    expect(row).not.toHaveProperty('token');
+    const expires = Date.parse(String(row.p_expires_at));
+    expect(expires - before).toBeGreaterThanOrEqual(7 * 86_400_000 - 1000);
+    expect(expires - before).toBeLessThanOrEqual(7 * 86_400_000 + 1000);
+
+    // The emailed link carries the token whose hash was stored.
+    const url = String(emails[0].url);
+    const token = url.split('/join/')[1];
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(row.p_token_hash).toBe(hashInvitationToken(token));
+    expect(emails[0]).toMatchObject({ to: 'nova@example.com', orgName: 'Night Shift', inviterName: 'Uche', role: 'member' });
+
+    // …and nowhere else.
+    expect(JSON.stringify(r.json)).not.toContain(token);
+    expect(JSON.stringify(r.json)).not.toContain(String(row.p_token_hash));
+    expect(JSON.stringify(row.p_payload)).not.toContain(token);
+    expect(JSON.stringify(logged)).not.toContain(token);
+
+    // The event is the function's payload; the route records nothing itself.
+    expect(row.p_payload).toEqual({ email: 'nova@example.com', role: 'member', functions: ['a_and_r'], contact_ids: [C1], scope: 'artists' });
+    expect(events).toEqual([]);
+  });
+
+  it('reads pending invitations scoped to the org', async () => {
+    await create({ email: 'a@b.test', role: 'admin' });
+    const chain = admin.chains.find((c) => c.table === 'org_invitations' && !opOf(c, 'insert'))!;
+    expect(eqs(chain)).toEqual({ org_id: ORG, email: 'a@b.test' });
+  });
+
+  it.each([
+    ['owner', {}],
+    ['artist', { kind: 'producer' }],
+    ['member', { functions: ['a_and_r'], kind: 'producer' }],
+    ['admin', { functions: ['legal'] }],
+    ['wizard', {}],
+  ])('400 for role %s %j', async (role, extra: { kind?: string; functions?: string[] }) => {
+    if (extra.kind) orgKind = extra.kind;
+    const r = await create({ email: 'a@b.test', role, functions: extra.functions ?? [] });
+    expect(r.status).toBe(400);
+    expect(admin.rpcs).toEqual([]);
+  });
+
+  it('400 on a bad email or unknown fields', async () => {
+    expect((await create({ email: 'nope', role: 'member' })).status).toBe(400);
+    expect((await create({ email: 'a@b.test', role: 'member', token: 'x' })).status).toBe(400);
+  });
+
+  it('409 when the address already has a pending invitation, without spending the rate limit', async () => {
+    pending = [{ id: INV }];
+    const r = await create({ email: 'a@b.test', role: 'member' });
+    expect(r).toMatchObject({ status: 409, json: { invitationId: INV } });
+    expect(emails).toEqual([]);
+    expect(rateCalls).toBe(0);
+  });
+
+  it('a 400 does not spend the rate limit either', async () => {
+    await create({ email: 'a@b.test', role: 'owner' });
+    expect(rateCalls).toBe(0);
+  });
+
+  it('409 when the function finds an older pending invitation (the race is decided under its lock): no email', async () => {
+    const OLDER = '66666666-6666-4666-8666-666666666666';
+    racePending = OLDER;
+    const r = await create({ email: 'a@b.test', role: 'member' });
+    expect(r).toMatchObject({ status: 409, json: { invitationId: OLDER } });
+    expect(emails).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
+  it('429 when rate-limited', async () => {
+    allowed = false;
+    expect((await create({ email: 'a@b.test', role: 'member' })).status).toBe(429);
+    expect(emails).toEqual([]);
+  });
+
+  it('when the audit function fails the request fails, no email goes out and the route writes nothing to undo', async () => {
+    auditFails = true;
+    const r = await create({ email: 'a@b.test', role: 'member' });
+    expect(r.status).toBe(500);
+    expect(admin.chains.some((c) => c.table === 'org_invitations' && opOf(c, 'delete'))).toBe(false);
+    expect(emails).toEqual([]);
+  });
+
+  it('503, not 500, when migration 146 is not applied', async () => {
+    admin = fakeAdmin({ answer, rpc: () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.labelos_audit_invitation_create' } }) });
+    const r = await create({ email: 'a@b.test', role: 'member' });
+    expect(r.status).toBe(503);
+    expect(emails).toEqual([]);
+  });
+
+  it('reports an email that did not go out, without failing', async () => {
+    emailResult = { sent: false, reason: 'not_configured' };
+    const r = await create({ email: 'a@b.test', role: 'member' });
+    expect(r.status).toBe(201);
+    expect(r.json).toMatchObject({ emailSent: false, emailError: 'not_configured' });
+  });
+});
+
+describe('DELETE invitation', () => {
+  it('passes through the access helper refusal (404 for another org)', async () => {
+    denied = 404;
+    expect((await revoke()).status).toBe(404);
+  });
+
+  it('revokes a pending invitation once, org-scoped, through the audit function', async () => {
+    const r = await revoke();
+    expect(r).toEqual({ status: 200, json: { revoked: true, revoked_at: '2026-10-01T00:00:00Z' } });
+    expect(admin.rpcs).toEqual([
+      { name: 'labelos_audit_invitation_revoke', args: { p_org: ORG, p_actor: INVITER, p_id: INV, p_payload: { email: 'a@b.test' } } },
+    ]);
+    expect(events).toEqual([]);
+  });
+
+  it('is idempotent on an already revoked invitation', async () => {
+    revokeRow = { accepted_at: null, revoked_at: '2026-09-30T00:00:00Z' };
+    const r = await revoke();
+    expect(r).toEqual({ status: 200, json: { revoked: true, revoked_at: '2026-09-30T00:00:00Z' } });
+    expect(admin.rpcs).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
+  it('a failed audit function fails the request, with nothing to undo (one transaction)', async () => {
+    auditFails = true;
+    const r = await revoke();
+    expect(r.status).toBe(500);
+    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
+  });
+
+  it('409 on an accepted invitation', async () => {
+    revokeRow = { accepted_at: '2026-09-30T00:00:00Z', revoked_at: null };
+    expect((await revoke()).status).toBe(409);
+    expect(events).toEqual([]);
+  });
+
+  it('409 when an accept wins the race', async () => {
+    revokeResult = { error: 'not_pending' };
+    let reads = 0;
+    admin = fakeAdmin({
+      answer: (chain) => {
+        if (chain.table === 'org_invitations' && opOf(chain, 'maybeSingle')) {
+          reads += 1;
+          return { data: { id: INV, email: 'a@b.test', accepted_at: reads > 1 ? 'now' : null, revoked_at: null }, error: null };
+        }
+        return answer(chain);
+      },
+      rpc,
+    });
+    expect((await revoke()).status).toBe(409);
+    expect(events).toEqual([]);
+  });
+});
+
+describe('GET invitations (LABEL-09)', () => {
+  it('lists pending invitations of this org, newest first, without token or hash', async () => {
+    pending = [{ id: INV, email: 'a@b.test', role: 'member', functions: ['a_and_r'], artist_ids: [], expires_at: 'x', accepted_at: null, revoked_at: null, created_at: 'now' }];
+    const { GET } = await import('./route');
+    const res = await GET(new NextRequest(`https://app.test/api/org/${ORG}/invitations`), { params: Promise.resolve({ orgId: ORG }) });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.invitations).toEqual([
+      { id: INV, email: 'a@b.test', role: 'member', functions: ['a_and_r'], contact_ids: [], expires_at: 'x', accepted_at: null, revoked_at: null, created_at: 'now' },
+    ]);
+    const chain = admin.chains[0];
+    expect(eqs(chain)).toEqual({ org_id: ORG });
+    expect(chain.ops.filter((o) => o.op === 'is').map((o) => o.args)).toEqual([['project_id', null], ['accepted_at', null], ['revoked_at', null]]); // project invitations are listed on their project (LABEL-21)
+    expect(opOf(chain, 'gt')?.args[0]).toBe('expires_at');
+    expect(String(opOf(chain, 'select')?.args[0])).not.toContain('token');
+  });
+
+  it('passes through the access helper refusal', async () => {
+    denied = 403;
+    const { GET } = await import('./route');
+    const res = await GET(new NextRequest(`https://app.test/api/org/${ORG}/invitations`), { params: Promise.resolve({ orgId: ORG }) });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('POST invitations: the seat cap (LABEL-47)', () => {
+  const licence = (maxSeats: number | null) => ({ modules: new Set<string>(), maxSeats, maxArtists: null, setupDone: true, licensed: true });
+
+  it('no cap: no count is even read', async () => {
+    expect((await create({ email: 'a@b.test', role: 'member', functions: ['a_and_r'] })).status).toBe(201);
+    expect(admin.chains.some((c) => c.table === 'org_members')).toBe(false);
+  });
+
+  it('members + pending invitations fill the cap: 409 with a plain message, nothing written, no email', async () => {
+    entitlements = licence(3);
+    seatCounts = { members: 2, pending: 1 };
+    const res = await create({ email: 'a@b.test', role: 'member', functions: ['a_and_r'] });
+    expect(res.status).toBe(409);
+    expect(res.json).toEqual({ error: expect.stringMatching(/used all 3 of its seats/), code: 'seat_limit' });
+    expect(admin.rpcs).toEqual([]);
+    expect(emails).toEqual([]);
+  });
+
+  it('a free seat is used normally', async () => {
+    entitlements = licence(3);
+    seatCounts = { members: 2, pending: 0 };
+    expect((await create({ email: 'a@b.test', role: 'admin' })).status).toBe(201);
+  });
+
+  it('a roster artist does not take a seat, so a full org can still invite one', async () => {
+    entitlements = licence(1);
+    seatCounts = { members: 5, pending: 0 };
+    expect((await create({ email: 'a@b.test', role: 'artist', contact_ids: [C1] })).status).toBe(201);
+  });
+});

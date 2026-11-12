@@ -33,6 +33,8 @@ export interface ProjectAssetView {
   portal_at: string | null;
   created_at: string;
   downloadUrl: string;
+  /** A contact who sent it through their portal (mig 191); null = the producer's own. */
+  uploaded_by?: { contact_id: string; name: string } | null;
 }
 
 export const PROJECT_ASSET_COLUMNS = 'id, project_id, kind, label, file_name, url, mime, size_bytes, position, in_portal, portal_at, created_at, updated_at';

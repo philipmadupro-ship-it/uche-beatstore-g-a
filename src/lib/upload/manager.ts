@@ -18,9 +18,11 @@ import {
   parsePersistedUploads, bytesFromCompletedParts, type PersistedItem,
 } from './persisted-uploads';
 import {
-  findLiveDuplicate, bytesFromParts, displayedBytes, computeSpeedBps,
+  findLiveDuplicate, bytesFromParts, displayedBytes, computeSpeedBps, describePartFailure,
   computeEtaSec, backoffMs, isRetriableStatus,
+  isPresignedUrlFresh, shouldResignPart,
 } from './progress';
+import { sameUploadTarget, uploadApiBase, uploadCompleteBody, uploadInitBody, type OrgUploadTarget } from './org-target';
 
 type UploadAnalysis = {
   bpm?: number | null;
@@ -71,6 +73,8 @@ export interface UploadItem {
   updatedAt: number;
   error: string | null;
   retries: number;
+  /** How parts travel, shown in the tray: straight to R2, or through the app. */
+  transport: 'direct' | 'proxied' | null;
   // Context to pass back to /complete and into the track record
   type: string;
   projectId: string | null;
@@ -79,6 +83,8 @@ export interface UploadItem {
   analysis: UploadAnalysis | null;
   // Track returned from /complete on success
   track: UploadedTrack | null;
+  /** LABEL-14: an org upload (its org and what it becomes); null for the producer's. */
+  org: OrgUploadTarget | null;
 }
 
 interface ManagerState {
@@ -113,6 +119,8 @@ export interface EnqueueOpts {
    */
   analysis?: UploadAnalysis | null | Promise<UploadAnalysis | null>;
   onSuccess?: (track: UploadedTrack) => void;
+  /** Upload into an org (LABEL-14) through /api/org/<org>/upload/* instead of /api/upload/*. */
+  org?: OrgUploadTarget | null;
 }
 
 const LS_KEY = 'antigravity:uploads:v1';
@@ -139,9 +147,14 @@ const successCallbacks: Record<string, ((track: UploadedTrack) => void) | undefi
 const pendingAnalysis: Record<string, Promise<UploadAnalysis | null> | undefined> = {};
 const inFlightBytes: Record<string, Record<number, number>> = {};
 const lastProgressPush: Record<string, number> = {};
-// Part URLs signed in one request per file, keyed by upload session. A part
-// that fails drops its entry so the retry signs a fresh URL (they expire).
-const presignedUrls: Record<string, Record<number, string>> = {};
+// Part URLs signed in one request per file, keyed by upload session. They
+// expire, so each carries its signing time: a stale one is never used, and a
+// part that fails on a batch URL re-signs once on the spot (`shouldResignPart`).
+const presignedUrls: Record<string, Record<number, { url: string; signedAt: number }>> = {};
+// The org target of each org upload session (LABEL-14), so the part helpers,
+// which only know a session id, call the org's routes. Absent = producer.
+const sessionOrg: Record<string, OrgUploadTarget> = {};
+const apiFor = (sessionId: string) => uploadApiBase(sessionOrg[sessionId]);
 
 /* ─────────── persistence ─────────── */
 
@@ -169,6 +182,7 @@ function persist(state: ManagerState) {
       replaceTrackId: u.replaceTrackId,
       status: u.status,
       startedAt: u.startedAt,
+      org: u.org,
     }));
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(items));
@@ -187,13 +201,15 @@ function loadPersisted(): PersistedItem[] {
 
 /* ─────────── XHR helpers ─────────── */
 
+type PartResult = { ok: boolean; status: number; error?: string; transport?: 'direct' | 'proxied' };
+
 function xhrPart(opts: {
   sessionId: string;
   partNumber: number;
   blob: Blob;
   onProgress: (loadedBytes: number) => void;
   signal?: AbortSignal;
-}): Promise<{ ok: boolean; status: number; error?: string }> {
+}): Promise<PartResult> {
   return directOrProxiedPart(opts);
 }
 
@@ -203,12 +219,16 @@ async function directOrProxiedPart(opts: {
   blob: Blob;
   onProgress: (loadedBytes: number) => void;
   signal?: AbortSignal;
-}): Promise<{ ok: boolean; status: number; error?: string }> {
+}): Promise<PartResult> {
   try {
-    const cached = presignedUrls[opts.sessionId]?.[opts.partNumber];
-    let url: string | null = cached ?? null;
+    const entry = presignedUrls[opts.sessionId]?.[opts.partNumber];
+    // Taken out of the cache either way: a URL is good for one PUT, and a
+    // retry must never reach back for one that may have expired meanwhile.
+    if (entry) delete presignedUrls[opts.sessionId]?.[opts.partNumber];
+    const cached = entry && isPresignedUrlFresh(entry.signedAt, Date.now()) ? entry.url : null;
+    let url: string | null = cached;
     if (!url) {
-      const signRes = await fetch('/api/upload/part', {
+      const signRes = await fetch(`${apiFor(opts.sessionId)}/part`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: opts.signal,
@@ -222,7 +242,9 @@ async function directOrProxiedPart(opts: {
       if (!signRes.ok) {
         return { ok: false, status: signRes.status, error: signed.error || 'part signing failed' };
       }
-      if (!signed.direct || !signed.url) return proxiedPart(opts);
+      if (!signed.direct || !signed.url) {
+        return { ...(await proxiedPart(opts)), transport: 'proxied' };
+      }
       url = signed.url;
     }
 
@@ -233,13 +255,16 @@ async function directOrProxiedPart(opts: {
       signal: opts.signal,
     });
     if (!uploaded.ok || !uploaded.etag) {
-      // Whatever went wrong, do not retry against the same URL: it may be the
-      // reason (expired), and a fresh signature costs one cheap request.
-      if (cached) delete presignedUrls[opts.sessionId]?.[opts.partNumber];
-      return uploaded;
+      // A batch URL may simply have expired (403, or a CORS-less error that
+      // surfaces as status 0). One fresh signature costs one cheap request;
+      // without it the 403 reads as permanent and ends the whole upload.
+      if (!opts.signal?.aborted && shouldResignPart({ fromBatch: cached !== null, status: uploaded.status })) {
+        return directOrProxiedPart(opts);
+      }
+      return { ...uploaded, transport: 'direct' };
     }
 
-    const confirmRes = await fetch('/api/upload/part', {
+    const confirmRes = await fetch(`${apiFor(opts.sessionId)}/part`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       signal: opts.signal,
@@ -252,8 +277,8 @@ async function directOrProxiedPart(opts: {
     });
     const confirmed = await confirmRes.json() as { error?: string };
     return confirmRes.ok
-      ? { ok: true, status: confirmRes.status }
-      : { ok: false, status: confirmRes.status, error: confirmed.error || 'part confirmation failed' };
+      ? { ok: true, status: confirmRes.status, transport: 'direct' }
+      : { ok: false, status: confirmRes.status, error: confirmed.error || 'part confirmation failed', transport: 'direct' };
   } catch (err) {
     if (isError(err) && err.name === 'AbortError') {
       return { ok: false, status: 0, error: 'aborted' };
@@ -283,12 +308,12 @@ function directPart(opts: {
       if (xhr.status >= 200 && xhr.status < 300) {
         const etag = xhr.getResponseHeader('ETag') || xhr.getResponseHeader('etag') || '';
         if (!etag) {
-          resolve({ ok: false, status: xhr.status, error: 'R2 did not expose ETag' });
+          resolve({ ok: false, status: xhr.status, error: 'R2 did not expose ETag (bucket CORS must expose ETag)' });
           return;
         }
         resolve({ ok: true, status: xhr.status, etag });
       } else {
-        let msg = `HTTP ${xhr.status}`;
+        let msg = describePartFailure(xhr.status, xhr.responseText);
         try {
           const j = JSON.parse(xhr.responseText);
           if (j.error) msg = j.error;
@@ -321,7 +346,7 @@ function proxiedPart(opts: {
 }): Promise<{ ok: boolean; status: number; error?: string }> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('PUT', '/api/upload/part', true);
+    xhr.open('PUT', `${apiFor(opts.sessionId)}/part`, true);
     xhr.setRequestHeader('x-session-id', opts.sessionId);
     xhr.setRequestHeader('x-part-number', String(opts.partNumber));
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
@@ -426,7 +451,8 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
     // dropping the same file twice, used to produce two R2 objects and two
     // track rows the producer then had to delete by hand.
     const existing = findLiveDuplicate(
-      get().order.map((x) => get().uploads[x]).filter(Boolean),
+      // Only an upload to the same destination is the same upload (LABEL-14).
+      get().order.map((x) => get().uploads[x]).filter((u) => u && sameUploadTarget(u.org, opts.org)),
       { fileName: file.name, fileSize: file.size, fileLastModified: file.lastModified },
     );
     if (existing) {
@@ -455,6 +481,7 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
       updatedAt: Date.now(),
       error: null,
       retries: 0,
+      transport: null,
       type: opts.type || 'instrumental',
       projectId: opts.projectId ?? null,
       replaceTrackId: opts.replaceTrackId ?? null,
@@ -462,6 +489,7 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
       // EnqueueOpts.analysis. Bytes start moving on the next tick either way.
       analysis: opts.analysis instanceof Promise ? null : (opts.analysis ?? null),
       track: null,
+      org: opts.org ?? null,
     };
     if (opts.onSuccess) successCallbacks[id] = opts.onSuccess;
     if (opts.analysis instanceof Promise) {
@@ -514,7 +542,7 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
     const u = get().uploads[id];
     if (u?.sessionId) {
       // Best-effort tell the server to drop the session
-      fetch('/api/upload/abort', {
+      fetch(`${uploadApiBase(u.org)}/abort`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: u.sessionId }),
@@ -585,12 +613,15 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
           updatedAt: Date.now(),
           error: null,
           retries: 0,
+          transport: null,
           type: p.type,
           projectId: p.projectId,
           replaceTrackId: p.replaceTrackId,
           analysis: null,
           track: null,
+          org: p.org ?? null,
         };
+        if (p.org && p.sessionId) sessionOrg[p.sessionId] = p.org;
         if (!order.includes(p.id)) order.push(p.id);
       }
       return { uploads, order };
@@ -718,29 +749,23 @@ async function runUpload(id: string) {
 
     if (!sessionId) {
       m._patch(id, { status: 'preparing' });
-      const initRes = await fetch('/api/upload/init', {
+      const initRes = await fetch(`${uploadApiBase(u.org)}/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: ac.signal,
-        body: JSON.stringify({
-          fileName: u.fileName,
-          fileSize: u.fileSize,
-          fileType: u.contentType,
-          trackType: u.type,
-          projectId: u.projectId,
-          replaceTrackId: u.replaceTrackId,
-        }),
+        body: JSON.stringify(uploadInitBody(u)),
       });
       const initJson = await initRes.json();
       if (!initRes.ok) throw new Error(initJson.error || 'init failed');
       sessionId = initJson.sessionId as string;
+      if (u.org) sessionOrg[sessionId] = u.org;
       partSize = initJson.partSize as number;
       totalParts = initJson.totalParts as number;
       m._patch(id, { sessionId, partSize, totalParts, status: 'uploading' });
     } else {
       // Resume — verify with server which parts are already on disk
       try {
-        const r = await fetch(`/api/upload/status?sessionId=${sessionId}`);
+        const r = await fetch(`${uploadApiBase(u.org)}/status?sessionId=${sessionId}`);
         if (r.ok) {
           const j = await r.json();
           completed = new Set<number>(j.completedPartNumbers || []);
@@ -817,6 +842,9 @@ async function runUpload(id: string) {
               useUploadManager.getState()._registerBytes(id, partNumber, loaded);
             },
           });
+          if (res.transport && useUploadManager.getState().uploads[id]?.transport !== res.transport) {
+            useUploadManager.getState()._patch(id, { transport: res.transport });
+          }
           if (res.ok) {
             useUploadManager.getState()._registerPart(id, partNumber);
             break;
@@ -841,7 +869,7 @@ async function runUpload(id: string) {
           const latest = useUploadManager.getState().uploads[id];
           if (!latest) return;
           useUploadManager.getState()._patch(id, {
-            error: `Chunk ${partNumber} retrying (attempt ${attempt}/${MAX_CHUNK_RETRIES})…`,
+            error: `Chunk ${partNumber} retrying (attempt ${attempt}/${MAX_CHUNK_RETRIES}): ${res.status === 0 ? describePartFailure(0, null, res.error) : (res.error || describePartFailure(res.status, null))}`,
             retries: latest.retries + 1,
           });
           // Offline? Waiting on the `online` event beats spending the whole
@@ -937,11 +965,11 @@ async function postComplete(
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), FINALIZE_TIMEOUT_MS);
   try {
-    const res = await fetch('/api/upload/complete', {
+    const res = await fetch(`${apiFor(sessionId)}/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: ac.signal,
-      body: JSON.stringify({ sessionId, analysis }),
+      body: JSON.stringify(uploadCompleteBody(sessionId, analysis, sessionOrg[sessionId])),
     });
     const json = await res.json().catch(() => ({})) as { error?: string; track?: UploadedTrack };
     if (res.status === 409 && /already completed/i.test(json.error || '')) return json;
@@ -975,7 +1003,7 @@ async function postComplete(
 async function presignParts(sessionId: string, parts: number[], signal: AbortSignal) {
   if (parts.length < 2) return;
   try {
-    const res = await fetch('/api/upload/part', {
+    const res = await fetch(`${apiFor(sessionId)}/part`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal,
@@ -984,9 +1012,10 @@ async function presignParts(sessionId: string, parts: number[], signal: AbortSig
     if (!res.ok) return;
     const json = await res.json() as { direct?: boolean; urls?: Record<string, string> };
     if (!json.direct || !json.urls) return;
-    const map: Record<number, string> = {};
+    const signedAt = Date.now();
+    const map: Record<number, { url: string; signedAt: number }> = {};
     for (const [n, url] of Object.entries(json.urls)) {
-      if (typeof url === 'string') map[Number(n)] = url;
+      if (typeof url === 'string') map[Number(n)] = { url, signedAt };
     }
     presignedUrls[sessionId] = map;
   } catch {
@@ -997,6 +1026,7 @@ async function presignParts(sessionId: string, parts: number[], signal: AbortSig
 function cleanupSideChannels(id: string) {
   const sid = useUploadManager.getState().uploads[id]?.sessionId;
   if (sid) delete presignedUrls[sid];
+  if (sid) delete sessionOrg[sid];
   delete successCallbacks[id];
   delete pendingAnalysis[id];
   delete inFlightBytes[id];

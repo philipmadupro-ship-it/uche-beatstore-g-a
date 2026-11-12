@@ -9328,6 +9328,136 @@ Tests: `buyer-session.test.ts` (3 new): a lost marker with a live session is res
 
 Not changed: the session is shared with the producer's dashboard login, so a producer browsing `/store` while signed in now syncs hearts under their own email and `upsertLeadContact` creates a lead for them (as opening `/store/account/me` already did). Skipping that needs the server to know the producer's email; left for a follow-up. `syncedIdentity` is keyed on the query string (`session=1`), not the user id, so switching accounts without signing out through `/store/account/me` would not re-sync until reload.
 
+## 2026-10-02 - Buyer download system: held exclusives, quiet failures, same-origin URLs (BUYER-05)
+
+Task: make the post-purchase download path (`/store/download` → `/api/store/delivery` → `/api/store/download-file`) demonstrably tied to purchase and permission.
+
+**Audited, already correct (tests added, no change needed):** unknown session → 404, missing params → 400, track outside the purchase → 403, refunded/disputed (`download_unlocked = false`) → 403, MP3-only tier cannot reach WAV/stems, a WAV master cannot be streamed through an MP3 entitlement, an expired/refunded project link → 403, and `download-file` already hid internal errors.
+
+**Reproduced and fixed** (route tests failed before the change):
+- **A double-sold exclusive stayed downloadable.** The webhook claims exclusivity with a conditional UPDATE; the loser's `license_purchases` row is flagged `needs_refund_review` but written with `download_unlocked = true`, and neither route read the flag. Both routes now ask `lib/store/purchase-access.ts#purchaseAccess`; a flagged row answers 403 with a "producer is reviewing this" message. The hold ends when the producer marks the sale reviewed on /sales (documented as "once you've refunded") or when the refund webhook clears `download_unlocked`. The /sales badge tooltip says so.
+- **`/api/store/delivery` returned `errorMessage(err)` on a 500**, i.e. DB/storage internals on a public route. `download-file` had been fixed already; delivery now logs the detail and returns a fixed sentence.
+- **`download-file` ignored a failed purchase lookup** and fell through to the project branch, answering 404 "Purchase not found" for a paid buyer on a transient (or missing-column) error. It now throws → 500.
+- **The page saved silently on failure.** An `<a download>` at a route that answers 403 JSON shows nothing on the page (Chrome files a failed download). `lib/store/download-failure.ts#probeDownload` asks the route for one byte (`Range: bytes=0-0`) first; a refusal toasts the route's own sentence (4xx only; a 5xx gets a fixed line), a pass saves.
+- **Download URLs are relative** (they were `NEXT_PUBLIC_APP_URL`-prefixed). The pre-check is a `fetch`, which a different origin (www vs apex, a preview alias) would block by CORS, and the file should come from the origin the buyer is on anyway.
+
+Tests: `purchase-access.test.ts`, `download-failure.test.ts`, route tests for both routes (+12), `page.test.tsx` (jsdom), `e2e/store-download.spec.ts` (1280 and 390 px, API stubbed, real browser download event and filename). Not run against a real database: both routes use the service client, so RLS does not apply to them; the authorization is the route code, which the route tests exercise.
+
+Not changed (see report): 
+
+Follow-up (same PR): `/api/store/projects/access/[token]/download` now logs the detail and returns a fixed "Download failed" on a 500 (new `route.test.ts`; also covers 404 for unknown/expired token).
+
+Follow-up (same PR): the flagged buyer's email. `runFulfillment` step 4 re-reads `needs_refund_review` and, when set, sends `lib/store/held-purchase-email.ts` ("Your purchase is being reviewed": payment received, exclusive sold at the same moment, producer will be in touch) instead of "your files are ready" — no download button, no license PDF attached. Same `deliverFulfillmentEmail` job key, so retries stay idempotent.
+
+**A hazard this exposed, fixed here:** the webhook decided "double sale" from a failed conditional claim alone. A re-delivered event re-runs fulfilment for a purchase that already claimed the track, the claim fails against itself, and the legitimate winner was flagged. Harmless while the flag was a badge; with the flag now holding downloads and triggering this email it would lock out the buyer who paid first. `lib/store/exclusive-claim.ts#trackHeldByAnotherBuyer` now requires another LIVE exclusive purchase of the track (unlocked and not itself flagged — the loser's row also names the track) before the flag is written; if that lookup errors it falls back to the old behaviour (flag). Tests: webhook loser and winner-retry cases (both failed on the old code), `exclusive-claim.test.ts`.
+
+Not changed: the license PDF is still generated and stored on a flagged row (just not emailed); `/api/sales/resend` and `/api/store/orders/resend` will still email the download link to a flagged buyer, which then shows the hold message.
+
+Follow-up (same PR): the partial-refund rule. `charge.refunded` fires for every refund, and the handler treated each as a full one: status `refunded`, downloads revoked, bundle link expired and, for an exclusive, the track re-listed (`exclusive_sold = false`) while the buyer still held the license. `lib/store/refund-rule.ts#refundAccessEffect` now decides: dispute → revoke; `refunded: true` or `amount_refunded >= amount` → revoke; a partial refund → keep. A kept partial refund changes nothing in the DB and writes a producer notification ("Partial refund — $10.00 of $300.00 … refund the rest in Stripe to revoke them"). An event whose shape cannot be read revokes, as before. The last of several partial refunds arrives with `refunded: true` and revokes then.
+
+Found alongside, same branch: refunding the LOSER of a double sale — the way a held purchase is resolved — re-listed the track for sale while the winner still held it exclusively. The re-list now skips any track another live exclusive purchase holds (`trackHeldByAnotherBuyer`).
+
+Tests: `refund-rule.test.ts`; webhook cases for partial (no writes but the notification), full-with-amounts, dispute, and loser refund (the partial and loser cases fail on the old handler). 
+
+Follow-up (same PR): download audit log and rate limit.
+
+**Audit log, no migration.** One `store_events` row (`event_type: 'download'`) per file granted or refused on a known purchase, written by `lib/store/download-audit.ts` from `/api/store/download-file` and the bundle-token download. `store_events` was built open ("new event types never need a migration"), already has producer-only read RLS and a salted IP hash, and the funnel/analytics readers ignore types they don't know. The public `/api/store/event` endpoint validates a closed enum that excludes `download` (tested through the real schema), so the log cannot be forged from a browser. A new table would also have needed a migration number: 136–138 are claimed by `claude/happy-bardeen-rnosf3` / `label-os/*` and 139 by #64. Metadata: purchase kind, purchase id, format, outcome, and for a refusal the reason (`revoked`, `under-review`, `expired`, `track-not-in-purchase`, `format-not-permitted`, `file-missing`). It deliberately omits the Stripe session id and bundle token (bearer credentials). The write is best-effort and awaited, so a failed insert is logged and never blocks a paid download. The page's one-byte pre-check sends `X-Download-Probe` and a resumed download asks for the middle of the file; neither counts (`shouldLogGrant`). Unknown sessions/tokens are not logged: no seller to attribute them to, and a flood of guesses is not an audit.
+
+**Rate limit, no migration.** The durable limiter already existed (`rateLimitDurable`, mig 074, in-memory fallback). `/api/store/download-file` and the bundle-token download share a per-IP bucket of 240/min; `/api/store/delivery` (which returns the buyer's email for a session id) gets 60/min. 429 + `Retry-After: 60`, checked before any lookup. The page shows the route's sentence.
+
+**Not built:** anything that READS the log. The rows are queryable by the producer (RLS), but /sales shows no "downloaded N times / last on" yet — that is the natural next step and needs a join on `metadata->>purchase_id`. Also not done: a per-purchase download cap, and retention for old `download` rows.
+
+Tests: `download-audit.test.ts` (rule, row shape, no credential, hashed IP, never throws, forgery guard), route tests for all three routes (11 fail on the old routes), page 429 case.
+
+Follow-up (same PR): a lease on a WAV master.
+
+**The defect.** A lease tier promises `['MP3']`. `delivery` only advertised the master's own format, and `download-file` (correctly, since the earlier security fix) refused a WAV to an MP3-only tier. For a track whose `audio_url` is a WAV — the common case — the buyer paid, the page said "No files available for download", and nothing could be fetched. Checkout had let the sale through. Reproduced as route tests (delivery listed nothing; download-file answered 403) and then end to end.
+
+**The fix, without a schema change.** The first design was a `tracks.mp3_url` column filled at upload and by the backfill cron. Dropped: the cron runs once a day on this plan (a WAV-mastered catalogue would stay unbuyable for weeks), a revert of a track version changes `audio_url` and would leave a stale MP3 on the row, and migration numbers 136–139 are already claimed by other branches. Instead the derivative's KEY is derived from the track id and a hash of `audio_url` (`mp3DeliverableKey`), so existence of the key is the whole state and a replaced master can never be served an old MP3. `lib/audio/mp3-deliverable.ts` is the pure orchestration with injected dependencies (every branch tested with fakes); `mp3-deliverable.server.ts` wires R2 + ffmpeg. `convert.ts#makeDeliveryMp3Buffer` is a 320 kbps stereo 44.1 kHz libmp3lame pass over the whole master (the 96 kbps 75 s public preview is a different thing and untouched).
+- `/api/store/delivery`: offers `mp3` for a tier that includes it on a transcodable non-MP3 master.
+- `/api/store/download-file?format=mp3`: serves the stored derivative, making it first if needed; if it was made but could not be stored the bytes are served directly; if it cannot be made, 503 + `Retry-After`, audit `file-missing`, one deduped `fulfillment_alert` to the producer. It never falls back to the master. `format=wav` is still refused to an MP3-only tier.
+- Upload processing makes it eagerly from the master already in memory (non-fatal). `next.config.ts` traces ffmpeg into `/api/store/download-file`; the route has `maxDuration = 120`.
+- Side effect, intended: exclusive and bundle tiers include MP3, so `format=mp3` now returns a real MP3 for them too (it used to return the WAV master named `.wav`).
+
+Tests: `mp3-deliverable.test.ts` (rules, key, reuse, create, store-failure, no-storage, cannot-make → null, upload-time), `convert-delivery.test.ts` (REAL ffmpeg over a generated WAV: valid stereo MP3, whole length, not a clip), route tests for delivery and download-file, and `mp3-integration.test.ts` — the real route, real `ensureTrackMp3` and real ffmpeg over a WAV on disk, DB stubbed: a lease receives a genuine MP3 and the WAV is refused (fails on the old routes).
+
+Not verified: ffmpeg actually running inside the Vercel function for `/api/store/download-file`. It is traced the same way as the upload routes, whose earlier "never traced" failure is documented in `lib/audio/preview-clip.ts`, and `/api/audio/diagnostics` reports it; but I could not run on Vercel. If it does not run there, the buyer sees "being prepared" and the producer is alerted, and the eager upload-time path is the fallback for new tracks. 
+
+Follow-up (same PR): the producer-visible "MP3 ready" indicator.
+
+The drawer's new **Delivery** section (`TrackDeliverySection`, after Linked) shows a pill — MP3 ready (mint) for an MP3 master or a stored derivative, "MP3 not made yet" for a convertible master with none, "No MP3 possible" for an unconvertible file, "No audio" — plus one sentence of explanation, and **Make MP3 now** for the pending case. `lib/audio/mp3-status.ts#mp3Status` is the single mapping (pure, tested; `derivativeExists` of null — unchecked — is never reported as ready). `GET /api/tracks/[id]/mp3` returns it (one storage lookup for the key `mp3DeliverableKey` names); `POST` runs the same `ensureTrackMp3` a buyer's first download would, answering 503 (not a false ready) if it cannot be made or stored and 409 when there is nothing to make. Both are owner-gated through `requireRowOwnership` and re-read the row with the owner filter, since the service client bypasses RLS; failures return fixed text, never internals. ffmpeg is traced into the new route in `next.config.ts`.
+
+**Per track, not on list rows — deliberately.** No column holds this state (that was the point of the no-migration design), so a list badge means one R2 lookup per visible row; a 300-row library would fire 300 requests to answer a question the producer asks about one track. If a list-level signal is wanted, the honest cheap one is static ("master is not an MP3") with no claim about whether the derivative exists.
+
+The section re-checks when `audio_url` changes (a version revert swaps the master, and the old derivative key no longer applies) and renders nothing in local mode (501). A failed check says "Could not check the MP3" with Retry rather than guessing.
+
+Tests: `mp3-status.test.ts`, route tests (signed out 401 / another producer's track 403 / missing 404 each read nothing; owner filter asserted; status; make success; 503 cannot make; 503 not stored; 409; no internal leak), `TrackDeliverySection.test.tsx` (ready, pending → make → ready, make fails, check fails + Retry, 501 hides, re-check on master change), and `e2e/track-delivery.spec.ts` in the real drawer at 1280 and 390 px (the library has no All tracks toggle on phones; the spec handles both).
+
+Follow-up (same PR): deleting superseded MP3s.
+
+**Where orphans come from.** The derivative's key hashes `audio_url`, so a changed master leaves the old MP3 behind. `audio_url` is written in exactly one place — the version-revert route — and a track delete is a bare DB delete. The MP3 feature has not reached production, so there is no existing backlog to sweep; three hooks cover the lifecycle:
+1. **A new derivative is stored** (`EnsureMp3Deps.prune`): every other `deliverables/<track>-*.mp3` is superseded.
+2. **A version revert** (`revert/route.ts`): prune everything except the key for the restored master (kept if it was already made).
+3. **A track delete** (`[id]/route.ts` DELETE, after ownership is proven and the row is gone): remove all of them. Masters, previews and peaks are not touched; they were never deleted on track delete and that is a wider storage-GC question this does not take on.
+
+**The selection is the safety boundary.** `supersededDeliverableKeys` returns a key only if it matches exactly `deliverables/<this track's uuid>-<12 hex>.mp3` and is not the current key; the track id must itself be a uuid before it is interpolated into the pattern. The adversarial test feeds it a master, another track's derivative, wrong extensions, `..` traversal, the bare prefix and an empty string and expects nothing back. `listPrivateKeys` (paginated) and `deletePrivateKeys` (batches of 1000, throws on a per-object S3 error) only touch the private bucket. Pruning is best-effort and never throws: a failed cleanup must not fail the download, revert or delete that triggered it; without R2 (local dev) it is a no-op.
+
+**Known small race, accepted.** A request that read the track before a revert can store the OLD master's key after the revert and prune the NEW one; the next request regenerates it. Nothing is served stale (the key is derived from the master it was made from).
+
+Tests: pure selection (adversarial), prune with fakes, ensure prunes only on a NEW derivative (not on exists / MP3 master / unstored; a failing prune doesn't lose the result), a lifecycle test over an in-memory object store (one MP3 per track through a master change, another track's untouched, delete removes only that track's, masters and stems intact), `private-keys.test.ts` (pagination, 1000-batching, error surfaced), and route tests for revert and DELETE (prune on success with the right arguments; none on a failed revert or a track the caller does not own) — the two hook tests fail without the hooks.
+
+Not verified: against real R2 (ListObjectsV2 / DeleteObjects). The S3 client is exercised with its `send` spied, so command shapes are asserted but not accepted by a live bucket; the token needs `s3:ListBucket` and `s3:DeleteObject` on the private bucket, which the upload and delete helpers already imply for delete but list is new.
+
+Follow-up (same PR): `charge.dispute.closed`.
+
+**The gap.** `charge.dispute.created` revokes access immediately (status `disputed`, `download_unlocked = false`, bundle link expired), and nothing ever undid it: a buyer whose dispute the producer WON — they paid, the bank sided with the seller — stayed locked out of files they own, until the producer hand-edited the database.
+
+**The rule** (`lib/store/dispute-rule.ts`, pure and tested). `won` and `warning_closed` restore; `lost` and `charge_refunded` stay revoked; anything else (an open status in a "closed" event, or a status Stripe adds later) does nothing — leaving access revoked is recoverable, restoring files on a sale we cannot classify is not.
+
+**The handler** (`/api/stripe/webhook`, new case):
+- **Track licenses:** `UPDATE … SET status='paid', download_unlocked=true WHERE stripe_payment_intent = … AND status = 'disputed'`. The status guard is the protection against a later full refund (which moved the row to `refunded`) being reversed. `needs_refund_review` is untouched, so a double-sold exclusive stays held after a won dispute.
+- **Bundles:** no status column, and both a refund and a dispute revoke by setting `expires_at = now()`, so the row cannot say which. Before un-expiring (`expires_at = null`, by payment intent and by checkout session, only rows currently expired) it retrieves the charge from Stripe: refunded, or Stripe unreachable → left revoked and logged. Setting null is a faithful undo because the webhook never writes `expires_at` at creation.
+- Notifies the producer: "Dispute won", "Dispute inquiry closed", or "Dispute lost" with whether downloads were restored; silent for `charge_refunded` (the refund event already notified). Bundle sales are now covered too (the created-notification only looked at `license_purchases`; the closed one falls back to `project_access_links`).
+- Every write is conditional, so a redelivered event is a no-op.
+
+**Required prod config:** the Stripe webhook endpoint must also be subscribed to `charge.dispute.closed` (Dashboard → Developers → Webhooks), or this never fires. `/api/stripe/diagnostics` now lists it as a required event and reports it missing.
+
+Tests: `dispute-rule.test.ts`; webhook cases for won (the WHERE clause asserted, not just the payload), warning_closed, lost, charge_refunded, unrecognised/absent statuses, no payment intent, bundle un-expire (both lookups, only-expired filter), bundle left revoked on a refunded charge and on a Stripe failure, "could not restore" wording, and idempotence. The restore cases fail on the old handler. The test harness now records the filters applied to each write so WHERE clauses can be asserted.
+
+Not verified against a real Stripe dispute: the event shape (`status`, `payment_intent`, `charge` on the dispute object) is from Stripe's documented Dispute object, and the tests construct it, not capture it. A Stripe CLI `stripe trigger charge.dispute.closed` against a test-mode endpoint would confirm.
+
+## 2026-10-02 - Buyer "My beats" workspace on /store/account/me (BUYER-01)
+
+Asked for: an artist/rapper-personalised buyer workspace reusing the Library's philosophy for owned and requested beats; acceptance "filter, sort, play and create project". Decisions taken with the owner: **create project = a buyer playlist**, **requested = offers only**, **personalised = derived from ownership**. No migration.
+
+**Reproduced** (stubbed APIs, 1280 and 390 px): the page listed purchases as one text line per order, favourites and history as links, and had no Play, no filter or sort, and no way to group beats except an empty-playlist name field. Offers (`buyer_offers`, mig 068) were never readable by the buyer. First wrong layer: the read model, not any write path.
+
+Changes:
+- `lib/store/buyer-workspace.ts` (pure, Vitest): merge purchases + bought-bundle tracks + offers into one row per beat. Owned beats win over requested; a revoked purchase owns nothing; metadata shows only for a listed or owned beat (a delisted, merely requested beat keeps the title the offer stored); built field by field, so no media URL can ride along. `filterBuyerBeats` / `sortBuyerBeats`, `ownedSound` + `describeOwnedSound` (the personalisation), `projectTrackIds`, `beatToPlayerTrack` (always the PUBLIC preview route, never a master).
+- `lib/store/buyer-beats.ts`: the queries. Reuses `loadBuyerPurchases`, so the buyer's orders and "My beats" cannot disagree on ownership.
+- `/api/store/me`: `GET ?view=beats` (a separate view so the wishlist sync that reads this route on every store navigation does not pay for it); `create_playlist` accepts `track_ids` (≤50, all checked before anything is written, rolled back if the rows fail); `add_to_playlist` now accepts a beat the buyer paid for even when it is delisted. Every read and write is keyed on the email the session/token proved, never the body.
+- `components/store/BuyerBeatsWorkspace` on `/store/account/me`.
+
+Tests: `buyer-workspace.test.ts`, `api/store/me/workspace.test.ts` (in-memory PostgREST stand-in that really filters: cross-buyer, token == session, revoked, expired bundle, no leak of media/private fields/offer messages, all-or-nothing project create, owned-but-delisted add), `BuyerBeatsWorkspace.test.tsx` (jsdom), `e2e/buyer-workspace.spec.ts` (1280 + 390; APIs stubbed).
+
+Not changed: a delisted owned beat cannot play here (the public preview route serves listed / featured-bundle beats only); the delivery page plays it. Offers are matched on the lowercased email the offer form stored, which is unverified at write time, so a buyer sees offers made under their address by anyone. The playlist section is still headed "My playlists".
+
+## 2026-10-02 - My beats follow-ups: owners can play a sold exclusive, offers can't be planted, "Projects", two 401s (BUYER-02)
+
+Built on the open BUYER-01 branch (PR #62). Four reported items.
+
+**1. A sold exclusive could not play in My beats.** Reproduced from the code path, then pinned with a route test over an in-memory PostgREST: an exclusive sale delists the track, `canStreamPublicly` (listed or featured-bundle only) said no, so `/api/store/preview/[id]` 404'd for the one person who paid, and `playable` was `store_listed === true`. Fix: `lib/store/owned-preview-access.ts#sessionOwnsTrack` is a second gate both the preview and peaks routes consult only AFTER the public one says no — Supabase session → `sessionBuyerEmail` → `loadBuyerOwnedTrackIds` (refunded / disputed / expired-bundle own nothing), and the track must still belong to the producer. It widens who may stream, not what: the source is still `publicPreviewSource` (never `r2://`, never `wav_url`). Owned responses are `private, no-store` + `Vary: Cookie` (and drop the peaks wildcard CORS header); the anonymous/listed path and its cache headers are byte-identical. `/api/store` is already on the api-gate allowlist, so a signed-in buyer is not 403'd (pinned in `api-gate.test.ts`). `BuyerBeat.playable` = listed or owned; new `BuyerBeat.listed` decides whether the title links to `/store/[id]`, which 404s for a delisted beat — `playable` had been doing both jobs. Cost: an owned-path request is one session read plus the purchase queries (`loadBuyerOwnedTrackIds`), once per Range request; fine for a 75 s clip, worth a short-lived cache if it ever shows.
+
+**2. Offers were matched on an unverified email.** `POST /api/store/offer` stored the body's `buyer_email`; `loadBuyerBeats` shows a signed-in buyer every offer under their address, so typing a victim's address planted a price/status/title in their My beats. Smallest option that stops it needs one bit of state the table doesn't have, so it is a migration: **139** `buyer_offers.buyer_email_verified boolean NOT NULL DEFAULT false` (136–138 are claimed by `origin/label-os/*`, so 139 avoids a numbering collision; the MIGRATIONS ledger, verify.sql and pending.sql are updated). With a session the route uses the session's email and ignores the body (stored verified); anonymous offers still work and still reach the producer (notification says "(unverified)") but are stored unverified; My beats reads verified only. Before 139: the insert retries without the column and My beats shows no offers (fail closed — showing them would reopen the hole). Existing rows default to unverified, so they leave buyers' My beats and stay on /sales. The offer modal tells an anonymous buyer to sign in first. Test (`offer/planting.test.ts`) wires the REAL offer route to the REAL `/api/store/me?view=beats` over one database: planted anonymous offer, signed-in attacker naming the victim, the victim's own offer, planted-beside-real, and the pre-139 path. It fails on the old code.
+
+**3. "My playlists" → "Projects".** `/store/account/me` heading, placeholder, empty state, delete confirmation, toasts and aria-labels; the BuyerBeatsWorkspace toast; AGENTS.md. Also the legacy `/store/account/[token]` page and the storefront's "Add to project" menu (trigger label, "Your projects", "New project with this beat", toasts, default name "My project"), because the same list shows under two names otherwise. Table, `/api/store/me` action names and the component file names keep "playlist". Not renamed: the producer's playlists (`/store/playlists/[id]`, featured playlists), which are a different thing.
+
+**4. The two 401s on /store/account/me are a real defect, not a stub artifact.** Reproduced with a Playwright script logging every response >= 400 under the e2e's stubbed session: `GET /api/tags/colors` and `GET /api/profile`, both `fetch`, both from the page itself. Cause: `BuyerBeatsWorkspace` / `BuyerLibraryTile` draw artwork through `ArtworkFallback`, whose `useTagColors` / `useBrandArtwork` read "no theme provider" as "I am the dashboard" and call those producer-only endpoints. `StoreLayoutClient` wraps only the player and cart in a provider, and the account pages had none (the token page has had the same bug since the tile was added). In production the calls are 401 signed out and 403 from the producer gate in `src/proxy.ts` for a signed-in buyer — the stub only changes which status the server answers with (`getUser()` can't reach stub.supabase.co). Fix: `src/app/store/account/layout.tsx` wraps its children in `PublicArtworkThemeProvider` (one cached call to the public `/api/store/theme`). Tests: `account/layout.test.tsx` (hooks call neither endpoint inside it, do outside it) and the e2e now collects failed `/api/*` responses and asserts none — it fails with `401 /api/profile`, `401 /api/tags/colors` when the layout is reverted. Probed `/store/orders`, `/store/type/*`, `/store/privacy`, `/store/account`: no failing API calls.
+
+Also: `lib/ui/type-scale.test.ts` was red on the BUYER-01 head (four `text-[12px]` in BuyerBeatsWorkspace); changed to the agreed 11px.
+
+Verification: `tsc --noEmit` clean; `vitest run` 348 files / 3414 tests; eslint clean on changed files; `next build` with the CI stub env + `check-store-dynamic`; `e2e/buyer-workspace.spec.ts` 8/8 at 1280 and 390 against `next dev -p 3457` with stub Supabase env. Not run: a real database or R2 (no preview bytes were streamed from a bucket), the `artist-workspace` real-db suite.
+
 ## 2026-10-02 - Play a beat from the buyer account (BUYER-04)
 
 Reported: a buyer should be able to play an owned or requested beat from their account.
@@ -9375,3 +9505,343 @@ Changes:
 Tests: `buyer-workspace.test.ts`, `api/store/me/workspace.test.ts` (in-memory PostgREST stand-in that really filters: cross-buyer, token == session, revoked, expired bundle, no leak of media/private fields/offer messages, all-or-nothing project create, owned-but-delisted add), `BuyerBeatsWorkspace.test.tsx` (jsdom), `e2e/buyer-workspace.spec.ts` (1280 + 390; APIs stubbed).
 
 Not changed: a delisted owned beat cannot play here (the public preview route serves listed / featured-bundle beats only); the delivery page plays it. Offers are matched on the lowercased email the offer form stored, which is unverified at write time, so a buyer sees offers made under their address by anyone. The playlist section is still headed "My playlists".
+
+Merge note (BUYER-02 ↔ #62/#63/BUYER-04): main gained BUYER-04 (#60), the follow-ups (#63) and #62 (squashed) while this PR was open. #62 as merged already makes an owned, delisted beat playable in My beats and plays it through `/api/store/me/preview/[id]` (session or token), and already carries the e2e cookie-name fix and the 11px fix. Resolved by taking main's behaviour where they overlap and keeping BUYER-02's non-overlapping parts: `BuyerBeat.listed` (the title is not a dead `/store/[id]` link), verified-only offers (mig 139), "Projects" copy, the account layout's theme provider, and the owner fallback on the public preview/peaks routes (now a second path nothing in the UI depends on; two ownership checks, `loadBuyerOwnedTrackIds` and `buyerOwnsTrack`, worth consolidating).
+
+## 2026-10-14 - Label OS phase 2 (LABEL-43..78): orchestrator log
+
+Orchestrator: session_01U1hEgSEMBP1MAk65kDjAcW. Backlog: `docs/bstudio-label-os/23-engineering-backlog-phase-2.md`. Every task PR merges into `claude/happy-bardeen-rnosf3`, never `main`; no migration is applied to Supabase.
+
+- 2026-10-14 23:33 UTC — #125 (docs 21–24) squash-merged into the Label OS branch, `e8ee54ab303691ad131eed7356e83df8894ca6fe`.
+- 2026-10-14 23:34 UTC — LABEL-43 (migrations 162–164) started, session_01XomWvrxzd67FGQzax9EyM4. LABEL-45 (migration 168, disjoint files) started in parallel, session_011ULZD1PDrEVrwr2TKj2iDr.
+- 2026-10-15 — both children stopped on the weekly usage limit (LABEL-43 before opening its PR; LABEL-45 with PR #127 green). Restarted with send_message on 2026-10-17 08:22 UTC after the reset.
+- 2026-10-17 08:23 UTC — **LABEL-45 Done**: #127 squash-merged, `7b899221bd4000d7cd291c04cc881fff51031bcf`. Migration 168 regenerates the six `search_tsv` columns (`_ . - @ /` become spaces, NFKC); query words keep combining marks; search pages past hidden rows (up to 5 extra pages) so scoped members are not starved. Gate: 3 checks green on `a588f63`, scope = search store/route/tests + 168 migration/check/rollback + MIGRATIONS row.
+- 2026-10-17 08:23 UTC — LABEL-46 (migration 169) started, session_016m8GmEqNtNDD9vyoWvzEkA, in parallel with LABEL-43.
+- 2026-10-17 08:58 UTC — **LABEL-46 Done**: #128 squash-merged, `3451405d7284236229a73c2491c5c2fdc6095429`. Migration 169 adds `org_overview_seen (org_id, user_id)` (own-row read, service-role writes, removed when the member leaves, cascades from the org), backfilled from `user_profiles.last_seen_overview_at`, which stays as the pre-169 fallback. Gate: 3 checks green on `dec9a9f`; real-DB e2e `label-org-activity` 8/8 and `label-org-overview` 4/4 run locally by the child on request.
+- 2026-10-17 09:26 UTC — **LABEL-43 Done**: #129 squash-merged, `b7ec46d321911a69564c32d8b340995405b53460`. 162 column-level SELECT on `split_sheets` (note / created_by / circulated_by / document_asset_id unreadable on a member's own JWT); 163 audit `activity_events` rows immutable for every role (only the org-row cascade and the actor's account deletion pass); 164 `org_members` / `user_profiles` reads follow `mayListMember` through two uncorrelated helpers. Gate: 3 checks green on `a8d609d` (after a base merge for 168/169), independent read-only review found no blocking issue, child ran db:local:check and e2e:real-db (156 passed). Its "Found, not fixed" items were added to LABEL-75.
+- 2026-10-17 09:26 UTC — LABEL-44 (165–167) started, session_012j7fJ6jDULUKjERyue5MW1; LABEL-47 (170, phase B) started in parallel, session_01WnnJSAeJEwE2UPKBg9gXZS (disjoint surfaces; both depend only on 43).
+- 2026-10-17 18:41 UTC — **LABEL-44 Done**: #131 squash-merged, `a45f185733a4dc28425c81f8f2eda0aa414d1aad`. 165 `playlist_tracks` same-owner / same-org trigger; 166 one artist contact per artist-kind org (trigger-kept `org_self_artist` + partial unique index, 409 `ONE_ARTIST`); 167 tracklist lock on non-draft releases + member update compare-and-set (`p_expect`, 409 `MEMBER_CHANGED`) + `labelos_release_item_update` so every tracklist write locks the release before the item. The independent review found a deadlock (item PATCH vs reorder/remove) in the first head; fixed in `2fd5974` (release locked first, 40P01/40001 → 409). Gate: 3 checks green on `2fd5974`. Both children hit the five-hour limit twice today (restarted 13:22 and 18:22). Readiness-vs-claim window and the stale-cache fallback were added to LABEL-73.
+- **Phase A (LABEL-43..46) complete.**
+- PR #130 (another session, `session_01LD1pc25B2tmqHwzKLSmbKQ`, self-serve "choose your account type at sign-up" + migration 189) is not part of the backlog; left unmerged pending the owner's decision (self-serve vs licensed-only).
+- 2026-10-17 18:55 UTC — status PR #126 squash-merged, `2db2106a118ebbf33928bd3176666b9ca61b5882`.
+- 2026-10-17 19:26 UTC — **LABEL-47 Done**: #132 squash-merged, `e03a073ebf996649ae268011c11ade7b8182d634`. Migration 170: `platform_admins` (operator list, no API write path; the owner adds themself by SQL at final merge) and `org_entitlements` (licence per licensee; no row = everything the face allows); `has_org_cap` and `labelos_accept_invitation` redefined (module check for `contracts.read` / `finance.read`, owner invitations only from an operator, seat cap under a lock). Faces: independent = kind `artist`, label = kind `label`. Console `/platform` + `/api/platform/*`, 404 for everyone but an operator. Gate: 3 checks green on `2813bc8` (after a base merge for #126); independent read-only review found nothing blocking; its two small findings fixed before merge (unlist still allowed after the store module is withdrawn; a wrong policy comment). Cap races and the 154 connection-accept cap bypass were added to LABEL-73. Four product questions (seat counting, artist cap, face ceilings, licence-change feed line) are open for the owner in #132.
+- 2026-10-17 19:26 UTC — LABEL-49 (migration 171) started before LABEL-48, session_01Aj5ecD2rnQ5pVQCtWZaq45: the wizard's Departments step needs 49's functions, and 49 does not wait on the #130 decision.
+- 2026-10-17 23:22 UTC — status PR #133 merged (`b237890`). LABEL-49's child hit the five-hour limit after 5 minutes; restarted.
+- 2026-10-17 23:30 UTC — **Owner rules:** sessions already on Opus stay on Opus; every new child session runs on Sonnet 5.5. Every PR is verified in a running app before merge: a fresh local stack with all migrations (Label OS on), and the Vercel preview (the orchestrator checks it with the automation bypass secret; the preview uses the production database, so Label OS pages must 404/degrade, never 500).
+- 2026-10-17 23:42 UTC — **Owner answers on LABEL-47's decisions:** seats as built; the artist cap counts artist-role contacts only (a project link alone is "just a link"); no module barred for either face (faces differ in layout, not functions, later per client); `org.entitlements_changed` in the feed is fine. New owner idea recorded as LABEL-79 (proposed), being planned in PR #135.
+- 2026-10-18 11:21 UTC — **LABEL-49 Done**: #134 squash-merged, `e56f4f7f70cf639b47d6d66dc1e9738ec0cf1269`. Migration 171 redefines `has_org_cap` (170's body, new constants only): functions `pr`, `executive`, `artistic_director`, `contracts` and a preset for `finance`; capabilities `finance.write/approve`, `pr.read/write`, `exec.read`, `creative.read/approve`, `contracts.write/sign` (one `contracts.*` namespace, no `contract.*`), each module-gated; a roster artist can hold none (mutation-checked in TS, the SQL mirror and real Postgres). Shared `ActionMenu` now caps its height to the room on its side (`placeMenu`). Gate: 3 checks green on `9c8bac6`; fresh local stack e2e 8/8 (`e2e/label-org-departments.spec.ts`); preview checked by the orchestrator (store/login 200 at 1440 and 390, no app errors, Label OS 404 with the flag off); independent review: nothing blocking. **Note for the final merge:** any member row that already lists the `finance` function gains catalog.read, business.read.internal, finance.write and tasks.write when 171 is applied (the preset was empty before).
+- 2026-10-18 11:22 UTC — LABEL-48 put on hold: PR #130 (owner's session) now builds sign-up, org setup and team accounts (doc 25, migrations 189–190), which overlaps LABEL-48 and part of LABEL-50. PR #135's portal-upload migration moved to 191 to avoid #130's 190. LABEL-51 (migration 172) started on Sonnet, session_01XUukitVZqRKtu4UX1W4myN.
+- 2026-10-18 11:32 UTC — status PR #136 merged (`3cd175d`). PR #135 (portal uploads) renumbered its migration to 191 (189–190 are #130's).
+- 2026-10-18 12:44 UTC — **LABEL-51 Done**: #137 squash-merged, `945f23984cfc458c4d5101455327742a0bde063c`. Owner-only `/o/<slug>/settings/organization` + `GET|PATCH /api/org/[orgId]/settings` for `legal_gate`, `marketing_gate`, `require_signed_master_split`, `attention_*` days and departments on/off within the licence. Migration 172: `labelos_audit_org_settings` (merge under a row lock + `org.settings_changed` audit event in one transaction, service_role only), and `labelos_org_asset_allowed` replaced so "Contracts off" also hides restricted contract / split-sheet files from a member's own JWT. Draft releases show a banner when a gate is skipped. Gate: 3 checks green on `851ad56`; fresh local stack e2e 14/14 (settings + release board); preview checked by the orchestrator (store/login 200 at 1440/390, no app errors, Label OS 404 with the flag off); independent review found nothing blocking, its two findings fixed before merge (the RLS path above; the release page no longer 500s on a failed settings read). `has_org_cap` and the stale-`from` audit item go to LABEL-73/75.
+- 2026-10-18 12:44 UTC — LABEL-52 (no migration) started on Sonnet, session_01939RXhTx8r5quF2Efoz9nF. LABEL-48 and LABEL-50 stay on hold for the owner's call on #130.
+
+- 2026-10-19 04:47 UTC — PR #139 (LABEL-52) gated: 3 checks green on `6a40738` and the preview checked by the orchestrator. The independent review found nothing blocking in the five rules but sent back three items: release titles were returned outside the viewer's artist scope; artwork reads fetched the whole object on every board/readiness load; the legal queue kept songs that could only answer 409 `decided_on_release`. Fixed in `69f1e5a`.
+- 2026-10-19 — **Owner answers:** PR #130 is the owner's own task (not a replacement for LABEL-48/50), and the orchestrator gates and merges it. LABEL-48 and LABEL-50 are blocked on #130 and build on it. An org created at sign-up keeps every module and option; default limits come later with plans and prices.
+- 2026-10-19 04:55 UTC — PR #130 gated. CI green and preview clean (flag off: `/setup`, `/account/password`, `/api/org/setup` 404). The independent security review sent back three gaps, fixed in `0bd1c2e`:
+  - the forced password change is now enforced on the server (proxy plus org-access, `labelos_my_password_pending`);
+  - a team account cannot create or join another org (409 `team_account`);
+  - reset, switch-off and the person's own change revoke sessions (`labelos_revoke_auth_sessions`, inside the audited transaction).
+  Also an admin can reset or switch off another admin only when the caller is an owner. **Final-apply note:** confirm `postgres` may DELETE from `auth.sessions` on production.
+- 2026-10-19 05:00 UTC — **#140 merged** (`c2b9972`), the owner's LABEL-51 follow-up, no migration. The skip banner also shows on delivered releases, stating only the current setting. Contracts & legal cannot be switched off while legal approval is required (422; Save is blocked with the reason). The contracts e2e includes a member's own-JWT restricted-file read. The release-board test 3 failure seen locally does not reproduce on a fresh stack (a long-lived, piecemeal-restarted dev server); watch test 7 for a cold-compile flake.
+- 2026-10-19 05:37 UTC — **LABEL-52 Done**: #139 squash-merged, `cb191e7eedf82d503fd24d308a3cafd4c25b5699` (after merging base `c2b9972`; 3 checks green on `ab6a835`; preview checked). The five rules:
+  - `seen` (the gate's `snapshotKey`, handed only to deciders) is required to approve;
+  - a non-owner/admin approves only an open request addressed to them;
+  - song-level legal approval answers 409 once the song is on a live release, and the queue leaves it out;
+  - the artwork must be square, RGB and at least `artwork_min_px` (3000), read from the file head with a ranged read, drafts only;
+  - restricted counts are shown only to whole-org staff.
+  No migration. The route-only race goes to LABEL-73; small items go to LABEL-74/76.
+- 2026-10-19 05:38 UTC — LABEL-53 (migration 173) started on Sonnet, session_01MdzVrfyDLcpCD7bVXTgphD.
+- 2026-10-19 06:05 UTC — **#130 merged** (`0f62ce2`), the owner's own task. It adds the account type at sign-up, `/setup` + `POST /api/org/setup` (migration 189 `labelos_setup_org`), team accounts (migration 190 `org_managed_accounts` + its functions; server-side forced password change; team accounts cannot create or join another org; reset and switch-off revoke sessions; only an owner may reset an admin) and the admin centre `/o/<slug>/settings`. Gate: 3 checks green on `87fc28f` (after merging `cb191e7`); preview checked (flag off: `/setup`, `/account/password` and `/api/org/setup` 404); real-db e2e 44/44 reported. 189 and 190 are not applied (final merge, after 170–172). **Final-apply note:** confirm `postgres` may DELETE from `auth.sessions` on production. LABEL-48 starts on top of it.
+- 2026-10-19 06:05 UTC — LABEL-48 started on Sonnet, session_01SDgRGH4VkVHresRGGoh7sW. It builds on #130's `/setup` and `labelos_setup_org`; migration 192 may be used only if needed (next free number outside the backlog). LABEL-50 follows it.
+- 2026-10-19 10:05 UTC — **Owner decision: Label OS goes live.**
+  - Integrate claude/happy-bardeen-rnosf3 into main and merge when green.
+  - Apply the migrations to the PRODUCTION database through one SQL-editor bundle.
+  - Switch `LABEL_OS_ENABLED` on in production.
+  - The producer account (the owner's outlook.com login) must not change.
+
+  The go-live session (session_01N5iuXW7Y4hWLMnH8xmr76n, branch `release/label-os-into-main`) does four things:
+  - merges main in;
+  - builds `supabase/apply/labelos-go-live.sql` (pending 130–135 and 139_buyer, Label OS 136–172 and 189–190, the producer as platform operator, a verify table);
+  - proves it idempotent on a database in the production state, and proves the code safe both before and after the bundle;
+  - writes `docs/bstudio-label-os/go-live.md`.
+
+  The phase-2 backlog continues on the Label OS branch.
+- 2026-10-19 — **LABEL-48 Done**: #143 squash-merged at the owner's request (`8e6fd7b`).
+  - The setup wizard extends #130's `/setup`. Migration 192 replaces 189's `labelos_setup_org` with a 4-argument version that validates settings in SQL (`labelos_validate_org_settings_patch`, shared with 172), and ships with 189.
+  - The done screen shows each team login's password once. A retry after a lost response says plainly what was not added.
+  - Gate: CI green on `060a962`; the orchestrator checked the preview (flag off: /setup and /api/org/setup 404); independent review found nothing blocking.
+- 2026-10-24 13:04 UTC — **LABEL-53 Done**: #142 squash-merged, `09e69a4`.
+  - Migration 173 adds the org-only recording metadata columns plus `metadata_updated_at`, the compare-and-set token.
+  - `PATCH /api/org/[orgId]/songs/[trackId]/metadata` gates each field by its own capability (ISRC needs `release.write`).
+  - `notes` and `master_owner` are omitted for viewers without `catalog.write` or `business.read.internal`, and always for role `artist`.
+  - The readiness "no ISRC" blocker links to the editor for `release.write`.
+  - The review's false 409 on a second save (Z vs +00:00) was fixed before merge.
+  - Follow-ups: no tray editor for org songs; no ISRC uniqueness within an org.
+- 2026-10-24 13:05 UTC — **Owner report: sign-out.** Main's `e2c0dd9` (another AI) added a sign-out only to the producer dashboard, so org members (marketing etc.) had none in the org shell, and on main a non-producer lands in the buyer account. The fix (sign-out for every org role, correct landing after sign-in, Playwright journeys) is added to the go-live session's scope.
+- 2026-10-24 13:05 UTC — LABEL-54 (migration 174) started, session_01VdMEG5FGhGT7BkditBEft4. LABEL-50 (no migration; 193 if needed) started, session_01J9Cs4e12d1Khurw8sTDw9P. Both on Sonnet.
+
+## 2026-10-18 - PORTAL-UP: contact uploads through the portal link
+
+Owner request from the LABEL-47 decision round. Extends the artist portal (one contact, already has files, password, revocation, sign-in) rather than project shares (anonymous holder, no files). Plan: `docs/portal-contact-uploads.md`; PR #135 into `claude/happy-bardeen-rnosf3`.
+
+- Migration 191 (not applied; 189–190 are #130's): `project_contacts.can_upload`, `project_assets.uploaded_by_contact_id`, same-owner + linked-contact trigger. 172–187 are backlog reservations.
+- Routes: `POST /api/portal/[token]/files` (+ `/presign`, opaque upload id, never a storage reference in or out). PATCH link accepts `can_upload` (503 naming 191 before it).
+- UI: workspace Uploads switch and password set/remove; portal "Send a file" on the Files tab; "From <contact>" on the project page and workspace Files.
+- Notify / NEW / pulse ignore a contact's own uploads for that contact. Erasure deletes them.
+- Tests: `uploads.test.ts`, `files/route.test.ts`, local check 191, `e2e/portal-uploads.spec.ts` (3/3 on the local real-DB stack; artist-workspace 1–3 + portal-roles re-run green).
+- 2026-10-25 04:50 UTC — **Security: next 16.3.8 → 16.4.3** (GHSA-2464-fhr4-w9xw critical RCE in the image optimizer with SVG, plus GHSA-673q-mjm6-r5xr and GHSA-p3m5-59mp-jv5r). CI's `npm audit --audit-level=critical` step was failing on every PR.
+  - #146 merged into main (`81af0d3`, deploys production; production `/store` and `/login` answer 200 afterwards).
+  - #147 merged into this branch (`6034329`).
+  - `eslint-config-next` stays 16.3.8: 16.4 pulls eslint-plugin-react-hooks 7.1, which reports 138 errors and needs its own code pass. High and moderate audit items remain informational (`npm audit fix` crashes on an npm bug).
+  - Gate: 3 checks green on both heads; preview checked on both (`/store` 200, `/library` 307, `/o` and `/api/org` 404 with the flag off).
+- 2026-10-25 — PORTAL-UP (#135, migration 191) was merged into this branch by its own session (`96e9d94`). 191 is not applied; it joins the go-live bundle.
+- 2026-10-25 04:41 UTC — LABEL-54 opened #148 (migration 174, head `7b2a369`). It chose a lock trigger over a snapshot for party identity once a sheet has left draft. `finance.read` now opens Parties for the payee fields. Role `artist` loses legal data on credits, splits and parties.
+- 2026-10-25 — **LABEL-50 Done**: #145 squash-merged (`837ab51`).
+  - One Team and roster window (`TeamRosterEditor`) serves setup wizard step 3 and `/o/<slug>/settings/members`. It adds members (invite or team login), roster artists and collaborators.
+  - Roster rows: "Invite to sign in" (role `artist`, scoped to the existing contact, no duplicate). Collaborator rows: "Invite to a project".
+  - New `GET /api/org/[orgId]/projects` (`share.external`, whole-org viewers only). No migration.
+  - Gate: CI green on `5b92a4f`; preview checked; independent review found nothing blocking, and its regression (no login for an existing roster artist) was fixed before merge.
+- 2026-10-26 — **LABEL-54 Done**: #148 squash-merged (`f7882dd`), migration 174 (not applied).
+  - Party payee data: `tax_id` needs `rights.write` or `finance.read`; `payment_instructions` needs `finance.read` only, so nobody can read them without the finance module (accepted per the spec).
+  - A lock trigger freezes a party's display name and linked account once a non-draft sheet names it. Deleting an auth user is still allowed.
+  - Editing self-correctable fields or relinking resets "confirmed by the person".
+  - Role `artist` loses legal data on credits, splits, parties, party search and readiness reasons (views and RLS).
+  - Gate: CI green on `73b39f8`; preview checked; independent review fixes applied before merge.
+- 2026-10-25 — LABEL-55 (migration 175) started on Sonnet, session_01B78NKcfVzPhjTMAuMGinJ2, PR #150. The next reserved number is 176 (LABEL-57).
+- 2026-10-25 — **Go-live PR #149** (release/label-os-into-main → main) reported.
+  - It contains the bundle `supabase/apply/labelos-go-live.sql` (130–173, 189–192), a production-state rehearsal, both-order safety and sign-out for every org role.
+  - It is under an independent review. 174+ ship as a second paste.
+- 2026-10-25 — **Owner report: library WAV uploads crawl (~20 KB/s) with "Chunk N retrying".**
+  - Cause, reproduced locally: `@aws-sdk/client-s3` 3.1022 presigns `UploadPart` URLs with `x-amz-checksum-crc32` + `x-amz-sdk-checksum-algorithm` (default `requestChecksumCalculation: WHEN_SUPPORTED`). R2 rejects each 8 MiB part after it is sent.
+  - Fix in progress (session_01AZYEkfBpQvzmvfQKBtdN31, branch `fix/upload-slow` → main): set `WHEN_REQUIRED` on the S3 client.
+- Follow-ups noted:
+  - `ui/Dropdown` (z-[200]) renders behind `ui/Modal` (`--z-modal` 240).
+  - Saved-view credit/split filter clauses still key on `rights.read`, so role `artist` can filter by credited names.
+  - eslint-plugin-react-hooks 7.1 needs a code pass.
+- 2026-10-26 — **Upload speed fix live** (#152 → main, `801a3b2`). The r2 S3Client now uses `requestChecksumCalculation`/`responseChecksumValidation: 'WHEN_REQUIRED'`. A presign test guards against the checksum params coming back. The tray's retry text shows the real HTTP status / S3 code and whether the upload is direct or proxied. Waiting on the owner's WAV test.
+- 2026-10-26 — **Label OS go-live merged into main**: #149, merge commit `584b212`.
+  - Gate:
+    - CI green on `a18ec79`; preview checked.
+    - Independent HARD review: safe to merge; bundle byte-identical to its generator; no write to existing producer rows.
+    - Cold rehearsal reported: 63/63 applied twice, fingerprints identical, guard refusals.
+  - Production already has `LABEL_OS_ENABLED=true` (`/o` and `/setup` redirect to login and `/api/org` answers 401 after the deploy). The owner still has to run the go-live.md pre-checks and paste `supabase/apply/labelos-go-live.sql` (130–173, 189–192). 174+ ship in a later rebuilt paste.
+- 2026-10-26 — **LABEL-55 Done**: #150 squash `99f7c49`, migration 175 (not applied).
+  - Adds a New release form, a master chooser (D4-filtered), a per-row master / explicit editor, and release distributor / territories / language.
+  - Single-release routes degrade without 175; writes naming the new fields answer 503 naming 175.
+  - The metadata approval snapshot includes the new fields.
+  - Gate: CI green on `958aca6`; preview checked; independent review fixes M1/M2/L1/L3 applied before merge.
+- 2026-10-26 — LABEL-56 started (session_01EsNbV2xZ8ChWsGtjbL7474, no migration) and LABEL-57 started (session_01DCscGqX56BBP54VFWPemjL, migration 176), both on Sonnet. Next reserved: 177 (LABEL-59).
+- Follow-ups noted:
+  - LABEL-34 export lacks distributor / territories / language.
+  - Deliver does not pre-fill the planned distributor.
+  - The New-release artist list uses main-role artists only.
+  - CI e2e `timeout-minutes` raised 15 → 25 in this status PR: runs take ~12–15 min and were cancelled at the limit (twice on #151, once on #149).
+- 2026-10-27 — **CI e2e timeout raised 15 → 25 min**, on this branch (#151, `98e33d1`) and on main (#153, `1064cef`). Runs take about 12–15 min and were cancelled at the limit without a failing test.
+- 2026-10-27 — **LABEL-56 decisions (orchestrator):** migration **193** approved, the next free number outside the backlog; next free is now 194. A song whose only releases are drafts stays `working` until a release is DELIVERED, not when its gates turn green, because the gates are derived in TS and cannot be mirrored in SQL. Cancelled releases are ignored. The TS rule and its SQL twin (`labelos_track_is_finished`) carry parity tests. Without 193 the old rule applies; 193 ships in the second paste.
+- 2026-10-27 — **LABEL-56 Done**: #156 squash `4f4f642`, migration 193 (not applied; second paste). It adds the delivered-release withdraw (audited, unlists, keeps the record, put-back if the audit fails) and makes cancel draft-only. A song stays `working` until a release is delivered. Gate: CI green on `444df1e`; preview checked; independent review (not blocking); its four items were fixed before merge: a stray `public/uploads` WAV, a truncated test block, the put-back message, and the best-effort `release.store_unlisted` listed as an accepted deviation.
+- 2026-10-27 — **LABEL-57 Done**: #154 squash `a852419`, migration 176 (not applied; second paste). It adds the contract model, 14 platform templates and the template editor. Gate: CI green on `3302a30`; preview checked; independent review (not blocking). Fixed before merge:
+  - M1: column grants keep `internal_note`, `void_reason`, `created_by` and `voided_by` off API JWTs; a party or roster artist could otherwise read the internal note through RLS. The 176 check proves it.
+  - L1: party delete answers 409 when a contract names the party.
+  - L2: org contact delete gives the right message for a contract artist.
+  - L3: POST answers 503 when 174 is also missing.
+- 2026-10-27 — LABEL-58 started (session_019AUhHbkT7VPBpTf7EocUCZ, no migration; reuses pdfkit) and LABEL-71 started (session_019AUhHcTrzenYfjeqYpuTqL, migration 186 as reserved). Both on Sonnet. Next reserved is still 177 (LABEL-59, after 58).
+- 2026-10-27 — **LABEL-58 Done**: #158 squash `0bcd988`, no migration. Adds the contract editor, a pdfkit PDF stored as a restricted `contract` asset, and an audited send.
+  - Gate: CI green on `0925bab`; preview checked; independent review (not blocking). Fixed before merge:
+    - the PDF is filed only in the contract artist's own project;
+    - a sent contract always serves its frozen sent copy;
+    - `contract.send_failed` is recorded when the send claim is lost;
+    - a partially saved PATCH records its event and answers 409;
+    - older draft copies are deleted when a new one is filed;
+    - GETs answer `schemaReady: false` without 176;
+    - the asset PATCH refuses to declassify contract or split-sheet files.
+  - `pdfkit` moved to `serverExternalPackages`. This also affects the Stripe webhook's best-effort licence PDF; check a real licence PDF after the next main integration.
+- 2026-10-28 — **LABEL-71 Done**: #159 squash `6eea56c`, migration 186 (not applied; second paste). Adds artist consent on store listing: any credited artist's no unlists, and it stays unlisted until that artist says yes; no-store caching on governed releases.
+  - Gate: CI green on `8db767b`; preview checked. The independent review was BLOCKING. H1: a `rights.write` member could link a party to their own account, confirm it themself and answer as the artist. The first fix (confirmation-only) still allowed self-confirm. The final rule: a party never answers; only a role-artist scoped member, or an artist org's owner.
+  - Accepted deviation: an admin can invite an address they control as role artist (label orgs). Known gap: credited artists in the producer org are unreachable.
+- 2026-10-28 — LABEL-59 resumed after the usage limit (#160, migration 177). LABEL-72 started (session_019AUhHf7cB5hZ5AzMkogSjr, no migration reserved; 194 on request). LABEL-60 waits for 59 (both touch contract signing).
+- 2026-11-01 — **LABEL-59 Done**: #160 squash `cd0d9d9`, **no migration — 177 is released** (a contract already names its song, so the link is derived). It adds:
+  - a contract → draft split sheet pre-fill (drafts only; an existing draft is replaced only on request);
+  - drift between a live sheet and a sent or signed contract, derived on read and warned on both pages;
+  - `assertCanSign` for LABEL-60.
+  - Gate: CI green on `4bce528`; preview checked; independent review (not blocking). Fixed before merge:
+    - L1: the contract page's drift covers only sheets the caller can see, so the other sheets' existence is not disclosed (D2);
+    - L2: one shared `driftDetailFor` rule for both routes.
+  - Also fixes the test helper `pdf-text.ts`, which dropped a final CR byte from a compressed stream. That made `contract-editor.test` fail on some dates; it broke #161's CI on 2026-10-28.
+  - Noted for LABEL-60: `canSignContract` accepts a signed master sheet that disagrees with the contract.
+- 2026-11-01 — LABEL-72 resumed after the weekly usage limit (#162, no migration). LABEL-60 started at the owner's request (session_019AUhHfrxtwvQbCJYPndU7q, migration 178), branched from LABEL-59 just before it merged. Next reserved: 179 (LABEL-62).
+- 2026-11-01 — LABEL-61 started (session_019AUhHecUE3Bs5jsSUugPNK, migration 179): finance schema, permissions and money helpers only. Next reserved: 180 (LABEL-62).
+- 2026-11-01 — **LABEL-72 Done**: #162 squash `4592fdf`, no migration.
+  - What it adds:
+    - teaser listing before the release date, preview clips only;
+    - `full` derived from the release date on every read;
+    - full playback and listen-only project members stream a 128 kbps MP3 derivative in the private bucket (`orgs/<org>/derivatives/`), never the master;
+    - each Range response is capped at 1 MiB;
+    - a durable per-IP limiter (120/min) on public full playback.
+  - Gate: CI green on `5fe78c0` (one re-run for an `ArInboxView` timing flake outside the PR); preview checked; independent review not blocking.
+  - Accepted: a release listed `full` before this change needs a re-list to get its derivative. None exist on production (158 is not applied).
+  - Follow-ups (low):
+    - `clientIp` trusts the first `x-forwarded-for` entry, which is safe only on Vercel;
+    - the limiter caps volume, not scraping;
+    - the first-listen cut for external members has no negative cache and no `maxDuration`, and reads the whole master into memory;
+    - HEAD spends the limiter;
+    - a reversed range gets 416.
+- 2026-11-01 — **LABEL-60 Done**: #166 squash `17e770e`, migration 178 (not applied; second paste).
+  - What it adds:
+    - in-app signatures bound to the SHA-256 of the frozen sent copy's stored bytes;
+    - append-only `contract_signatures`;
+    - countersign by owner, admin or a `contracts.write` member;
+    - external signing links, emailed to the party and never returned to the issuer;
+    - a certificate page, supersede, and contract expiry on the calendar feed.
+  - Gate: CI green on `a6315c3`; preview checked (`/sign` is 404 with the flag off). The independent review was BLOCKING:
+    - H1: a `rights.write` member could link a party to their own account, self-confirm and sign as the artist. Fixed: `parties.user_linked_by` is recorded; signing needs a link made by someone else plus the party's own confirmation; the confirm route refuses the self-linker.
+    - M1: the issuer received the raw link token. Fixed: the link is emailed, no token is in any response, and the certificate names the issuer.
+    - Also fixed: L1 (void revokes links), L3 (scope in the GET view), L4 (no DELETE of a non-draft contract), L5 (the sent copy is re-hashed before it is served).
+    - L2 kept: the drift gate stays in Node; documented.
+  - Accepted residual: a member can link a second account they control, because there is no invitation-accept flow for party links yet. Existing party links have no recorded linker and must be re-linked before anyone can sign through them.
+- 2026-11-02 — **LABEL-61 Done**: #165 squash `b474c1f`, migration 179 (not applied; second paste).
+  - What it adds:
+    - eight finance tables with bigint minor units and a currency on every amount;
+    - RLS: `finance.read` plus artist scope for staff; role artist reads only their own ISSUED statements;
+    - integer money helpers (half-to-even rounding, largest-remainder allocation).
+  - Gate: CI green on `cd6f80e` (after merging LABEL-60); preview checked; independent review found no security blocker. Fixed before merge:
+    - M1: a user who wrote finance rows could not be deleted; the user columns may now only go to NULL.
+    - L1: contact delete has a finance message.
+    - L2: payee POST requires `artist_contact_id`, closing a re-point race.
+    - L3: int64 bounds on the money helpers.
+    - L4: documented that statement visibility follows `member_artist_scopes`.
+- 2026-11-01 — LABEL-73 started (session_019AUhHchpteAUmRDWbmX5fx, migration 187).
+- 2026-11-02 — LABEL-62 started (session_019AUhHc8KkPccemFofVqZfr, migration 180). Next reserved: 181 (LABEL-63).
+- Follow-ups:
+  - an invitation-accept flow for party↔account links;
+  - `contact-roles` real-DB e2e #3 failing locally (unconfirmed on base);
+  - `label-org-departments` e2e flake;
+  - LABEL-72 lows (XFF trust, derivative negative cache and `maxDuration`, HEAD spends the limiter).
+- 2026-11-02 — **LABEL-73 Done**: #168 squash `2ccf06d`, migration 187 (not applied; second paste).
+  - What it adds:
+    - one atomic SQL function family (change + audit event in one transaction) for: deliver (G7 + G10, raw `updated_at` fingerprint), import, store list/unlist (LABEL-71 consent re-checked under the lock; LABEL-72 derivatives still cut before the claim), org delete/restore/export and the digest channel;
+    - `approval_decide` checks addressee, live release, seen and the latest row;
+    - `has_org_cap` subtracts `departments_off`;
+    - seat and artist caps enforced under the `org_entitlements` lock, including the 154 connection accept;
+    - routes fall back to the previous path only on a missing function (PGRST202 / 42883 naming `labelos_audit_*`);
+    - the members route's six-argument fallback is kept (it is only reachable without 167).
+  - Gate: CI green on `3c3071d`; preview checked; independent review not blocking. `db:local:check` passed, including the dblink race checks, and the rollback is byte-identical to the previous definitions.
+  - Follow-ups (low):
+    - the approval "seen" key is computed before the lock;
+    - no TS↔SQL parity test for `departments_off`;
+    - a store list answering `not_found` does not drop promoted previews;
+    - `contacts_artist_cap` 23514 becomes a raw 500 for future writers;
+    - the approval tie-break uses id where the plan uses array order.
+- 2026-11-02 — LABEL-62 #169: orchestrator decision on royalties. A signed contract's royalty rate REPLACES the split share for that payee (never split × rate); lines whose shares exceed 100% go to review (`terms_exceed_gross`); the remainder is retained by the label. LABEL-65 #170 is in review.
+- 2026-11-02 — **LABEL-65 Done**: #170 squash `44bb802`, migration 183 (not applied; second paste).
+  - What it adds: release marketing plans (timeline, tasks, budget lines in integer minor units, platform checklist, asset requests to the artist with one recipient), an owner-only "plan required" switch that only counts while the marketing module is present, and plan milestones in the calendar feed.
+  - Gate: CI green on `f46424d`; preview checked; independent review found no High. Fixed before merge:
+    - M1: plan requirement without the marketing module;
+    - L2: one notification recipient;
+    - L3: the artist sees how to deliver an ask;
+    - L4: all plan events internal.
+  - Follow-up: the artist cannot mark an asset as received in-app.
+- 2026-11-02 — **LABEL-62 Done**: #169 squash `8302d8a`, migration 180 (not applied; second paste).
+  - What it adds: distributor CSV import (idempotent by file bytes), ISRC/UPC matching, allocation, recoupment, and a needs-review queue scoped to the member's artists.
+  - Gate: CI green on `31d64ba`; preview checked. The independent review was BLOCKING twice. Fixed before merge:
+    - income class per contract type;
+    - contract-only payees loaded;
+    - the song's artist = the Inbox contact only;
+    - the rate goes only to the receiving role (`RATE_TERMS`);
+    - a receiver with no payee → `no_payee` review, never retained silently;
+    - golden tests fail when their file is missing.
+  - **Royalty rule (orchestrator decision; owner may change):** a signed contract's rate REPLACES the split share for the receiving party; shares over 100 % go to review (`terms_exceed_gross`); the remainder is retained by the label.
+  - CI change: the Type-check step runs with `NODE_OPTIONS=--max-old-space-size=4096`, because tsc on the branch exceeds node's 2 GB default heap. Main needs the same change at final integration.
+- 2026-11-02 — LABEL-66 started (session_019AUhHdgtc1yjaLzBLRhKxP, migration 184). LABEL-63 started (session_019AUhHfmYhmCPwuv3PbWtUU, migration 181). Next reserved: 182 (LABEL-64).
+- Follow-up: `ArInboxView.test.tsx` "Escape abandons the note" timing flake (recurring) → LABEL-77.
+- 2026-11-02 — **LABEL-66 Done**: #172 squash `a0da509`, migration 184 (not applied; second paste).
+  - What it adds: release press kits, press contacts and a public press page by token with an embargo, and PR tasks. No private audio reaches a public route.
+  - Gate: CI green on `7f30782`; preview checked; independent review found nothing blocking.
+  - Follow-ups (low):
+    - a store teaser can reveal what the press embargo hides;
+    - the embargo page shows title and artist;
+    - ids appear in public JSON;
+    - the per-IP photo limit;
+    - the token sits in the page path;
+    - the link, photo and live-share caps are not atomic.
+- 2026-11-02 — LABEL-69 started (session_019AUhHbF14KRc9E5FH2NgNa, no migration). LABEL-68 started (session_019AUhHeNHwgaBP1ijwbN479, PR #176).
+  - Orchestrator decision: LABEL-68's migration moves from 185 to **194**, because it redefines 187's approval-decide and release-deliver functions and must sort after 187. Merged migrations are never edited. 185 is released; the next free number outside the backlog is 195.
+- 2026-11-02 — LABEL-63 CI: `src/lib/store/filters.test.ts:130` and `marketing/route.test.ts:296` failed once with order swaps (possibly unstable sort ties). Under investigation; LABEL-77 is the home if recurring.
+- 2026-11-03 — **LABEL-69 Done**: #175 squash `d3997f3` (no migration).
+  - What it adds: invite a collaborator to a project with a role (beatmaker, producer, rapper, feature, engineer); on accept, a credit is proposed for the invitee's own party, which they confirm themselves. "My sessions" on `/shared` groups their projects by org with what is waiting on them: a credit, a split line, a contract.
+  - Gate: CI green on `ace0e77`; preview checked; independent review NOT BLOCKING.
+  - Follow-ups (low):
+    - the compensating revoke is not audited;
+    - the collaborator intent is not in the invitation audit payload;
+    - a credit withdrawn within 2 minutes can be proposed again;
+    - a duplicate-by-name skip is silent;
+    - a contract ask may show without an issued signing link;
+    - `song_id` is not checked to be a song;
+    - storing the intent atomically needs a column (migration 195+);
+    - no resend-signing-link action;
+    - collaborator statements.
+- 2026-11-03 — **LABEL-63 Done**: #174 squash `9dde850`, migration 181 (not applied; second paste).
+  - What it adds: statements per payee per period (generate / approve / issue / void, PDF and CSV), payments recorded (never moved), payout CSV, and earnings import void. The artist sees only their own issued statements.
+  - Gate: CI green on `c9a0d2b`; preview checked; independent review NOT BLOCKING (totals = allocations − recoupments in SQL, append-only approval, void rules). Fixed before merge: the flaky 181 local check (amount regex vs UUIDs) and period creation probing only 179.
+  - Decisions: no "statement issued" notification for now; an import with no period never reaches a statement; an import into a period with an approved or issued statement is refused until it is voided.
+  - Follow-ups:
+    - the self-approval check is skipped once the generator account is deleted;
+    - no carry-forward of a negative net;
+    - exports show display names, not legal names.
+- 2026-11-03 — LABEL-70 (session_019AUhHdnLXe7mLCoov8wmhq, no migration) and LABEL-64 (session_019AUhHbQckpjX1sMdPkHon5, migration 182) started.
+  - LABEL-68's first review was BLOCKING: a creative gate left on after the artistic department was switched off or unlicensed blocked delivery. Fixed with `creativeGateEffective`; re-review pending.
+- 2026-11-03 — **LABEL-68 Done**: #176 squash `9d55067`, migration 194 (not applied; second paste).
+  - What it adds: a creative workspace reading direction, references, reviews, song stages and releases through the existing scope and D4 rules, and an optional creative approval release gate. The gate is OFF by default and owner-toggled. It is in force only while the artistic department is licensed and on (`creativeGateEffective`).
+  - Gate: CI green on `3d86ea0`; preview checked. The independent review was BLOCKING once (H1, fixed); the re-review was NOT BLOCKING.
+  - Follow-ups:
+    - saved-view filters cannot select the creative gate;
+    - the real-db `label-org-departments` 1440 "Approve statements" switch timeout is pre-existing (→ LABEL-77).
+- 2026-11-06 — LABEL-77 (session_019AUhHdvXtZepahKVJnTZZ9) started; also asked to root-cause the known flaky tests rather than hide them.
+- 2026-11-06 — **LABEL-70 Done**: #178 squash `3ab0215` (no migration).
+  - What it adds: one role-view table (`lib/labelos/role-view.ts`, `pageAllowed`) behind the nav, the page guards and the artist-shaped home tiles; a creative-workspace entry for `creative.read` with the artistic department on and licensed; independent-artist orgs no longer get the legal queue.
+  - Gate: CI green on `cb7b675`; preview checked; independent review (Sonnet) NOT BLOCKING. Fixed before merge: a dead `/ar` link on the creative workspace, six pages moved onto `pageAllowed` (statements skipped the finance licence; music/releases opened for a producer-kind org), nav "My statements" built from the same rule.
+  - Follow-ups: `/o/<slug>/artists` is a client page with no server guard; department staff still land on the label Overview; the org palette has no "My music" jump.
+- 2026-11-06 — **LABEL-64 Done**: #180 squash `9aaff9d`, migration 182 (not applied; second paste).
+  - What it adds: advances ledger (frozen once referenced), finance overview (per-payee position, per-release income vs cost), period close/reopen under the earnings lock; a closed period is immutable (import void, statement issue and void refuse `period_closed`; 182 redefines 181's three functions, defined by no later migration).
+  - Decisions: release cost = `spent` marketing budget lines (LABEL-65) until a general cost table exists; close refused with draft statements or review-waiting lines, payees without a statement only warn.
+  - Gate: CI green on `59c18e4`; preview checked; independent review (Sonnet) NOT BLOCKING. Fixed before merge: statement void/issue in a closed period, scoped dashboard readers no longer see spend/committed/margin, a voided statement no longer freezes an advance.
+  - Follow-ups: general cost table; income of a song on several releases is "ambiguous"; the dashboard filters after reading the whole org (SQL aggregate at scale).
+- 2026-11-06 — LABEL-74 + LABEL-75 started as one PR (session_019AUhHeidKKga8RUEDpPiLK, migration 195). 188 released. Orchestration now runs at most two children, with Sonnet reviews for Medium/High risk only.
+- 2026-11-07 — LABEL-74 + LABEL-75 in one PR (#182, migration 195, not applied).
+  - LABEL-74: the Slack digest uses `channelContent` (owner/admin reach minus `business.read.internal`, `audio.working`, `rights.read`; no Needs-attention list); sharing a saved view warns that its name is shown to every member; `/o/<slug>/artists` (layout) and `/releases/store` 404 through `pageAllowed`; `ensurePersonalOrg` runs only with `LABEL_OS_ENABLED`; the references cap counts only what the member can read (`referencesAtCap`); `releaseItemTitles` drops hidden songs and renumbers (no "Restricted song" line, no gap).
+  - LABEL-75: `org.created` is an audit verb (the prune skips it by verb, so existing rows are kept too); purge cron `maxDuration` 60 with a 45 s budget; `/api/store/releases` list, detail and cover are rate limited per caller; migration 195 = sole-owner `auth.users` delete guard, `split_lines` column grant, `activity_events` TRUNCATE guard, uncorrelated `activity_events_member_read`, `organizations` DELETE only past the 30-day grace.
+  - Side effect of the `organizations` guard: 21 local check files that delete an org now first set `deleted_at` 31 days back, and 137's rollback does the same. 155's plan probe names granted `split_lines` columns.
+  - Doc drift fixed: `contacts.artist_org_id` is `ON DELETE SET NULL` (it is `label_contact_id` that is RESTRICT); AGENTS.md marks `invites` / `team_members` legacy.
+- 2026-11-07 — **LABEL-74 + LABEL-75 Done**: #182 squash `506654b`, migration 195 (not applied; second paste).
+  - What it adds: the Slack digest from the artist-visible, non-restricted view; a warning when sharing a saved view's name; `/artists` and `/releases/store` 404 through `pageAllowed`; `ensurePersonalOrg` behind the flag; the references cap counts only readable references; restricted songs dropped from release tracklists. `org.created` is audit-class (195 redefines 170's console function so its event is audit too); purge cron budget; `/api/store/releases/*` rate limited; sole-owner account deletion refused; `split_lines` column grant; `activity_events` TRUNCATE guard; 147's read policy without per-row `has_org_cap`; an `organizations` row is deleted only 30 days after `deleted_at`.
+  - Gate: CI green on `ce0e52b`; preview checked; Low risk, no independent review. Fixed before merge: the console-created `org.created` event, purge vs the delete guard's clock (a refusal is "kept, retry tomorrow").
+  - Follow-ups: `org.created` rows written before 195 stay non-audit (163 forbids promotion; the prune skips the verb); a new local check that deletes an org must backdate `deleted_at`.
+- 2026-11-07 — **LABEL-67 Done**: #184 squash `bee57da`, no migration.
+  - What it adds: `/o/<slug>/exec` and `GET /api/org/[orgId]/exec[?format=csv]` for `exec.read` (label org, module `executive`): pipeline by stage, releases by month, blocked releases, approvals waiting, income vs cost, top songs, task load by department, audited CSV (`exec.exported`, written before any byte).
+  - Decisions (orchestrator): pipeline counts the songs in the reader's scope, numbers only; money, top songs and task load are whole-org readers only and come back as `withheld` for a scoped reader; label kind only; approvals waiting covers release gates only. Commits 27e50ef and 9f3e913 changed this before merge: counts include every song in the reader's artist scope regardless of audio class (numbers only; titles stay D4-filtered); #184's PR body still describes the superseded `restricted` count.
+  - Follow-ups: song-level legal requests stay in the legal queue; a person with several functions counts under one department; UPC-only earnings lines cannot appear in top songs.
+- 2026-11-07 — **LABEL-76 Done**: #185 squash `ea51d60`, migration 196 (not applied).
+  - What it adds: Overview at 390 px and an aligned 1440 header; org bar with the org name, home link and Sign out; Label OS panels on tokens plus a scoped `de-roche-archive` override layer; no UI-asks-server-refuses 403s; artwork checks (large JPEG headers read further, `no_request` before `seen_required`); the `artwork_min_px` settings field (196 redefines 192's `labelos_validate_org_settings_patch`, 600 to 10000).
+  - Decisions: a transparent PNG (alpha) fails the RGB rule; the archive theme is a scoped override layer, not a rewrite of the white-alpha utilities.
+  - Gate: CI green and the orchestrator's preview check before merge; the PR body's "first slice" wording is stale, it merged complete.
+- 2026-11-07 — **LABEL-77 Done**: #181 squash `5aa1007`, no migration.
+  - What it adds: `e2e:real-db` timeouts (expect 25 s, test 90 s) and marker-based discovery of the real-DB specs (58 files); service-key seeds replaced by the real routes where a UI exists; four named flakes root-caused (A&R note Escape race, `ui/Popover` top-edge clamp `fitPanelTop`, equal `created_at` ordering, check regexes); CI e2e states `LABEL_OS_ENABLED: 'false'`.
+  - Decisions: producer orgs keep the releases page; org cleanup in e2e is header-gated (`x-e2e-org-cleanup: 1`, service role only) because migration 195 refuses early org deletes; all 20 default specs kept; the real-DB suite is verified in chunks because one dev server degrades late.
+  - Follow-ups: no chunked runner; `clickWhenHydrated` uses a React internal key; screenshot churn under `e2e-artifacts/`.
+- 2026-11-07 — LABEL-78 docs (#186): `27-phase-2-report.md`, `28-migration-apply-order.md`, roadmap 4b, review groups G11 to G19, CLAUDE.md and AGENTS.md phase-2 text.
+- 2026-11-07 — **Migrations 130–196 applied to PRODUCTION** (owner, SQL editor, reported via the orchestrator; two pastes, both 0 errors).
+  - Paste 1: main's `supabase/apply/labelos-go-live.sql` (130–135, 136–173, `139_buyer_offer_email_verified`, 189–192, the operator step); its verify table ran.
+  - Paste 2: a `scripts/ops/bundle-migrations.sh` bundle from `claude/happy-bardeen-rnosf3`: 174, 175, 176, 178, 186, 179, 180, 181, 182, 183, 184, 187, 193, 194, 195, 196. No verify table exists for that range; "0 errors" is the evidence.
+  - Recorded in `supabase/MIGRATIONS.md` (rows 130–196 applied; row 159 added, it was missing), `CLAUDE.md`, doc 27 and doc 28 §0. `pending.sql` untouched. Follow-up: a post-hoc verify table for 174–196.
+  - Also in #186: LABEL-67's pipeline counts changed before merge (every song in the reader's artist scope, numbers only); #184's PR body is stale.
+- 2026-11-07 — Migrations 198–200 (review fixes G15, G16, G14; branch `fix/migrations-198-200`, NOT applied).
+  - 198: a voided earnings import's file can be imported again (partial unique index `WHERE status <> 'void'`; `labelos_earnings_import` looks only at live imports). The imports route imports it fresh; without 198 the unique violation is mapped to 409 `voided_file` naming 198.
+  - 199: press share create / revoke are audit class through `labelos_audit_press_share_create` / `_revoke` (change + event in one transaction, hash only); verbs added to `AUDIT_VERBS`; routes use `auditRpc` with the old path as fallback while 199 is unapplied (undone if the event cannot be written).
+  - 200: `parties_confirmation_reset` lists `email`, so SQL and TS `clearsConfirmation` agree.
+  - 197 left to G12b. `supabase/apply/pending.sql` untouched.
+- 2026-11-08 — Migration 201 (review G17, branch `fix/migration-201-consent-audit`, NOT applied).
+  - What it adds: `labelos_audit_consent_decide` and `labelos_audit_listing_veto`, so an artist's answer on store listing and the store owner's veto commit WITH their audit events (`listing.consent_decided`, `listing.vetoed`, `listing.veto_lifted`, and `release.store_unlisted` for a no on a listed release) in one transaction. Before, each was change-then-`recordEvent` with a put-back.
+  - Routes: the consent PUT and the connected-releases veto PUT call `auditRpc('consentDecide' | 'listingVeto')` and use the old path when `isMissingAuditRpc` (201 unapplied). Deleting promoted public previews (storage) stays in the route, after the commit. `store-consent.ts` rules unchanged (silence is not a no; one no withdraws; re-listing needs that artist's yes, still enforced by 187's `labelos_audit_release_store`).
+  - Decision: the artist-org copy of the veto event is now written inside the same function (it was best effort); a lost race on a `no` is followed by an enforce call (`p_from` NULL) so a standing no always ends with the release off the store. 146's check excludes the two new functions from its count.
+
+- 2026-11-09 — Library: Tags facet (status/mood/instruments/own tags, by name; `tag=` in the URL), Select opens All tracks, batch bar **New playlist** / **New project** / add to existing (`AddToCollectionModal`), and **Upload options** (type, state, tags, destination) applied on upload success. No migration; no API change. Tests: tag-filter, collect-selection, upload/preset, FilterBar jsdom.
+- 2026-11-11 — **Migrations 197–201 applied to PRODUCTION** (owner, SQL editor; the `3-label-os-migrations-197-200.sql` bundle then `4-label-os-migration-201.sql`, both 0 errors). Ledger rows in `supabase/MIGRATIONS.md`, CLAUDE.md and doc 28 updated. Next free number 202.

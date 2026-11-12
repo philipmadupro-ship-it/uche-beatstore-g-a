@@ -10,3 +10,4 @@ export RESEND_FROM_EMAIL=studio@local.test
 export SHARE_MEDIA_TOKEN_SECRET=local-share-media-secret
 export E2E_REAL_DB=1
 export CRON_SECRET=local-cron
+export LABEL_OS_ENABLED=true

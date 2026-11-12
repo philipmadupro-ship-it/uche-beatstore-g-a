@@ -78,6 +78,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [uploadingHero, setUploadingHero] = useState(false);
   // A photo uploaded since the last save. Replacing it before saving discards
   // it, so picking three photos doesn't leave two orphans in the bucket.
@@ -172,6 +173,17 @@ export default function ProfilePage() {
     }
   };
 
+  /** Same hook as the TopBar menu: toast on failure, hard-nav to /login. */
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    const { error } = await signOut();
+    if (error) {
+      setSigningOut(false);
+      toast.error('Sign out failed', error);
+    }
+  };
+
   if (loading) return (
     <DashboardLayout>
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -209,11 +221,13 @@ export default function ProfilePage() {
                 {saving ? 'Saving…' : saved ? 'Saved' : 'Save profile'}
               </button>
               <button
-                onClick={() => signOut()}
-                className="flex h-9 items-center gap-2 rounded-full border border-white/[0.06] px-3 text-[11px] font-medium text-white/80 transition-all hover:border-red-400/30 hover:text-red-400"
+                onClick={handleSignOut}
+                disabled={signingOut}
+                aria-label="Sign out"
+                className="flex h-9 items-center gap-2 rounded-full border border-white/[0.06] px-3 text-[11px] font-medium text-white/80 transition-all hover:border-red-400/30 hover:text-red-400 disabled:opacity-50"
               >
                 <LogOut size={13} />
-                Sign out
+                {signingOut ? 'Signing out…' : 'Sign out'}
               </button>
             </div>
           }

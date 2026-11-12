@@ -17,6 +17,7 @@ import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { isUUID } from '@/lib/validate';
+import { isMissingOrgColumn } from '@/lib/auth/org-column';
 
 export type AdminClient = ReturnType<typeof createServiceClient>;
 
@@ -39,6 +40,9 @@ export type OwnershipOk = {
 export type OwnershipFail = { ok: false; res: NextResponse };
 export type OwnershipResult = OwnershipOk | OwnershipFail;
 
+/** Tables whose rows may belong to a Label OS org (`org_id`, migration 141). */
+export const ORG_SCOPED_TABLES: ReadonlySet<string> = new Set(['tracks', 'projects']);
+
 /**
  * Resolve the caller and confirm they own a row in `table` with `id`.
  * Returns the admin client + user id for follow-up writes, or a 401/403/404
@@ -54,15 +58,20 @@ export async function requireRowOwnership(
     return { ok: false, res: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) };
   }
   const admin = createServiceClient();
-  const { data: row, error } = await admin
-    .from(table)
-    .select('user_id')
-    .eq('id', id)
-    .maybeSingle();
+  // Org tables (LABEL-12/14): an org row carries the uploading member's
+  // user_id (NOT NULL), so when the producer uploaded it, user_id alone would
+  // hand a Label OS recording to every producer route — edit, list in the
+  // store, analyze, delete. Producer routes own producer rows only.
+  const orgScoped = ORG_SCOPED_TABLES.has(table);
+  const read = (columns: string) => admin.from(table).select(columns).eq('id', id).maybeSingle();
+  let { data, error } = await read(orgScoped ? 'user_id, org_id' : 'user_id');
+  // Before migration 141 there is no `org_id` and no org row to refuse.
+  if (error && orgScoped && isMissingOrgColumn(error)) ({ data, error } = await read('user_id'));
+  const row = data as { user_id?: string | null; org_id?: string | null } | null;
   if (error) {
     return { ok: false, res: NextResponse.json({ error: error.message }, { status: 500 }) };
   }
-  if (!row) {
+  if (!row || (orgScoped && row.org_id)) {
     return { ok: false, res: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
   }
   if (!row.user_id || row.user_id !== user.id) {

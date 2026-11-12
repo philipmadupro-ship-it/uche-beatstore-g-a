@@ -1,6 +1,6 @@
 # Antigravity — Product Spec
 
-Single-producer beatstore. The product is two things in one app:
+Single-producer beatstore (plus, behind a switch, a second product for labels and independent artists: see "Label OS" below). The beatstore is two things in one app:
 
 1. A **private dashboard** the producer uses to write, store, organise, and sell music.
 2. A **public storefront** buyers visit to discover, preview, and license that music — either one track at a time or as a whole project bundle.
@@ -26,6 +26,7 @@ The producer's workspace. Surfaces:
 | Surface | Purpose |
 |---|---|
 | `/library` | Vault. Flat list of every track. List / Grid / Portfolio views. Filter, sort, batch-select, batch-delete. **Browse** shows curated rows (WIP, Finished, each genre, In your store, Top rated…); a row's **See all →** opens All tracks with that row's filter and ordering applied. The Filters menu governs both views, and the view (Browse/All, filters, sort) lives in the URL, so a refresh or a bookmark keeps it. |
+| `/library` (filters and selection) | **Filters** cover type, genre, **tags** (status such as "Ready to send", mood, instruments and your own tags, with counts), state, stage, BPM, key, scale and rating. Within one tag group any selection matches ("Dark" or "Chill"); across groups all must ("Dark" and "Ready to send"). Pressing **Select** (it opens All tracks, the only list with checkboxes) and ticking tracks offers **New playlist**, **New project** (a plain collection, nothing is priced or listed — **Create pack** is the priced store bundle) and adding to an existing one. |
 | `/library/[id]` | Single-track drawer: metadata, BPM/key analysis, **chord detection with MIDI download**, tags, rating, waveform peaks, version history, comments. |
 | `/projects` + `/projects/[id]` | Active production. Group tracks into projects, set BPM/key targets, add stems, add to public storefront as a bundle. |
 | `/playlists` + `/playlists/[id]` | Curated sets for outreach — drag tracks into a playlist, share it, optionally feature on `/store`. |
@@ -58,7 +59,7 @@ Where buyers actually buy.
 | `/store/orders` | Order lookup by email — sends a magic-link-style token so a buyer without a persistent account can still find a past purchase. |
 | `/store/account` | Buyer sign-in — email magic link (Supabase OTP) or Google OAuth. Already-signed-in buyers redirect straight to `/store/account/me`. |
 | `/store/account/[token]` | Legacy 24h signed-token delivery view (pre-dates persistent accounts) — still the link post-purchase emails point at. Looks up purchases by email only, no session. |
-| `/store/account/me` | Persistent buyer account dashboard (session-gated). Purchases, listening history, favorites, and custom playlists that follow the buyer across devices — see "Buyer accounts" below. |
+| `/store/account/me` | Persistent buyer account dashboard (session-gated). Purchases, listening history, favorites, and custom playlists (shown as **Projects**) that follow the buyer across devices — see "Buyer accounts" below. |
 
 ### Artist portal (`/artist/[token]`)
 
@@ -82,6 +83,28 @@ Whatever the variant, the options the producer set are honoured on the page:
 - **Role** — commenters and editors get a "Leave feedback" / "Comment & edit" entry into the collaboration view (region-pinned comments, the editor); viewers do not.
 - **For sale** — Buy buttons on the client variant only when `sales_enabled`.
 
+### Label OS (`/o/<org>/…`, behind a switch)
+
+A second product built on the same app, **off unless `LABEL_OS_ENABLED` is set** (off = the beatstore exactly as above; every `/o/…`, `/setup`, `/platform` and `/api/org/…` address answers "Not found"). Its database changes (migrations 130–196) were applied to production on 2026-11-07 (see `docs/bstudio-label-os/28-migration-apply-order.md` §0); the switch stays off until the owner turns it on. It lets a **label** or an **independent artist/producer** run their business in one place, so they need no other application. Detail: `docs/bstudio-label-os/` (decisions in 15 and 21, owner brief 22, report 27, owner test walkthrough 18).
+
+**Two kinds of customer.** An **independent artist/producer** (one person who is both) or a **label** (artists, beatmakers, producers, rappers, collaborators and staff). The platform operator (the owner) licenses the software to either, from a private console (`/platform`), and decides which modules each gets: contracts, finance, marketing, PR, executive, artistic direction, store, search, digest, export. With no restriction recorded, a customer gets everything their kind allows; paid plans come later. People can also sign up themselves, choose an account type and be walked through a setup wizard (`/setup`) that creates the organization, its choices (which contract types, which departments, which gates) and, optionally, logins for the team.
+
+**Who sees what.** The menu and home follow the kind of account, the person's role, their functions and the licensed modules. The roster **artist** sees their own music, releases, splits, contracts, statements and open asks, and never the label's internal notes, money or co-writers' contact details. Staff see the whole label or only the artists they were given. Outside collaborators (beatmaker, producer, rapper, feature, engineer) are invited to one song or project, confirm their credit and their split, see their own contract and statements, and list their sessions across labels at `/shared`. Working audio (demos, loops, stems) is separated from finished music: marketing and the executive hear finished music only. Any page a person may not open answers "Not found".
+
+**Departments, all actionable.** A&R (inbox, reviews, stages), legal (queue, contracts, approvals), finance, marketing, PR, executive ("the big boss"), artistic direction, producers, collaborators and operations.
+- **Songs, credits and splits.** Recording and song metadata (ISRC, ISWC, language, P-line…), parties with their rights details, credits that the credited person confirms or disputes, and split sheets that must add up to exactly 100 % (shares are exact integers, never floats).
+- **Releases.** A release is built from songs with a master chooser, then passes seven gates (tracklist, masters, credits and splits, legal, artwork, metadata, marketing) plus an optional creative gate. Approvals are append-only and become stale if the thing approved changes. Only an owner may deliver past an open gate, with a written reason, audited. A delivered release can be withdrawn.
+- **Contracts.** Every contract type has a template (placeholder wording to be replaced by counsel). A contract is filled in, turned into a PDF, sent, and signed **in the app** by each party (the page says this is not a qualified electronic signature). Splits and contracts are linked: a signed sheet that disagrees with its contract blocks signing.
+- **Finance.** Import a distributor earnings file (a re-import changes nothing), match lines to recordings, allocate by splits and contract terms, recoup advances, produce a statement per payee per period, approve, issue and mark it paid, export a payout file. A dashboard shows each payee's position and each release's income against cost; periods can be closed. **The app never moves money.** An artist sees only their own statements.
+- **Marketing and PR.** A plan per release (timeline, platform checklist, tasks, budget, asset requests to the artist) and a press kit with an embargo, shareable by link, plus an outreach tracker.
+- **Executive dashboard.** A read-only view across the whole roster: pipeline, releases by month, blocked releases, approvals waiting, income against cost, top songs, workload by department, with an export. It follows the same access rules as everything else.
+- **Artistic direction.** One workspace across each artist's direction, references, reviews, song stages and releases.
+- **Overview, search, filters.** A "since your last visit" feed per organization, a Needs-attention list, full-text search, saved views and a weekly digest by email or Slack.
+
+**The artist has the final say on the store.** A label can list a release (or ask for a showcase) on the beatstore's public store only if every credited artist has not said no; one artist's no withdraws it and it cannot come back without their yes. A listed release plays previews until its release date, then the full song as a lower-quality copy, never the master. (A showcase of past songs is not built yet.)
+
+**Safety rules the product keeps.** Account deletion is blocked for the only owner of an organization; an organization is deleted after a 30-day grace period and can be restored in that time; an owner can export everything the organization holds; audit records of sensitive changes are never altered or pruned.
+
 ---
 
 ## Core flows
@@ -90,6 +113,8 @@ Whatever the variant, the options the producer set are honoured on the page:
 Drag/drop file in `/library` → R2 multipart upload (`/api/upload/{init,part,complete,abort}`) → Essentia.js BPM + key extraction → AudD danceability + energy → row written to `tracks` with `audio_url`, peaks JSON, computed metadata → realtime channel (`useRealtimeTable`) refreshes the library.
 
 The filename is read as metadata, not just a title: `Night Shift 140 Fm.wav` becomes the track *Night Shift* at 140 BPM in F minor. What the producer wrote wins over what the analyser detected, because a detector regularly halves a tempo or names the relative major. A name that says nothing is left alone, and the tray shows what was read so a wrong name is visible immediately. A name that says two things — two tempos, two keys — or whose "key" could just as well be a word (`BB gun`) is not guessed at: nothing from it is applied, the analyser's reading stands, and the tray offers each reading as a one-click choice, marking the one the analyser heard too. When a clear filename and the analyser disagree (140 in the name, 97 heard), the name still wins, but the tray says so and offers the analysed value in one click. Half- or double-time and relative major/minor are not treated as disagreements, since those are the analyser's usual slips. A value the producer sets there is never overwritten by the background analysis that finishes afterwards.
+
+**Upload options.** Before the files go up, **Upload options** (next to *Upload beat* in the Library, and on every drop zone) sets what happens to each file the moment it finishes: its type, its state (MAQ / WIP / Finished / Archived), any tags — status ("Ready to send"), genre, mood, instruments — and an existing project or playlist to put it in. Only the type is remembered between visits; the rest are cleared on reload so one session's tags never silently stick to the next. A step that fails (a tag, say) is reported by name; the upload itself still counts as done.
 
 Uploads run in the persistent **Uploads tray**, which is mounted globally and survives navigation. Once a file finishes, its row **names and tags the track it just created, in the tray** — the moment the producer still knows what the file is. Without that, a beat lands in the library titled `beat_final_v3_140.wav` and fixing it means finding it again later. A row that finished without a track id (a `/complete` that returned nothing) shows no editor rather than one bound to nothing.
 
@@ -116,7 +141,7 @@ Either type `?promo=CODE` in any `/store/checkout*` URL, or enter it in the cart
 ### Buyer accounts (persistent, opt-in)
 A buyer can sign in at `/store/account` (Supabase magic-link OTP or Google OAuth — the same auth system the producer uses) to get a library that follows them across devices: favorited tracks, listening history (last 100 plays), and custom playlists built from anything free/previewable/licensed. All three are keyed on the buyer's **email**, not a producer-scoped `user_id` — there's exactly one producer, so no scoping is needed. Writes only ever happen through `/api/store/me`, which is the sole path into `buyer_favorites` / `buyer_listening_history` / `buyer_playlists` (RLS blocks direct PostgREST access; see migration 060). This coexists with — and is separate from — the older `/store/account/[token]` flow: a 24h signed token, no real session, used by post-purchase delivery emails to resolve "purchases for this email" without requiring sign-in. Both views read the same email-keyed rows, so no merge step is needed: signing in with the email a purchase was made under shows that purchase, plus the same favourites, history and playlists the token page shows. The delivery page says so and links to sign-in, since its link expires and the account doesn't.
 
-**My beats.** `/store/account/me` opens with the buyer's own library: every beat they own (a license, or a track of a bundle they bought) and every beat they have made an offer on, in one list with a status. It searches, filters (All / Owned / Requested), sorts (Newest, Title, BPM, Key) and plays through the store's player bar. A line under the heading says what their owned beats have in common — tempo range, most common key and type — worked out from what they own, never asked for. Ticking beats and pressing **Create project** makes a buyer playlist from them, which then lives under My playlists. A refunded purchase owns nothing. A beat the producer has delisted (an exclusive that sold) stays in the list for its owner and still plays, as the preview clip, with an Open link to the delivery page.
+**My beats.** `/store/account/me` opens with the buyer's own library: every beat they own (a license, or a track of a bundle they bought) and every beat they have made an offer on, in one list with a status. It searches, filters (All / Owned / Requested), sorts (Newest, Title, BPM, Key) and plays through the store's player bar. A line under the heading says what their owned beats have in common — tempo range, most common key and type — worked out from what they own, never asked for. Ticking beats and pressing **Create project** makes a buyer playlist from them, which then lives under **Projects** on the same page (the buyer-facing word for a buyer playlist is *project*, including in the storefront's "Add to project" menu). A refunded purchase owns nothing. A beat the producer has delisted (an exclusive that sold) stays in My beats for its owner and still plays, as the preview clip, with an Open link to the delivery page; its title is plain text rather than a link, because the store page no longer exists for it. Nobody but its owner can stream a delisted beat. The "requested" rows are offers the buyer made **while signed in as themselves**; an offer sent without an account is still delivered to the producer but is stored as unverified and shows in nobody's My beats, so typing someone's address into the offer form cannot put an offer in their account.
 
 From `/store/account/me` a buyer can play any beat in the account — Recently played, Favorites, a playlist, or a beat they bought — in the same player bar the store uses. A bought beat plays even after an exclusive sale took it off the store; what streams is always the preview clip, and a refunded purchase plays nothing.
 
@@ -170,6 +195,8 @@ In the portal the artist plays beats, downloads where the producer allowed it, a
 
 **Messages and requests.** The workspace's Messages tab is one conversation with the artist, outside any project. What the producer writes appears in the artist's portal and is also emailed — unless the artist is on the portal right now, or already has an email about a message they have not read, so a run of messages is one email. The producer sees when a message was seen. An artist can ask for something ("something darker, around 140"), optionally about a project; open requests show at the top of the workspace and of the Messages tab, and marking one Done or Declined shows in the portal.
 
+**Uploads from the contact.** On the workspace's Projects tab, **Uploads** (off by default, per project) lets the contact send their own files and recordings into that project from their portal link — no account. A file they send appears on the project page and in the workspace Files tab marked "From <name>", the producer gets a notification, and in the portal it shows as "Sent by you". The link can also carry a password (workspace ⋯ → **Set a password…**), asked before the portal opens; setting or removing it keeps the same link.
+
 **Email sign-in.** In the portal menu, **Require email sign-in** makes the link open a "confirm it's you" screen. The artist asks for a sign-in link, which goes to the address on their contact (never one the visitor types), and opening it keeps that browser signed in for 30 days. Reissuing the link, or changing the artist's email, signs everyone out.
 
 **Daily digest.** Notify stays a button by default. Turning on **Daily digest** for an artist hands that button to a once-a-day email: sent only when something is new, never more than once a day, and never on top of a Notify the producer pressed that day.
@@ -179,6 +206,8 @@ In the portal the artist plays beats, downloads where the producer allowed it, a
 **A tab per role.** /contacts has **Artists · Producers · Labels & A&R · Other contacts**. A contact has a main role and can have one more ("Role: Artist · Also: Producer" on the contact page), and shows in the tab of each, badged with the other. Each tab puts first what that relationship is about: Artists keep the workspace cards (and list artists who have no workspace yet); **Labels & A&R** work the same way — a workspace and portal per label shown as cards, and labels without one listed underneath with the toplines, songs and packs sent and **Send toplines** / **Send a pack**; **Producers** show what loops and beats you have sent each one and the tracks you share credits on, with **Send loops**. Those buttons open the usual send flow already filtered to loops or toplines (one click clears the filter). Buyers, friends and everyone else stay under Other contacts.
 
 **Finding things.** ⌘K search labels a song with its artist, finds project files, and marks which contacts are artists. Projects are found by what is inside them too: /projects and ⌘K match a track in the project, an artist on it, a tag or its description, and say which ("Track · MIDNIGHT", "with Nova"). A track's credits show one entry per person ("Nova · Feature, Collaborator") and fold past three people behind "+N more". A credit on a track can be linked to a contact, which puts the track in that artist's workspace, and a contact can have a photo.
+
+**Lease MP3 delivery.** A lease tier delivers an MP3. When the track's master is a WAV (or flac, aiff, m4a, ogg) the MP3 is made from it — at upload, or the first time a buyer downloads it. The track drawer's **Delivery** section shows whether it is ready (an MP3 master is ready as it is), and **Make MP3 now** makes it before any buyer asks, so the first buyer does not wait and a problem with the conversion shows up for the producer first. If it cannot be made, the buyer is told it is being prepared and the producer gets one alert for that track.
 
 **Linked material.** The pieces of one record are linked in the track drawer's **Linked** panel: a song to its beat, its instrumental and the loops it uses; a beat to its loops and a topline written on it; any track to an alternate version. Loop and topline are track types of their own. The panel sits under Asset Intelligence and lists recent tracks before anything is typed, the kinds that fit first; type part of a name — or a kind, like "loop" or "topline" — and click a result to link it; what it is (Beat, Instrumental, Loop, Topline, Version) is picked from its type and can be set by hand. Every link shows from both sides — a loop lists the beats and songs that use it. **Download all** gives one zip of the track and everything linked (WAV where there is one), with a README saying what each file is; **Share all** makes one share link of the set with downloads on; **Send to…** sends the set to a contact.
 
@@ -267,6 +296,8 @@ license_purchases(id, seller_user_id, buyer_email, buyer_stripe_customer,
                   amount_usd, stripe_session_id, stripe_payment_intent,
                   status[paid|refunded|disputed|failed], download_unlocked,
                   fulfillment_email_sent, created_at, updated_at)
+buyer_offers(id, seller_user_id, track_id, buyer_email, buyer_email_verified,
+             offered_price_usd, status)   -- verified = made while signed in as buyer_email
 promo_codes(code, seller_user_id, discount_percent, discount_amount,
             active, expires_at, max_uses, uses_count, created_at)
 processed_stripe_events(event_id, processed_at)
@@ -276,13 +307,13 @@ track_collaborators(track_id, name, role, source, contact_id)
 stems(track_id, job_id, status, vocals_url, drums_url, bass_url, other_url)
 calendar_events(id, user_id, title, date, end_date, type, track_ids[],
                 notes, color)
-invites(email, role, token, expires_at, used_at)
-team_members(user_id, role[owner|admin|collaborator], email, name)
+invites(email, role, token, expires_at, used_at)      -- legacy (migration 001), no code reads it
+team_members(user_id, role[owner|admin|collaborator], email, name)  -- legacy (001), no code reads it; teams are org_members (Label OS)
 rating_history(track_id, user_id, rating, rated_at)
 
 buyer_favorites(email, track_id, created_at)
 buyer_listening_history(id, email, track_id, played_at)
-buyer_playlists(id, email, name, created_at, updated_at)
+buyer_playlists(id, email, name, created_at, updated_at)   -- shown to the buyer as "Projects"
 buyer_playlist_tracks(playlist_id, track_id, position, added_at)
 ```
 
@@ -328,7 +359,7 @@ Text and borders are **white at alpha**, never warm hexes — that is what keeps
 ## What we explicitly don't do
 
 - No *required* accounts for buyers — purchasing never demands sign-in, and email at checkout is still the only identifier a one-time buyer has to give. Persistent buyer accounts exist as an *opt-in* (see "Buyer accounts" above) for anyone who wants a saved library across devices, not as a purchase gate.
-- No multi-tenant producer model (yet). Single `creator_profiles` row drives the store.
+- No multi-tenant producer model for the beatstore. A single `creator_profiles` row drives the store. (Label OS organizations are multi-tenant, but separate from the store and off by default.)
 - No subscriptions. Every sale is a one-time payment.
 - No Radix / Headless UI / shadcn. Primitives are hand-rolled.
 - No CDN font imports. The three faces (Akira, Synkopy, Panchang) ship from `/public/fonts`.

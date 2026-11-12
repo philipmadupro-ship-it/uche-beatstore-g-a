@@ -28,6 +28,7 @@ import {
 import { deriveRelationshipStage, isWorkspaceMode, type Relationship } from '@/lib/contacts/relationship';
 import { availableAt, countUnnotified, isNewSince, type NotifyCount } from '@/lib/artist-portal/new-items';
 import { assetAvailableAt } from '@/lib/projects/assets';
+import { loadAssetUploaders, loadUploaderNames } from '@/lib/artist-portal/uploads';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
@@ -65,6 +66,8 @@ export interface ProjectLinkRow {
   created_at: string;
   /** Mig 135: the pitch shown to a label for this project; null when missing. */
   pitch_note?: string | null;
+  /** Mig 191: the contact may upload into this project from their portal; false when missing. */
+  can_upload?: boolean;
 }
 
 export interface PortalRow {
@@ -123,6 +126,11 @@ export async function loadArtistLinks(admin: Admin, userId: string, contactId: s
     const { data, error } = await admin.from('project_contacts').select('project_id, pitch_note').eq('contact_id', contactId).eq('user_id', userId);
     const notes = new Map(error ? [] : ((data ?? []) as Array<{ project_id: string; pitch_note: string | null }>).map((r) => [r.project_id, r.pitch_note]));
     for (const l of links) l.pitch_note = notes.get(l.project_id) ?? null;
+    // Same again for mig 191's upload switch: missing reads as off.
+    const up = await admin.from('project_contacts').select('project_id, can_upload').eq('contact_id', contactId).eq('user_id', userId);
+    const uploads = new Set(up.error ? [] : ((up.data ?? []) as Array<{ project_id: string; can_upload: boolean | null }>)
+      .filter((u) => u.can_upload === true).map((u) => u.project_id));
+    for (const l of links) l.can_upload = uploads.has(l.project_id);
   }
   const portal = portals[0] ?? null;
   if (portal) {
@@ -186,6 +194,10 @@ export interface WorkspaceFile {
   isNewForArtist: boolean;
   /** When this artist last downloaded it from the portal. */
   downloadedAt: string | null;
+  /** Sent by THIS artist through their portal (mig 191). */
+  fromArtist: boolean;
+  /** Sent by another contact through their portal: their name; null otherwise. */
+  uploadedByName: string | null;
   downloadUrl: string;
 }
 
@@ -295,6 +307,9 @@ export async function loadWorkspace(
 
   const projectById = new Map(projects.map((p) => [p.id, p]));
   const linkById = new Map(links.map((l) => [l.project_id, l]));
+  const uploaders = await loadAssetUploaders(admin, userId, assets.map((a) => a.id));
+  const otherUploaders = new Map([...uploaders].filter(([, c]) => c !== contact.id));
+  const uploaderNames = await loadUploaderNames(admin, userId, otherUploaders);
 
   // Every track this artist is connected to, by any route.
   const trackIds = new Set<string>();
@@ -436,7 +451,9 @@ export async function loadWorkspace(
     projectTracks
       .filter((pt) => portalLinks.some((l) => l.project_id === pt.project_id))
       .map((pt) => ({ projectId: pt.project_id, trackId: pt.track_id, addedAt: pt.added_at })),
-    portalAssets.map((a) => ({ projectId: a.project_id, fileId: a.id, portalAt: a.portal_at ?? a.created_at })),
+    // A file this artist sent is not news to them.
+    portalAssets.filter((a) => uploaders.get(a.id) !== contact.id)
+      .map((a) => ({ projectId: a.project_id, fileId: a.id, portalAt: a.portal_at ?? a.created_at })),
   );
 
   const fileDownloads = new Map<string, string>();
@@ -461,8 +478,10 @@ export async function loadWorkspace(
         size_bytes: a.size_bytes == null ? null : Number(a.size_bytes),
         in_portal: a.in_portal,
         created_at: a.created_at,
-        isNewForArtist: a.in_portal && !!link?.in_portal && isNewSince(visibleAt, portal?.last_viewed_at),
+        isNewForArtist: a.in_portal && !!link?.in_portal && uploaders.get(a.id) !== contact.id && isNewSince(visibleAt, portal?.last_viewed_at),
         downloadedAt: fileDownloads.get(a.id) ?? null,
+        fromArtist: uploaders.get(a.id) === contact.id,
+        uploadedByName: otherUploaders.has(a.id) ? uploaderNames.get(otherUploaders.get(a.id)!) ?? null : null,
         downloadUrl: `/api/projects/${a.project_id}/assets/${a.id}/download`,
       };
     });

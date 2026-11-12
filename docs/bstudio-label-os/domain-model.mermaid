@@ -1,0 +1,99 @@
+%% BStudio Label OS — domain model, reconciled with main's Artist Workspace (#44) on 2026-10-01.
+%% See 17-reconciliation-with-artist-workspace.md. EXISTING = on main today; EXTEND = gains columns; NEW = Label OS.
+%% No songs / artists / files / comments / credits tables: those are tracks, contacts, project_assets,
+%% project_comments and track_collaborators.
+erDiagram
+    USERS ||--o{ ORG_MEMBERS : "belongs to many orgs"
+    ORGANIZATIONS ||--o{ ORG_MEMBERS : "NEW"
+    ORGANIZATIONS ||--o{ ORG_INVITATIONS : "NEW"
+    ORG_MEMBERS ||--o{ MEMBER_ARTIST_SCOPES : "limited to"
+    CONTACTS ||--o{ MEMBER_ARTIST_SCOPES : "artist scope"
+    ORGANIZATIONS ||--o{ ORG_CONNECTIONS : "label side (NEW)"
+
+    ORGANIZATIONS ||--o{ CONTACTS : "people directory (EXTEND org_id)"
+    CONTACTS ||--o{ PROJECT_CONTACTS : "artist workspace (EXISTING)"
+    CONTACTS |o--o| ARTIST_PORTALS : "portal (EXISTING)"
+    CONTACTS ||--o{ ARTIST_MESSAGES : "thread + requests (EXISTING)"
+    CONTACTS ||--o{ CONTACT_TRACK_STATES : "recipient decision (EXISTING)"
+
+    ORGANIZATIONS ||--o{ PROJECTS : "EXTEND org_id"
+    PROJECTS ||--o{ PROJECT_CONTACTS : "for artist"
+    PROJECTS ||--o{ PROJECT_TRACKS : "EXISTING"
+    PROJECTS ||--o{ PROJECT_ASSETS : "files (EXTEND)"
+    PROJECTS ||--o{ PROJECT_COMMENTS : "region comments (EXTEND)"
+    PROJECTS ||--o{ PROJECT_MEMBERS : "contributors (NEW)"
+    PROJECTS ||--o{ PROJECT_SHARES : "token links (EXISTING)"
+
+    ORGANIZATIONS ||--o{ TRACKS : "EXTEND org_id"
+    TRACKS ||--o{ PROJECT_TRACKS : "in project"
+    TRACKS ||--o{ SONG_BEATS : "song built on beats (EXISTING)"
+    TRACKS ||--o{ TRACK_LINKS : "instrumental loop topline version master demo"
+    TRACKS ||--o{ TRACK_VERSIONS : "file history (EXISTING)"
+    TRACKS ||--o{ TRACK_COLLABORATORS : "credits (EXTEND)"
+    TRACKS ||--o{ SONG_REVIEWS : "A&R reviews (NEW)"
+    TRACKS ||--o{ SPLIT_SHEETS : "song splits (NEW)"
+
+    ORGANIZATIONS ||--o{ PARTIES : "rights holders (NEW)"
+    PARTIES |o--o| CONTACTS : "same person"
+    PARTIES ||--o{ TRACK_COLLABORATORS : "credited"
+    SPLIT_SHEETS ||--|{ SPLIT_LINES : "sum to 100"
+    PARTIES ||--o{ SPLIT_LINES : "holds share"
+
+    ORGANIZATIONS ||--o{ RELEASES : "NEW"
+    PROJECTS ||--o{ RELEASES : "every release has a project"
+    RELEASES ||--|{ RELEASE_ITEMS : "tracklist"
+    TRACKS ||--o{ RELEASE_ITEMS : "song + master"
+    RELEASES ||--o{ APPROVALS : "gates (NEW)"
+    ORGANIZATIONS ||--o{ TASKS : "NEW"
+    ORGANIZATIONS ||--o{ ACTIVITY_EVENTS : "append-only (NEW)"
+
+    TRACKS {
+        uuid id PK
+        uuid user_id "EXISTING owner"
+        text type "beat|instrumental|song|remix|loop|topline"
+        uuid beat_track_id "EXISTING main beat"
+        uuid org_id "EXTEND"
+        text song_stage "EXTEND, songs only"
+        text isrc "EXTEND"
+        text iswc "EXTEND"
+    }
+    TRACK_LINKS {
+        uuid from_track_id FK
+        uuid to_track_id FK
+        text relation "instrumental|loop|topline|version + master|demo"
+    }
+    CONTACTS {
+        uuid id PK
+        uuid user_id "EXISTING owner"
+        uuid org_id "EXTEND"
+        text category "artist|producer|label|..."
+        uuid artist_org_id "EXTEND connection"
+    }
+    PROJECT_ASSETS {
+        uuid id PK
+        uuid project_id FK
+        text kind "+ photo video contract split_sheet session"
+        text sensitivity "EXTEND normal|restricted"
+    }
+    TRACK_COLLABORATORS {
+        uuid track_id FK
+        uuid contact_id "EXISTING"
+        uuid party_id "EXTEND"
+        text scope "EXTEND composition|recording"
+        text status "EXTEND proposed|confirmed|disputed"
+    }
+    RELEASES {
+        uuid id PK
+        uuid org_id FK
+        uuid project_id "NOT NULL"
+        uuid contact_id "artist"
+        text upc
+        text state "draft|delivered|cancelled"
+        boolean store_listed "released only"
+    }
+    RELEASE_ITEMS {
+        uuid release_id FK
+        int position
+        uuid song_track_id FK
+        uuid master_track_id FK
+    }

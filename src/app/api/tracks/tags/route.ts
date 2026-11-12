@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll } from '@/lib/db';
 import { requireUser, safeSellerId } from '@/lib/auth/ownership';
+import { withoutOrgRows } from '@/lib/auth/producer-rows';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { customVocabulary, type TagUsageRow } from '@/lib/tags/vocabulary';
@@ -38,10 +39,16 @@ export async function GET() {
       // is ~3.7KB of UUIDs in the query string and PostgREST rejects the URL.
       // `/api/store/facets` works around it by chunking, which is N requests
       // and still only moves the ceiling. The join has neither problem.
-      const { data, error } = await auth.admin
-        .from('track_tags')
-        .select('tag, category, tracks!inner(user_id)')
-        .or(`user_id.eq.${safeId},user_id.is.null`, { referencedTable: 'tracks' });
+      //
+      // The ownerless arm is for pre-ownership producer rows; an org's tracks
+      // are ownerless too, so they are excluded on the joined track.
+      const { data, error } = await withoutOrgRows((excludeOrg) => {
+        const q = auth.admin
+          .from('track_tags')
+          .select(excludeOrg ? 'tag, category, tracks!inner(user_id, org_id)' : 'tag, category, tracks!inner(user_id)')
+          .or(`user_id.eq.${safeId},user_id.is.null`, { referencedTable: 'tracks' });
+        return excludeOrg ? q.is('tracks.org_id', null) : q;
+      });
       if (error) throw new Error(error.message);
 
       return NextResponse.json({ tags: customVocabulary((data ?? []) as TagUsageRow[]) });

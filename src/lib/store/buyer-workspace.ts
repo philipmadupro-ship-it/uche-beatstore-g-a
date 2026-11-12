@@ -79,6 +79,8 @@ export interface BuyerBeat {
   /** License tier of the latest purchase; null for a bundle track or a request. */
   license: string | null;
   offer: BuyerBeatOffer | null;
+  /** The storefront lists it, so `/store/[id]` exists to link to. */
+  listed: boolean;
   /**
    * `/api/store/me/preview/[id]` will stream it: the buyer owns it (even after
    * an exclusive sale delisted it) or the store still lists it.
@@ -194,6 +196,7 @@ export function buildBuyerBeats(input: {
       since: claimed ? claimed.since : offer?.created_at ?? null,
       license: claimed?.license ?? null,
       offer: offer ? { status: offer.status ?? 'pending', price_usd: Number.isFinite(price) ? price : 0 } : null,
+      listed,
       playable: Boolean(claimed) || listed,
       canAddToProject: Boolean(claimed) || listed,
       openUrl: claimed?.openUrl ?? null,

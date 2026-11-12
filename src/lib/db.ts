@@ -35,7 +35,8 @@
 
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { createServiceClient, requireRowOwnership, requireUser } from '@/lib/auth/ownership';
+import { ORG_SCOPED_TABLES, createServiceClient, requireRowOwnership, requireUser } from '@/lib/auth/ownership';
+import { isMissingOrgColumn } from '@/lib/auth/org-column';
 import {
   isSupabaseConfigured,
   getAll,
@@ -204,40 +205,48 @@ export async function scopedList<T = unknown>(
   const { data: { user } } = await cookieClient.auth.getUser();
   const supabase = user ? createServiceClient() : cookieClient;
 
-  let q = supabase.from(table).select(select).order(orderBy, { ascending });
-  if (user) {
-    if (includeNullOwner) {
-      q = q.or(`user_id.eq.${user.id},user_id.is.null`);
-    } else {
-      q = q.eq('user_id', user.id);
+  // `excludeOrg` is dropped (once) when `org_id` does not exist yet: before
+  // migration 141 no org row can exist, so the plain read is the right one.
+  const build = (excludeOrg: boolean) => {
+    let q = supabase.from(table).select(select).order(orderBy, { ascending });
+    if (user) {
+      if (includeNullOwner) {
+        q = q.or(`user_id.eq.${user.id},user_id.is.null`);
+      } else {
+        q = q.eq('user_id', user.id);
+      }
+      // An org row carries its uploader's user_id; it is never the producer's (LABEL-14).
+      if (excludeOrg && ORG_SCOPED_TABLES.has(table)) q = q.is('org_id', null);
     }
-  }
-  if (extraEq) {
-    for (const [k, v] of Object.entries(extraEq)) {
-      q = q.eq(k, v);
+    if (extraEq) {
+      for (const [k, v] of Object.entries(extraEq)) {
+        q = q.eq(k, v);
+      }
     }
-  }
-  if (extraGte) {
-    for (const [k, v] of Object.entries(extraGte)) {
-      q = q.gte(k, v);
+    if (extraGte) {
+      for (const [k, v] of Object.entries(extraGte)) {
+        q = q.gte(k, v);
+      }
     }
-  }
-  if (extraLte) {
-    for (const [k, v] of Object.entries(extraLte)) {
-      q = q.lte(k, v);
+    if (extraLte) {
+      for (const [k, v] of Object.entries(extraLte)) {
+        q = q.lte(k, v);
+      }
     }
-  }
-  if (extraIn) {
-    q = q.in(extraIn.column, extraIn.values);
-  }
-  if (limit != null) {
-    q = q.range(offset, offset + limit - 1);
-  } else if (offset > 0) {
-    // Offset without an explicit limit — page from `offset` to PostgREST's
-    // own per-response ceiling.
-    q = q.range(offset, offset + 999);
-  }
-  const { data, error } = await q;
+    if (extraIn) {
+      q = q.in(extraIn.column, extraIn.values);
+    }
+    if (limit != null) {
+      q = q.range(offset, offset + limit - 1);
+    } else if (offset > 0) {
+      // Offset without an explicit limit — page from `offset` to PostgREST's
+      // own per-response ceiling.
+      q = q.range(offset, offset + 999);
+    }
+    return q;
+  };
+  let { data, error } = await build(true);
+  if (error && ORG_SCOPED_TABLES.has(table) && isMissingOrgColumn(error)) ({ data, error } = await build(false));
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

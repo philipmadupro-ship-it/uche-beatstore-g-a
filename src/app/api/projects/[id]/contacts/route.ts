@@ -11,6 +11,7 @@ import { isDecision } from '@/lib/contacts/decisions';
 import { isSchemaNotReady, schemaNotReadyResponse } from '@/lib/artists/http';
 import { portalUrl } from '@/lib/artists/portal-send';
 import { loadPortalAssets, toPortalFileRows } from '@/lib/artist-portal/files';
+import { filesForContact } from '@/lib/artist-portal/uploads';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -79,7 +80,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         const notify = countUnnotified(
           mine.map((x) => ({ projectId: x.project_id, linkedAt: x.created_at, lastNotifiedAt: x.last_notified_at })),
           portalTracks.filter((t) => mineIds.has(t.project_id)).map((t) => ({ projectId: t.project_id, trackId: t.track_id, addedAt: t.added_at })),
-          portalFiles.filter((f) => mineIds.has(f.projectId)),
+          filesForContact(portalFiles, l.contact_id).filter((f) => mineIds.has(f.projectId)),
         );
         const portal = portalOf.get(l.contact_id) ?? null;
         return {

@@ -26,13 +26,21 @@
 -- Idempotent (IF NOT EXISTS) on all DDL. Safe to re-run.
 
 -- ── 1. projects.user_id NOT NULL ────────────────────────────────
+--
+-- Label OS (142) amendment: an org project has user_id NULL on purpose
+-- (projects_org_or_owner) and is NOT an orphan. scripts/apply-migrations.sh replays every
+-- file, so the backfill below skips rows with an org_id. `to_jsonb(row) ->>
+-- 'org_id'` is used instead of the column because on a fresh database this
+-- file runs before 141 adds it (a missing key reads as NULL). On a database
+-- without org rows — production when this was written — the effect is
+-- unchanged. Same pattern as LABEL-10's amendment of 111.
 DO $$
 DECLARE
   lone_owner uuid;
 BEGIN
   SELECT user_id INTO lone_owner FROM public.creator_profiles LIMIT 1;
   IF lone_owner IS NOT NULL THEN
-    UPDATE public.projects SET user_id = lone_owner WHERE user_id IS NULL;
+    UPDATE public.projects p SET user_id = lone_owner WHERE p.user_id IS NULL AND (to_jsonb(p) ->> 'org_id') IS NULL;
   END IF;
 END $$;
 

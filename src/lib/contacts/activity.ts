@@ -48,6 +48,7 @@ export type ActivityKind =
   | 'decision_changed'
   | 'artist_notified'
   | 'file_downloaded'
+  | 'file_uploaded'
   | 'portal_comment'
   | 'artist_message'
   | 'artist_request'
@@ -272,7 +273,7 @@ export function activityFromStored(rows: StoredActivityRow[]): ContactActivity[]
   const known: ActivityKind[] = [
     'beat_sent', 'email_opened', 'link_clicked', 'track_played', 'favorited', 'purchase', 'note', 'stage_change',
     'project_linked', 'track_added', 'portal_opened', 'track_downloaded', 'decision_changed', 'artist_notified',
-    'file_downloaded', 'portal_comment', 'artist_message', 'artist_request', 'artist_request_resolved',
+    'file_downloaded', 'file_uploaded', 'portal_comment', 'artist_message', 'artist_request', 'artist_request_resolved',
     'producer_message',
   ];
   return rows.map((r) => ({

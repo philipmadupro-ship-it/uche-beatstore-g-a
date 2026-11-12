@@ -17,6 +17,7 @@ import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
 import { enqueueUploadProcessingJob, processUploadProcessingJobById } from '@/lib/upload/processing';
 import { verifyStoredAudio } from '@/lib/upload/verify-stored-audio';
 import { parseClientAnalysis } from '@/lib/contracts/client-analysis';
+import { isAnyOrgUploadKey } from '@/lib/labelos/org-upload';
 
 export const runtime = 'nodejs';
 // Processing runs in after() once the response is sent, and shares this budget.
@@ -46,6 +47,11 @@ export async function POST(req: NextRequest) {
     }
     const owner = await requireUploadSessionOwner(session);
     if (!owner.ok) return owner.res;
+    // An org upload (LABEL-14) is finished only by /api/org/[orgId]/upload/complete,
+    // which places it in its org; here it would become a producer track.
+    if (isAnyOrgUploadKey(session.key)) {
+      return NextResponse.json({ error: 'Upload session not found' }, { status: 404 });
+    }
     let completedParts = session.parts;
     try {
       const remoteParts = await listParts({ uploadId: session.uploadId, key: session.key });

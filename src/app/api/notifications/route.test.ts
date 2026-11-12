@@ -44,6 +44,7 @@ function fakeAdmin() {
         const isCount = Boolean((options as { head?: boolean } | undefined)?.head);
         const q: Record<string, unknown> = {
           eq: (c: string, v: unknown) => { call.filters.push(['eq', c, v]); return q; },
+          is: (c: string, v: unknown) => { call.filters.push(['is', c, v]); return q; },
           order: () => q,
           limit: () => q,
           then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
@@ -60,6 +61,7 @@ function fakeAdmin() {
         calls.push(call);
         const q: Record<string, unknown> = {
           eq: (c: string, v: unknown) => { call.filters.push(['eq', c, v]); return q; },
+          is: (c: string, v: unknown) => { call.filters.push(['is', c, v]); return q; },
           in: (c: string, v: unknown) => { call.filters.push(['in', c, v]); return q; },
           then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
             Promise.resolve({ error: writeError }).then(res, rej),
@@ -117,6 +119,27 @@ describe('GET /api/notifications', () => {
     const count = calls.find((c) => (c.options as { head?: boolean })?.head);
     expect(count?.filters).toContainEqual(['eq', 'read', false]);
     expect(count?.filters).toContainEqual(['eq', 'user_id', 'producer-1']);
+  });
+
+  it('reads producer notifications only: an org direct ask (migration 151) never appears in this bell or its badge', async () => {
+    const { GET } = await import('./route');
+    await GET();
+    const page = calls.find((c) => c.action === 'select' && !(c.options as { head?: boolean })?.head);
+    const count = calls.find((c) => (c.options as { head?: boolean })?.head);
+    expect(page?.filters).toContainEqual(['is', 'org_id', null]);
+    expect(count?.filters).toContainEqual(['is', 'org_id', null]);
+  });
+
+  it('reads exactly as before when migration 151 is not applied (no org_id column to filter on)', async () => {
+    pageRows = rows(2);
+    pageError = { code: '42703', message: 'column notifications.org_id does not exist' };
+    const { GET } = await import('./route');
+    // The retry reads without the filter; the fake keeps failing the page, so the route answers 500 — what
+    // matters is that the second pair of queries carries no org_id filter at all.
+    await GET();
+    const retried = calls.slice(2);
+    expect(retried.length).toBe(2);
+    for (const c of retried) expect(c.filters.some(([, col]) => col === 'org_id')).toBe(false);
   });
 
   it('says the list is only a page when it is full', async () => {
@@ -186,6 +209,8 @@ describe('PATCH /api/notifications', () => {
 
     const write = calls.find((c) => c.action === 'update')!;
     expect(write.filters).toContainEqual(['eq', 'user_id', 'producer-1']);
+    // "Mark all read" here must not clear the asks waiting under an org.
+    expect(write.filters).toContainEqual(['is', 'org_id', null]);
     // No id filter — that is what makes it "all", and why it must never be
     // reachable from simply opening the panel.
     expect(write.filters.some(([op]) => op === 'in')).toBe(false);

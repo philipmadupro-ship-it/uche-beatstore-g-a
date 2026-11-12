@@ -4,6 +4,14 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { requireProducer } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
+import {
+  cleanEnv,
+  modeHints,
+  resendConfig,
+  stripeKeyMode,
+  webhookSecretStatus,
+  type StripeKeyMode,
+} from '@/lib/stripe/payments-config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,10 +20,19 @@ interface StripeDiagnostics {
   env: {
     stripe_secret_key: boolean;
     stripe_webhook_secret: boolean;
+    webhook_secret: { set: boolean; looks_valid: boolean; has_whitespace: boolean };
     app_url: string | null;
     resend_api_key: boolean;
   };
+  resend: ReturnType<typeof resendConfig>;
+  fulfillment?: {
+    failed_email_jobs: number | null;
+    dead_email_jobs: number | null;
+    paid_without_email_7d: number | null;
+  };
   stripe: {
+    key_mode: StripeKeyMode;
+    publishable_key_mode: StripeKeyMode;
     configured: boolean;
     account_id: string | null;
     account_error: string | null;
@@ -34,6 +51,7 @@ interface StripeDiagnostics {
   };
   webhook?: {
     endpoint_registered: boolean;
+    livemode: boolean | null;
     url: string | null;
     status: string | null;
     missing_events: string[];
@@ -64,14 +82,28 @@ interface StripeDiagnostics {
  *      lease/exclusive prices set
  */
 export async function GET() {
+  // Owner-only. It calls Stripe with the live secret key and reveals the
+  // webhook URL and mail configuration, so a stranger gets nothing.
+  const gate = await requireProducer();
+  if (!gate.ok) return gate.res;
+
+  const secretMode = stripeKeyMode(process.env.STRIPE_SECRET_KEY);
+  const publishableMode = stripeKeyMode(
+    cleanEnv(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).replace(/^pk_/, 'sk_'),
+  );
+  const webhookSecret = webhookSecretStatus(process.env.STRIPE_WEBHOOK_SECRET);
   const out: StripeDiagnostics = {
     env: {
-      stripe_secret_key: !!process.env.STRIPE_SECRET_KEY,
-      stripe_webhook_secret: !!process.env.STRIPE_WEBHOOK_SECRET,
+      stripe_secret_key: !!cleanEnv(process.env.STRIPE_SECRET_KEY),
+      stripe_webhook_secret: webhookSecret.set,
+      webhook_secret: webhookSecret,
       app_url: process.env.NEXT_PUBLIC_APP_URL ?? null,
-      resend_api_key: !!process.env.RESEND_API_KEY,
+      resend_api_key: !!cleanEnv(process.env.RESEND_API_KEY),
     },
+    resend: resendConfig(process.env),
     stripe: {
+      key_mode: secretMode,
+      publishable_key_mode: publishableMode,
       configured: isStripeConfigured(),
       account_id: null as string | null,
       account_error: null as string | null,
@@ -117,17 +149,16 @@ export async function GET() {
   if (!out.env.app_url || out.env.app_url.includes('localhost')) {
     out.hints.push('NEXT_PUBLIC_APP_URL is missing or set to localhost. Receipt URLs will be broken.');
   }
-  if (!out.env.resend_api_key) {
-    out.hints.push('RESEND_API_KEY missing — purchase receipt emails will be skipped (purchase still records).');
-  }
+  out.hints.push(...out.resend.problems);
 
-  // 2b: Confirm a Stripe webhook endpoint is actually registered for the three
-  // events we handle. This turns "is the dashboard set up?" from a manual
+  // 2b: Confirm a Stripe webhook endpoint is actually registered for the
+  // events we handle (charge.dispute.closed restores access when a dispute is won). This turns "is the dashboard set up?" from a manual
   // checklist into a programmatic check — a paid sale with no registered
   // webhook never fulfils.
-  const REQUIRED_EVENTS = ['checkout.session.completed', 'charge.refunded', 'charge.dispute.created'];
+  const REQUIRED_EVENTS = ['checkout.session.completed', 'charge.refunded', 'charge.dispute.created', 'charge.dispute.closed'];
   out.webhook = {
     endpoint_registered: false,
+    livemode: null as boolean | null,
     url: null as string | null,
     status: null as string | null,
     missing_events: REQUIRED_EVENTS.slice(),
@@ -141,6 +172,7 @@ export async function GET() {
       if (ours) {
         out.webhook.endpoint_registered = true;
         out.webhook.url = ours.url;
+        out.webhook.livemode = typeof ours.livemode === 'boolean' ? ours.livemode : null;
         out.webhook.status = ours.status;
         // '*' means the endpoint is subscribed to all events.
         const enabled = new Set(ours.enabled_events);
@@ -161,13 +193,49 @@ export async function GET() {
     }
   }
 
+  out.hints.push(...modeHints({
+    secretKeyMode: secretMode,
+    publishableKeyMode: publishableMode,
+    webhookSecret,
+    endpointLivemode: out.webhook.livemode,
+  }));
+  if (secretMode === 'live' && out.stripe.account_id === 'verified' && !out.webhook.endpoint_registered && !out.webhook.error) {
+    out.hints.push('The live key lists NO webhook endpoint: Stripe test and live mode have separate endpoints. Create one in Live mode.');
+  }
+
   // 3+4+5: Supabase-side checks. Require a signed-in user so this
   // endpoint can show seller-scoped diagnostics.
   if (out.supabase.configured) {
-    const auth = await requireProducer();
+    const auth = gate;
     if (auth.ok) {
       out.seller.authenticated = true;
       const admin = createServiceClient();
+
+      // Fulfilment health: a paid sale whose email never went out shows up
+      // here even when nobody saw the log line.
+      try {
+        const [failed, dead, unsent] = await Promise.all([
+          admin.from('fulfillment_email_jobs').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
+          admin.from('fulfillment_email_jobs').select('id', { count: 'exact', head: true }).eq('status', 'dead'),
+          admin.from('license_purchases').select('id', { count: 'exact', head: true })
+            .eq('seller_user_id', auth.userId)
+            .eq('status', 'paid')
+            .eq('fulfillment_email_sent', false)
+            .gte('created_at', new Date(Date.now() - 7 * 86_400_000).toISOString()),
+        ]);
+        out.fulfillment = {
+          failed_email_jobs: failed.error ? null : failed.count ?? 0,
+          dead_email_jobs: dead.error ? null : dead.count ?? 0,
+          paid_without_email_7d: unsent.error ? null : unsent.count ?? 0,
+        };
+        if ((out.fulfillment.paid_without_email_7d ?? 0) > 0 || (out.fulfillment.failed_email_jobs ?? 0) > 0 || (out.fulfillment.dead_email_jobs ?? 0) > 0) {
+          out.hints.push(
+            'Some paid purchases have no delivery email yet (see fulfillment counts). Fix the Resend config, then use /api/sales/resend per sale; failed jobs retry via /api/cron/process-fulfillment-emails.',
+          );
+        }
+      } catch {
+        /* diagnostics must never throw */
+      }
 
       // Table existence + recent purchases count
       const { count, error: lpErr } = await admin

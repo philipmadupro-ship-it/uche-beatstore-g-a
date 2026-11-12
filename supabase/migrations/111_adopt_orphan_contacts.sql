@@ -19,6 +19,14 @@
 -- exactly as 097 specified, rather than being handed to a guessed account.
 --
 -- Idempotent: a re-run finds no null-owner rows and does nothing.
+--
+-- Label OS (139) amendment: an org contact also has user_id NULL — on
+-- purpose (contacts_org_or_owner) — and is NOT an orphan. scripts/apply-
+-- migrations.sh replays every file, so every statement below skips rows with
+-- an org_id. `to_jsonb(row) ->> 'org_id'` is used instead of the column
+-- because on a fresh database this file runs before 139 adds it (a missing
+-- key reads as NULL, i.e. "not an org contact"). On a database without org
+-- contacts — production when this was written — the effect is unchanged.
 
 DO $$
 DECLARE
@@ -50,6 +58,7 @@ BEGIN
    AND k.email IS NOT NULL
    AND lower(btrim(k.email)) = lower(btrim(o.email))
   WHERE o.user_id IS NULL
+    AND (to_jsonb(o) ->> 'org_id') IS NULL
     AND o.email IS NOT NULL;
 
   DELETE FROM public.contact_tags ct USING _orphan_merges m
@@ -85,15 +94,17 @@ BEGIN
   USING (
     SELECT id,
            row_number() OVER (PARTITION BY lower(btrim(email)) ORDER BY created_at, id) AS rn
-    FROM public.contacts
-    WHERE user_id IS NULL AND email IS NOT NULL
+    FROM public.contacts c2
+    WHERE c2.user_id IS NULL AND c2.email IS NOT NULL
+      AND (to_jsonb(c2) ->> 'org_id') IS NULL
   ) d
   WHERE c.id = d.id AND d.rn > 1;
 
   -- Everything left can be adopted without tripping the unique index.
-  UPDATE public.contacts
+  UPDATE public.contacts c3
      SET user_id = owner_id
-   WHERE user_id IS NULL;
+   WHERE c3.user_id IS NULL
+     AND (to_jsonb(c3) ->> 'org_id') IS NULL;
 
   -- contact_activity / contact_tasks carry their own user_id for RLS; any row
   -- hanging off a just-adopted contact needs the same owner.

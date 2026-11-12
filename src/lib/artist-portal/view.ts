@@ -70,6 +70,8 @@ export interface PortalProject {
   files: number;
   allowDownloads: boolean;
   canComment: boolean;
+  /** The artist may upload their own files into this project (mig 191). */
+  canUpload: boolean;
   /** The producer's pitch of this project to this label (mig 135); null elsewhere. */
   pitchNote: string | null;
 }
@@ -84,6 +86,8 @@ export interface PortalFile {
   mime: string | null;
   sizeBytes: number | null;
   isNew: boolean;
+  /** This artist sent it through the portal (mig 191). */
+  fromYou: boolean;
   /** The portal's own streaming route for this file. */
   url: string;
 }
@@ -158,7 +162,7 @@ export function toPortalTrack(
 
 export function toPortalProject(
   row: { id: string; name: string | null; cover_url: string | null; description: string | null; [key: string]: unknown },
-  ctx: { isNew: boolean; newCount: number; beats: number; songs: number; files: number; allowDownloads: boolean; canComment: boolean; pitchNote?: string | null },
+  ctx: { isNew: boolean; newCount: number; beats: number; songs: number; files: number; allowDownloads: boolean; canComment: boolean; canUpload?: boolean; pitchNote?: string | null },
 ): PortalProject {
   return {
     id: row.id,
@@ -172,6 +176,7 @@ export function toPortalProject(
     files: ctx.files,
     allowDownloads: ctx.allowDownloads,
     canComment: ctx.canComment,
+    canUpload: ctx.canUpload ?? false,
     pitchNote: ctx.pitchNote ?? null,
   };
 }
@@ -180,7 +185,7 @@ const FILE_KINDS: ReadonlyArray<PortalFile['kind']> = ['reference', 'artwork', '
 
 export function toPortalFile(
   row: { id: string; project_id: string; kind: string; label: string | null; file_name: string | null; mime: string | null; size_bytes: number | string | null },
-  ctx: { token: string; isNew: boolean },
+  ctx: { token: string; isNew: boolean; fromYou?: boolean },
 ): PortalFile {
   const size = row.size_bytes == null ? null : Number(row.size_bytes);
   return {
@@ -191,7 +196,8 @@ export function toPortalFile(
     fileName: (row.file_name ?? '').split(/[\\/]/).pop() ?? '',
     mime: typeof row.mime === 'string' ? row.mime : null,
     sizeBytes: size != null && Number.isFinite(size) ? size : null,
-    isNew: ctx.isNew,
+    isNew: ctx.isNew && !ctx.fromYou,
+    fromYou: !!ctx.fromYou,
     url: `/api/portal/${encodeURIComponent(ctx.token)}/files/${row.id}`,
   };
 }

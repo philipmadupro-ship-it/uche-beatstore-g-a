@@ -22,7 +22,9 @@ export async function POST(req: NextRequest) {
   const emailLc = email;
 
   // Find existing (case-insensitive) among the caller's contacts.
-  const existing = await scopedList<{ id: string; email: string | null; name: string }>('contacts', { orderBy: 'name', ascending: true });
+  // Strictly owner-scoped: a NULL-owner contact is a Label OS org contact
+  // (mig 139), not the producer's (mig 111 adopted every legacy orphan).
+  const existing = await scopedList<{ id: string; email: string | null; name: string }>('contacts', { orderBy: 'name', ascending: true, includeNullOwner: false });
   if (isErrorResponse(existing)) return existing;
   const match = existing.find((c) => (c.email ?? '').toLowerCase() === emailLc);
   if (match) return NextResponse.json({ contact: match, created: false });

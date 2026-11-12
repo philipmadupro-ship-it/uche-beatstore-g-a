@@ -5,7 +5,9 @@
  * that has checked ownership or portal membership — never by a public URL.
  * Without R2 (local development and the local-db harness) they go under
  * `data/project-assets/`, outside `public/`, as `local://` references, so the
- * local fallback is private too.
+ * local fallback is private too. Org files (LABEL-15) use the same helpers
+ * with keys under `orgs/<org>/assets/<project>/` (lib/labelos/org-assets),
+ * in the private bucket or `data/orgs/` — never `public/`.
  */
 
 import fs from 'node:fs';
@@ -18,10 +20,14 @@ import { getStoredObject, parseR2ObjectRef, privateAudioBucket, r2, r2ObjectRef 
 
 const LOCAL_ROOT = path.join(process.cwd(), 'data');
 
+/** An org file's local key (LABEL-15): `orgs/<org>/assets/<project>/<file>`, still under `data/`. */
+const ORG_LOCAL_KEY = /^orgs\/[0-9a-f-]{36}\/assets\/[0-9a-f-]{36}\/[A-Za-z0-9_-]{6,64}\.[a-z0-9]{1,8}$/;
+
 function localPath(key: string): string {
   const full = path.resolve(LOCAL_ROOT, key);
-  if (!full.startsWith(path.resolve(LOCAL_ROOT, 'project-assets') + path.sep)) throw new Error('Invalid local asset path');
-  return full;
+  if (full.startsWith(path.resolve(LOCAL_ROOT, 'project-assets') + path.sep)) return full;
+  if (ORG_LOCAL_KEY.test(key) && full.startsWith(path.resolve(LOCAL_ROOT, 'orgs') + path.sep)) return full;
+  throw new Error('Invalid local asset path');
 }
 
 /** Buckets a stored project-file reference may point into. */
@@ -47,6 +53,16 @@ export async function presignProjectAssetPut(key: string, mime: string): Promise
   const Bucket = privateAudioBucket();
   const uploadUrl = await getSignedUrl(r2, new PutObjectCommand({ Bucket, Key: key, ContentType: mime }), { expiresIn: 15 * 60 });
   return { uploadUrl, url: r2ObjectRef(Bucket, key) };
+}
+
+/**
+ * The stored reference of a key in the private bucket (what
+ * `presignProjectAssetPut` returns as `url`), for a caller that must not
+ * hand the reference itself to the browser. Null without R2.
+ */
+export function privateProjectAssetRef(key: string): string | null {
+  if (!isR2Configured()) return null;
+  return r2ObjectRef(privateAudioBucket(), key);
 }
 
 /** Size of a stored object, or null when it does not exist. */
@@ -113,4 +129,47 @@ export async function streamProjectAsset(
   if (object.ContentLength != null) headers.set('content-length', String(object.ContentLength));
   if (object.ContentRange) headers.set('content-range', object.ContentRange);
   return new Response(object.Body.transformToWebStream(), { status: range ? 206 : 200, headers });
+}
+
+/**
+ * The first `bytes` of a stored project file and nothing more (the artwork
+ * size rule reads an image header): a bounded read of a local file, or a
+ * ranged GET of an R2 object. Null when it is gone or outside the allowed
+ * buckets. Never the whole object.
+ */
+export async function readProjectAssetHead(ref: string, bytes: number): Promise<Uint8Array | null> {
+  if (ref.startsWith('local://')) {
+    let file: string;
+    try { file = localPath(ref.slice(8)); } catch { return null; }
+    if (!fs.existsSync(file)) return null;
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(bytes);
+      const read = fs.readSync(fd, buf, 0, bytes, 0);
+      return new Uint8Array(buf.subarray(0, read));
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+  const r = parseR2ObjectRef(ref);
+  if (!r || !projectAssetBuckets().includes(r.bucket)) return null;
+  const object = await getStoredObject(ref, `bytes=0-${bytes - 1}`);
+  return object?.Body ? await object.Body.transformToByteArray() : null;
+}
+
+/**
+ * A stored project file as bytes to put into an archive (the legal pack,
+ * LABEL-31): the whole object, not a Range response, and never a URL. Null
+ * when the object is gone or the reference is outside the allowed buckets.
+ */
+export async function openProjectAsset(ref: string): Promise<ReadableStream<Uint8Array> | Uint8Array | null> {
+  if (ref.startsWith('local://')) {
+    let file: string;
+    try { file = localPath(ref.slice(8)); } catch { return null; }
+    return fs.existsSync(file) ? new Uint8Array(fs.readFileSync(file)) : null;
+  }
+  const r = parseR2ObjectRef(ref);
+  if (!r || !projectAssetBuckets().includes(r.bucket)) return null;
+  const object = await getStoredObject(ref, null);
+  return object?.Body ? (object.Body.transformToWebStream() as ReadableStream<Uint8Array>) : null;
 }

@@ -10,6 +10,7 @@
  * - view=beats returns only THIS email's purchases and offers; another buyer's
  *   rows never appear, an email in the query string is ignored
  * - a session and a token for the same human get the same rows
+ * - offers made on an unverified address (mig 139) are not shown
  * - revoked purchases own nothing; a delisted beat that is only requested
  *   leaks no metadata; no media URL is in the JSON
  * - create_playlist with track_ids: all-or-nothing, listed or owned only,
@@ -113,9 +114,11 @@ beforeEach(() => {
     project_access_links: [],
     project_tracks: [],
     buyer_offers: [
-      { id: 'o1', buyer_email: ME, track_id: C, track_title: 'Beat 3', offered_price_usd: 300, status: 'pending', created_at: '2026-09-12T00:00:00Z', message: 'private note', seller_user_id: 'prod' },
-      { id: 'o2', buyer_email: ME, track_id: D, track_title: 'Stored D', offered_price_usd: 80, status: 'countered', created_at: '2026-09-13T00:00:00Z', seller_user_id: 'prod' },
-      { id: 'o3', buyer_email: OTHER, track_id: E, track_title: 'Beat 5', offered_price_usd: 1, status: 'pending', created_at: '2026-09-14T00:00:00Z', seller_user_id: 'prod' },
+      { id: 'o1', buyer_email: ME, track_id: C, track_title: 'Beat 3', offered_price_usd: 300, status: 'pending', created_at: '2026-09-12T00:00:00Z', message: 'private note', seller_user_id: 'prod', buyer_email_verified: true },
+      { id: 'o2', buyer_email: ME, track_id: D, track_title: 'Stored D', offered_price_usd: 80, status: 'countered', created_at: '2026-09-13T00:00:00Z', seller_user_id: 'prod', buyer_email_verified: true },
+      { id: 'o3', buyer_email: OTHER, track_id: E, track_title: 'Beat 5', offered_price_usd: 1, status: 'pending', created_at: '2026-09-14T00:00:00Z', seller_user_id: 'prod', buyer_email_verified: true },
+      // typed into the public offer form by someone else: claims ME's address, proves nothing
+      { id: 'o4', buyer_email: ME, track_id: E, track_title: 'Beat 5', offered_price_usd: 1, status: 'pending', created_at: '2026-09-15T00:00:00Z', seller_user_id: 'prod', buyer_email_verified: false },
     ],
     buyer_playlists: [{ id: PL, email: ME, name: 'Mine' }],
     buyer_playlist_tracks: [],
@@ -140,7 +143,9 @@ describe('GET /api/store/me?view=beats', () => {
     expect(beats.map((b: { id: string; status: string }) => [b.id, b.status]).sort()).toEqual([
       [A, 'owned'], [B, 'owned'], [C, 'requested'], [D, 'requested'],
     ]);
+    // o4 names ME's address on E but was never verified (a planted offer)
     expect(beats.find((b: { id: string }) => b.id === E)).toBeUndefined();
+    expect(reads.find((x) => x.table === 'buyer_offers')?.filters).toContainEqual(['buyer_email_verified', true]);
     // every read of a buyer-keyed table was scoped to the proven email
     for (const r of reads.filter((x) => ['license_purchases', 'project_access_links', 'buyer_offers'].includes(x.table))) {
       expect(r.filters).toContainEqual(['buyer_email', ME]);
@@ -181,18 +186,18 @@ describe('GET /api/store/me?view=beats', () => {
     const { GET } = await import('./route');
     const body = await (await GET(get('?session=1&view=beats'))).json();
     const d = body.beats.find((b: { id: string }) => b.id === D);
-    expect(d).toMatchObject({ title: 'Stored D', bpm: null, cover_url: null, available: false, playable: false });
+    expect(d).toMatchObject({ title: 'Stored D', bpm: null, cover_url: null, available: false, listed: false, playable: false });
     const text = JSON.stringify(body);
     for (const leak of ['r2://', 'wav_url', 'audio_url', 'preview_url', 'private note', 'seller_user_id', 'Secret Title']) {
       expect(text).not.toContain(leak);
     }
   });
 
-  it('a delisted beat the buyer owns still shows, and plays', async () => {
+  it('a delisted beat the buyer owns still shows, plays, and has no storefront page', async () => {
     const { GET } = await import('./route');
     const { beats } = await (await GET(get('?session=1&view=beats'))).json();
     expect(beats.find((b: { id: string }) => b.id === B)).toMatchObject({
-      title: 'Exclusive One', playable: true, canAddToProject: true, license: 'exclusive', openUrl: '/store/download?session_id=cs_2',
+      title: 'Exclusive One', listed: false, playable: true, canAddToProject: true, license: 'exclusive', openUrl: '/store/download?session_id=cs_2',
     });
   });
 

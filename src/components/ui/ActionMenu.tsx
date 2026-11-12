@@ -6,7 +6,7 @@ import { Check, Loader2, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   resolveSections, flattenActions, nextEnabledIndex, firstEnabledIndex,
-  indexForShortcutKey, type MenuAction, type MenuSection,
+  indexForShortcutKey, placeMenu, type MenuAction, type MenuSection,
 } from '@/lib/ui/action-menu';
 
 export type { MenuAction, MenuSection };
@@ -59,7 +59,7 @@ export function ActionMenu({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
-  const [coords, setCoords] = useState<{ top: number; left: number; openUp: boolean } | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; openUp: boolean; maxHeight: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -125,11 +125,10 @@ export function ActionMenu({
     if (!el) return null;
     const r = el.getBoundingClientRect();
     const h = menuRef.current?.offsetHeight ?? Math.min(420, flat.length * 34 + 24);
-    const spaceBelow = window.innerHeight - r.bottom;
-    const openUp = spaceBelow < h + 8 && r.top > spaceBelow;
+    const place = placeMenu({ trigger: r, menuHeight: h, view: { width: window.innerWidth, height: window.innerHeight } });
     let left = align === 'right' ? r.right - width : r.left;
     left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
-    return { top: openUp ? Math.max(8, r.top - h - 6) : r.bottom + 6, left, openUp };
+    return { ...place, left };
   }, [align, width, flat.length]);
 
   const reposition = useCallback(() => {
@@ -245,13 +244,13 @@ export function ActionMenu({
           }
           onKeyDown={onKeyDown}
           onClick={(e) => e.stopPropagation()}
-          style={{ position: 'fixed', top: coords.top, left: coords.left, width }}
+          style={{ position: 'fixed', top: coords.top, left: coords.left, width, maxHeight: coords.maxHeight }}
           className={cn(
             // Arrives off the edge it hangs from, so it reads as coming out of
             // the trigger. Flipped menus animate the other way for the same
             // reason.
             coords.openUp ? 'ui-pop-up' : 'ui-pop',
-            'overlay-surface z-[200] max-h-[70vh] overflow-y-auto rounded-xl py-1',
+            'overlay-surface z-[200] overflow-y-auto rounded-xl py-1',
             'border border-white/[0.12]',
             'focus:outline-none',
           )}

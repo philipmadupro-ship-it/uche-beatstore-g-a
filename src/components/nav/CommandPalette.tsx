@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Search, Music, Layers, Users, Disc3, ListMusic, Calendar,
   Link2, Settings, Sliders, CloudOff, ArrowRight, Loader2, FileText,
@@ -47,7 +47,19 @@ const ROUTE_COMMANDS = [
   { label: 'Settings',  icon: Settings,  href: '/settings'  },
 ];
 
+/**
+ * The producer dashboard's palette. Inside the Label OS org shell (`/o/*`)
+ * it steps aside entirely — it does not even mount, so it fetches nothing —
+ * because the org has its own (components/labelos/OrgCommandPalette, LABEL-36),
+ * mounted by the org shell layout.
+ */
 export function CommandPalette() {
+  const pathname = usePathname();
+  if (pathname === '/o' || pathname?.startsWith('/o/')) return null;
+  return <ProducerCommandPalette />;
+}
+
+function ProducerCommandPalette() {
   const open = useCommandPalette((s) => s.open);
   const setOpen = useCommandPalette((s) => s.setOpen);
   const router = useRouter();

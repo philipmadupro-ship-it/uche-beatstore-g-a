@@ -42,21 +42,6 @@ describe('producer-only routes refuse a signed-in buyer', () => {
     expect(mockSend).not.toHaveBeenCalled();
   });
 
-  it('POST /api/invite does not create or send an invite', async () => {
-    const { POST } = await import('@/app/api/invite/route');
-    const res = await POST(post('http://localhost/api/invite', { email: 'victim@example.com', role: 'admin' }));
-    expect(res.status).toBe(403);
-    expect(mockSend).not.toHaveBeenCalled();
-    expect(mockAdminFrom).not.toHaveBeenCalled();
-  });
-
-  it('GET /api/team does not list team members', async () => {
-    const { GET } = await import('@/app/api/team/route');
-    const res = await GET();
-    expect(res.status).toBe(403);
-    expect(mockAdminFrom).not.toHaveBeenCalled();
-  });
-
   it('POST /api/cover/generate does not spend AI credits', async () => {
     const { POST } = await import('@/app/api/cover/generate/route');
     const res = await POST(post('http://localhost/api/cover/generate', { prompt: 'x' }));

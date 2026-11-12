@@ -18,8 +18,6 @@ interface DBSchema {
   beat_sends: LocalRow[];
   calendar_events: LocalRow[];
   share_links: LocalRow[];
-  team_members: LocalRow[];
-  invites: LocalRow[];
   stems: LocalRow[];
   track_tags: LocalRow[];
   rating_history: LocalRow[];
@@ -55,8 +53,6 @@ function getEmptyDB(): DBSchema {
     beat_sends: [],
     calendar_events: [],
     share_links: [],
-    team_members: [],
-    invites: [],
     stems: [],
     track_tags: [],
     rating_history: [],

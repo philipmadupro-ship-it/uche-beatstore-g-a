@@ -42,17 +42,17 @@ function detectExt(fileName: string): string {
   return ext;
 }
 
-function buildObjectKey(fileName: string): string {
+function buildObjectKey(fileName: string, keyPrefix = 'tracks'): string {
   const ext = detectExt(fileName);
-  return `tracks/${nanoid(10)}.${ext}`;
+  return `${keyPrefix}/${nanoid(10)}.${ext}`;
 }
 
 /* ─────────── R2 backend ─────────── */
 
-async function r2Init(fileName: string, contentType: string) {
+async function r2Init(fileName: string, contentType: string, keyPrefix?: string) {
   const Bucket = privateAudioBucket();
   if (!Bucket) throw new Error('Missing R2_PRIVATE_BUCKET_NAME');
-  const Key = buildObjectKey(fileName);
+  const Key = buildObjectKey(fileName, keyPrefix);
   const cmd = new CreateMultipartUploadCommand({ Bucket, Key, ContentType: contentType });
   const res = await r2.send(cmd);
   if (!res.UploadId) throw new Error('R2 did not return UploadId');
@@ -112,11 +112,13 @@ async function r2ListParts(opts: { uploadId: string; key: string }) {
 
 /* ─────────── Local-fs backend (dev fallback) ─────────── */
 
-async function localInit(fileName: string) {
+async function localInit(fileName: string, keyPrefix?: string) {
   const sessionId = nanoid(16);
   const dir = ensureStagingDir(sessionId);
   fs.writeFileSync(path.join(dir, '_meta.json'), JSON.stringify({ fileName, createdAt: Date.now() }));
-  return { uploadId: sessionId, key: `local:${sessionId}` };
+  // The key is a label locally (staging is keyed by uploadId); a prefix keeps
+  // it saying whose upload it is, as the R2 key does.
+  return { uploadId: sessionId, key: keyPrefix ? `local:${keyPrefix}/${sessionId}` : `local:${sessionId}` };
 }
 
 async function localUploadPart(opts: { uploadId: string; partNumber: number; body: Buffer }): Promise<PartRef> {
@@ -189,9 +191,14 @@ export const MIN_PART_SIZE = 5 * 1024 * 1024;        // 5 MiB minimum (S3/R2)
 export const DEFAULT_PART_SIZE = 8 * 1024 * 1024;    // 8 MiB default
 export const MAX_PARTS = 10_000;
 
-export async function initMultipart(fileName: string, contentType: string) {
-  if (isR2Configured()) return r2Init(fileName, contentType);
-  return localInit(fileName);
+/**
+ * `keyPrefix` (default `tracks`) is where in the private bucket the object
+ * lands. Org uploads pass `orgs/<org>/tracks` (LABEL-14), which is also what
+ * binds their session to the org.
+ */
+export async function initMultipart(fileName: string, contentType: string, opts: { keyPrefix?: string } = {}) {
+  if (isR2Configured()) return r2Init(fileName, contentType, opts.keyPrefix);
+  return localInit(fileName, opts.keyPrefix);
 }
 
 export async function uploadPart(opts: {

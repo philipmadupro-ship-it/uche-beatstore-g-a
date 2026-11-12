@@ -19,6 +19,7 @@ import type { Track } from '@/lib/types';
 import { StoreListView } from '@/components/store/StoreListView';
 import BandcampRemixCard from '@/components/store/BandcampRemixCard';
 import { RecommendationsStrip } from '@/components/store/RecommendationsStrip';
+import { ReleasesStrip } from '@/components/store/ReleasesStrip';
 import { useWishlist } from '@/hooks/useWishlist';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 import { filterAndSortTracks, type StoreTrack as StoreTrackFilter } from '@/lib/store/filters';
@@ -1309,6 +1310,9 @@ function StorePage() {
         const hidden = visibilityClasses(section);
         return hidden ? <div key={section.id} className={hidden}>{node}</div> : <Fragment key={section.id}>{node}</Fragment>;
       })}
+
+      {/* Released music (LABEL-42): its own strip, drawn only when a release is listed. */}
+      <ReleasesStrip />
 
       {/* ── Toolbar — sticky glass header ──────────────────────── */}
       <div className="sticky top-0 z-30" style={{ backdropFilter: 'blur(24px)', background: 'rgba(10,9,7,0.88)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>

@@ -7,6 +7,7 @@ import { createLogger } from '@/lib/log';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { loadPortalAssets, toPortalFileRows } from '@/lib/artist-portal/files';
 import { sortArtistSummaries, summarizeArtist } from '@/lib/contacts/artist-summary';
+import { filesForContact } from '@/lib/artist-portal/uploads';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -89,7 +90,7 @@ export async function GET() {
         activity: activityBy.get(c.id) ?? [],
         shareCount: (sharesBy.get(c.id) ?? []).length,
         portalTracks,
-        portalFiles,
+        portalFiles: filesForContact(portalFiles, c.id),
       });
     }));
 

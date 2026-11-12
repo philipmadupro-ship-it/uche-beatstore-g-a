@@ -1,0 +1,523 @@
+/**
+ * GET / PATCH / DELETE /api/org/[orgId]/members (LABEL-09).
+ *
+ * LABEL-19: PATCH and DELETE call one audit function each (migration 146)
+ * that makes the change AND writes the event in one transaction. The fake
+ * `rpc` below stands in for it; that a failing audit insert leaves the
+ * change undone is proven against a real database in
+ * supabase/local/checks/146_labelos_audit_rpc.sql. Here: the route sends the
+ * right arguments, maps the answers, and writes nothing else.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest, NextResponse } from 'next/server';
+import { fakeAdmin, eqs, opOf, type Answer, type Chain } from '@/lib/labelos/mocks/fake-admin';
+
+const ORG = '22222222-2222-4222-8222-222222222222';
+const ME = '33333333-3333-4333-8333-333333333333';
+const THEM = '44444444-4444-4444-8444-444444444444';
+const OWNER2 = '55555555-5555-4555-8555-555555555555';
+
+type Row = {
+  user_id: string;
+  role: string;
+  functions: string[];
+  scope: string;
+  cap_grants: string[];
+  cap_revokes: string[];
+  joined_at: string;
+  invited_by: string | null;
+};
+const row = (over: Partial<Row> = {}): Row => ({
+  user_id: THEM,
+  role: 'member',
+  functions: ['a_and_r'],
+  scope: 'org',
+  cap_grants: [],
+  cap_revokes: [],
+  joined_at: '2026-10-01T00:00:00Z',
+  invited_by: ME,
+  ...over,
+});
+
+let denied: number | null = null;
+let myRole: 'owner' | 'admin' | 'artist' = 'admin';
+let myCaps = ['members.manage'];
+let target: Row | null = row();
+let owners = 1;
+let updateError: { message: string; code?: string } | null = null;
+let deleteError: { message: string; code?: string } | null = null;
+let auditFails = false;
+let admin: ReturnType<typeof fakeAdmin>;
+const events: unknown[][] = [];
+let capRequested: string | null = null;
+let myArtistScope: Set<string> | null = null;
+let listRows: Row[] | null = null;
+let scopeRows: string[] = [];
+let scopeTable: { user_id: string; contact_id: string }[] | null = null;
+const replaced: string[][] = [];
+const C1 = '66666666-6666-4666-8666-666666666666';
+const C2 = '77777777-7777-4777-8777-777777777777';
+
+const accessOk = () => ({
+  ok: true as const,
+  userId: ME,
+  admin: admin.client,
+  orgId: ORG,
+  orgKind: 'label',
+  role: myRole,
+  scope: myArtistScope ? 'artists' : 'org',
+  artistScope: myArtistScope,
+  capabilities: new Set(myCaps),
+});
+
+vi.mock('@/lib/auth/org-access', () => {
+  const scoped = (a: { from: (t: string) => { select: (c: string, o?: unknown) => { eq: (k: string, v: string) => unknown } } }, table: string, ctx: { orgId: string }, cols = '*', opts?: unknown) =>
+    a.from(table).select(cols, opts).eq('org_id', ctx.orgId);
+  return {
+    requireOrgMember: async (orgId: string) => {
+      if (denied) return { ok: false, res: NextResponse.json({ error: 'x' }, { status: denied }) };
+      expect(orgId).toBe(ORG);
+      capRequested = null;
+      return accessOk();
+    },
+    requireOrgCapability: async (orgId: string, cap: string) => {
+      if (denied) return { ok: false, res: NextResponse.json({ error: 'x' }, { status: denied }) };
+      expect(orgId).toBe(ORG);
+      capRequested = cap;
+      if (!myCaps.includes(cap)) return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+      return accessOk();
+    },
+    scopedOrgQuery: scoped,
+    memberArtistScopeQuery: (a: { from: (t: string) => { select: (c: string) => { eq: (k: string, v: string) => { eq: (k: string, v: string) => unknown } } } }, ctx: { orgId: string }, userId: string) => ({
+      select: () => a.from('member_artist_scopes').select('contact_id').eq('org_id', ctx.orgId).eq('user_id', userId),
+      list: async () => [...scopeRows].sort(),
+      replace: async (ids: string[]) => {
+        replaced.push(ids);
+        return { error: null };
+      },
+    }),
+    memberRowQuery: (a: { from: (t: string) => Record<string, (...x: unknown[]) => { eq: (k: string, v: string) => { eq: (k: string, v: string) => unknown } }> }, ctx: { orgId: string; capabilities: Set<string> }, userId: string) => ({
+      select: (cols = '*') => a.from('org_members').select(cols).eq('org_id', ctx.orgId).eq('user_id', userId),
+      update: (patch: unknown) => {
+        if (!ctx.capabilities.has('members.manage')) throw new Error('members.manage');
+        return a.from('org_members').update(patch).eq('org_id', ctx.orgId).eq('user_id', userId);
+      },
+      delete: () => {
+        if (!ctx.capabilities.has('members.manage')) throw new Error('members.manage');
+        return a.from('org_members').delete().eq('org_id', ctx.orgId).eq('user_id', userId);
+      },
+    }),
+  };
+});
+vi.mock('@/lib/labelos/activity', () => ({
+  recordEvent: async (...args: unknown[]) => {
+    events.push(args.slice(1));
+    return { ok: true, id: 'e1' };
+  },
+}));
+vi.mock('@/lib/labelos/member-identity', () => ({
+  memberIdentities: async (_a: unknown, _org: string, ids: string[]) =>
+    new Map(ids.map((id) => [id, { name: id === ME ? 'Uche' : 'Dana', email: id === ME ? 'uche@studio.test' : 'dana@label.test' }])),
+}));
+vi.mock('@/lib/log', () => ({
+  createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }),
+}));
+
+function answer(chain: Chain): Answer {
+  if (chain.table === 'member_artist_scopes') {
+    if (eqs(chain).user_id) return { data: scopeRows.map((contact_id) => ({ contact_id })), error: null };
+    expect(eqs(chain)).toEqual({ org_id: ORG });
+    if (scopeTable) return { data: scopeTable, error: null };
+    return { data: [{ user_id: THEM, contact_id: C2 }, { user_id: THEM, contact_id: C1 }], error: null };
+  }
+  if (chain.table !== 'org_members') return { data: null, error: { message: `unexpected ${chain.table}` } };
+  const select = opOf(chain, 'select');
+  if (opOf(chain, 'update')) {
+    if (updateError) return { data: null, error: updateError };
+    const patch = opOf(chain, 'update')!.args[0] as Partial<Row>;
+    return { data: select ? [{ ...target!, ...patch }] : null, error: null };
+  }
+  if (opOf(chain, 'delete')) {
+    if (deleteError) return { data: null, error: deleteError };
+    return { data: target ? [{ user_id: target.user_id }] : [], error: null };
+  }
+  if (opOf(chain, 'insert')) return { data: null, error: null };
+  if ((select?.args[1] as { head?: boolean } | undefined)?.head) {
+    expect(eqs(chain)).toEqual({ org_id: ORG, role: 'owner' });
+    return { data: null, error: null, count: owners } as Answer;
+  }
+  if (opOf(chain, 'maybeSingle')) return { data: target, error: null };
+  return { data: listRows ?? [row({ user_id: ME, role: 'owner', functions: [] }), row()], error: null };
+}
+
+function rpc(name: string, args: Record<string, unknown>): Answer {
+  if (auditFails) return { data: null, error: { message: 'audit insert refused' } };
+  if (name === 'labelos_audit_member_update') {
+    if (updateError) return { data: null, error: updateError };
+    if (!target) return { data: { error: 'not_found' }, error: null };
+    return { data: { member: { ...target, ...(args.p_patch as object) } }, error: null };
+  }
+  if (name === 'labelos_audit_member_remove') {
+    if (deleteError) return { data: null, error: deleteError };
+    return { data: target ? { removed: true } : { error: 'not_found' }, error: null };
+  }
+  return { data: null, error: { message: `unexpected rpc ${name}` } };
+}
+
+const { GET, PATCH, DELETE } = await import('./route');
+const params = { params: Promise.resolve({ orgId: ORG }) };
+const patch = (body: unknown) =>
+  PATCH(new NextRequest(`http://x/api/org/${ORG}/members`, { method: 'PATCH', body: JSON.stringify(body) }), params);
+const del = (userId: string) => DELETE(new NextRequest(`http://x/api/org/${ORG}/members?user_id=${userId}`, { method: 'DELETE' }), params);
+
+beforeEach(() => {
+  denied = null;
+  myRole = 'admin';
+  myCaps = ['members.manage'];
+  target = row();
+  owners = 1;
+  updateError = null;
+  deleteError = null;
+  auditFails = false;
+  events.length = 0;
+  capRequested = null;
+  myArtistScope = null;
+  listRows = null;
+  scopeRows = [];
+  scopeTable = null;
+  replaced.length = 0;
+  admin = fakeAdmin({ answer, rpc });
+});
+
+describe('GET members', () => {
+  it('lists the org’s members, org-scoped, with emails for a manager', async () => {
+    const res = await GET(new NextRequest('http://x'), params);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.members.map((m: { name: string; email: string; is_you: boolean }) => [m.name, m.email, m.is_you])).toEqual([
+      ['Uche', 'uche@studio.test', true],
+      ['Dana', 'dana@label.test', false],
+    ]);
+    expect(eqs(admin.chains[0])).toEqual({ org_id: ORG });
+    expect(JSON.stringify(body)).not.toContain('invited_by');
+  });
+
+  it('any member reads it, but without emails', async () => {
+    myCaps = ['catalog.read'];
+    const body = await (await GET(new NextRequest('http://x'), params)).json();
+    expect(body.members.every((m: { email: unknown }) => m.email === null)).toBe(true);
+  });
+
+  it('a roster artist reads the staff and themselves, never the other roster artists (D5 / 06 §2.4: artists never see other artists)', async () => {
+    myRole = 'artist';
+    myCaps = ['catalog.read', 'review.comment'];
+    myArtistScope = new Set([C1]);
+    listRows = [
+      row({ user_id: OWNER2, role: 'owner', functions: [] }),
+      row({ user_id: ME, role: 'artist', functions: [], scope: 'artists' }),
+      row({ user_id: THEM, role: 'artist', functions: [], scope: 'artists' }),
+      row({ user_id: '88888888-8888-4888-8888-888888888888', role: 'member', functions: ['a_and_r'] }),
+    ];
+    const body = await (await GET(new NextRequest('http://x'), params)).json();
+    expect(body.members.map((m: { user_id: string }) => m.user_id)).toEqual([OWNER2, ME, '88888888-8888-4888-8888-888888888888']);
+  });
+
+
+  it('a member limited to some artists does not see the logins of the artists outside their list (scope: no names, no existence)', async () => {
+    const IN_SCOPE_ARTIST = '88888888-8888-4888-8888-888888888881';
+    const OUT_OF_SCOPE_ARTIST = '88888888-8888-4888-8888-888888888882';
+    myCaps = ['catalog.read'];
+    myArtistScope = new Set([C1]);
+    listRows = [
+      row({ user_id: ME, scope: 'artists' }),
+      row({ user_id: OWNER2, role: 'owner', functions: [] }),
+      row({ user_id: IN_SCOPE_ARTIST, role: 'artist', functions: [], scope: 'artists' }),
+      row({ user_id: OUT_OF_SCOPE_ARTIST, role: 'artist', functions: [], scope: 'artists' }),
+    ];
+    scopeTable = [
+      { user_id: IN_SCOPE_ARTIST, contact_id: C1 },
+      { user_id: OUT_OF_SCOPE_ARTIST, contact_id: C2 },
+    ];
+    const body = await (await GET(new NextRequest('http://x'), params)).json();
+    expect(body.members.map((m: { user_id: string }) => m.user_id)).toEqual([ME, OWNER2, IN_SCOPE_ARTIST]);
+  });
+
+  it('a limited member who does not read the artist logins asks the scope table nothing (no artist rows, no read)', async () => {
+    myCaps = ['catalog.read'];
+    myArtistScope = new Set([C1]);
+    listRows = [row({ user_id: ME, scope: 'artists' }), row({ user_id: OWNER2, role: 'owner', functions: [] })];
+    await GET(new NextRequest('http://x'), params);
+    expect(admin.chains.some((c) => c.table === 'member_artist_scopes')).toBe(false);
+  });
+
+  it('passes the helper’s refusal through', async () => {
+    denied = 403;
+    expect((await GET(new NextRequest('http://x'), params)).status).toBe(403);
+  });
+
+  it('a manager sees each limited member’s artists (LABEL-10); org-wide members carry null', async () => {
+    listRows = [row({ user_id: ME, role: 'owner', functions: [] }), row({ scope: 'artists' })];
+    const body = await (await GET(new NextRequest('http://x'), params)).json();
+    expect(body.members.map((m: { contact_ids: unknown }) => m.contact_ids)).toEqual([null, [C1, C2]]);
+  });
+
+  it('a limited member sees only their own list, never a co-member’s', async () => {
+    myCaps = ['catalog.read'];
+    myArtistScope = new Set([C1]);
+    listRows = [row({ user_id: ME, scope: 'artists' }), row({ scope: 'artists' })];
+    const body = await (await GET(new NextRequest('http://x'), params)).json();
+    expect(body.members.map((m: { contact_ids: unknown }) => m.contact_ids)).toEqual([[C1], null]);
+    expect(admin.chains.some((c) => c.table === 'member_artist_scopes')).toBe(false);
+  });
+});
+
+describe('PATCH members', () => {
+  it('an admin changes a member’s functions: ONE audit function call by (org, user), no separate write', async () => {
+    const res = await patch({ user_id: THEM, functions: ['marketing'] });
+    expect(res.status).toBe(200);
+    expect((await res.json()).member).toMatchObject({ user_id: THEM, functions: ['marketing'] });
+    expect(capRequested).toBe('members.manage');
+    expect(admin.rpcs).toEqual([
+      {
+        name: 'labelos_audit_member_update',
+        args: {
+          p_org: ORG,
+          p_actor: ME,
+          p_user: THEM,
+          p_patch: { functions: ['marketing'] },
+          p_verb: 'member.capabilities_changed',
+          p_payload: { functions: { from: ['a_and_r'], to: ['marketing'] } },
+          // 167: the row the plan was made from, compared under the function's lock.
+          p_expect: { role: 'member', functions: ['a_and_r'], scope: 'org', cap_grants: [], cap_revokes: [] },
+        },
+      },
+    ]);
+    // The event is the function's; the route writes neither a row nor an event itself.
+    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
+    expect(events).toEqual([]);
+  });
+
+  it('a role change is ONE member.role_changed event, carried by the function', async () => {
+    await patch({ user_id: THEM, role: 'admin' });
+    expect(admin.rpcs).toHaveLength(1);
+    expect(admin.rpcs[0].args.p_verb).toBe('member.role_changed');
+    expect(admin.rpcs[0].args.p_payload).toEqual({ role: { from: 'member', to: 'admin' }, functions: { from: ['a_and_r'], to: [] } });
+  });
+
+  it('another CHECK violation is a 500, not a misleading last-owner 409', async () => {
+    updateError = { code: '23514', message: 'new row violates check constraint "org_members_artist_is_scoped"' };
+    expect((await patch({ user_id: THEM, role: 'admin' })).status).toBe(500);
+  });
+
+  it('403 without members.manage, before reading anything', async () => {
+    myCaps = ['catalog.read'];
+    expect((await patch({ user_id: THEM, functions: [] })).status).toBe(403);
+    expect(admin.chains).toHaveLength(0);
+  });
+
+  it('400 for what the kind does not offer, an owner role or an empty body', async () => {
+    expect((await patch({ user_id: THEM, functions: ['dj'] })).status).toBe(400);
+    expect((await patch({ user_id: THEM, role: 'owner' })).status).toBe(400);
+    expect((await patch({ user_id: THEM, cap_grants: ['members.manage'] })).status).toBe(400);
+    expect((await patch({ user_id: THEM })).status).toBe(400);
+    expect((await patch({ user_id: 'nope', role: 'admin' })).status).toBe(400);
+    expect(admin.rpcs).toEqual([]);
+  });
+
+  it('404 for someone who is not a member of this org', async () => {
+    target = null;
+    expect((await patch({ user_id: THEM, role: 'admin' })).status).toBe(404);
+  });
+
+  it('an admin cannot touch an owner (403); the last owner cannot be demoted (409)', async () => {
+    target = row({ user_id: OWNER2, role: 'owner', functions: [] });
+    expect((await patch({ user_id: OWNER2, role: 'admin' })).status).toBe(403);
+    myRole = 'owner';
+    owners = 1;
+    const last = await patch({ user_id: OWNER2, role: 'admin' });
+    expect(last.status).toBe(409);
+    expect((await last.json()).error).toMatch(/at least one owner/);
+    expect(admin.rpcs).toEqual([]);
+  });
+
+  it('a race the trigger catches is 409, not a raw database error', async () => {
+    myRole = 'owner';
+    owners = 2;
+    target = row({ user_id: OWNER2, role: 'owner', functions: [] });
+    updateError = { code: '23514', message: 'organization x must keep at least one owner' };
+    // (matched on the trigger's message)
+    const res = await patch({ user_id: OWNER2, role: 'admin' });
+    expect(res.status).toBe(409);
+    expect(JSON.stringify(await res.json())).not.toContain('23514');
+  });
+
+  it('an admin may lower their own role but not make themselves owner', async () => {
+    // Raising is refused by planMemberChange's rank rule (members.test.ts);
+    // the only role above admin is owner, which is never assigned here.
+    target = row({ user_id: ME, role: 'admin', functions: [] });
+    expect((await patch({ user_id: ME, role: 'owner' })).status).toBe(400);
+    expect((await patch({ user_id: ME, role: 'member' })).status).toBe(200);
+  });
+
+  it('an unchanged value writes nothing', async () => {
+    const res = await patch({ user_id: THEM, functions: ['a_and_r'] });
+    expect(res.status).toBe(200);
+    expect(admin.rpcs).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
+  it('when the audit function fails the request fails, and the route writes nothing to compensate', async () => {
+    auditFails = true;
+    const res = await patch({ user_id: THEM, functions: ['marketing'] });
+    expect(res.status).toBe(500);
+    // The rollback is the transaction's (146's local check); no revert write exists here.
+    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
+    expect(admin.rpcs).toHaveLength(1);
+  });
+
+  it('answers 503, not 500, when migration 146 is not applied', async () => {
+    updateError = { code: 'PGRST202', message: 'Could not find the function public.labelos_audit_member_update' };
+    const res = await patch({ user_id: THEM, functions: ['marketing'] });
+    expect(res.status).toBe(503);
+    expect((await res.json()).error).toMatch(/146/);
+  });
+
+  it('404 when the function finds no such member', async () => {
+    // The row was read, then removed by someone else before the function ran.
+    const read = target;
+    admin = fakeAdmin({
+      answer: (c) => (opOf(c, 'maybeSingle') ? { data: read, error: null } : answer(c)),
+      rpc: () => ({ data: { error: 'not_found' }, error: null }),
+    });
+    expect((await patch({ user_id: THEM, role: 'admin' })).status).toBe(404);
+  });
+
+  it('a stale plan is a 409 with a plain message: the function saw the row change under its lock (167)', async () => {
+    // A second admin changed the member between this route's read and its call.
+    admin = fakeAdmin({ answer, rpc: () => ({ data: { error: 'changed' }, error: null }) });
+    const res = await patch({ user_id: THEM, functions: ['marketing'] });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/changed this member at the same time/);
+    expect(body.error).not.toMatch(/labelos_|postgres|sql/i);
+  });
+
+  it('before 167 is applied (no seven-argument function), the change still goes through 146’s function, without the comparison', async () => {
+    const calls: Record<string, unknown>[] = [];
+    admin = fakeAdmin({
+      answer,
+      rpc: (name, args) => {
+        calls.push(args);
+        if ('p_expect' in args) {
+          return { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.labelos_audit_member_update(p_actor, p_expect, p_org, p_patch, p_payload, p_user, p_verb) in the schema cache' } };
+        }
+        return rpc(name, args);
+      },
+    });
+    const res = await patch({ user_id: THEM, functions: ['marketing'] });
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(2);
+    expect('p_expect' in calls[1]).toBe(false);
+  });
+
+  it('146 itself missing is still the 503 (the retry without p_expect finds nothing either)', async () => {
+    updateError = { code: 'PGRST202', message: 'Could not find the function public.labelos_audit_member_update(p_actor, p_expect, p_org, p_patch, p_payload, p_user, p_verb) in the schema cache' };
+    const res = await patch({ user_id: THEM, functions: ['marketing'] });
+    expect(res.status).toBe(503);
+  });
+
+  it('the expectation is the row as read, not as planned (a role change still expects the old role)', async () => {
+    target = row({ functions: ['marketing', 'a_and_r'], cap_revokes: ['catalog.write'] });
+    await patch({ user_id: THEM, role: 'admin' });
+    expect(admin.rpcs[0].args.p_expect).toEqual({
+      role: 'member',
+      functions: ['marketing', 'a_and_r'],
+      scope: 'org',
+      cap_grants: [],
+      cap_revokes: ['catalog.write'],
+    });
+  });
+});
+
+describe('artist scope rows follow the membership (LABEL-10)', () => {
+  it('widening a limited member to the whole org is one function call; clearing their artists is the function’s (146 check)', async () => {
+    target = row({ scope: 'artists' });
+    scopeRows = [C2, C1];
+    const res = await patch({ user_id: THEM, scope: 'org' });
+    expect(res.status).toBe(200);
+    expect(admin.rpcs[0].args).toMatchObject({ p_verb: 'member.scope_changed', p_patch: { scope: 'org' } });
+    expect(admin.rpcs[0].args).not.toHaveProperty('p_clear_artists');
+    expect(replaced).toEqual([]);
+  });
+
+  it('a change that keeps the member limited leaves their artists alone', async () => {
+    target = row({ scope: 'artists' });
+    scopeRows = [C1];
+    expect((await patch({ user_id: THEM, functions: ['marketing'] })).status).toBe(200);
+    expect(admin.rpcs[0].args).toMatchObject({ p_patch: { functions: ['marketing'] }, p_verb: 'member.capabilities_changed' });
+    expect(replaced).toEqual([]);
+  });
+
+  it('a failed function leaves the route with nothing to put back', async () => {
+    target = row({ scope: 'artists' });
+    scopeRows = [C1];
+    auditFails = true;
+    expect((await patch({ user_id: THEM, scope: 'org' })).status).toBe(500);
+    expect(replaced).toEqual([]);
+    expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
+  });
+
+  it('a failed removal has no restore write either: the artists never left', async () => {
+    target = row({ scope: 'artists' });
+    scopeRows = [C1, C2];
+    auditFails = true;
+    expect((await del(THEM)).status).toBe(500);
+    expect(replaced).toEqual([]);
+    expect(admin.chains.some((c) => opOf(c, 'insert'))).toBe(false);
+  });
+});
+
+describe('DELETE members', () => {
+  it('removes a member by (org, user) through the audit function (member.removed)', async () => {
+    const res = await del(THEM);
+    expect(res.status).toBe(200);
+    expect(admin.rpcs).toEqual([
+      {
+        name: 'labelos_audit_member_remove',
+        args: { p_org: ORG, p_actor: ME, p_user: THEM, p_payload: { role: 'member', functions: ['a_and_r'], scope: 'org' } },
+      },
+    ]);
+    expect(admin.chains.some((c) => opOf(c, 'delete'))).toBe(false);
+    expect(events).toEqual([]);
+  });
+
+  it('400 without a uuid; 404 when not a member; 403 without members.manage', async () => {
+    expect((await del('x')).status).toBe(400);
+    target = null;
+    expect((await del(THEM)).status).toBe(404);
+    myCaps = [];
+    expect((await del(THEM)).status).toBe(403);
+  });
+
+  it('the last owner is never removed (409), by check or by trigger', async () => {
+    myRole = 'owner';
+    target = row({ user_id: ME, role: 'owner', functions: [] });
+    owners = 1;
+    expect((await del(ME)).status).toBe(409);
+    owners = 2;
+    deleteError = { code: '23514', message: 'must keep at least one owner' };
+    expect((await del(ME)).status).toBe(409);
+  });
+
+  it('an admin cannot remove an owner', async () => {
+    target = row({ user_id: OWNER2, role: 'owner', functions: [] });
+    owners = 2;
+    expect((await del(OWNER2)).status).toBe(403);
+  });
+
+  it('when the audit function fails, the request fails (the membership is untouched: one transaction)', async () => {
+    auditFails = true;
+    expect((await del(THEM)).status).toBe(500);
+    expect(admin.chains.some((c) => opOf(c, 'insert'))).toBe(false);
+  });
+});

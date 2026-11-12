@@ -26,5 +26,14 @@ pkill -f '[p]ostgrest.local-db.conf' 2>/dev/null || true
 pkill -f '[g]ateway.mjs' 2>/dev/null || true
 nohup "$BIN" "$HERE/.cache/postgrest.local-db.conf" > "$HERE/.cache/postgrest.log" 2>&1 &
 nohup node "$HERE/gateway.mjs" > "$HERE/.cache/gateway.log" 2>&1 &
-sleep 2
+# Wait (bounded) until PostgREST AND the gateway in front of it answer a real query with the service key, so the first
+# request of a run never hits "TypeError: fetch failed" (review G19).
+SERVICE_KEY=$(node -e "import('$HERE/jwt.mjs').then(m => console.log(m.SERVICE_KEY))")
+ready=0
+for _ in $(seq 1 60); do
+  if [ "$(curl -s -o /dev/null -w '%{http_code}' -H "apikey: $SERVICE_KEY" -H "Authorization: Bearer $SERVICE_KEY" \
+        'http://127.0.0.1:54321/rest/v1/creator_profiles?select=user_id&limit=1')" = 200 ]; then ready=1; break; fi
+  sleep 1
+done
+[ "$ready" = 1 ] || { echo "local stack did not become ready within 60 s (see $HERE/.cache/*.log)" >&2; exit 1; }
 echo "✓ local stack up — now: source scripts/local-db/env.sh && npm run dev -- -p 3457"

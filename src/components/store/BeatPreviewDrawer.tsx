@@ -6,7 +6,8 @@ import {
   ExternalLink, Music, ChevronRight, ShoppingBag, Play, Pause, X,
 } from 'lucide-react';
 import { LicenseSelector } from '@/components/store/LicenseSelector';
-import { SpectralWaveform } from '@/components/player/SpectralWaveform';
+import { BandScrubber } from '@/components/visuals/BandScrubber';
+import { AudioVisualizer } from '@/components/visuals/AudioVisualizer';
 import { AsciiCoverArt } from '@/components/player/AsciiCoverArt';
 import { useAudioReactivity } from '@/hooks/useAudioReactivity';
 import { bandsUrlFromPeaksUrl } from '@/lib/audio/sidecar-url';
@@ -217,7 +218,21 @@ export function BeatPreviewDrawer({
               sit before committing to a licence. Interaction is unchanged —
               seeking on the current track, starting playback on any other. */}
           <div className="px-5 pt-4 pb-3 border-b border-white/[0.05]">
-            <SpectralWaveform
+            {/* Compact line-drawn visual above the scrubber: live while this
+                beat plays, otherwise a static picture of its peaks. */}
+            <AudioVisualizer
+              mode="terrain"
+              compact
+              trackId={track.id}
+              peaksUrl={track.peaks_url}
+              progress={isCurrent ? progress : 0}
+              isPlaying={isCurrent && isPlaying}
+              background="#0D0D0A"
+              height={132}
+              label={track.title}
+              className="mb-3"
+            />
+            <BandScrubber
               trackId={track.id}
               audioUrl={track.audio_url}
               publicAnalysisUrl={publicAnalysisUrl}
@@ -229,7 +244,7 @@ export function BeatPreviewDrawer({
               label={track.title}
               durationSeconds={dur}
             />
-            {/* No time row here — SpectralWaveform renders its own
+            {/* No time row here — BandScrubber renders its own
                 elapsed/remaining pair. Keeping this one produced two stacked
                 rows showing the same elapsed value with different right-hand
                 figures (remaining vs total). */}

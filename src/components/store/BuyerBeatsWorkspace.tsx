@@ -12,7 +12,7 @@
  *
  * "Create project" is a buyer playlist made from the selection
  * (`create_playlist` + `track_ids` on `/api/store/me`), so it lands in
- * "My playlists" below and follows the buyer across devices.
+ * "Projects" below and follows the buyer across devices.
  */
 
 import { useMemo, useState } from 'react';
@@ -142,7 +142,7 @@ export function BuyerBeatsWorkspace() {
       if (!res.ok) throw new Error(await readError(res));
     },
     onSuccess: (_d, input) => {
-      toast.success('Project created', `${input.track_ids.length} beat${input.track_ids.length === 1 ? '' : 's'} saved under My playlists.`);
+      toast.success('Project created', `${input.track_ids.length} beat${input.track_ids.length === 1 ? '' : 's'} saved under Projects.`);
       setSelected(new Set());
       setProjectName('');
       void queryClient.invalidateQueries({ queryKey: ['buyerMeLibrary'] });
@@ -301,7 +301,7 @@ export function BuyerBeatsWorkspace() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      {b.playable ? (
+                      {b.listed ? (
                         <Link href={`/store/${b.id}`} className="block truncate text-[11px] font-medium text-white hover:underline underline-offset-2">
                           {b.title}
                         </Link>

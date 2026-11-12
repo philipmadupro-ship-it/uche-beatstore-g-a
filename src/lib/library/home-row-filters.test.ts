@@ -11,6 +11,7 @@ function empty(): LibraryFilters {
     types: new Set(),
     offlineOnly: false,
     genres: new Set(),
+    tags: new Set(),
     statuses: new Set(),
     triage: new Set(),
     bpmMin: null,

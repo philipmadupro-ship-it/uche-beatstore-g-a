@@ -7,6 +7,7 @@ import {
   query,
   requireRowOwnership,
 } from '@/lib/db';
+import { selectIn } from '@/lib/db/chunked-in';
 import { readBody } from '@/lib/validate';
 import {
   PlaylistTracksAddBodySchema,
@@ -49,8 +50,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const have = new Set(rows.map((p) => p.track_id));
       const startPos = rows.reduce((m, p) => Math.max(m, p.position ?? 0), 0) + 1;
 
+      // Only the caller's own tracks. The playlist's owner was checked; the
+      // tracks were not, so another user's track — or an organization's, which
+      // is ownerless — could be put in a playlist and read back through it
+      // (the public store looks a featured playlist's tracks up by id).
+      // Chunked: a "add the selection" of a few hundred ids overflows a URL.
+      const ownedRows = await selectIn<{ id: string }>(
+        (ids) => owner.admin.from('tracks').select('id').in('id', ids).eq('user_id', owner.userId),
+        track_ids,
+      );
+      const owned = new Set(ownedRows.map((t) => t.id));
+
       const toInsert = track_ids
-        .filter((tid) => !have.has(tid))
+        .filter((tid) => owned.has(tid) && !have.has(tid))
         .map((tid, i) => ({ playlist_id: playlistId, track_id: tid, position: startPos + i }));
 
       if (toInsert.length) {

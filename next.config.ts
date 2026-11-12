@@ -70,6 +70,9 @@ const nextConfig: NextConfig = {
     // gets the empty `fs` stub from resolveAlias below and throws while the
     // build collects route config. Loaded from node_modules it sees real fs.
     'exceljs',
+    // pdfkit reads its font metric files with fs.readFileSync at runtime. Bundled, it gets the
+    // empty `fs` stub below and every PDF (LABEL-58 contracts) fails with "readFileSync is not a function".
+    'pdfkit',
     'audio-decode',
     '@wasm-audio-decoders/opus-ml',
     '@wasm-audio-decoders/common',
@@ -97,6 +100,14 @@ const nextConfig: NextConfig = {
     '/api/cron/process-uploads': ['./node_modules/ffmpeg-static/ffmpeg'],
     '/api/tracks/previews/backfill': ['./node_modules/ffmpeg-static/ffmpeg'],
     '/api/audio/diagnostics': ['./node_modules/ffmpeg-static/ffmpeg'],
+    // LABEL-72: the lossy full-length listening copy of a master is cut with ffmpeg when full songs are put on
+    // the store, and on first listen for a project member who may listen but not download.
+    '/api/org/[orgId]/releases/[releaseId]/store': ['./node_modules/ffmpeg-static/ffmpeg'],
+    '/api/org/[orgId]/audio/[trackId]': ['./node_modules/ffmpeg-static/ffmpeg'],
+    // The MP3 a lease buyer is sold is made from the master on first download.
+    '/api/store/download-file': ['./node_modules/ffmpeg-static/ffmpeg'],
+    // "Make MP3 now" in the track drawer runs the same transcode.
+    '/api/tracks/[id]/mp3': ['./node_modules/ffmpeg-static/ffmpeg'],
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
