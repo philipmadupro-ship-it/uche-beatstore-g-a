@@ -1,22 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advancePosition, bandEnergies, envFollow, normaliseSeries, scrubFraction, seriesPeakAt, tapFraction,
-} from './lanes';
-
-describe('normaliseSeries / seriesPeakAt', () => {
-  it('scales to the series peak and lifts the body', () => {
-    const n = normaliseSeries([0, 0.1, 0.5, 1]);
-    expect(n[3]).toBe(1);
-    expect(n[1]).toBeGreaterThan(0.1);
-    expect(Array.from(normaliseSeries([0, 0, 0]))).toEqual([0, 0, 0]);
-  });
-  it('takes the bucket peak, not a point sample', () => {
-    const s = new Float32Array(100); s[37] = 0.9;
-    expect(seriesPeakAt(s, 0.3, 0.5)).toBeCloseTo(0.9);
-    expect(seriesPeakAt(s, 0.6, 0.8)).toBe(0);
-    expect(seriesPeakAt(s, 2, 3)).toBe(0);
-  });
-});
+  advancePosition, bandEnergies, envFollow, scrubFraction, tapFraction,
+} from './scrub';
 
 describe('bandEnergies', () => {
   it('routes low / mid / high bands to red / green / blue order (low, mid, high)', () => {

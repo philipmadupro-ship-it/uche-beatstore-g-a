@@ -7,7 +7,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 
-function wav(seconds = 12, rate = 22050): Buffer {
+function wav(seconds = 30, rate = 22050): Buffer {
   const n = seconds * rate;
   const buf = Buffer.alloc(44 + n * 2);
   buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVE', 8);
@@ -17,21 +17,37 @@ function wav(seconds = 12, rate = 22050): Buffer {
   let seed = 1;
   const noise = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 2147483648 - 1; };
   let lp = 0;
+  let prev1 = 0;
+  let prev2 = 0;
   for (let i = 0; i < n; i += 1) {
     const t = i / rate;
-    const beat = t % 0.5;
-    // low: kick
-    const kick = Math.sin(2 * Math.PI * (55 + 90 * Math.exp(-beat * 18)) * t) * Math.exp(-beat * 7);
-    // mid: minor chord stabs on the off-beat
-    const stab = (t + 0.25) % 0.5;
-    const env = Math.exp(-stab * 5);
-    const chord = (Math.sin(2 * Math.PI * 220 * t) + Math.sin(2 * Math.PI * 261.6 * t) + Math.sin(2 * Math.PI * 329.6 * t)) / 3 * env;
-    // high: hi-hats, high-passed noise bursts every 1/8
-    const hat = (t % 0.25);
-    const raw = noise();
-    const hp = raw - lp; lp += 0.35 * (raw - lp);
-    const hats = hp * Math.exp(-hat * 38) * (Math.floor(t / 0.25) % 2 ? 1 : 0.6);
-    buf.writeInt16LE(Math.round(Math.max(-1, Math.min(1, 0.75 * kick + 0.5 * chord + 0.35 * hats)) * 0.8 * 32767), 44 + i * 2);
+    let v: number;
+    if (t < 2) {
+      // LEGEND 1/3 — bass only: an 808 at 50 Hz, two hits
+      const e = Math.exp(-(t % 1) * 3);
+      v = 0.85 * Math.sin(2 * Math.PI * (50 + 6 * e) * t) * e;
+    } else if (t < 4) {
+      // LEGEND 2/3 — mids only: a chord stab around 600–2000 Hz, four hits
+      const e = Math.exp(-(t % 0.5) * 6);
+      v = 0.3 * e * (Math.sin(2 * Math.PI * 600 * t) + Math.sin(2 * Math.PI * 900 * t) + Math.sin(2 * Math.PI * 1400 * t) + Math.sin(2 * Math.PI * 2000 * t));
+    } else if (t < 6) {
+      // LEGEND 3/3 — hats only: noise differentiated twice (energy far above 6 kHz)
+      const r = noise();
+      const d = r - 2 * prev1 + prev2; prev2 = prev1; prev1 = r;
+      v = 0.28 * d * Math.exp(-(t % 0.125) * 40);
+    } else {
+      // the full mix: kick + chord stabs + hi-hats
+      const beat = t % 0.5;
+      const kick = Math.sin(2 * Math.PI * (55 + 90 * Math.exp(-beat * 18)) * t) * Math.exp(-beat * 7);
+      const stab = (t + 0.25) % 0.5;
+      const chord = (Math.sin(2 * Math.PI * 220 * t) + Math.sin(2 * Math.PI * 261.6 * t) + Math.sin(2 * Math.PI * 329.6 * t)) / 3 * Math.exp(-stab * 5);
+      const hat = t % 0.25;
+      const raw = noise();
+      const hp = raw - lp; lp += 0.35 * (raw - lp);
+      const hats = hp * Math.exp(-hat * 38) * (Math.floor(t / 0.25) % 2 ? 1 : 0.6);
+      v = 0.75 * kick + 0.5 * chord + 0.35 * hats;
+    }
+    buf.writeInt16LE(Math.round(Math.max(-1, Math.min(1, v)) * 0.8 * 32767), 44 + i * 2);
   }
   return buf;
 }
@@ -127,6 +143,9 @@ for (const vp of [{ name: '1440', width: 1440, height: 900 }, { name: '390', wid
       const a = await snap();
       await page.waitForTimeout(500);
       expect(await snap()).not.toBe(a);
+      // Jump to the full mix (the first 6 s are the colour legend) and let it settle.
+      await page.evaluate(() => { (document.querySelector('audio') as HTMLAudioElement).currentTime = 10; });
+      await page.waitForTimeout(700);
       await page.screenshot({ path: `e2e-artifacts/store-visuals/scrubber-playing-${vp.name}.png` });
 
       // Arrow keys step 5 s.
@@ -210,14 +229,22 @@ test('element swap: a captured player moving to an uncapturable source keeps pla
 test.describe('scrubber close-up @2x', () => {
   test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
 
-  test('the scrubber alone, playing and paused, for judging line detail and glow', async ({ page }) => {
+  test('the scrubber alone at 2x: the full mix, and the colour legend', async ({ page }) => {
     await openAndPlay(page);
-    await expect.poll(() => audioTime(page), { timeout: 10_000 }).toBeGreaterThan(2.2);
+    await expect.poll(() => audioTime(page), { timeout: 10_000 }).toBeGreaterThan(1);
     const slider = page.locator('[role="dialog"] [data-band-scrubber]').first();
-    await slider.screenshot({ path: 'e2e-artifacts/store-visuals/scrubber-closeup-2x-playing.png' });
+    await expect(slider).toHaveAttribute('data-wave-source', 'analysis', { timeout: 15_000 });
+    await page.evaluate(() => { (document.querySelector('audio') as HTMLAudioElement).currentTime = 11; });
+    await page.waitForTimeout(500);
+    await slider.screenshot({ path: 'e2e-artifacts/store-visuals/scrubber-closeup-2x-fullmix-playing.png' });
+    // Legend: pause at 4.0 s — bass (red) and mids (green) played behind the playhead, hats (blue) ahead.
     await page.locator('[role="dialog"]').getByRole('button', { name: 'Pause', exact: true }).first().click();
-    await page.waitForTimeout(400);
-    await slider.screenshot({ path: 'e2e-artifacts/store-visuals/scrubber-closeup-2x-paused.png' });
+    await page.evaluate(() => { (document.querySelector('audio') as HTMLAudioElement).currentTime = 4; });
+    await page.waitForTimeout(600);
+    await slider.screenshot({ path: 'e2e-artifacts/store-visuals/scrubber-closeup-2x-legend.png' });
+    await page.evaluate(() => { (document.querySelector('audio') as HTMLAudioElement).currentTime = 2.9; });
+    await page.waitForTimeout(500);
+    await slider.screenshot({ path: 'e2e-artifacts/store-visuals/scrubber-closeup-2x-legend-bass-mid.png' });
   });
 });
 

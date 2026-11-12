@@ -1,40 +1,9 @@
 /**
- * Pure maths for the scrolling band scrubber: series normalisation and bucket-peak lookup, per-band live energy, envelope
+ * Pure maths for the scrolling scrubber: per-band live energy, envelope
  * following, position extrapolation, scrub/tap mapping.
  */
 
 import { clamp01 } from './geometry';
-
-/**
- * Normalise a series to 0..1 against its own peak and lift the quiet body with
- * a gamma curve (a mastered beat would otherwise be a thin thread). Writes a
- * new Float32Array — called once per track, never per frame.
- */
-export function normaliseSeries(values: ArrayLike<number>, gamma = 0.62): Float32Array {
-  const out = new Float32Array(values.length);
-  let max = 0;
-  for (let i = 0; i < values.length; i += 1) {
-    const v = Math.abs(values[i]);
-    if (Number.isFinite(v) && v > max) max = v;
-  }
-  if (max <= 0) return out;
-  for (let i = 0; i < values.length; i += 1) {
-    const v = Math.abs(values[i]);
-    out[i] = Number.isFinite(v) ? Math.pow(v / max, gamma) : 0;
-  }
-  return out;
-}
-
-/** Peak of `series` across the fraction range [f0, f1] (bucket peak, never a point sample). */
-export function seriesPeakAt(series: ArrayLike<number>, f0: number, f1: number): number {
-  const n = series.length;
-  if (n === 0 || f1 < 0 || f0 > 1) return 0;
-  const a = Math.max(0, Math.min(n - 1, Math.floor(f0 * n)));
-  const b = Math.max(a, Math.min(n - 1, Math.floor(f1 * n)));
-  let p = 0;
-  for (let i = a; i <= b; i += 1) if (series[i] > p) p = series[i];
-  return p;
-}
 
 /**
  * Live energy per band (0..1), order low, mid, high, from the log-spaced

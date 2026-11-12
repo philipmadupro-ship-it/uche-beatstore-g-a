@@ -38,7 +38,6 @@ export interface DrawState {
   /** Smoothed bands, 0..1, length BAND_COUNT. */
   bands: Float32Array;
   history: History;
-  /** Smoothed meter ladder levels [left, right] for hold/decay. */
   /** Playhead 0..1, used for a tiny marker on static frames. */
   progress: number;
   /** True when drawing live analyser data rather than precomputed peaks. */
