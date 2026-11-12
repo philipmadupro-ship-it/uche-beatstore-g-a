@@ -54,8 +54,12 @@ for (const vp of [
     test.use({ viewport: { width: vp.width, height: vp.height } });
 
     test('scrubber and transport are visible on open without scrolling', async ({ page }) => {
+      const logs: string[] = [];
+      page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`${m.type()}: ${m.text().slice(0, 300)}`); });
+      page.on('pageerror', (e) => logs.push(`pageerror: ${e.message.slice(0, 300)}`));
       await openNowPlaying(page);
-      await page.waitForTimeout(600); // let the open animation settle
+      await page.waitForTimeout(600);
+      console.log(`CONSOLE@${vp.name} ${JSON.stringify(logs)}`); // let the open animation settle
       const m = await page.evaluate(() => {
         const dlg = document.querySelector('[role="dialog"][aria-label="Now playing"]')!;
         const r = (el: Element | null) => { const b = el!.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom) }; };
