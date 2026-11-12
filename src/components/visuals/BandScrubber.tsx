@@ -1,15 +1,16 @@
 'use client';
 
 /**
- * DAW-grade scrolling scrubber: a dense mirrored waveform on ONE centre line,
- * each line coloured by its frequency content (lows red, mids green, highs
- * blue; equal bands white), with a FIXED centre playhead the waveform scrolls
- * past. Height is the true peak of the mix; colour never changes it.
+ * Rekordbox-style 3-band scrolling waveform: a CONTINUOUS filled shape (one
+ * column per device pixel) of three layered, mirrored bands on ONE centre line
+ * (low at the back, mid, then high in front, each at its own height), with a
+ * FIXED centre playhead the waveform scrolls past. Unplayed is full colour; the
+ * played side is darkened and desaturated.
  *
- * Rendering is tiled: the coloured lines (played and dimmed) and the glow are
- * pre-rendered ONCE per (track, width, DPR) into ~2048 CSS px tiles; each frame
- * only blits the visible tiles at an integer device-pixel offset, then draws the
- * small live-reaction overlay and the playhead.
+ * Rendering is tiled: the layers (full and played variants) and the small HIGH-
+ * layer bloom are pre-rendered ONCE per (track, width, DPR) into ~2048 CSS px
+ * tiles; each frame only blits the visible tiles at an integer device-pixel
+ * offset, then draws the live-reaction overlay and the playhead.
  *
  * Drop-in for SpectralWaveform's props. Drag/swipe scrubs, tap/click jumps,
  * arrow keys step 5 s, `role="slider"` with aria values.
@@ -24,8 +25,8 @@ import { cn } from '@/lib/utils';
 import { clamp01, BAND_COUNT } from '@/lib/visuals/geometry';
 import { advancePosition, bandEnergies, envFollow, scrubFraction, tapFraction } from '@/lib/visuals/scrub';
 import {
-  DEFAULT_BAND_THEME, GLOW_ALPHA_PLAYED, GLOW_ALPHA_UNPLAYED, GLOW_SCALE, renderBandGlow, renderBandWaveform,
-  stripLayout, stripX, tileCount, type BandTheme, type StripLayout,
+  GLOW_SCALE, PALETTES, PLAYHEAD_CSS, bandTheme, renderBandBloom, renderBandWaveform,
+  stripLayout, stripX, tileCount, type BandTheme, type PaletteName, type StripLayout,
 } from '@/lib/visuals/waveform-render';
 import type { WaveformModel } from '@/lib/visuals/waveform-model';
 import { readBands, type LiveFrame } from '@/lib/visuals/analyser-hub';
@@ -34,6 +35,20 @@ const DEFAULT_VISIBLE_SECONDS = 16;
 const TAP_SLOP_PX = 5;
 /** The live reaction reaches this far either side of the playhead, CSS px. */
 const LIVE_RADIUS_CSS = 40;
+/** The listener's palette (per browser; `rgb` is the Serato-like alternative). */
+const PALETTE_KEY = 'antigravity-wave-palette';
+function storedPalette(): PaletteName {
+  try {
+    const v = window.localStorage.getItem(PALETTE_KEY);
+    return v && v in PALETTES ? (v as PaletteName) : 'rekordbox3band';
+  } catch { return 'rekordbox3band'; }
+}
+
+/** Default box height: min(18vh, 160px). */
+function defaultHeight(): number {
+  const vh = typeof window === 'undefined' ? 800 : window.innerHeight;
+  return Math.round(Math.max(96, Math.min(0.18 * vh, 160)));
+}
 
 interface Props {
   trackId: string;
@@ -64,9 +79,11 @@ interface TileSet {
   layout: StripLayout;
   width: number;
   count: number;
+  /** Played side: darkened, desaturated. */
   played: HTMLCanvasElement[];
-  dim: HTMLCanvasElement[];
-  glow: HTMLCanvasElement[];
+  /** Unplayed side: full colour. */
+  full: HTMLCanvasElement[];
+  bloom: HTMLCanvasElement[];
 }
 
 function makeCanvas(w: number, h: number): { c: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
@@ -80,25 +97,41 @@ function makeCanvas(w: number, h: number): { c: HTMLCanvasElement; ctx: CanvasRe
 function buildTiles(model: WaveformModel, theme: BandTheme, width: number, height: number, dpr: number, visibleSeconds: number, durationSeconds: number): TileSet {
   const layout = stripLayout(width, visibleSeconds, height, dpr);
   const count = tileCount(layout, durationSeconds);
-  const set: TileSet = { model, theme, layout, width, count, played: [], dim: [], glow: [] };
+  const set: TileSet = { model, theme, layout, width, count, played: [], full: [], bloom: [] };
   for (let k = 0; k < count; k += 1) {
     const p = makeCanvas(layout.tileDevWidth, layout.devHeight);
-    const d = makeCanvas(layout.tileDevWidth, layout.devHeight);
-    const g = makeCanvas(Math.ceil(layout.tileDevWidth * GLOW_SCALE), Math.ceil(layout.devHeight * GLOW_SCALE));
-    if (!p || !d || !g) continue;
+    const f = makeCanvas(layout.tileDevWidth, layout.devHeight);
+    const g = theme.bloomAlpha > 0
+      ? makeCanvas(Math.ceil(layout.tileDevWidth * GLOW_SCALE), Math.ceil(layout.devHeight * GLOW_SCALE))
+      : null;
+    if (!p || !f) continue;
     renderBandWaveform(p.ctx, model, layout, k, theme, 'played');
-    renderBandWaveform(d.ctx, model, layout, k, theme, 'unplayed');
-    renderBandGlow(g.ctx, model, layout, k, theme);
-    set.played.push(p.c); set.dim.push(d.c); set.glow.push(g.c);
+    renderBandWaveform(f.ctx, model, layout, k, theme, 'unplayed');
+    if (g) renderBandBloom(g.ctx, model, layout, k, theme);
+    set.played.push(p.c); set.full.push(f.c); if (g) set.bloom.push(g.c);
   }
   return set;
 }
 
 export function BandScrubber({
   trackId, audioUrl, peaksUrl, publicAnalysisUrl, progress, isPlaying, canSeek, onSeek, label, durationSeconds: trackSeconds,
-  height = 140, visibleSeconds = DEFAULT_VISIBLE_SECONDS, theme = DEFAULT_BAND_THEME, className,
+  height: heightProp, visibleSeconds = DEFAULT_VISIBLE_SECONDS, theme: themeProp, className,
 }: Props) {
   const reduced = useReducedMotion();
+  // min(18vh, 160px) unless the caller sets one (measured after mount so SSR matches).
+  const [autoHeight, setAutoHeight] = useState(140);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- viewport is only known after mount
+    setAutoHeight(defaultHeight());
+    const on = () => setAutoHeight(defaultHeight());
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  const height = heightProp ?? autoHeight;
+  const [palette, setPalette] = useState<PaletteName>('rekordbox3band');
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after mount
+  useEffect(() => { setPalette(storedPalette()); }, []);
+  const theme = useMemo(() => themeProp ?? bandTheme(palette), [themeProp, palette]);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [width, setWidth] = useState(0);
@@ -201,42 +234,35 @@ export function BandScrubber({
         ctx.restore();
       };
 
-      // 1) Glow BEHIND the lines (source-over, alpha ≤ 0.22), smoothed upscale.
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.globalAlpha = GLOW_ALPHA_PLAYED;
-      side(0, cx, (k, dx) => ctx.drawImage(t.glow[k], 0, 0, t.glow[k].width, t.glow[k].height, dx, 0, tileW, H));
-      ctx.globalAlpha = GLOW_ALPHA_UNPLAYED;
-      side(cx, W, (k, dx) => ctx.drawImage(t.glow[k], 0, 0, t.glow[k].width, t.glow[k].height, dx, 0, tileW, H));
-      // Live glow boost near the playhead (small, source-over, still behind the lines).
-      if (liveEnergy > 0.02) {
-        ctx.globalAlpha = Math.min(0.08, liveEnergy * 0.1);
-        side(cx - liveR, cx + liveR, (k, dx) => ctx.drawImage(t.glow[k], 0, 0, t.glow[k].width, t.glow[k].height, dx, 0, tileW, H));
+      // 1) The soft bloom on the HIGH layer only, behind everything (alpha ≤ 0.12).
+      if (t.bloom.length > 0 && theme.bloomAlpha > 0) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.globalAlpha = theme.bloomAlpha;
+        side(0, W, (k, dx) => { const g = t.bloom[k]; if (g) ctx.drawImage(g, 0, 0, g.width, g.height, dx, 0, tileW, H); });
       }
 
-      // 2) Lines: crisp, integer offsets, no smoothing. Played full colour, unplayed dimmed.
+      // 2) The layers, crisp at integer offsets: played (left) darkened, unplayed (right) full colour.
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = 1;
       side(0, cx, (k, dx) => ctx.drawImage(t.played[k], dx, 0));
-      side(cx, W, (k, dx) => ctx.drawImage(t.dim[k], dx, 0));
-      // Live brightness boost: the same lines again, additively, inside the radius.
-      // Transparent gaps add nothing, so the gaps stay dark and the hue is unchanged.
+      side(cx, W, (k, dx) => ctx.drawImage(t.full[k], dx, 0));
+
+      // 3) Live brightness under the playhead: the same layers again, additively, within the radius.
       if (liveEnergy > 0.02) {
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = Math.min(0.4, liveEnergy * 0.4);
+        ctx.globalAlpha = Math.min(0.25, liveEnergy * 0.25);
         side(cx - liveR, cx, (k, dx) => ctx.drawImage(t.played[k], dx, 0));
-        side(cx, cx + liveR, (k, dx) => ctx.drawImage(t.dim[k], dx, 0));
+        side(cx, cx + liveR, (k, dx) => ctx.drawImage(t.full[k], dx, 0));
         ctx.globalCompositeOperation = 'source-over';
       }
     }
 
-    // 3) Playhead: a 1 px line with a 3 px halo, snapped to whole device pixels.
+    // 4) Playhead: a 2 px solid white line, snapped to the pixel grid.
     ctx.globalAlpha = 1;
-    const halo = px1 * 3;
-    ctx.fillStyle = theme.playheadHalo;
-    ctx.fillRect(cx - Math.floor(halo / 2), 0, halo, H);
+    const ph = Math.max(1, Math.round(PLAYHEAD_CSS * dpr));
     ctx.fillStyle = theme.playhead;
-    ctx.fillRect(cx - Math.floor(px1 / 2), 0, px1, H);
+    ctx.fillRect(cx - Math.floor(ph / 2), 0, ph, H);
   }, [theme, durationSeconds]);
 
   const currentPos = useCallback(() => {

@@ -1,175 +1,138 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_BAND_THEME, GLOW_ALPHA_PLAYED, GLOW_ALPHA_UNPLAYED, GLOW_SCALE, columnColour, dimColour, parseHex,
-  renderBandGlow, renderBandWaveform, stripLayout, type Rgb, type RectSink,
+  DEFAULT_BAND_THEME, HEIGHT_FILL, PALETTES, bandCss, bandTheme, parseHex, playedColour, renderBandWaveform,
+  stripLayout, tileHeights, type RectSink,
 } from './waveform-render';
 import type { WaveformModel } from './waveform-model';
 
-const V = {
-  low: parseHex('#FF2D2D'), mid: parseHex('#33FF66'), high: parseHex('#2E7BFF'),
-};
-const G: [number, number, number] = [1, 1, 1];
-
-describe('columnColour (max of three)', () => {
-  it('pure low is red, pure mid green, pure high blue', () => {
-    const out: Rgb = [0, 0, 0];
-    expect(columnColour(200, 0, 0, V, G, out)).toBe(true);
-    expect(out[0]).toBeCloseTo(1); expect(out[0]).toBeGreaterThan(out[1] * 2); expect(out[0]).toBeGreaterThan(out[2] * 2);
-    columnColour(0, 200, 0, V, G, out);
-    expect(out[1]).toBeCloseTo(1); expect(out[1]).toBeGreaterThan(out[0]); expect(out[1]).toBeGreaterThan(out[2]);
-    columnColour(0, 0, 200, V, G, out);
-    expect(out[2]).toBeCloseTo(1); expect(out[2]).toBeGreaterThan(out[0]); expect(out[2]).toBeGreaterThan(out[1]);
-  });
-  it('equal strong bands add to white; the hue stays saturated (max channel is 1) for any mix', () => {
-    const out: Rgb = [0, 0, 0];
-    // with neutral (pure R, G, B) colours equal bands are exactly white
-    const pure = { low: [1, 0, 0] as Rgb, mid: [0, 1, 0] as Rgb, high: [0, 0, 1] as Rgb };
-    columnColour(180, 180, 180, pure, G, out);
-    expect(out).toEqual([1, 1, 1]);
-    columnColour(90, 255, 30, V, G, out);
-    expect(Math.max(...out)).toBeCloseTo(1);
-  });
-  it('zero energy is skipped', () => {
-    expect(columnColour(0, 0, 0, V, G, [0, 0, 0])).toBe(false);
-  });
-  it('per-band gain shifts the mix', () => {
-    const out: Rgb = [0, 0, 0];
-    columnColour(100, 100, 0, V, [1, 0, 1], out);
-    expect(out[0]).toBeGreaterThan(out[1]); // mid muted -> red wins
-  });
-  it('dimming keeps the hue, halves the brightness and leans toward grey', () => {
-    const d = dimColour([1, 0, 0], [0, 0, 0]);
-    expect(d[0]).toBeGreaterThan(d[1]);
-    expect(d[0]).toBeLessThan(0.6);
-    expect(d[1]).toBeGreaterThan(0.1); // greyed, not black
-  });
-});
-
-// ── a tiny software raster that implements the RectSink the renderer draws into ──
+/** Records every fill, so layer order and shape can be asserted. */
 class Raster implements RectSink {
   fillStyle: string | CanvasGradient | CanvasPattern = '#000000';
   globalAlpha = 1;
-  data: Float64Array;
-  constructor(public w: number, public h: number) { this.data = new Float64Array(w * h * 4); }
-  private colour(): Rgb {
-    const fs = String(this.fillStyle);
-    const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(fs);
-    return m ? [+m[1] / 255, +m[2] / 255, +m[3] / 255] : parseHex(fs);
-  }
+  fills: Array<{ style: string; alpha: number; x: number; y: number; w: number; h: number }> = [];
+  px: Uint8Array;
+  constructor(public w: number, public h: number) { this.px = new Uint8Array(w * h); }
   fillRect(x: number, y: number, w: number, h: number) {
-    const c = this.colour();
-    for (let yy = Math.max(0, Math.round(y)); yy < Math.min(this.h, Math.round(y + h)); yy += 1) {
-      for (let xx = Math.max(0, Math.round(x)); xx < Math.min(this.w, Math.round(x + w)); xx += 1) {
-        const i = (yy * this.w + xx) * 4;
-        const sa = this.globalAlpha; const da = this.data[i + 3];
-        const oa = sa + da * (1 - sa);
-        for (let k = 0; k < 3; k += 1) this.data[i + k] = (c[k] * sa + this.data[i + k] * da * (1 - sa)) / (oa || 1);
-        this.data[i + 3] = oa;
-      }
+    this.fills.push({ style: String(this.fillStyle), alpha: this.globalAlpha, x, y, w, h });
+    for (let yy = Math.max(0, y); yy < Math.min(this.h, y + h); yy += 1) {
+      for (let xx = Math.max(0, x); xx < Math.min(this.w, x + w); xx += 1) this.px[yy * this.w + xx] = 1;
     }
   }
-  px(x: number, y: number): [number, number, number, number] {
-    const i = (y * this.w + x) * 4; return [this.data[i], this.data[i + 1], this.data[i + 2], this.data[i + 3]];
+  /** Is any pixel of device column x painted? */
+  column(x: number): boolean { for (let y = 0; y < this.h; y += 1) if (this.px[y * this.w + x]) return true; return false; }
+  /** Painted extent (top, bottom) of column x for fills of one style. */
+  extent(x: number, style: string): { top: number; bottom: number } | null {
+    let top = Infinity, bottom = -1;
+    for (const f of this.fills) if (f.style === style && x >= f.x && x < f.x + f.w) { top = Math.min(top, f.y); bottom = Math.max(bottom, f.y + f.h - 1); }
+    return bottom < 0 ? null : { top, bottom };
   }
 }
 
-/** Bilinear upscale of the glow raster (what the browser's smoothing does). */
-function upscale(src: Raster, w: number, h: number): Raster {
-  const out = new Raster(w, h);
-  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
-    const sx = Math.min(src.w - 1, Math.max(0, (x + 0.5) * (src.w / w) - 0.5));
-    const sy = Math.min(src.h - 1, Math.max(0, (y + 0.5) * (src.h / h) - 0.5));
-    const x0 = Math.floor(sx), y0 = Math.floor(sy), x1 = Math.min(src.w - 1, x0 + 1), y1 = Math.min(src.h - 1, y0 + 1);
-    const fx = sx - x0, fy = sy - y0;
-    const o = (y * w + x) * 4;
-    for (let k = 0; k < 4; k += 1) {
-      const a = src.data[(y0 * src.w + x0) * 4 + k], b = src.data[(y0 * src.w + x1) * 4 + k];
-      const c = src.data[(y1 * src.w + x0) * 4 + k], d = src.data[(y1 * src.w + x1) * 4 + k];
-      out.data[o + k] = (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
-    }
-  }
-  return out;
-}
+const model = (cols: number, lo: number, mid: number, hi: number): WaveformModel => ({
+  all: new Uint8Array(cols).fill(Math.max(lo, mid, hi)),
+  low: new Uint8Array(cols).fill(lo), mid: new Uint8Array(cols).fill(mid), high: new Uint8Array(cols).fill(hi),
+  columnsPerSecond: 441, peak: 1,
+});
 
-const lum = (c: number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+describe('palettes', () => {
+  it('rekordbox3band is the default: deep blue lows, amber mids, white highs', () => {
+    expect(DEFAULT_BAND_THEME.palette).toEqual({ low: '#1E5BFF', mid: '#FF9A1F', high: '#FFFFFF' });
+    expect(PALETTES.rekordbox3band.low).toBe('#1E5BFF');
+  });
+  it('the rgb palette is the Serato-like one', () => {
+    expect(PALETTES.rgb).toEqual({ low: '#FF2D2D', mid: '#33FF66', high: '#2E7BFF' });
+    expect(bandTheme('rgb').palette).toEqual(PALETTES.rgb);
+  });
+  it('the played side is darkened to 45% and desaturated by 30%', () => {
+    const c = parseHex('#FF9A1F');
+    const p = playedColour(c, 0.3, 0.45);
+    for (let k = 0; k < 3; k += 1) expect(p[k]).toBeLessThanOrEqual(c[k] * 0.45 + 0.2);
+    const sat = (v: number[]) => Math.max(...v) - Math.min(...v);
+    expect(sat(p) / Math.max(...p)).toBeLessThan(sat(c) / Math.max(...c)); // less saturated
+    expect(Math.max(...p)).toBeCloseTo(0.45 * (c[0] + (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] - c[0]) * 0.3), 5);
+    // and the unplayed variant is the FULL colour
+    expect(bandCss(DEFAULT_BAND_THEME, 'mid', 'unplayed')).toBe('rgb(255,154,31)');
+    expect(bandCss(DEFAULT_BAND_THEME, 'mid', 'played')).not.toBe('rgb(255,154,31)');
+  });
+});
 
-/** Composite exactly as the app does: background, glow BEHIND at its alpha, then the lines. */
-function composite(model: WaveformModel, dpr: number, variant: 'played' | 'unplayed') {
-  const layout = stripLayout(400, 16, 140, dpr);
-  const W = layout.tileDevWidth, H = layout.devHeight;
-  const lines = new Raster(W, H);
-  renderBandWaveform(lines, model, layout, 0, DEFAULT_BAND_THEME, variant);
-  const glowSmall = new Raster(Math.ceil(W * GLOW_SCALE), Math.ceil(H * GLOW_SCALE));
-  renderBandGlow(glowSmall, model, layout, 0, DEFAULT_BAND_THEME);
-  const glow = upscale(glowSmall, W, H);
-  const bg = parseHex(DEFAULT_BAND_THEME.background);
-  const ga = variant === 'played' ? GLOW_ALPHA_PLAYED : GLOW_ALPHA_UNPLAYED;
-  const out = (x: number, y: number) => {
-    const g = glow.px(x, y); const l = lines.px(x, y);
-    const a = g[3] * ga;
-    const base = [0, 1, 2].map((k) => bg[k] * (1 - a) + g[k] * a);
-    return [0, 1, 2].map((k) => base[k] * (1 - l[3]) + l[k] * l[3]);
-  };
-  return { layout, out };
-}
-
-function loudModel(cols: number, band: 'all3' | 'low'): WaveformModel {
-  const m: WaveformModel = {
-    all: new Uint8Array(cols).fill(255), low: new Uint8Array(cols), mid: new Uint8Array(cols), high: new Uint8Array(cols),
-    columnsPerSecond: 441, peak: 1,
-  };
-  if (band === 'all3') { m.low.fill(255); m.mid.fill(255); m.high.fill(255); } else { m.low.fill(255); }
-  return m;
-}
-
-describe('rendered columns keep a visible gap (even inside a loud kick)', () => {
+describe('continuous columns', () => {
   for (const dpr of [1, 2]) {
-    for (const variant of ['played', 'unplayed'] as const) {
-      for (const band of ['all3', 'low'] as const) {
-        it(`dpr ${dpr}, ${variant}, ${band}: gap luminance ≤ 35% of line luminance`, () => {
-          const { layout, out } = composite(loudModel(441 * 8, band), dpr, variant);
-          const col = 40;                      // a column well inside the loud region
-          const x0 = col * layout.devPitch;
-          const y = Math.round(layout.devHeight / 2) - 6;
-          const line = out(x0 + Math.floor(layout.lineDev / 2), y);
-          const gap = out(x0 + layout.lineDev + Math.floor((layout.devPitch - layout.lineDev) / 2), y);
-          expect(lum(gap)).toBeLessThanOrEqual(0.35 * lum(line));
-          // the line is really there, snapped to whole device pixels
-          expect(layout.lineDev).toBe(Math.round(1.5 * dpr));
-          expect(layout.devPitch - layout.lineDev).toBe(Math.round(2.5 * dpr) - Math.round(1.5 * dpr));
-        });
-      }
-    }
+    it(`dpr ${dpr}: no empty device column inside a loud region (a solid shape, no gaps)`, () => {
+      const layout = stripLayout(400, 16, 140, dpr);
+      const r = new Raster(layout.tileDevWidth, layout.devHeight);
+      renderBandWaveform(r, model(441 * 12, 255, 200, 120), layout, 0, DEFAULT_BAND_THEME, 'unplayed');
+      const loud = Math.floor((12 / layout.secPerPx) * dpr) - 2;
+      for (let x = 0; x < loud; x += 1) expect(r.column(x)).toBe(true);
+    });
   }
 
-  it('lines are mirrored about the centre and use up to 78% of the height', () => {
-    const layout = stripLayout(400, 16, 140, 2);
+  it('a varying signal is still contiguous and one column wide at most per height step', () => {
+    const layout = stripLayout(400, 16, 140, 1);
+    const m = model(441 * 8, 255, 0, 0);
+    for (let i = 0; i < m.low.length; i += 1) m.low[i] = 40 + ((i * 37) % 200);
     const r = new Raster(layout.tileDevWidth, layout.devHeight);
-    renderBandWaveform(r, loudModel(441 * 8, 'low'), layout, 0, DEFAULT_BAND_THEME, 'played');
-    const x = 10 * layout.devPitch + 1;
-    let top = -1, bottom = -1;
-    for (let y = 0; y < r.h; y += 1) if (r.px(x, y)[3] > 0) { if (top < 0) top = y; bottom = y; }
+    renderBandWaveform(r, m, layout, 0, DEFAULT_BAND_THEME, 'unplayed');
+    for (let x = 0; x < Math.floor(8 / layout.secPerPx) - 2; x += 1) expect(r.column(x)).toBe(true);
+  });
+});
+
+describe('layered bands', () => {
+  const layout = stripLayout(400, 16, 160, 2);
+  const lo = bandCss(DEFAULT_BAND_THEME, 'low', 'unplayed');
+  const mi = bandCss(DEFAULT_BAND_THEME, 'mid', 'unplayed');
+  const hi = bandCss(DEFAULT_BAND_THEME, 'high', 'unplayed');
+
+  it('draws low first (back), then mid, then high (front), each at alpha 0.95', () => {
+    const r = new Raster(layout.tileDevWidth, layout.devHeight);
+    renderBandWaveform(r, model(441 * 6, 255, 160, 80), layout, 0, DEFAULT_BAND_THEME, 'unplayed');
+    const firstIndex = (style: string) => r.fills.findIndex((f) => f.style === style);
+    const lastIndex = (style: string) => r.fills.length - 1 - [...r.fills].reverse().findIndex((f) => f.style === style);
+    expect(firstIndex(lo)).toBe(0);
+    expect(lastIndex(lo)).toBeLessThan(firstIndex(mi));
+    expect(lastIndex(mi)).toBeLessThan(firstIndex(hi));
+    expect(r.fills.every((f) => f.alpha === 0.95)).toBe(true);
+  });
+
+  it("each layer's height follows its own band, mirrored on the centre line, with the same curve", () => {
+    const r = new Raster(layout.tileDevWidth, layout.devHeight);
+    renderBandWaveform(r, model(441 * 6, 255, 128, 51), layout, 0, DEFAULT_BAND_THEME, 'unplayed');
+    const x = 100;
+    const half = (style: string) => { const e = r.extent(x, style)!; return (e.bottom - e.top + 1) / 2; };
+    const boxHalf = layout.devHeight / 2;
+    expect(half(lo)).toBeCloseTo(HEIGHT_FILL * boxHalf, 0);
+    expect(half(mi)).toBeCloseTo(Math.pow(128 / 255, 0.7) * HEIGHT_FILL * boxHalf, 0);
+    expect(half(hi)).toBeCloseTo(Math.pow(51 / 255, 0.7) * HEIGHT_FILL * boxHalf, 0);
+    expect(half(lo)).toBeGreaterThan(half(mi));
+    expect(half(mi)).toBeGreaterThan(half(hi)); // a shorter front layer lets the back layer show around it
+    const e = r.extent(x, lo)!;
     const cy = Math.round(layout.devHeight / 2);
-    expect(cy - top).toBe(bottom - cy + 1);
-    expect((bottom - top + 1) / layout.devHeight).toBeGreaterThan(0.76);
-    expect((bottom - top + 1) / layout.devHeight).toBeLessThan(0.8);
+    expect(cy - e.top).toBe(e.bottom - cy + 1); // mirrored
   });
 
-  it('height comes from `all` only: colour does not change it', () => {
-    const layout = stripLayout(400, 16, 140, 1);
-    const a = loudModel(441 * 4, 'low'); const b = loudModel(441 * 4, 'all3');
-    const ra = new Raster(layout.tileDevWidth, layout.devHeight); const rb = new Raster(layout.tileDevWidth, layout.devHeight);
-    renderBandWaveform(ra, a, layout, 0, DEFAULT_BAND_THEME, 'played');
-    renderBandWaveform(rb, b, layout, 0, DEFAULT_BAND_THEME, 'played');
-    const count = (r: Raster) => { let n = 0; for (let y = 0; y < r.h; y += 1) if (r.px(5 * layout.devPitch, y)[3] > 0) n += 1; return n; };
-    expect(count(ra)).toBe(count(rb));
-  });
-
-  it('skips columns with no band energy and stops past the end of the track', () => {
-    const layout = stripLayout(400, 16, 140, 1);
-    const m = loudModel(441, 'low'); m.low.fill(0); // all > 0 but every band is 0
+  it('a band at zero draws nothing for that layer, and the others are unaffected', () => {
     const r = new Raster(layout.tileDevWidth, layout.devHeight);
-    renderBandWaveform(r, m, layout, 0, DEFAULT_BAND_THEME, 'played');
-    expect(r.data.some((v, i) => i % 4 === 3 && v > 0)).toBe(false);
+    renderBandWaveform(r, model(441 * 6, 200, 0, 0), layout, 0, DEFAULT_BAND_THEME, 'unplayed');
+    expect(r.extent(50, mi)).toBeNull();
+    expect(r.extent(50, hi)).toBeNull();
+    expect(r.extent(50, lo)).not.toBeNull();
+  });
+
+  it('the played variant uses the darkened palette; the unplayed variant the full one', () => {
+    const a = new Raster(layout.tileDevWidth, layout.devHeight);
+    const b = new Raster(layout.tileDevWidth, layout.devHeight);
+    renderBandWaveform(a, model(441 * 4, 255, 255, 255), layout, 0, DEFAULT_BAND_THEME, 'played');
+    renderBandWaveform(b, model(441 * 4, 255, 255, 255), layout, 0, DEFAULT_BAND_THEME, 'unplayed');
+    expect(a.fills[0].style).not.toBe(b.fills[0].style);
+    expect(b.fills[0].style).toBe(lo);
+  });
+
+  it('applies the curve equally, stops at the end of the track and uses the global scale', () => {
+    const buf = new Int16Array(layout.tileDevWidth * 3);
+    const filled = tileHeights(model(441 * 2, 255, 255, 255), layout, 0, 0.7, buf);
+    expect(filled).toBeGreaterThan(0);
+    expect(filled).toBeLessThan(layout.tileDevWidth);
+    expect(buf[0]).toBe(buf[layout.tileDevWidth]); // same input, same curve, every band
+    expect(buf[filled + 5]).toBe(0);
   });
 });
