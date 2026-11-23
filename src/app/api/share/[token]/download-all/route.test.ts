@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   grantable: vi.fn(),
   stream: vi.fn(),
-  size: vi.fn(async () => 0),
+  size: vi.fn(async (..._a: unknown[]) => 0),
 }));
 
 vi.mock('@/lib/db', () => ({ isSupabaseConfigured: () => mocks.configured() }));
