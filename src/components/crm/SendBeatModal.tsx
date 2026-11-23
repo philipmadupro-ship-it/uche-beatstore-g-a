@@ -657,7 +657,12 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
             content and both sides scrolled as one page. */}
         <div className="flex flex-col md:flex-row h-[min(680px,calc(88dvh-190px))] min-h-0">
           {/* Left — source selection */}
-          <div className="md:w-5/12 h-1/2 md:h-auto border-b md:border-b-0 md:border-r border-white/10 flex flex-col min-h-0">
+          {/* Below md the two panes stack, and a preview under a half-height
+              picker overlapped it — so the preview tab shows only the preview. */}
+          <div
+            data-testid="send-picker-pane"
+            className={`md:w-5/12 h-1/2 md:h-auto border-b md:border-b-0 md:border-r border-white/10 flex-col min-h-0 ${tab === 'preview' ? 'hidden md:flex' : 'flex'}`}
+          >
             <div className="px-6 pt-4 pb-3 border-b border-white/10 space-y-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={12} />
