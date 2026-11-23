@@ -51,4 +51,28 @@ describe('zipStream', () => {
     expect(Object.keys(unzipSync(zip))).toEqual(['c.wav']);
     expect(skipped).toEqual(['a.wav:unavailable', 'b.wav:boom']);
   });
+
+  it('stops adding entries past maxBytes and reports them, keeping exempt entries', async () => {
+    const skipped: string[] = [];
+    const zip = await collect(zipStream([
+      { name: 'a.wav', open: async () => new Uint8Array(100) },
+      { name: 'b.wav', open: async () => new Uint8Array(100) },
+      { name: 'c.wav', size: 10, open: async () => new Uint8Array(10) },
+      { name: 'README.txt', exempt: true, open: async () => new TextEncoder().encode(`left out: ${skipped.join(', ')}`) },
+    ], { maxBytes: 150, onSkip: (n) => skipped.push(n) }));
+    const files = unzipSync(zip);
+    expect(Object.keys(files)).toEqual(['a.wav', 'b.wav', 'README.txt']);
+    expect(skipped).toEqual(['c.wav']);
+    expect(strFromU8(files['README.txt'])).toBe('left out: c.wav');
+  });
+
+  it('skips an entry whose known size cannot fit without opening it', async () => {
+    let opened = false;
+    const skipped: string[] = [];
+    await collect(zipStream([
+      { name: 'big.wav', size: 500, open: async () => { opened = true; return new Uint8Array(500); } },
+    ], { maxBytes: 100, onSkip: (n) => skipped.push(n) }));
+    expect(opened).toBe(false);
+    expect(skipped).toEqual(['big.wav']);
+  });
 });

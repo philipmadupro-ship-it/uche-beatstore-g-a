@@ -250,7 +250,7 @@ export function ActionMenu({
             // the trigger. Flipped menus animate the other way for the same
             // reason.
             coords.openUp ? 'ui-pop-up' : 'ui-pop',
-            'overlay-surface z-[200] overflow-y-auto rounded-xl py-1',
+            'overlay-surface z-[260] overflow-y-auto rounded-xl py-1',
             'border border-white/[0.12]',
             'focus:outline-none',
           )}
