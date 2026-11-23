@@ -89,15 +89,15 @@ export function NotificationPanel({
 
   return (
     <div className="overflow-hidden rounded-xl">
-      <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
-        <span className="font-mono text-[11px] uppercase tracking-wider text-white">Notifications</span>
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-white/10 px-4 py-3">
+        <span className="whitespace-nowrap font-mono text-[11px] uppercase tracking-wider text-white">Notifications</span>
+        <div className="flex items-center gap-3 whitespace-nowrap">
           {unread > 0 && (
             <button
               type="button"
               onClick={onMarkAllRead}
               title={markAllHint ?? undefined}
-              className="font-mono text-[10px] uppercase tracking-wider text-white/50 transition-colors hover:text-white"
+              className="whitespace-nowrap font-mono text-[10px] uppercase tracking-wider text-white/50 transition-colors hover:text-white"
             >
               Mark all read
             </button>
@@ -106,7 +106,7 @@ export function NotificationPanel({
             <button
               type="button"
               onClick={onOpenActivity}
-              className="font-mono text-[10px] uppercase tracking-wider text-white/50 transition-colors hover:text-white"
+              className="whitespace-nowrap font-mono text-[10px] uppercase tracking-wider text-white/50 transition-colors hover:text-white"
             >
               Activity log →
             </button>
@@ -116,7 +116,7 @@ export function NotificationPanel({
       {markAllHint && unread > 0 && (
         <p className="border-b border-white/10 px-4 py-1.5 text-[10px] leading-snug text-white/40">{markAllHint}</p>
       )}
-      <ul className="max-h-80 overflow-y-auto">
+      <ul className="max-h-[min(30rem,calc(100vh-8rem))] overflow-y-auto">
         {!orgBell && attention > 0 && (
           <li className="border-b border-white/10">
             <Link
@@ -201,7 +201,7 @@ function PanelRow({ n, href, onMarkRead, onNavigate }: {
             <span className="sr-only">, {full}</span>
           </time>
         </span>
-        <span className="mt-0.5 block truncate text-[11px] font-medium leading-tight text-white" title={n.title}>{n.title}</span>
+        <span className="mt-0.5 line-clamp-2 break-words text-[11px] font-medium leading-tight text-white" title={n.title}>{n.title}</span>
         {n.body && (
           <span className="mt-0.5 line-clamp-2 break-words text-[10px] leading-snug text-white/60">{n.body}</span>
         )}
