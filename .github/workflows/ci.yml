@@ -67,6 +67,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
+          NODE_OPTIONS: --max-old-space-size=4096
           NEXT_PUBLIC_SUPABASE_URL: https://stub.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: stub-anon-key
           SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
