@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -110,7 +110,7 @@ jobs:
   # (scripts/local-db) and run under `npm run e2e:real-db`; playwright.config.ts
   # finds them by their E2E_REAL_DB marker and leaves them out of this run.
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -152,7 +152,7 @@ jobs:
   # Secret scanning — catch an accidentally committed key/token before it
   # ships. Runs in parallel with build-and-test; full history on push.
   secret-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
