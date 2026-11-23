@@ -58,7 +58,7 @@ export function LinkActivity({ linkId, source }: { linkId: string; source: Share
           </>
         )}
       </p>
-      <p className="text-[10px] font-mono font-normal tracking-[0.2em] text-white/40 mt-1.5 normal-case">
+      <p className="text-[10px] font-mono font-normal tracking-[0.2em] text-white/40 mt-1.5 uppercase">
         Opens count page loads.
         {since ? ` People, plays and downloads are counted since ${since}.` : ''}
       </p>
