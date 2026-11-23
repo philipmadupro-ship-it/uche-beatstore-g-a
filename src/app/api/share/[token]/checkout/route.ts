@@ -1,3 +1,4 @@
+import { tokenRef } from '@/lib/share/token-ref';
 import { grantableTrackIds } from '@/lib/share/share-owner';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUrl } from '@/lib/env';
@@ -442,10 +443,10 @@ export async function POST(
       cancel_url: `${APP_URL}${sharePath}?purchase=cancelled`,
     });
 
-    log.info('share checkout session created', { token, session_id: session.id, items: cartItemsMeta.length });
+    log.info('share checkout session created', { tokenRef: tokenRef(token), session_id: session.id, items: cartItemsMeta.length });
     return NextResponse.json({ url: session.url, session_id: session.id });
   } catch (err) {
-    log.error('checkout failed', { token, error: errorMessage(err) });
+    log.error('checkout failed', { tokenRef: tokenRef(token), error: errorMessage(err) });
     return publicError(err);
   }
 }
