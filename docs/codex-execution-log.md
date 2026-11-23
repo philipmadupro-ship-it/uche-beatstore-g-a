@@ -9856,6 +9856,11 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
   - Readout note: on the file path the dB readout is the slice RMS (the sidecar's), where the browser decode derived it from peaks; pitch is computed at 44.1 kHz instead of 22.05 kHz.
 
 
+- 2026-11-23 — **SHARE-04 Unique link generation** (branch `claude/share-04-unique-tokens`, migration 202 NOT applied).
+  - Bug: `resolveShareToken` reads one URL token across `share_links`, `project_shares` and `artist_portals`, but UNIQUE was per table, so one token could sit in two tables and resolve the wrong share; a same-table clash was a raw 500.
+  - Code: `lib/share/token-mint.ts` (`withFreshToken`, `updateWithFreshToken`, `insertWithFreshToken`) retries up to 3 times on a 23505 whose constraint is exactly one of `share_links_token_key`, `project_shares_token_key`, `artist_portals_token_key`, `share_token_cross_table_unique` (never a substring guess; a 23505 on another constraint such as `artist_portals_contact_key` passes through), then throws "Could not create a link, try again". Used by `/api/share`, the project / track / playlist share POSTs (around `writeWithPlayback`, so the migration-121 fallback still works), `ensurePortal`, and the portal `reissue` UPDATE. URLs are built from the token that was inserted. Portal tokens stay 24 chars; share tokens stay nanoid(12).
+  - Migration 202: `share_token_cross_table_guard` trigger on the three tables (insert or update of token), advisory lock per token; raises 23505 with that constraint name. Pre-apply audit: `supabase/apply/editor/202_find_cross_table_token_dupes.sql`. Check: `supabase/local/checks/202_share_token_cross_table_unique.sql` (every table pair, both directions, insert and update).
+
 ## 2026-11-23 — Share zip hardening
 
 - `/api/share/[token]/download-all`: 1.5 GiB cap (`SHARE_ZIP_MAX_BYTES`). Sizes come from `sourceSizeBytes` (R2 HeadObject / local stat, unknown = 0); over the cap is 413 before any stream opens. `zipStream` takes `maxBytes` (entries with a known `size` that cannot fit, or arriving after the cap, are skipped and reported through `onSkip`; `exempt` entries such as the README always go in). The track cap stays 200.
