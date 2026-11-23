@@ -14,11 +14,17 @@ import { Zip, ZipPassThrough } from 'fflate';
 
 export interface ZipEntrySource {
   name: string;
+  /** Size in bytes when known; lets a capped zip skip a file that cannot fit before opening it. */
+  size?: number;
+  /** Exempt from `maxBytes` (a README that names what was left out). */
+  exempt?: boolean;
   open: () => Promise<ReadableStream<Uint8Array> | Uint8Array | null>;
 }
 
-export function zipStream(entries: readonly ZipEntrySource[], opts: { onSkip?: (name: string, reason: string) => void; mtime?: Date } = {}): ReadableStream<Uint8Array> {
+export function zipStream(entries: readonly ZipEntrySource[], opts: { onSkip?: (name: string, reason: string) => void; mtime?: Date; maxBytes?: number } = {}): ReadableStream<Uint8Array> {
   const mtime = opts.mtime ?? new Date();
+  const maxBytes = opts.maxBytes ?? Infinity;
+  let written = 0;
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       const zip = new Zip((err, chunk, final) => {
@@ -28,6 +34,10 @@ export function zipStream(entries: readonly ZipEntrySource[], opts: { onSkip?: (
       });
       try {
         for (const entry of entries) {
+          if (!entry.exempt && (written >= maxBytes || written + (entry.size ?? 0) > maxBytes)) {
+            opts.onSkip?.(entry.name, 'size limit');
+            continue;
+          }
           let source: ReadableStream<Uint8Array> | Uint8Array | null = null;
           try {
             source = await entry.open();
@@ -40,6 +50,7 @@ export function zipStream(entries: readonly ZipEntrySource[], opts: { onSkip?: (
           file.mtime = mtime;
           zip.add(file);
           if (source instanceof Uint8Array) {
+            written += source.length;
             file.push(source, true);
             continue;
           }
@@ -47,7 +58,7 @@ export function zipStream(entries: readonly ZipEntrySource[], opts: { onSkip?: (
           for (;;) {
             const { value, done } = await reader.read();
             if (done) break;
-            if (value?.length) file.push(value);
+            if (value?.length) { written += value.length; file.push(value); }
           }
           file.push(new Uint8Array(0), true);
         }

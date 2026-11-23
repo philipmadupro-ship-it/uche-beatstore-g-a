@@ -30,6 +30,12 @@ describe('ActionMenu', () => {
     expect(labels).toEqual(['Rename', 'Delete']);
   });
 
+  it('sits above drawers, like Dropdown and Popover (z-[260])', () => {
+    renderMenu([{ id: 'e', items: [{ id: 'rename', label: 'Rename', onSelect: () => {} }] }]);
+    open();
+    expect(screen.getByRole('menu').className).toContain('z-[260]');
+  });
+
   it('hides the trigger entirely when every item is hidden', () => {
     renderMenu([{ id: 'e', items: [{ id: 'x', label: 'X', hidden: true, onSelect: () => {} }] }]);
     expect(screen.queryByRole('button', { name: 'Options' })).toBeNull();
