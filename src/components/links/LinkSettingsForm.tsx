@@ -166,24 +166,31 @@ export function LinkSettingsForm<T extends LinkSettingsLink>({ link, onPatch, fo
         </div>
         <div>
           <span className="mb-1 block font-mono text-[9px] uppercase tracking-wider text-white/60">Selling</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={sales}
-            aria-label="Sell from this link"
-            disabled={!isClient}
-            onClick={() => void toggleSales()}
-            className={cn(
-              'flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-[11px] transition-colors',
-              sales ? 'border-white/30 bg-white/[0.14] text-white' : 'border-white/10 bg-white/[0.06] text-white/60 hover:border-white/20 hover:bg-white/[0.10]',
-              'disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/[0.06]',
-            )}
-          >
-            <span>{sales ? 'On' : 'Off'}</span>
-          </button>
+          <div className="flex items-center gap-2 py-1.5">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={sales}
+              aria-label="Sell from this link"
+              disabled={!isClient}
+              onClick={() => void toggleSales()}
+              className={cn(
+                'relative h-5 w-9 shrink-0 rounded-full border transition-colors disabled:opacity-40',
+                sales ? 'border-white/30 bg-white/[0.14]' : 'border-white/10 bg-white/[0.06] hover:border-white/20 hover:bg-white/[0.10]',
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute left-0.5 top-1/2 size-3.5 -translate-y-1/2 rounded-full bg-white transition-transform',
+                  sales ? 'translate-x-4' : 'translate-x-0 opacity-60',
+                )}
+              />
+            </button>
+            <span className="text-[11px] text-white/80">{sales ? 'On' : 'Off'}</span>
+          </div>
         </div>
       </div>
-      {!isClient && <p className="-mt-2 text-[10px] text-white/40">Selling is for client links only.</p>}
+      {!isClient && <p className="-mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Selling is for client links only</p>}
 
       <div>
         <label className="mb-1 block font-mono text-[9px] uppercase tracking-wider text-white/60">Expires in</label>
@@ -239,7 +246,7 @@ export function LinkSettingsForm<T extends LinkSettingsLink>({ link, onPatch, fo
         type="button"
         onClick={() => void save()}
         disabled={saving || !dirty}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-black transition-colors hover:bg-white/90 disabled:opacity-40"
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider text-white transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/[0.06]"
       >
         {saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
         Save
@@ -250,7 +257,7 @@ export function LinkSettingsForm<T extends LinkSettingsLink>({ link, onPatch, fo
         {isToken ? (
           <TrackEditor tracks={tracks} busy={busy} onMove={move} onRemove={(i) => void saveTracks(tracks.filter((_, j) => j !== i))} onAdd={(t) => void saveTracks([...tracks, t])} />
         ) : (
-          <p className="text-[11px] text-white/60">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">
             This link points at a {link.kind}, so its tracks follow it. Edit the {link.kind} to change what is on the link.
           </p>
         )}

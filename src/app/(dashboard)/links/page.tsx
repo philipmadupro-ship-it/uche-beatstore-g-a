@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Link2, Copy, Trash2, Check, Loader2, ExternalLink, Lock, Clock,
-  X, Share2, Music, Pencil, Download, Plus, Search, BarChart3, Headphones,
+  X, Share2, Music, SlidersHorizontal, Download, Plus, Search, BarChart3, Headphones,
 } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -879,8 +879,8 @@ function LinkPopup({
               onClick={() => setEditing((v) => !v)}
               className="inline-flex items-center gap-1.5 text-[11px] text-white/80 hover:text-white transition-colors px-2 py-1"
             >
-              <Pencil size={11} />
-              {editing ? 'Close' : 'Settings'}
+              {!editing && <SlidersHorizontal size={11} />}
+              {editing ? 'Done' : 'Settings'}
             </button>
             <button
               onClick={() => onDelete(link)}

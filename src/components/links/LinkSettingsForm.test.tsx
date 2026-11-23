@@ -56,7 +56,7 @@ describe('LinkSettingsForm', () => {
   it('selling is disabled with a note for a non-client link', () => {
     render(<LinkSettingsForm link={{ ...base, recipient_kind: 'friend' }} onPatch={vi.fn()} formatDate={fmt} />);
     expect((screen.getByRole('switch') as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText('Selling is for client links only.')).toBeTruthy();
+    expect(screen.getByText('Selling is for client links only')).toBeTruthy();
   });
 
   it('toggling selling is optimistic and rolls back with the server refusing', async () => {
@@ -98,6 +98,11 @@ describe('LinkSettingsForm', () => {
     fireEvent.click(screen.getByText('Add tracks'));
     fireEvent.click(await screen.findByText('Nine'));
     await waitFor(() => expect(onPatch).toHaveBeenCalledWith(expect.anything(), { track_ids: ['t1', 't2', 't9'] }));
+  });
+
+  it('shows the link’s real recipient kind in the dropdown', () => {
+    render(<LinkSettingsForm link={{ ...base, recipient_kind: 'rapper' }} onPatch={vi.fn()} formatDate={fmt} />);
+    expect(screen.getByText('Rapper')).toBeTruthy();
   });
 
   it('project shares keep their target and say so', () => {
