@@ -1,3 +1,4 @@
+import { tokenRef } from '@/lib/share/token-ref';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -112,7 +113,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const filename = `${track.title || 'track'}.${ext}`;
     return streamAudioSource(req, track.audio_url, filename);
   } catch (err) {
-    log.error('download gate failed', { token, trackId, error: errorMessage(err) });
+    log.error('download gate failed', { tokenRef: tokenRef(token), trackId, error: errorMessage(err) });
     return publicError(err);
   }
 }

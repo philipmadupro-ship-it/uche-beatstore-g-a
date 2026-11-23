@@ -9848,3 +9848,10 @@ Owner request from the LABEL-47 decision round. Extends the artist portal (one c
 - 2026-11-11 — **Migrations 197–201 applied to PRODUCTION** (owner, SQL editor; the `3-label-os-migrations-197-200.sql` bundle then `4-label-os-migration-201.sql`, both 0 errors). Ledger rows in `supabase/MIGRATIONS.md`, CLAUDE.md and doc 28 updated. Next free number 202.
 
 - 2026-11-12 — Share pages (final design, #208): `SharePageFrame` + `ShareTrackList` built from the Library's `TrackCard` / `RowWaveform` / `LibraryToolbar` / `FilterBar`; one engine with `ShareTransport` (engine-truth `playing`); `PlayerPill` extracted from `PlayerBar` (kept compatible with #207's Now Playing, `BandScrubber`, `AudioVisualizer`); `GET /api/share/[token]/download-all`; mobile Filters `Drawer`. `Dropdown` / `Popover` now stack at z-260 so a menu opened inside a drawer is not under its scrim. Supersedes the 2026-11-11 `ShareTrackRow` / `ShareRowWaveform` design. Tests: `ShareTrackList.test.tsx`, `ShareSync.test.tsx`, download-all route tests, `e2e/share-options|share-track-list|share-sync`.
+
+## 2026-11-23 — Share zip hardening
+
+- `/api/share/[token]/download-all`: 1.5 GiB cap (`SHARE_ZIP_MAX_BYTES`). Sizes come from `sourceSizeBytes` (R2 HeadObject / local stat, unknown = 0); over the cap is 413 before any stream opens. `zipStream` takes `maxBytes` (entries with a known `size` that cannot fit, or arriving after the cap, are skipped and reported through `onSkip`; `exempt` entries such as the README always go in). The track cap stays 200.
+- Share/checkout/download route logs carry `tokenRef` (first 8 hex of sha256, `lib/share/token-ref.ts`) instead of the raw token; a source scan fails any `log.*` call under `api/share` or `api/projects/share` with `token` as a key.
+- `lib/postgrest-or-update.test.ts` fails any `.or(` in the same chain as `.update(` / `.delete(` (PostgREST rejects `or=` on PATCH/DELETE, #73). No existing violations.
+- `ActionMenu` panel `z-[200]` -> `z-[260]`, like Dropdown / Popover.
