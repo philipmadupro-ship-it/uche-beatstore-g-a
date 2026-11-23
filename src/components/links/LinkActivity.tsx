@@ -15,21 +15,24 @@ import type { ShareLinkSource } from '@/lib/links/share-link';
  * context, never the thing the popup is for.
  */
 export function LinkActivity({ linkId, source }: { linkId: string; source: ShareLinkSource }) {
-  const [activity, setActivity] = useState<Activity | null>(null);
+  const key = `${source}:${linkId}`;
+  // Keyed by link, so a stale answer for another link is never shown.
+  const [loaded, setLoaded] = useState<{ key: string; activity: Activity } | null>(null);
 
   useEffect(() => {
     const ctl = new AbortController();
-    setActivity(null);
-    fetch(`/api/links/activity?links=${encodeURIComponent(`${source}:${linkId}`)}`, { signal: ctl.signal })
+    fetch(`/api/links/activity?links=${encodeURIComponent(key)}`, { signal: ctl.signal })
       .then((res) => (res.ok ? res.json() : null))
       .then((body) => {
-        if (body?.schemaReady) setActivity(body.activity?.[`${source}:${linkId}`] ?? null);
+        const found = body?.schemaReady ? body.activity?.[key] : null;
+        if (found) setLoaded({ key, activity: found });
       })
       .catch(() => {});
     return () => ctl.abort();
-  }, [linkId, source]);
+  }, [key]);
 
-  if (!activity) return null;
+  if (!loaded || loaded.key !== key) return null;
+  const activity = loaded.activity;
 
   const last = agoLabel(activity.lastActivityAt);
   const people = `${activity.people} ${activity.people === 1 ? 'person' : 'people'}`;
