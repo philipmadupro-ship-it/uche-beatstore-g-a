@@ -1,9 +1,14 @@
 import { expect, test } from '@playwright/test';
+import { startStubSupabase, signInCookie, stubSupabaseConfigured } from './fixtures/stub-supabase';
 
 /**
  * /links filtering (SHARE-03). /api/links is stubbed, so this needs neither
  * Supabase nor a seeded database: it covers the toolbar, the "N of M" count,
  * Clear all and the view-in-the-URL round trip through a real reload.
+ *
+ * `/links` is auth-gated. Where the app points at the stub Supabase URL (the
+ * e2e CI job does) the spec signs in through e2e/fixtures/stub-supabase.ts;
+ * with no Supabase env the proxy lets it through.
  */
 const day = 86_400_000;
 const link = (i: number, over: Record<string, unknown>) => ({
@@ -26,7 +31,16 @@ const LINKS = [
   link(8, { title: 'Hotel', kind: 'track' }),
 ];
 
-test.beforeEach(async ({ page }) => {
+let stubSupabase: Awaited<ReturnType<typeof startStubSupabase>> = null;
+test.beforeAll(async () => {
+  if (stubSupabaseConfigured()) stubSupabase = await startStubSupabase();
+});
+test.afterAll(async () => {
+  await stubSupabase?.close();
+});
+
+test.beforeEach(async ({ page, context, baseURL }) => {
+  if (stubSupabase) await context.addCookies([signInCookie(baseURL!)]);
   await page.route('**/api/links', (route) => route.fulfill({ json: { links: LINKS } }));
 });
 
