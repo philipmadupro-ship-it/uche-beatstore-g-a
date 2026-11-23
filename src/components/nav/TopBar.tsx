@@ -12,14 +12,6 @@ import {
   Menu,
   X,
   User,
-  ShoppingBag,
-  RotateCcw,
-  AlertTriangle,
-  Tag,
-  MessageSquare,
-  Heart,
-  MessageCircle, HandHelping, FileUp,
-  ListChecks,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { ACCOUNT_GROUP, ALL_GROUPS, activeGroupFor, activeGroupIn, isItemActive, navGroupsFor, type NavGroup } from './model';
@@ -35,7 +27,9 @@ import { cn } from '@/lib/utils';
 import { useBrandArtwork } from '@/hooks/useBrandArtwork';
 import { planMarkAllRead, planMarkRead } from '@/lib/notifications/read-state';
 import { notificationHref } from '@/lib/labelos/notify-links';
-import { isDirectAskKind } from '@/lib/labelos/notify-kinds';
+import { presentNotification } from '@/lib/notifications/presentation';
+import { NotificationPanel, usePanelWidth } from '@/components/notifications/NotificationPanel';
+import { toast } from '@/hooks/useToast';
 import {
   desktopNotificationsActive,
   selectDesktopNotifications,
@@ -50,31 +44,6 @@ interface Notification {
   data?: unknown;
   read: boolean;
   created_at: string;
-}
-
-function notifIcon(kind: string) {
-  if (kind === 'purchase') return <ShoppingBag size={13} className="text-[#6DC6A4]" />;
-  if (kind === 'refund') return <RotateCcw size={13} className="text-white" />;
-  if (kind === 'dispute') return <AlertTriangle size={13} className="text-red-400" />;
-  if (kind === 'buyer_offer') return <Tag size={13} className="text-white" />;
-  if (kind === 'share_comment' || kind === 'portal_comment') return <MessageSquare size={13} className="text-white" />;
-  if (kind === 'artist_reaction') return <Heart size={13} className="text-[#6DC6A4]" />;
-  if (kind === 'artist_message') return <MessageCircle size={13} className="text-white" />;
-  if (kind === 'artist_request') return <HandHelping size={13} className="text-white" />;
-  if (kind === 'portal_upload') return <FileUp size={13} className="text-[#6DC6A4]" />;
-  // Label OS direct asks (LABEL-23): somebody needs something from you.
-  if (isDirectAskKind(kind)) return <ListChecks size={13} className="text-white" />;
-  return <Bell size={13} className="text-white/60" />;
-}
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
 }
 
 export function TopBar() {
@@ -123,6 +92,7 @@ export function TopBar() {
   /** The panel renders a page of rows; the badge counts every unread row. */
   const [hasMore, setHasMore] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const panelWidth = usePanelWidth();
 
   /**
    * Ids already handed to the OS, and whether we have completed a first fetch.
@@ -217,6 +187,7 @@ export function TopBar() {
   useRealtimeTable({
     table: 'notifications',
     enabled: bellEnabled,
+    debounceMs: 400,
     onChange: fetchNotifs,
   });
 
@@ -230,24 +201,39 @@ export function TopBar() {
    * been scrolled to. Now nothing changes on open; a row is marked when it is
    * clicked, and clearing the lot is a button you press on purpose.
    */
+  /**
+   * Optimistic, but honest: if the server did not take the change, put the
+   * panel and badge back and say so, instead of showing "read" for a row the
+   * next poll will bring back unread.
+   */
+  const sendRead = (url: string, init: RequestInit, restore: () => void) => {
+    const fail = () => {
+      restore();
+      toast.error('Couldn\'t mark as read', 'Nothing was changed. Try again.');
+    };
+    fetch(url, init).then((res) => { if (!res.ok) fail(); }).catch(fail);
+  };
+
   const markRead = (ids: string[]) => {
     const plan = planMarkRead(notifs, unread, ids);
     if (!plan.changed) return;
+    const prev = { notifs, unread };
     setNotifs(plan.next);
     setUnread(plan.unread);
-    fetch(`${notifBase}?action=read`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: plan.ids }),
-    }).catch(() => undefined);
+    sendRead(
+      `${notifBase}?action=read`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: plan.ids }) },
+      () => { setNotifs(prev.notifs); setUnread(prev.unread); },
+    );
   };
 
   const markAllRead = () => {
     const plan = planMarkAllRead(notifs, unread);
     if (!plan.changed) return;
+    const prev = { notifs, unread };
     setNotifs(plan.next);
     setUnread(plan.unread);
-    fetch(`${notifBase}?action=read_all`, { method: 'PATCH' }).catch(() => undefined);
+    sendRead(`${notifBase}?action=read_all`, { method: 'PATCH' }, () => { setNotifs(prev.notifs); setUnread(prev.unread); });
   };
 
   return (
@@ -326,7 +312,7 @@ export function TopBar() {
               positions with viewport rect coords, clamps to the screen, and
               already closes on Escape and outside click. */}
           {bellEnabled && (<Popover
-            width={320}
+            width={panelWidth}
             align="right"
             open={notifOpen}
             onOpenChange={setNotifOpen}
@@ -342,115 +328,25 @@ export function TopBar() {
               >
                 <Bell size={18} />
                 {unread > 0 && (
-                  <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-[#6DC6A4] text-black text-[9px] font-black flex items-center justify-center leading-none">
+                  <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-white text-black text-[9px] font-black flex items-center justify-center leading-none">
                     {unread > 9 ? '9+' : unread}
                   </span>
                 )}
               </button>
             )}
           >
-              <div className="overflow-hidden rounded-xl">
-                <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-white">Notifications</span>
-                  <div className="flex items-center gap-3">
-                    {unread > 0 && (
-                      <button
-                        onClick={markAllRead}
-                        className="text-[9px] font-mono uppercase tracking-wider text-white/50 hover:text-white transition-colors"
-                      >
-                        Mark all read
-                      </button>
-                    )}
-                    {!orgBell && (
-                      <button
-                        onClick={() => setActivityOpen(true)}
-                        className="text-[9px] font-mono uppercase tracking-wider text-white/50 hover:text-white transition-colors"
-                      >
-                        Activity log →
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="max-h-80 overflow-y-auto">
-                  {!orgBell && attention > 0 && (
-                    <Link
-                      href="/store-editor"
-                      onClick={() => setNotifOpen(false)}
-                      className="flex items-start gap-3 border-b border-white/20 px-4 py-3 transition-colors hover:bg-white/[0.03]"
-                    >
-                      <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/[0.05]">
-                        <AlertTriangle size={13} className="text-white" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-medium leading-tight text-white">
-                          {attention} beat{attention === 1 ? '' : 's'} need attention
-                        </p>
-                        <p className="mt-0.5 text-[10px] leading-snug text-white/60">
-                          Listed without a cover, price, or BPM and key
-                        </p>
-                      </div>
-                    </Link>
-                  )}
-                  {notifs.length === 0 && (orgBell || attention === 0) ? (
-                    <div className="px-4 py-8 text-center text-[11px] text-white/50">
-                      No notifications yet
-                    </div>
-                  ) : (
-                    notifs.map((n) => {
-                      // An unread row is the button that reads it; a read one
-                      // has nothing left to do, so it stays inert rather than
-                      // offering a click that changes nothing.
-                      // A direct ask under an org also opens the page it is about.
-                      const href = shell ? notificationHref(shell.org.slug, n) : null;
-                      const Row = n.read && !href ? 'div' : 'button';
-                      return (
-                        <Row
-                          key={n.id}
-                          {...(n.read && !href
-                            ? {}
-                            : {
-                                type: 'button' as const,
-                                onClick: () => {
-                                  if (!n.read) markRead([n.id]);
-                                  if (href) {
-                                    setNotifOpen(false);
-                                    router.push(href);
-                                  }
-                                },
-                                'aria-label': href ? `Open "${n.title}"` : `Mark "${n.title}" read`,
-                              })}
-                          className={`flex w-full items-start gap-3 px-4 py-3 text-left border-b border-white/20 last:border-0 transition-colors ${
-                            n.read ? 'opacity-60' : 'bg-white/[0.04] hover:bg-white/[0.07]'
-                          }`}
-                        >
-                          <div className="w-6 h-6 rounded-lg bg-white/[0.05] border border-white/20 flex items-center justify-center shrink-0 mt-0.5">
-                            {notifIcon(n.kind)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-medium text-white leading-tight">{n.title}</p>
-                            {n.body && <p className="text-[10px] text-white/60 mt-0.5 leading-snug">{n.body}</p>}
-                            <p className="text-[9px] font-mono text-white/40 mt-1">{timeAgo(n.created_at)}</p>
-                          </div>
-                          {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shrink-0 mt-1.5" />}
-                        </Row>
-                      );
-                    })
-                  )}
-                </div>
-                {hasMore && orgBell && (
-                  <p className="border-t border-white/10 px-4 py-2.5 text-center text-[9px] font-mono uppercase tracking-wider text-white/40">
-                    Showing the latest 20
-                  </p>
-                )}
-                {hasMore && !orgBell && (
-                  <button
-                    onClick={() => { setNotifOpen(false); setActivityOpen(true); }}
-                    className="block w-full border-t border-white/10 px-4 py-2.5 text-center text-[9px] font-mono uppercase tracking-wider text-white/50 transition-colors hover:bg-white/[0.04] hover:text-white"
-                  >
-                    Showing the latest 20 — open activity log →
-                  </button>
-                )}
-              </div>
+              <NotificationPanel
+                notifications={notifs}
+                unread={unread}
+                hasMore={hasMore}
+                orgBell={orgBell}
+                attention={attention}
+                hrefFor={(n) => (shell ? notificationHref(shell.org.slug, n) : presentNotification(n).href)}
+                onMarkRead={markRead}
+                onMarkAllRead={markAllRead}
+                onOpenActivity={() => { setNotifOpen(false); setActivityOpen(true); }}
+                onNavigate={(href) => { setNotifOpen(false); router.push(href); }}
+              />
           </Popover>)}
 
           {/* View public storefront */}
