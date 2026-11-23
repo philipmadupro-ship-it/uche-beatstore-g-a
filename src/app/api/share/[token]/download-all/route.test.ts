@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   grantable: vi.fn(),
   stream: vi.fn(),
+  size: vi.fn(async (..._a: unknown[]) => 0),
 }));
 
 vi.mock('@/lib/db', () => ({ isSupabaseConfigured: () => mocks.configured() }));
@@ -40,13 +41,16 @@ vi.mock('@/lib/share/share-owner', () => ({
   projectShareOwnerId: async () => 'owner-1',
   grantableTrackIds: (...args: unknown[]) => mocks.grantable(...args),
 }));
-vi.mock('@/lib/audio/stream-source', () => ({ streamAudioSource: (...args: unknown[]) => mocks.stream(...args) }));
+vi.mock('@/lib/audio/stream-source', () => ({
+  streamAudioSource: (...args: unknown[]) => mocks.stream(...args),
+  sourceSizeBytes: (...args: unknown[]) => mocks.size(...args),
+}));
 vi.mock('@/lib/share/token-access', async (orig) => ({
   ...(await orig<typeof import('@/lib/share/token-access')>()),
   resolveShareToken: (...args: unknown[]) => mocks.resolve(...args),
 }));
 
-import { GET } from './route';
+import { GET, SHARE_ZIP_MAX_BYTES } from './route';
 
 const share = (over: Record<string, unknown> = {}) => ({
   kind: 'project_share',
@@ -62,6 +66,7 @@ beforeEach(() => {
   mocks.resolve.mockResolvedValue(share());
   mocks.grantable.mockImplementation(async (_a: unknown, _o: unknown, ids: string[]) => ids);
   mocks.stream.mockImplementation(async () => new Response(new Uint8Array([1, 2, 3])));
+  mocks.size.mockResolvedValue(1000);
 });
 
 describe('GET /api/share/[token]/download-all', () => {
@@ -135,5 +140,22 @@ describe('GET /api/share/[token]/download-all', () => {
     // Private references only ever go to the storage helper, never into the response.
     expect(mocks.stream.mock.calls.map((c) => c[1])).toEqual(['r2://private/a.wav', 'r2://private/b.mp3']);
     expect(text).not.toContain('r2://');
+  });
+
+  it('has a 1.5 GiB cap', () => {
+    expect(SHARE_ZIP_MAX_BYTES).toBe(1_610_612_736);
+  });
+
+  it('413s when the files together are over the byte cap, opening no stream', async () => {
+    mocks.size.mockResolvedValue(SHARE_ZIP_MAX_BYTES / 2 + 1);
+    const res = await call();
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toContain('1.5 GB');
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('streams when exactly at the cap, and treats an unknown size as 0', async () => {
+    mocks.size.mockResolvedValueOnce(SHARE_ZIP_MAX_BYTES).mockResolvedValueOnce(0);
+    expect((await call()).status).toBe(200);
   });
 });
