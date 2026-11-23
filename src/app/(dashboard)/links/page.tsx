@@ -20,6 +20,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { InlineText } from '@/components/ui/InlineText';
+import { LinkActivity } from '@/components/links/LinkActivity';
 import {
   LINK_FILTERS,
   filterShareLinks,
@@ -834,6 +835,8 @@ function LinkPopup({
               <FlagChip icon={<Clock size={10} />} label="Never expires" />
             )}
           </div>
+
+          <LinkActivity linkId={link.id} source={link.source} />
 
           {/* Tracks on this link — small avatar + title row. Empty
               state shown while loading or if the share is empty. */}
