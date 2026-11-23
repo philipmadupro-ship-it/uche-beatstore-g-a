@@ -5,6 +5,9 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import bcrypt from 'bcryptjs';
 import { createHash } from 'crypto';
 import { errorMessage } from '@/lib/errors';
+import { readBody } from '@/lib/validate';
+import { ShareLinkPatchBodySchema } from '@/lib/contracts';
+import { normalizeTrackIds, resolveSalesRule } from '@/lib/links/share-link';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { signedSharePeaksUrl } from '@/lib/share-media-token';
@@ -250,43 +253,58 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
 /**
  * PATCH /api/share/[token]
  *
- * Owner-only edit for the link's mutable fields. Whitelisted body —
- * passing anything outside the whitelist is silently dropped rather
- * than 400'd so the client can post a partial update without
- * tracking which keys are editable.
+ * Owner-only edit for the link's mutable fields, validated by
+ * `ShareLinkPatchBodySchema`.
  *
  *   title             — display label (search/listing)
  *   allow_downloads   — toggles the download CTA on the share page
- *   expires_days      — 0 / null = clear expiry; positive int =
- *                       set expires_at to now + N days
- *   password          — null clears, string sets a new hash
+ *   full_playback     — full track or the 75 s preview
+ *   expires_days      — 0 = never; positive int = expires_at = now + N days
+ *   password          — null clears, string sets a new bcrypt hash
+ *   recipient_kind    — which share variant renders
+ *   sales_enabled     — Buy buttons; client links only (`resolveSalesRule`)
+ *   track_ids         — the link's whole new ordered track list; every id
+ *                       must be a track the owner can grant (403 otherwise)
+ *
+ * The token never changes on edit. Password and expiry are re-checked by the
+ * share gate on every request, so an edit applies on the next one.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   try {
-    const body = await req.json().catch(() => ({}));
+    const parsed = await readBody(req, ShareLinkPatchBodySchema);
+    if (!parsed.ok) return parsed.res;
+    const body = parsed.data;
     const patch: Record<string, unknown> = {};
     if (typeof body.title === 'string') patch.title = body.title.trim().slice(0, 200) || null;
     if (typeof body.allow_downloads === 'boolean') patch.allow_downloads = body.allow_downloads;
     // Mig 121: full track (true) or the 75 s preview (false). Written through
     // writeWithPlayback below so an unapplied migration fails loudly for
     // "preview" instead of silently leaving the full track shared.
-    const fullPlayback: boolean | undefined =
-      typeof body.full_playback === 'boolean' ? body.full_playback : undefined;
-    if (body.expires_days != null) {
-      const days = Number(body.expires_days);
-      patch.expires_at = days > 0
-        ? new Date(Date.now() + days * 86400000).toISOString()
+    const fullPlayback: boolean | undefined = body.full_playback;
+    if (body.expires_days !== undefined) {
+      patch.expires_at = body.expires_days > 0
+        ? new Date(Date.now() + body.expires_days * 86400000).toISOString()
         : null;
     }
     if (body.password === null) {
       patch.password_hash = null;
-    } else if (typeof body.password === 'string' && body.password.length > 0) {
+    } else if (typeof body.password === 'string') {
       patch.password_hash = await bcrypt.hash(body.password, 10);
     }
-    if (Object.keys(patch).length === 0 && fullPlayback === undefined) {
-      return NextResponse.json({ error: 'No editable fields in body' }, { status: 400 });
-    }
+    const trackIds = body.track_ids ? normalizeTrackIds(body.track_ids) : undefined;
+    if (trackIds) patch.track_ids = trackIds;
+
+    const applySales = (currentKind: string | null | undefined): NextResponse | null => {
+      const sales = resolveSalesRule(currentKind, body);
+      if (!sales.ok) return NextResponse.json({ error: sales.error }, { status: 400 });
+      Object.assign(patch, sales.fields);
+      return null;
+    };
+    const noFields = () =>
+      Object.keys(patch).length === 0 && fullPlayback === undefined
+        ? NextResponse.json({ error: 'No editable fields in body' }, { status: 400 })
+        : null;
 
     if (isSupabaseConfigured()) {
       const cookieClient = await createServerClient();
@@ -297,7 +315,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
       const supabase = createServiceClient();
       const { data: existing } = await supabase
         .from('share_links')
-        .select('id, user_id')
+        .select('id, user_id, recipient_kind')
         .eq('token', token)
         .single();
       if (!existing) {
@@ -305,6 +323,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
       }
       if (existing.user_id && existing.user_id !== user.id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const refused = applySales(existing.recipient_kind) ?? noFields();
+      if (refused) return refused;
+      if (trackIds) {
+        const allowed = await grantableTrackIds(supabase, user.id, trackIds);
+        if (allowed.length !== trackIds.length) {
+          return NextResponse.json({ error: 'One or more tracks are not yours to share' }, { status: 403 });
+        }
       }
       const { data, error } = await writeWithPlayback(fullPlayback, (fields) =>
         supabase
@@ -319,7 +345,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
       }
       if (error) throw error;
       const row = data as LocalShareLink;
-      const safe = { ...withoutPasswordHash(row), full_playback: isFullPlayback(row) };
+      const safe = {
+        ...withoutPasswordHash(row),
+        full_playback: isFullPlayback(row),
+        password_protected: Boolean(row.password_hash),
+        ...(trackIds ? { tracks: await summarizeTracks(supabase, trackIds) } : {}),
+      };
       return NextResponse.json({ share: safe });
     }
 
@@ -327,11 +358,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     const all = getAll<LocalShareLink>('share_links');
     const link = all.find((l) => l.token === token);
     if (!link) return NextResponse.json({ error: 'Share link not found' }, { status: 404 });
+    const refused = applySales((link as { recipient_kind?: string }).recipient_kind) ?? noFields();
+    if (refused) return refused;
+    if (trackIds) {
+      const known = new Set(getAll<{ id: string }>('tracks').map((t) => t.id));
+      if (trackIds.some((id) => !known.has(id))) {
+        return NextResponse.json({ error: 'One or more tracks do not exist' }, { status: 403 });
+      }
+    }
     const updated = update('share_links', link.id, fullPlayback === undefined ? patch : { ...patch, full_playback: fullPlayback });
-    const safe = { ...withoutPasswordHash(updated as LocalShareLink), full_playback: isFullPlayback(updated as LocalShareLink) };
+    const safe = {
+      ...withoutPasswordHash(updated as LocalShareLink),
+      full_playback: isFullPlayback(updated as LocalShareLink),
+      password_protected: Boolean((updated as LocalShareLink).password_hash),
+    };
     return NextResponse.json({ share: safe });
   } catch (error) {
     log.error('share PATCH failed', { token, error: errorMessage(error) });
     return publicError(error);
   }
+}
+
+/** Title / type / cover for the new track list, in the list's own order. */
+async function summarizeTracks(supabase: ReturnType<typeof createServiceClient>, ids: string[]) {
+  const { data } = await supabase.from('tracks').select('id, title, type, cover_url').in('id', ids);
+  const byId = new Map(((data ?? []) as Array<{ id: string; title: string; type: string; cover_url: string | null }>).map((t) => [t.id, t]));
+  return ids.flatMap((id) => {
+    const t = byId.get(id);
+    return t ? [{ id: t.id, title: t.title, type: t.type, cover_url: t.cover_url ?? null }] : [];
+  });
 }

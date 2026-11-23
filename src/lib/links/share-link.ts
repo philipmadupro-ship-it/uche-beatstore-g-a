@@ -41,6 +41,10 @@ export interface ShareLinkFacts extends ShareLinkRef {
   /** Full track (default) or the 75 s preview only. Absent = full (mig 121). */
   full_playback?: boolean;
   password_protected: boolean;
+  /** Share variant. Optional: older list responses omit it. */
+  recipient_kind?: string | null;
+  /** Buy buttons on the page. Optional for the same reason. */
+  sales_enabled?: boolean | null;
 }
 
 /**
@@ -83,24 +87,63 @@ export function isShareLinkExpired(
   return at < now;
 }
 
+export const SHARE_RECIPIENT_KINDS = ['client', 'producer', 'rapper', 'friend'] as const;
+export type ShareRecipientKind = (typeof SHARE_RECIPIENT_KINDS)[number];
+
 export interface ShareLinkPatch {
   title?: string | null;
   allow_downloads?: boolean;
   /** Both tables accept it: full track (true) or the 75 s preview (false). */
   full_playback?: boolean;
   expires_at?: string | null;
-  /** Token shares set expiry as a day count; `0` means never. */
+  /** Both tables set expiry as a day count; `0` means never. */
   expires_days?: number;
   /** `null` clears the password; omitted leaves it untouched. */
   password?: string | null;
+  /** Which share variant the recipient sees. Both tables. */
+  recipient_kind?: ShareRecipientKind;
+  /** Buy buttons on the page. Meaningful for `client` links only. */
+  sales_enabled?: boolean;
+  /** Token shares only: the new, ordered track list. Never empty. */
+  track_ids?: string[];
+}
+
+/**
+ * Selling is for client links only: the Buy buttons exist in the client share
+ * variant and nowhere else. This is the ONE rule both PATCH routes apply.
+ *
+ * - Moving a link away from `client` clears `sales_enabled` (returned, so the
+ *   optimistic UI matches what was stored).
+ * - Asking for `sales_enabled: true` on a link that is not (or is not becoming)
+ *   a client link is an error, never silently dropped.
+ */
+export function resolveSalesRule(
+  currentKind: string | null | undefined,
+  patch: { recipient_kind?: string; sales_enabled?: boolean },
+): { ok: true; fields: { recipient_kind?: string; sales_enabled?: boolean } } | { ok: false; error: string } {
+  const effective = patch.recipient_kind ?? currentKind ?? 'client';
+  const fields: { recipient_kind?: string; sales_enabled?: boolean } = {};
+  if (patch.recipient_kind !== undefined) fields.recipient_kind = patch.recipient_kind;
+  if (patch.sales_enabled === true && effective !== 'client') {
+    return { ok: false, error: 'Selling is for client links only' };
+  }
+  if (patch.sales_enabled !== undefined) fields.sales_enabled = patch.sales_enabled;
+  if (patch.recipient_kind !== undefined && effective !== 'client') fields.sales_enabled = false;
+  return { ok: true, fields };
+}
+
+/** Drop repeats, keep the first occurrence's position. Empty stays empty. */
+export function normalizeTrackIds(ids: readonly string[]): string[] {
+  return Array.from(new Set(ids));
 }
 
 /**
  * Rename the patch fields for the table being written.
  *
- * `project_shares` stores the display name in `label`, and accepts none of the
- * token-share fields. Keys whose value is `undefined` are dropped so a patch of
- * one property never blanks another.
+ * `project_shares` stores the display name in `label`, and has no track list
+ * (it points at a project / playlist / track, so `track_ids` is never sent).
+ * Keys whose value is `undefined` are dropped so a patch of one property never
+ * blanks another.
  */
 export function toSharePatchBody(
   link: ShareLinkRef,
@@ -108,7 +151,15 @@ export function toSharePatchBody(
 ): Record<string, unknown> {
   const body: Record<string, unknown> =
     link.source === 'project_shares'
-      ? { label: patch.title, allow_downloads: patch.allow_downloads, full_playback: patch.full_playback }
+      ? {
+          label: patch.title,
+          allow_downloads: patch.allow_downloads,
+          full_playback: patch.full_playback,
+          expires_days: patch.expires_days,
+          password: patch.password,
+          recipient_kind: patch.recipient_kind,
+          sales_enabled: patch.sales_enabled,
+        }
       : { ...patch };
   for (const key of Object.keys(body)) {
     if (body[key] === undefined) delete body[key];
@@ -120,7 +171,8 @@ export function toSharePatchBody(
  * Map a PATCH response back onto the merged row shape.
  *
  * For a project share the response speaks `label`; falling back to the link's
- * own `content_title` keeps the row readable when the label is cleared.
+ * own `content_title` keeps the row readable when the label is cleared. Both
+ * routes answer `password_protected` (never the hash).
  */
 export function fromSharePatchResponse<T extends ShareLinkFacts>(
   link: T,
@@ -133,6 +185,9 @@ export function fromSharePatchResponse<T extends ShareLinkFacts>(
     title: (share.label as string | null) ?? link.content_title ?? null,
     allow_downloads: share.allow_downloads as boolean,
     ...(typeof share.full_playback === 'boolean' ? { full_playback: share.full_playback } : {}),
+    ...(typeof share.password_protected === 'boolean' ? { password_protected: share.password_protected } : {}),
+    ...(typeof share.recipient_kind === 'string' ? { recipient_kind: share.recipient_kind } : {}),
+    ...(typeof share.sales_enabled === 'boolean' ? { sales_enabled: share.sales_enabled } : {}),
     expires_at: (share.expires_at as string | null) ?? null,
     revoked_at: (share.revoked_at as string | null) ?? null,
   } as Partial<T>;

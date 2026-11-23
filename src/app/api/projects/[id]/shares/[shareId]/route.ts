@@ -2,13 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   isSupabaseConfigured,
   deleteRow,
-  update,
   createServiceClient,
 } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { readBody } from '@/lib/validate';
-import { writeWithPlayback } from '@/lib/share/playback';
-import { ProjectSharePatchBodySchema } from '@/lib/contracts';
+import { handleProjectSharePatch } from '@/lib/share/project-share-patch';
 import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
@@ -71,46 +68,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; shareId: string }> }) {
   const { shareId } = await params;
-  const parsed = await readBody(req, ProjectSharePatchBodySchema);
-  if (!parsed.ok) return parsed.res;
-  const body = parsed.data;
-
-  // Whitelisted patch — token / created_by / plays are never client-controllable.
-  const patch: Record<string, unknown> = {};
-  if (typeof body.allow_downloads === 'boolean') patch.allow_downloads = body.allow_downloads;
-  if (body.role) patch.role = body.role;
-  if (typeof body.label === 'string') patch.label = body.label.trim() || null;
-  if (typeof body.invited_email === 'string') patch.invited_email = body.invited_email.trim() || null;
-  if (body.revoke === true) patch.revoked_at = new Date().toISOString();
-  // Mig 121: full track (true) or the 75 s preview (false). Goes through
-  // writeWithPlayback so an unapplied migration refuses "preview" loudly.
-  const fullPlayback = typeof body.full_playback === 'boolean' ? body.full_playback : undefined;
-
-  if (Object.keys(patch).length === 0 && fullPlayback === undefined) {
-    return NextResponse.json({ error: 'No editable fields in body' }, { status: 400 });
-  }
-
-  try {
-    if (isSupabaseConfigured()) {
-      const gate = await requireShareOwner(shareId);
-      if (!gate.ok) return gate.res;
-      const { data, error } = await writeWithPlayback(fullPlayback, (fields) =>
-        gate.admin
-          .from('project_shares')
-          .update({ ...patch, ...fields })
-          .eq('id', shareId)
-          .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, revoked_at, created_at')
-          .single(),
-      );
-      if (error?.code === 'PLAYBACK_MIGRATION') {
-        return NextResponse.json({ error: error.message }, { status: 409 });
-      }
-      if (error) throw error;
-      return NextResponse.json({ share: { ...data, ...(fullPlayback === undefined ? {} : { full_playback: fullPlayback }) } });
-    }
-    const updated = update('project_shares', shareId, fullPlayback === undefined ? patch : { ...patch, full_playback: fullPlayback });
-    return NextResponse.json({ share: updated });
-  } catch (error) {
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
-  }
+  return handleProjectSharePatch(req, shareId, async () => {
+    if (!isSupabaseConfigured()) return { ok: true, admin: null };
+    const gate = await requireShareOwner(shareId);
+    return gate.ok ? { ok: true, admin: gate.admin } : { ok: false, res: gate.res };
+  });
 }
