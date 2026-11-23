@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isR2Configured } from '@/lib/local-store';
 import { isOrgMasterRef } from '@/lib/labelos/org-upload';
+import { waveFileUrlFor } from '@/lib/visuals/waveform-file';
 
 export const r2 = new S3Client({
   region: 'auto',
@@ -350,6 +351,60 @@ export function uploadPeaksSidecar(audioUrl: string, peaksJson: string): Promise
  */
 export function uploadBandsSidecar(audioUrl: string, bandsJson: string): Promise<string | null> {
   return uploadJsonSidecar(audioUrl, bandsJson, '.bands.json', 'uploadBandsSidecar');
+}
+
+/**
+ * Store the `.wave.bin` waveform model beside its PUBLIC preview clip
+ * (lib/visuals/waveform-file): same key plus the suffix, so the client derives
+ * it with no column. Returns the file's URL, or null — never throws: the file is
+ * an optimisation and its absence means "decode in the browser as before".
+ * An org recording's (private) preview never gets one.
+ */
+export async function uploadWaveModelFile(previewUrl: string, bytes: Uint8Array): Promise<string | null> {
+  try {
+    if (isOrgMasterRef(previewUrl)) return null;
+    const target = waveFileUrlFor(previewUrl);
+    if (!target) return null;
+    if (target.startsWith('/')) {
+      if (!target.startsWith('/uploads/') || target.includes('..')) return null;
+      const file = path.join(process.cwd(), 'public', target);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, bytes);
+      return target;
+    }
+    const bucketName = process.env.R2_BUCKET_NAME;
+    const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+    if (!isR2Configured() || !bucketName || !publicUrl) return null;
+    const prefix = `${publicUrl.replace(/\/$/, '')}/`;
+    if (!target.startsWith(prefix)) return null;
+    await r2.send(new PutObjectCommand({
+      Bucket: bucketName,
+      Key: target.slice(prefix.length),
+      Body: bytes,
+      ContentType: 'application/octet-stream',
+      // Keyed by the preview object, which never changes in place.
+      CacheControl: 'public, max-age=31536000, immutable',
+    }));
+    return target;
+  } catch (err) {
+    console.warn('uploadWaveModelFile failed:', err);
+    return null;
+  }
+}
+
+/** Whether a preview's `.wave.bin` already exists (a HEAD on the public URL / the local file). */
+export async function waveModelFileExists(previewUrl: string): Promise<boolean> {
+  const target = waveFileUrlFor(previewUrl);
+  if (!target) return false;
+  try {
+    if (target.startsWith('/')) {
+      return !target.includes('..') && fs.existsSync(path.join(process.cwd(), 'public', target));
+    }
+    const res = await fetch(target, { method: 'HEAD', cache: 'no-store' });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 /**
