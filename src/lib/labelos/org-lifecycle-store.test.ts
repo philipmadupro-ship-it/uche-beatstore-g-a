@@ -130,8 +130,8 @@ describe('soft delete and restore', () => {
 
   it('restores only the stamp it was given', async () => {
     await softDeleteOrg(mem.client as never, B, NOW);
-    expect(await restoreOrg(mem.client as never, B, '2020-01-01T00:00:00.000Z')).toBe(false);
-    expect(await restoreOrg(mem.client as never, B, NOW.toISOString())).toBe(true);
+    expect(await restoreOrg(mem.client as never, B, '2020-01-01T00:00:00.000Z', NOW)).toBe(false);
+    expect(await restoreOrg(mem.client as never, B, NOW.toISOString(), NOW)).toBe(true);
     expect(db.tables.organizations.find((o) => o.id === B)!.deleted_at).toBeNull();
   });
 
