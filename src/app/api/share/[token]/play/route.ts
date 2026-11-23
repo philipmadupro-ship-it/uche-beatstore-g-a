@@ -1,10 +1,11 @@
+import { recordShareEventFor } from '@/lib/links/share-events-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, insert, createServiceClient } from '@/lib/db';
 import { createHash } from 'crypto';
 import { errorMessage } from '@/lib/errors';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
-import { isWellFormedShareToken, shareNotFoundResponse } from '@/lib/share/token-access';
+import { isWellFormedShareToken, resolveShareToken, shareNotFoundResponse } from '@/lib/share/token-access';
 const log = createLogger('api.share.token.play');
 
 function hashIp(req: NextRequest): string {
@@ -49,6 +50,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         ({ error } = await supabase.from('share_plays').insert(legacy));
       }
       if (error) throw error;
+      const resolved = await resolveShareToken(supabase, token, ['project_share', 'share_link']);
+      if (resolved) recordShareEventFor(req, supabase, resolved, 'play', track_id);
     } else {
       insert('share_plays', row);
     }

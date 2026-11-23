@@ -55,14 +55,37 @@ export async function GET(req: NextRequest) {
     if (refs.length === 0) return NextResponse.json({ schemaReady: true, activity: {} });
 
     // The caller's own share rows (owner filter), for the token and counters.
+    // share_links carries user_id; project_shares has none — its owner is the
+    // owner of the project / playlist / track it points at.
     const shareRows = new Map<string, { id: string; source: Ref['source']; token: string | null; plays: number | null; created_at: string }>();
-    for (const source of ['share_links', 'project_shares'] as const) {
-      const ids = refs.filter((r) => r.source === source).map((r) => r.id);
-      const rows = await selectIn<any>(
-        (slice) => admin.from(source).select('id, token, plays, created_at').eq('user_id', userId).in('id', slice),
-        ids,
-      );
-      for (const r of rows) shareRows.set(`${source}:${r.id}`, { id: r.id, source, token: r.token ?? null, plays: r.plays ?? null, created_at: r.created_at });
+    const legacyIds = refs.filter((r) => r.source === 'share_links').map((r) => r.id);
+    for (const r of await selectIn<any>(
+      (slice) => admin.from('share_links').select('id, token, plays, created_at').eq('user_id', userId).in('id', slice),
+      legacyIds,
+    )) {
+      shareRows.set(`share_links:${r.id}`, { id: r.id, source: 'share_links', token: r.token ?? null, plays: r.plays ?? null, created_at: r.created_at });
+    }
+    const modernRows = await selectIn<any>(
+      (slice) => admin.from('project_shares').select('id, token, plays, created_at, content_type, project_id, playlist_id, track_id').in('id', slice),
+      refs.filter((r) => r.source === 'project_shares').map((r) => r.id),
+    );
+    const parentOf = (r: any): { table: 'projects' | 'playlists' | 'tracks'; id: string } | null => {
+      const kind = r.content_type ?? 'project';
+      if (kind === 'playlist' && r.playlist_id) return { table: 'playlists', id: r.playlist_id };
+      if (kind === 'track' && r.track_id) return { table: 'tracks', id: r.track_id };
+      return r.project_id ? { table: 'projects', id: r.project_id } : null;
+    };
+    const mine = new Set<string>();
+    for (const table of ['projects', 'playlists', 'tracks'] as const) {
+      const ids = [...new Set(modernRows.map(parentOf).filter((p): p is NonNullable<ReturnType<typeof parentOf>> => !!p && p.table === table).map((p) => p.id))];
+      for (const row of await selectIn<any>((slice) => admin.from(table).select('id').eq('user_id', userId).in('id', slice), ids)) {
+        mine.add(`${table}:${row.id}`);
+      }
+    }
+    for (const r of modernRows) {
+      const parent = parentOf(r);
+      if (!parent || !mine.has(`${parent.table}:${parent.id}`)) continue;
+      shareRows.set(`project_shares:${r.id}`, { id: r.id, source: 'project_shares', token: r.token ?? null, plays: r.plays ?? null, created_at: r.created_at });
     }
     const owned = refs.filter((r) => shareRows.has(`${r.source}:${r.id}`));
     if (owned.length === 0) return NextResponse.json({ schemaReady: true, activity: {} });
@@ -105,12 +128,12 @@ export async function GET(req: NextRequest) {
       tokens,
     );
     const contactIds = [...new Set(sends.map((s) => s.contact_id).filter(Boolean))] as string[];
-    const mine = new Set(
+    const myContacts = new Set(
       (await selectIn<any>((slice) => admin.from('contacts').select('id').eq('user_id', userId).in('id', slice), contactIds)).map((c) => c.id),
     );
     const sendsByToken = new Map<string, SendRow[]>();
     for (const s of sends) {
-      if (!mine.has(s.contact_id)) continue;
+      if (!myContacts.has(s.contact_id)) continue;
       const list = sendsByToken.get(s.share_token) ?? [];
       list.push({ contact_id: s.contact_id, sent_at: s.sent_at, opened_at: s.opened_at ?? null, link_clicked_at: s.link_clicked_at ?? null });
       sendsByToken.set(s.share_token, list);

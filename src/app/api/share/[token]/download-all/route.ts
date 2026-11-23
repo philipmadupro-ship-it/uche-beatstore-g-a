@@ -1,3 +1,4 @@
+import { recordShareEventFor } from '@/lib/links/share-events-server';
 import { tokenRef } from '@/lib/share/token-ref';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
@@ -93,6 +94,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (allowed.length > SHARE_ZIP_MAX_TRACKS) {
       return NextResponse.json({ error: `Too many tracks for one download (limit ${SHARE_ZIP_MAX_TRACKS}). Download them one by one.` }, { status: 413 });
     }
+
+    recordShareEventFor(req, admin, resolved, 'download_all');
 
     const rows = await selectIn<{ id: string; title: string | null; audio_url: string | null }>(
       (chunk) => admin.from('tracks').select('id, title, audio_url').in('id', chunk),

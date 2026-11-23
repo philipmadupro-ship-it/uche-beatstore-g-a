@@ -1,3 +1,4 @@
+import { recordShareEventFor } from '@/lib/links/share-events-server';
 import { tokenRef } from '@/lib/share/token-ref';
 import { grantableTrackIds } from '@/lib/share/share-owner';
 import { NextRequest, NextResponse } from 'next/server';
@@ -130,6 +131,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         creator = profile || null;
       }
 
+      recordShareEventFor(req, supabaseAdmin, resolved, 'open');
       await supabaseAdmin
         .from('share_links')
         .update({ plays: (share.plays || 0) + 1 })

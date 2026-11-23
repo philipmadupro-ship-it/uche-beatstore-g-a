@@ -13,6 +13,7 @@ const OWNER = 'owner-1';
 const L1 = '11111111-1111-4111-8111-111111111111';
 const P1 = '22222222-2222-4222-8222-222222222222';
 const OTHER = '33333333-3333-4333-8333-333333333333';
+const P2 = '44444444-4444-4444-8444-444444444444';
 
 type Rows = Record<string, any[]>;
 const filters: Array<{ table: string; col: string; val: unknown }> = [];
@@ -30,6 +31,8 @@ function admin(rows: Rows, opts: { eventsError?: any } = {}) {
         },
         eq: (col: string, val: unknown) => {
           filters.push({ table, col, val });
+          // The real project_shares table has no user_id column.
+          if (table === 'project_shares' && col === 'user_id') throw new Error('column project_shares.user_id does not exist');
           data = data.filter((r) => r[col] === val);
           return q;
         },
@@ -67,7 +70,11 @@ describe('GET /api/links/activity', () => {
         { id: L1, user_id: OWNER, token: 'tokL', plays: 9, created_at: '2026-10-01T00:00:00Z' },
         { id: OTHER, user_id: 'someone-else', token: 'tokO', plays: 1, created_at: '2026-10-01T00:00:00Z' },
       ],
-      project_shares: [{ id: P1, user_id: OWNER, token: 'tokP', plays: 2, created_at: '2026-11-01T00:00:00Z' }],
+      project_shares: [
+        { id: P1, token: 'tokP', plays: 2, created_at: '2026-11-01T00:00:00Z', content_type: 'project', project_id: 'proj-mine' },
+        { id: P2, token: 'tokQ', plays: 2, created_at: '2026-11-01T00:00:00Z', content_type: 'project', project_id: 'proj-theirs' },
+      ],
+      projects: [{ id: 'proj-mine', user_id: OWNER }, { id: 'proj-theirs', user_id: 'someone-else' }],
       share_events: [
         { owner_user_id: OWNER, share_source: 'share_links', share_id: L1, kind: 'open', ip_hash: 'a', created_at: '2026-11-20T00:00:00Z' },
         { owner_user_id: OWNER, share_source: 'share_links', share_id: L1, kind: 'download', ip_hash: 'b', created_at: '2026-11-21T00:00:00Z' },
@@ -80,7 +87,7 @@ describe('GET /api/links/activity', () => {
       contacts: [{ id: 'c1', user_id: OWNER }, { id: 'foreign', user_id: 'someone-else' }],
     };
     mockRequireUser.mockResolvedValue({ ok: true, userId: OWNER, admin: admin(rows) });
-    const res = await (await load()).GET(req(`share_links:${L1},share_links:${OTHER},project_shares:${P1},bogus:1`));
+    const res = await (await load()).GET(req(`share_links:${L1},share_links:${OTHER},project_shares:${P1},project_shares:${P2},bogus:1`));
     const body = await res.json();
     expect(body.schemaReady).toBe(true);
     expect(Object.keys(body.activity).sort()).toEqual([`project_shares:${P1}`, `share_links:${L1}`].sort());
