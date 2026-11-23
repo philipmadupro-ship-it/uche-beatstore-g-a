@@ -144,7 +144,7 @@ export function LinkFilterBar({
       </Drawer>
 
       <div className="mt-2 flex items-center justify-between px-1">
-        <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/30" data-testid="link-count">
+        <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/60" data-testid="link-count">
           {active ? `${shown} of ${total}` : `${total} link${total === 1 ? '' : 's'}`}
         </p>
         {active && (
