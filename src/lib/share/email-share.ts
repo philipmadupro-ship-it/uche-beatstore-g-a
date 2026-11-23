@@ -19,12 +19,16 @@
  */
 import type { createServiceClient } from '@/lib/auth/ownership';
 import { shareLifecycleFailure, type ShareLifecycle } from '@/lib/share/token-access';
+import { isFullPlayback } from '@/lib/share/playback';
+import { sharePathFor, type BeatSendRole } from '@/lib/email/beat-send-input';
 
 type Admin = ReturnType<typeof createServiceClient>;
 
 interface EmailShareRow extends ShareLifecycle {
   allow_downloads?: boolean | null;
   project_id?: string | null;
+  full_playback?: boolean | null;
+  role?: string | null;
 }
 
 export type EmailShareResolution =
@@ -35,6 +39,12 @@ export type EmailShareResolution =
       path: string;
       expiresAt: string | null;
       allowDownloads: boolean;
+      /** Full track (true) or the 75 s preview; a missing column reads as full. */
+      fullPlayback: boolean;
+      /** Project shares only. */
+      role: BeatSendRole | null;
+      /** The project a project share opens. */
+      projectId: string | null;
     }
   | { ok: false; status: 404 | 409; error: string };
 
@@ -50,6 +60,9 @@ function live(row: EmailShareRow, kind: 'tracks' | 'project', path: string): Ema
     path,
     expiresAt: row.expires_at ?? null,
     allowDownloads: row.allow_downloads !== false,
+    fullPlayback: isFullPlayback(row),
+    role: row.role === 'commenter' || row.role === 'editor' || row.role === 'viewer' ? row.role : null,
+    projectId: row.project_id ?? null,
   };
 }
 
@@ -60,16 +73,16 @@ export async function resolveEmailShare(
 ): Promise<EmailShareResolution> {
   const { data: trackShare, error: trackErr } = await admin
     .from('share_links')
-    .select('expires_at, revoked_at, allow_downloads')
+    .select('*')
     .eq('token', token)
     .eq('user_id', ownerId)
     .maybeSingle();
   if (trackErr) throw trackErr;
-  if (trackShare) return live(trackShare as EmailShareRow, 'tracks', `/share/${token}`);
+  if (trackShare) return live(trackShare as EmailShareRow, 'tracks', sharePathFor('tracks', token));
 
   const { data: projectShare, error: projectErr } = await admin
     .from('project_shares')
-    .select('project_id, expires_at, revoked_at, allow_downloads')
+    .select('*')
     .eq('token', token)
     .maybeSingle();
   if (projectErr) throw projectErr;
@@ -82,7 +95,7 @@ export async function resolveEmailShare(
       .eq('user_id', ownerId)
       .maybeSingle();
     if (ownErr) throw ownErr;
-    if (project) return live(projectShare as EmailShareRow, 'project', `/projects/share/${token}`);
+    if (project) return live(projectShare as EmailShareRow, 'project', sharePathFor('project', token));
   }
 
   // Unknown, or owned by someone else: the same answer either way, so the
