@@ -16,7 +16,7 @@ vi.mock('@/lib/auth/ownership', () => ({
 vi.mock('@/lib/store/public-preview-access', () => ({ canStreamPublicly: (...a: unknown[]) => mockPublic(...a) }));
 vi.mock('@/lib/store/owned-preview-access', () => ({
   sessionOwnsTrack: (...a: unknown[]) => mockOwns(...a),
-  ownedStreamHeaders: (h: Headers) => h.set('cache-control', 'private, no-store'),
+  ownedStreamHeaders: (h: Headers) => { h.set('cache-control', 'private, no-store'); h.set('vary', 'Cookie'); return h; },
 }));
 vi.mock('@/lib/audio/stream-source', () => ({ streamAudioPreviewSource: (...a: unknown[]) => mockStream(...a) }));
 
@@ -53,6 +53,18 @@ describe('GET /api/store/wave/[id]', () => {
     const res = await call();
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('is 404 for an org recording, even one that looks listed', async () => {
+    mockRow.mockReturnValue({ preview_url: 'https://pub.r2.dev/previews/a.mp3', store_listed: true, user_id: null, org_id: 'org-1' });
+    expect((await call()).status).toBe(404);
+    expect(mockStream).not.toHaveBeenCalled();
+  });
+
+  it('sets Vary: Cookie on the owner-only response', async () => {
+    mockPublic.mockResolvedValue(false);
+    mockOwns.mockResolvedValue(true);
+    expect((await call()).headers.get('vary')).toBe('Cookie');
   });
 
   it('is 404 without a public preview (never derives a file from the master) and when the file is missing', async () => {

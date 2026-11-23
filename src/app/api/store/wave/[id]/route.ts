@@ -27,12 +27,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const admin = createServiceClient();
     const { data, error } = await admin
       .from('tracks')
-      .select('preview_url, audio_url, store_listed, user_id')
+      .select('preview_url, audio_url, store_listed, user_id, org_id')
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
-    const row = data as PreviewTrackRow | null;
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const row = data as (PreviewTrackRow & { org_id?: string | null }) | null;
+    // A Label OS recording is never public, whatever its row says.
+    if (!row || row.org_id) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const isPublic = await canStreamPublicly(admin, id, row);
     if (!isPublic && !(await sessionOwnsTrack(admin, id, row.user_id))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
