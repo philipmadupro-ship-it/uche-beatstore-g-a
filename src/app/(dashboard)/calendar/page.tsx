@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
-  ChevronLeft, ChevronRight, Plus, Loader2,
-  Upload, History, MessageSquare, Send as SendIcon, Star, ArrowRight, Activity as ActivityIcon,
+  ChevronLeft, ChevronRight, Plus, Loader2, Activity as ActivityIcon,
 } from 'lucide-react';
+import { ActivityRow } from '@/components/activity/activity-ui';
+import type { ActivityItem } from '@/lib/dashboard/activity-taxonomy';
 import { MonthGrid } from '@/components/calendar/MonthGrid';
 import { AddEventModal } from '@/components/events/AddEventModal';
-import Link from 'next/link';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -21,15 +21,6 @@ interface CalendarEvent {
   end_date?: string | null;
   color?: string;
   notes?: string;
-}
-
-interface ActivityItem {
-  id: string;
-  kind: 'upload' | 'version' | 'comment' | 'send' | 'rating';
-  at: string;
-  title: string;
-  subject_id?: string | null;
-  subject_kind?: 'track' | 'project' | 'contact' | null;
 }
 
 export default function CalendarPage() {
@@ -213,32 +204,6 @@ export default function CalendarPage() {
 // most days of the year, and we'd rather not put fake "nothing here"
 // loading skeletons in front of it.
 
-const KIND_ICON: Record<ActivityItem['kind'], typeof Upload> = {
-  upload: Upload,
-  version: History,
-  comment: MessageSquare,
-  send: SendIcon,
-  rating: Star,
-};
-
-const KIND_COLOR: Record<ActivityItem['kind'], string> = {
-  upload: 'text-white',
-  version: 'text-white/80',
-  comment: 'text-[#8ecf9f]',
-  send: 'text-white',
-  rating: 'text-[#eca9a9]',
-};
-
-function subjectHref(item: ActivityItem): string | null {
-  if (!item.subject_id || !item.subject_kind) return null;
-  switch (item.subject_kind) {
-    case 'track':   return `/library/${item.subject_id}`;
-    case 'project': return `/projects/${item.subject_id}`;
-    case 'contact': return '/contacts';
-    default:        return null;
-  }
-}
-
 function ActivityPanel({
   day, items, loading,
 }: {
@@ -277,42 +242,17 @@ function ActivityPanel({
           </div>
         ) : items.length === 0 ? (
           <p className="px-5 py-10 text-center text-[11px] leading-relaxed text-[var(--text-readable)]">
-            No tracked actions on this day. Uploads, comments, sends, and ratings will land here.
+            No tracked actions on this day. Uploads, sales, artist replies, and sends will land here.
           </p>
         ) : (
           <ul className="py-2 px-2 space-y-0.5">
-            {items.map((it) => {
-              const Icon = KIND_ICON[it.kind];
-              const color = KIND_COLOR[it.kind];
-              const time = new Date(it.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-              const href = subjectHref(it);
-              const body = (
-                <>
-                  <div className={`shrink-0 w-7 h-7 rounded-full bg-white/[0.03] border border-white/[0.05] flex items-center justify-center ${color}`}>
-                    <Icon size={12} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[11px] text-white leading-snug">{it.title}</p>
-                    <p className="text-[9px] font-mono text-white/60 uppercase tracking-wider mt-0.5">
-                      {time}
-                      {it.subject_kind && ` · ${it.subject_kind}`}
-                    </p>
-                  </div>
-                  {href && <ArrowRight size={10} className="text-white/40 shrink-0" />}
-                </>
-              );
-              return (
-                <li key={it.id}>
-                  {href ? (
-                    <Link href={href} className="flex items-start gap-3 px-3 py-2.5 rounded-lg hover:bg-white/[0.03] transition-colors">
-                      {body}
-                    </Link>
-                  ) : (
-                    <div className="flex items-start gap-3 px-3 py-2.5">{body}</div>
-                  )}
-                </li>
-              );
-            })}
+            {items.map((it) => (
+              <ActivityRow
+                key={it.id}
+                item={it}
+                timeLabel={new Date(it.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+              />
+            ))}
           </ul>
         )}
       </div>
