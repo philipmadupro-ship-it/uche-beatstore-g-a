@@ -5,6 +5,8 @@ import { requireRowOwnership } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { pruneTrackMp3s } from '@/lib/audio/mp3-deliverable.server';
+import { pruneTrackStemCache } from '@/lib/stems/cache.server';
+import { stemSourceOf } from '@/lib/stems/pipeline';
 const log = createLogger('api.tracks.id.versions.versionId.revert');
 
 export const runtime = 'nodejs';
@@ -107,6 +109,8 @@ export async function POST(
       // superseded (its key is derived from audio_url). Keep the one for the
       // restored master if it was made before. Best-effort.
       await pruneTrackMp3s({ id, audio_url: target.audio_url });
+      // Same for split stems: keyed by the source (wav first), so keep only the restored one's.
+      await pruneTrackStemCache({ id, source: stemSourceOf(updated as { audio_url: string | null; wav_url: string | null }) });
 
       return NextResponse.json({ track: updated });
     }

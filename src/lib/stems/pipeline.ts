@@ -20,6 +20,7 @@ import {
   afterFailure, decideAfterPoll, isActive, isClaimable, isExhausted, isPermanentError,
   type BackendStatus,
 } from './lifecycle';
+import { lookupStemCache, stemCacheKey, type StemCacheDeps } from './cache';
 import type { StemRowFull, StemStore, StemPatch } from './store';
 
 const log = createLogger('stems.pipeline');
@@ -43,6 +44,8 @@ export interface PipelineDeps {
   };
   /** Write one stem to the PRIVATE bucket and return its r2:// reference. */
   putStem(buffer: Buffer, filename: string): Promise<string>;
+  /** Result cache (AUDIO-06). Absent = every job really splits. */
+  cache?: StemCacheDeps;
   /** All four stems are stored (buyer delivery emails etc.). Best effort. */
   onDone(trackId: string): Promise<void>;
   now(): number;
@@ -99,8 +102,20 @@ async function failRow(deps: PipelineDeps, row: StemRowFull, error: string, patc
   await deps.store.setTrackStatus(row.track_id, 'failed');
 }
 
+/** Record a finished split (real or cached): row, track status, buyer delivery. */
+async function finishDone(deps: PipelineDeps, row: StemRowFull, urls: Record<string, string>) {
+  await deps.store.patch(row, {
+    status: 'done', last_error: null, locked_at: null,
+    vocals_url: urls.vocals, drums_url: urls.drums, bass_url: urls.bass, other_url: urls.other,
+  }, deps.now());
+  await deps.store.setTrackStatus(row.track_id, 'done');
+  try { await deps.onDone(row.track_id); } catch (err) {
+    log.warn('stem onDone failed', { trackId: row.track_id, error: errorMessage(err) });
+  }
+}
+
 /** One claimed row, start to finish or until the budget runs out. */
-async function runJob(deps: PipelineDeps, claimed: StemRowFull, deadline: number): Promise<'done' | 'failed' | 'waiting' | 'retry'> {
+async function runJob(deps: PipelineDeps, claimed: StemRowFull, deadline: number): Promise<'done' | 'cached' | 'failed' | 'waiting' | 'retry'> {
   const { store } = deps;
   let row = claimed;
   const locks = await store.hasLocks();
@@ -111,6 +126,15 @@ async function runJob(deps: PipelineDeps, claimed: StemRowFull, deadline: number
     if (!track || !source) {
       await failRow(deps, row, 'The track has no audio to split.');
       return 'failed';
+    }
+
+    // A current result for this exact source/model/settings: finish without the backend.
+    if (!jobId && deps.cache) {
+      const hit = await lookupStemCache(deps.cache, track.id, source);
+      if (hit) {
+        await finishDone(deps, row, hit);
+        return 'cached';
+      }
     }
 
     if (!jobId) {
@@ -145,16 +169,16 @@ async function runJob(deps: PipelineDeps, claimed: StemRowFull, deadline: number
     const urls: Record<string, string> = {};
     for (const name of CORE_STEMS) {
       const buffer = await deps.backend.download(jobId, name, polled.stems[name]);
-      const filename = `${stemName(track.title || 'Track', name).replace(/[^\w\-— ]+/g, '').trim() || `stem-${name}`}.wav`;
-      urls[name] = await deps.putStem(buffer, filename);
+      if (deps.cache && deps.cache.refFor(stemCacheKey(track.id, source, name))) {
+        urls[name] = await deps.cache.put(stemCacheKey(track.id, source, name), buffer);
+      } else {
+        const filename = `${stemName(track.title || 'Track', name).replace(/[^\w\-— ]+/g, '').trim() || `stem-${name}`}.wav`;
+        urls[name] = await deps.putStem(buffer, filename);
+      }
     }
-    await store.patch(row, {
-      status: 'done', last_error: null, locked_at: null,
-      vocals_url: urls.vocals, drums_url: urls.drums, bass_url: urls.bass, other_url: urls.other,
-    }, deps.now());
-    await store.setTrackStatus(row.track_id, 'done');
-    try { await deps.onDone(row.track_id); } catch (err) {
-      log.warn('stem onDone failed', { trackId: row.track_id, error: errorMessage(err) });
+    await finishDone(deps, row, urls);
+    if (deps.cache) {
+      try { await deps.cache.prune({ id: track.id, source }); } catch { /* best effort */ }
     }
     return 'done';
   } catch (err) {
@@ -177,7 +201,7 @@ async function runJob(deps: PipelineDeps, claimed: StemRowFull, deadline: number
 }
 
 export interface BatchResult {
-  claimed: number; done: number; failed: number; waiting: number; retry: number; expired: number;
+  claimed: number; cached: number; done: number; failed: number; waiting: number; retry: number; expired: number;
 }
 
 /**
@@ -190,7 +214,7 @@ export async function processStemBatch(
   opts: { limit?: number; budgetMs?: number; onlyTrackId?: string } = {},
 ): Promise<BatchResult> {
   const { store } = deps;
-  const result: BatchResult = { claimed: 0, done: 0, failed: 0, waiting: 0, retry: 0, expired: 0 };
+  const result: BatchResult = { claimed: 0, cached: 0, done: 0, failed: 0, waiting: 0, retry: 0, expired: 0 };
   const deadline = deps.now() + (opts.budgetMs ?? 240_000);
   const locks = await store.hasLocks();
   const work = await store.listWork(opts.limit ?? 5);

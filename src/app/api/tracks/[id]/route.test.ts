@@ -38,6 +38,11 @@ vi.mock('@/lib/audio/mp3-deliverable.server', () => ({
   pruneTrackMp3s: (...args: unknown[]) => mockPrune(...args),
 }));
 
+const mockPruneStems = vi.fn();
+vi.mock('@/lib/stems/cache.server', () => ({
+  pruneTrackStemCache: (...args: unknown[]) => mockPruneStems(...args),
+}));
+
 function buildReq(method: string, body?: unknown): NextRequest {
   return new NextRequest('http://localhost/api/tracks/t-1', {
     method,
@@ -184,6 +189,7 @@ describe('DELETE /api/tracks/[id]', () => {
     await mod.DELETE(buildReq('DELETE'), { params: Promise.resolve({ id: 't-1' }) });
 
     expect(mockPrune).toHaveBeenCalledWith({ id: 't-1', audio_url: null });
+    expect(mockPruneStems).toHaveBeenCalledWith({ id: 't-1', source: null });
   });
 
   it('removes nothing when the caller does not own the track', async () => {
@@ -192,5 +198,6 @@ describe('DELETE /api/tracks/[id]', () => {
     await mod.DELETE(buildReq('DELETE'), { params: Promise.resolve({ id: 't-1' }) });
 
     expect(mockPrune).not.toHaveBeenCalled();
+    expect(mockPruneStems).not.toHaveBeenCalled();
   });
 });
