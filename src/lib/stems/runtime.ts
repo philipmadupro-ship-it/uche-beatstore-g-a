@@ -4,6 +4,7 @@ import { uploadAudio } from '@/lib/storage/upload';
 import { downloadStem, pollJob, startJobFromSource } from './dispatch';
 import { autoDeliverStems } from './auto-deliver';
 import { defaultStemStore } from './store';
+import { realStemCache } from './cache.server';
 import type { PipelineDeps } from './pipeline';
 
 export function defaultPipelineDeps(): PipelineDeps {
@@ -20,6 +21,7 @@ export function defaultPipelineDeps(): PipelineDeps {
     },
     // uploadAudio is the PRIVATE-bucket writer (fails closed without it).
     putStem: (buffer, filename) => uploadAudio(buffer, filename, 'audio/wav'),
+    cache: realStemCache,
     onDone: async (trackId) => {
       if (supabase) await autoDeliverStems(createServiceClient(), trackId);
     },

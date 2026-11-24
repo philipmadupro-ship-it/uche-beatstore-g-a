@@ -8,6 +8,8 @@ vi.mock('@/lib/auth/ownership', () => ({ requireRowOwnership: (...a: unknown[]) 
 
 const mockPrune = vi.fn();
 vi.mock('@/lib/audio/mp3-deliverable.server', () => ({ pruneTrackMp3s: (...a: unknown[]) => mockPrune(...a) }));
+const mockPruneStems = vi.fn();
+vi.mock('@/lib/stems/cache.server', () => ({ pruneTrackStemCache: (...a: unknown[]) => mockPruneStems(...a) }));
 
 import { POST } from './route';
 
@@ -51,6 +53,8 @@ describe('POST /api/tracks/[id]/versions/[versionId]/revert and the lease MP3', 
     expect(res.status).toBe(200);
     expect(a.updates[0]).toMatchObject({ audio_url: 'r2://p/tracks/old.wav' });
     expect(mockPrune).toHaveBeenCalledWith({ id: 'track-1', audio_url: 'r2://p/tracks/old.wav' });
+    expect(mockPruneStems).toHaveBeenCalledTimes(1);
+    expect(mockPruneStems.mock.calls[0][0]).toMatchObject({ id: 'track-1' });
   });
 
   it('prunes nothing when the revert itself failed, and nothing for a track the caller does not own', async () => {
@@ -62,5 +66,6 @@ describe('POST /api/tracks/[id]/versions/[versionId]/revert and the lease MP3', 
     expect((await POST(req(), ctx)).status).toBe(403);
 
     expect(mockPrune).not.toHaveBeenCalled();
+    expect(mockPruneStems).not.toHaveBeenCalled();
   });
 });

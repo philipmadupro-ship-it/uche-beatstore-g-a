@@ -15,8 +15,8 @@ function fakeStore(opts: { locks?: boolean; track?: Partial<StemTrack> | null } 
     id: 't1', title: 'Night Drive', user_id: 'u1', audio_url: 'r2://priv/tracks/a.wav', wav_url: null, ...opts.track,
   };
   let seq = 0;
-  const store: StemStore & { rows: StemRowFull[]; trackStatus: Record<string, string> } = {
-    rows, trackStatus,
+  const store: StemStore & { rows: StemRowFull[]; trackStatus: Record<string, string>; track: StemTrack | null } = {
+    rows, trackStatus, track,
     async hasLocks() { return locks; },
     async findByTrack(id) { return rows.find((r) => r.track_id === id) ?? null; },
     async findByJobId(id) { return rows.find((r) => r.job_id === id) ?? null; },
@@ -237,5 +237,96 @@ describe('reduced mode (migration 205 not applied)', () => {
     expect((await processStemBatch(d)).claimed).toBe(0);
     advance(STALE_LOCK_MS + 1000);
     expect((await processStemBatch(d)).done).toBe(1);
+  });
+});
+
+describe('result cache (AUDIO-06)', () => {
+  const TID = '11111111-1111-4111-8111-111111111111';
+  /** In-memory object store behind the cache deps. */
+  function cacheDeps() {
+    const objects = new Set<string>();
+    const prune = vi.fn(async (_t: { id: string; source: string }) => 0);
+    const cache = {
+      refFor: (k: string) => `r2://priv/${k}`,
+      exists: async (ref: string) => objects.has(ref),
+      put: vi.fn(async (k: string) => { objects.add(`r2://priv/${k}`); return `r2://priv/${k}`; }),
+      prune,
+    };
+    return { objects, cache, prune };
+  }
+  async function run(store: ReturnType<typeof fakeStore>, d: PipelineDeps) {
+    await enqueueStemJob(d, TID);
+    return processStemBatch(d, { budgetMs: 60_000 });
+  }
+
+  for (const locks of [true, false]) {
+    it(`the same job twice is one backend call (locks=${locks})`, async () => {
+      const store = fakeStore({ locks, track: { id: TID } });
+      const { objects, cache } = cacheDeps();
+      const { d, start, download, onDone } = deps(store, { cache } as never);
+      const first = await run(store, d);
+      expect(first).toMatchObject({ done: 1, cached: 0 });
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(objects.size).toBe(4);
+      expect(store.rows[0].vocals_url).toMatch(/^r2:\/\/priv\/stem-cache\/.+\/vocals\.wav$/);
+
+      const second = await run(store, d); // done -> reset -> resolved from cache
+      expect(second).toMatchObject({ cached: 1, done: 0 });
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(download).toHaveBeenCalledTimes(4);
+      expect(store.rows[0]).toMatchObject({ status: 'done' });
+      expect(store.rows[0].other_url).toMatch(/stem-cache\/.+\/other\.wav$/);
+      expect(store.trackStatus[TID]).toBe('done');
+      // buyer auto-delivery behaves exactly as after a real split
+      expect(onDone).toHaveBeenCalledTimes(2);
+      expect(onDone).toHaveBeenLastCalledWith(TID);
+    });
+  }
+
+  it('a changed master splits again and prunes what it supersedes', async () => {
+    const store = fakeStore({ track: { id: TID, audio_url: 'r2://priv/tracks/a.wav' } });
+    const { objects, cache, prune } = cacheDeps();
+    const { d, start } = deps(store, { cache } as never);
+    await run(store, d);
+    const before = new Set(objects);
+    store.track!.audio_url = 'r2://priv/tracks/b.wav'; // re-upload / revert
+    const out = await run(store, d);
+    expect(out).toMatchObject({ done: 1, cached: 0 });
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(objects.size).toBe(8); // the fake bucket has not pruned; the real prune is the hook below
+    for (const k of before) expect(store.rows[0].vocals_url).not.toBe(k);
+    expect(prune).toHaveBeenLastCalledWith({ id: TID, source: 'r2://priv/tracks/b.wav' });
+  });
+
+  it('a partial or unreachable cache is a miss, not a failure', async () => {
+    const store = fakeStore({ track: { id: TID } });
+    const { objects, cache } = cacheDeps();
+    const { d, start } = deps(store, { cache } as never);
+    await run(store, d);
+    objects.delete([...objects][0]);
+    expect(await run(store, d)).toMatchObject({ done: 1, cached: 0 });
+    expect(start).toHaveBeenCalledTimes(2);
+    cache.exists = async () => { throw new Error('r2 down'); };
+    expect(await run(store, d)).toMatchObject({ done: 1, cached: 0 });
+  });
+
+  it('a different track never reuses another track\'s entry', async () => {
+    const { objects, cache } = cacheDeps();
+    const other = '22222222-2222-4222-8222-222222222222';
+    const s1 = fakeStore({ track: { id: TID } });
+    await run(s1, deps(s1, { cache } as never).d);
+    const s2 = fakeStore({ track: { id: other } }); // identical source ref
+    const d2 = deps(s2, { cache } as never);
+    await enqueueStemJob(d2.d, other);
+    expect(await processStemBatch(d2.d, { budgetMs: 60_000 })).toMatchObject({ done: 1, cached: 0 });
+    expect(d2.start).toHaveBeenCalledTimes(1);
+    expect(objects.size).toBe(8);
+  });
+
+  it('without a cache dep the pipeline behaves as before', async () => {
+    const store = fakeStore({ track: { id: TID } });
+    const { d, putStem } = deps(store);
+    expect(await run(store, d)).toMatchObject({ done: 1, cached: 0 });
+    expect(putStem).toHaveBeenCalledTimes(4);
   });
 });

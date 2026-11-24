@@ -15,6 +15,7 @@ import { errorMessage } from '@/lib/errors';
 import { currentSongBeats, writeSongBeats } from '@/lib/tracks/song-beats-store';
 import { replaceMainBeat } from '@/lib/tracks/song-beats';
 import { pruneTrackMp3s } from '@/lib/audio/mp3-deliverable.server';
+import { pruneTrackStemCache } from '@/lib/stems/cache.server';
 
 const log = createLogger('api.tracks.item');
 
@@ -81,5 +82,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   // Ownership is proven and the row is gone: its lease MP3s have no purpose.
   // Best-effort (never throws); the master and previews are not touched here.
   await pruneTrackMp3s({ id, audio_url: null });
+  await pruneTrackStemCache({ id, source: null });
   return NextResponse.json({ success: true });
 }
