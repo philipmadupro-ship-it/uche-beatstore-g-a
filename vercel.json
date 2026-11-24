@@ -36,6 +36,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/cron/process-stems",
+      "schedule": "20 7 * * *"
+    },
+    {
       "path": "/api/cron/reconcile-payments",
       "schedule": "0 8 * * *"
     },
