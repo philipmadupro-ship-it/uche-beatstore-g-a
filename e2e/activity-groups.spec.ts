@@ -62,3 +62,23 @@ test('a row opens its subject and closes the panel', async ({ page }) => {
   await expect(page).toHaveURL(/\/sales/);
   await expect(page.getByRole('dialog', { name: 'Recent activity' })).toHaveCount(0);
 });
+
+for (const [name, width, height] of [['390', 390, 844], ['1440', 1440, 900]] as const) {
+  test(`every chip is visible inside the panel, no sideways scroll (${name})`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto('/library');
+    const dialog = await openPanel(page);
+    const chips = dialog.getByRole('group', { name: /filter activity/i }).getByRole('button');
+    await expect(chips).toHaveCount(5);
+    // The panel slides in; measure once it has settled against the right edge.
+    await expect.poll(async () => Math.round((await dialog.boundingBox())!.x + (await dialog.boundingBox())!.width)).toBe(width);
+    const panel = await dialog.boundingBox();
+    for (let i = 0; i < 5; i++) {
+      const b = (await chips.nth(i).boundingBox())!;
+      expect(b.x).toBeGreaterThanOrEqual(panel!.x);
+      expect(b.x + b.width).toBeLessThanOrEqual(panel!.x + panel!.width + 0.5);
+    }
+    const overflow = await dialog.evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+}

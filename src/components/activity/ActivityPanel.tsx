@@ -114,8 +114,8 @@ export function ActivityPanel({ open, onClose }: Props) {
 
         {/* Group chips — All + Music / Sales / Artists / Sharing. A group with
             no rows is not offered; counts come from the unfiltered list. */}
-        <div className="px-3 pt-3 pb-2 border-b border-white/[0.04] overflow-x-auto scrollbar-hide">
-          <div className="flex items-center gap-1.5" role="group" aria-label="Filter activity by group">
+        <div className="px-3 pt-3 pb-2 border-b border-white/[0.04]">
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter activity by group">
             {(['all', ...ACTIVITY_GROUPS.filter((g) => counts[g] > 0)] as ActivityFilter[]).map((k) => {
               const count = k === 'all' ? items.length : counts[k];
               const active = filter === k;
