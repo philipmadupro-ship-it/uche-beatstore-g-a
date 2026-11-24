@@ -3182,7 +3182,7 @@ export default function StoreEditorPage() {
               }
               badge={`${globalLicenses.length} tier${globalLicenses.length === 1 ? '' : 's'}`}
             >
-              <LicenseBuilder />
+              <LicenseBuilder template={form.license_template_md} />
             </Section>
 
             {/* Mobile save shortcut — the header button is off-screen on
