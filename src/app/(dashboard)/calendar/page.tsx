@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
-  ChevronLeft, ChevronRight, Plus, Loader2, Music, Mic, Users, Bell,
+  ChevronLeft, ChevronRight, Plus, Loader2,
   Upload, History, MessageSquare, Send as SendIcon, Star, ArrowRight, Activity as ActivityIcon,
 } from 'lucide-react';
+import { MonthGrid } from '@/components/calendar/MonthGrid';
 import { AddEventModal } from '@/components/events/AddEventModal';
 import Link from 'next/link';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
@@ -17,6 +18,7 @@ interface CalendarEvent {
   title: string;
   date: string;
   type: 'release' | 'studio' | 'meeting' | 'other';
+  end_date?: string | null;
   color?: string;
   notes?: string;
 }
@@ -118,15 +120,6 @@ export default function CalendarPage() {
   const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
   const calendarDays = getDaysInMonth(currentDate);
 
-  const eventIcon = (type: string) => {
-    switch (type) {
-      case 'release': return <Music size={9} />;
-      case 'studio': return <Mic size={9} />;
-      case 'meeting': return <Users size={9} />;
-      default: return <Bell size={9} />;
-    }
-  };
-
   return (
     <DashboardLayout>
       <PageContainer className="flex min-h-[calc(100vh-80px)] flex-col">
@@ -180,71 +173,13 @@ export default function CalendarPage() {
               ))}
             </div>
 
-            <div className="flex-1 grid grid-cols-7 grid-rows-6">
-              {calendarDays.map((day, i) => {
-                const dayEvents = events.filter((e) => {
-                  const ed = new Date(e.date);
-                  return ed.getDate() === day.date && ed.getMonth() === day.fullDate.getMonth() && ed.getFullYear() === day.fullDate.getFullYear();
-                });
-                const isToday = new Date().toDateString() === day.fullDate.toDateString();
-                const isSelected = selectedDay.toDateString() === day.fullDate.toDateString();
-
-                return (
-                  <div
-                    key={i}
-                    onClick={() => setSelectedDay(day.fullDate)}
-                    className={`border-r border-b border-white/10 p-2 transition-all relative group min-h-[90px] cursor-pointer ${
-                      !day.isCurrentMonth ? 'bg-[#08070a]' : ''
-                    } ${
-                      isSelected
-                        ? 'bg-gradient-to-br from-white/10 to-[#161616]/40 ring-1 ring-white/30 ring-inset z-10'
-                        : 'hover:bg-white/[0.02]'
-                    }`}
-                  >
-                    {/* Date number — today gets a circular amber chip,
-                        regular days are flat numerals. Pulls the user's
-                        eye to "now" without shouting. */}
-                    <div className="flex items-center gap-1.5">
-                      {isToday ? (
-                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-white/20 text-white/70 text-[10px] font-bold tabular-nums">
-                          {day.date}
-                        </span>
-                      ) : (
-                        <span className={`text-[11px] font-mono tabular-nums ${
-                          day.isCurrentMonth ? 'text-white/80' : 'text-white/30'
-                        }`}>
-                          {day.date}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-1.5 space-y-0.5">
-                      {dayEvents.map((ev) => (
-                        <div
-                          key={ev.id}
-                          className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors cursor-pointer border border-white/[0.04] truncate"
-                          style={{ color: ev.color || '#FFFFFF' }}
-                          title={ev.notes || ev.title}
-                        >
-                          {eventIcon(ev.type)}
-                          <span className="truncate">{ev.title}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Quick-add affordance — only visible on hover so
-                        empty cells don't carry pixel noise. */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setShowAddModal(true); }}
-                      className="tap absolute bottom-1.5 right-1.5 flex size-6 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-white/60 opacity-0 transition-opacity hover:border-white/20 hover:text-white group-hover:opacity-100"
-                      aria-label={`Add event on ${day.fullDate.toLocaleDateString()}`}
-                    >
-                      <Plus size={10} aria-hidden="true" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+            <MonthGrid
+              days={calendarDays}
+              events={events}
+              selectedDay={selectedDay}
+              onSelectDay={setSelectedDay}
+              onAddEvent={() => setShowAddModal(true)}
+            />
 
             {loading && (
               <div className="absolute inset-0 bg-[#090907]/70 backdrop-blur-sm flex items-center justify-center z-20">
