@@ -117,7 +117,7 @@ export function DuplicateSendNotice({ rows, names, removed, skipped, bulk, canRe
             const droppedTitles = row.tracks.filter((t) => dropped.includes(t.id)).map((t) => t.title || 'Untitled');
             return (
               <li key={row.key} className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                <p className="flex min-w-0 items-start gap-2 text-[12px] leading-5 text-white/60">
+                <p className="flex min-w-0 items-start gap-2 text-[11px] leading-5 text-white/60">
                   <History size={13} aria-hidden className="mt-1 shrink-0 text-[var(--warning)]" />
                   <span className="min-w-0">
                     {isSkipped ? (
