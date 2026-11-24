@@ -6,6 +6,8 @@ import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { TagOverflowChip } from '@/components/ui/TagOverflowToggle';
+import { hiddenTagsTitle, splitTags, TAG_LIMIT_CARD } from '@/lib/ui/tag-overflow';
 import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
 import { SessionFitMarkers } from '@/components/tracks/SessionFitMarkers';
 
@@ -32,6 +34,10 @@ function BeatListRowImpl({
   onPlay, onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
 }: Props) {
   void index;
+  const rowTags = splitTags(
+    (track.tags ?? []).filter((t) => t.category === 'genre' || t.category === 'mood'),
+    { limit: TAG_LIMIT_CARD, strict: true },
+  );
 
   return (
     <div
@@ -95,16 +101,20 @@ function BeatListRowImpl({
           </p>
           {(track.tags ?? []).length > 0 && (
             <div className="hidden sm:flex items-center gap-1 mt-1 h-[18px] overflow-hidden">
-              {(track.tags ?? [])
-                .filter((t) => t.category === 'genre' || t.category === 'mood')
-                .slice(0, 3)
-                .map((t) => (
+              {rowTags.visible.map((t) => (
                   <span key={t.tag} className={`px-1.5 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border shrink-0 ${t.category === 'genre'
                       ? 'bg-white/10 text-white border-white/20'
                       : 'bg-white/20 text-white/60 border-white/10'}`}>
                     {t.tag}
                   </span>
                 ))}
+              {rowTags.hiddenCount > 0 && (
+                <TagOverflowChip
+                  count={rowTags.hiddenCount}
+                  title={hiddenTagsTitle(rowTags.hidden.map((t) => t.tag))}
+                  className="text-[8px] font-mono tracking-wider"
+                />
+              )}
             </div>
           )}
         </div>

@@ -4,6 +4,8 @@ import { useRef, useEffect, useCallback, useState, useSyncExternalStore } from '
 import { gsap } from 'gsap';
 import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { TagOverflowChip } from '@/components/ui/TagOverflowToggle';
+import { hiddenTagsTitle, splitTags, TAG_LIMIT_ROW } from '@/lib/ui/tag-overflow';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
 
 gsap.registerPlugin(ScrambleTextPlugin);
@@ -425,7 +427,7 @@ export default function MusicPortfolio({
                                 {isEmbedded && (
                                     <div className="hidden md:flex items-center gap-2.5 shrink-0 pointer-events-none">
                                         {/* Tags — top 2, accent on hover for readability */}
-                                        {(track.tags ?? []).slice(0, 2).map((tag) => (
+                                        {splitTags(track.tags ?? [], { limit: TAG_LIMIT_ROW, strict: true }).visible.map((tag) => (
                                             <span
                                                 key={tag}
                                                 className="px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-[0.15em] text-white/80 bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm"
@@ -433,6 +435,12 @@ export default function MusicPortfolio({
                                                 {tag}
                                             </span>
                                         ))}
+                                        {(() => {
+                                            const more = splitTags(track.tags ?? [], { limit: TAG_LIMIT_ROW, strict: true });
+                                            return more.hiddenCount > 0 ? (
+                                                <TagOverflowChip count={more.hiddenCount} title={hiddenTagsTitle(more.hidden)} className="font-mono text-[10px] text-white/60" />
+                                            ) : null;
+                                        })()}
                                         {/* Duration */}
                                         {track.durationSeconds != null && (
                                             <span className="text-[11px] font-mono text-white/80 tabular-nums w-10 text-right">

@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Plus, Tag as TagIcon, X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils';
+import { TagOverflowToggle } from '@/components/ui/TagOverflowToggle';
+import { splitTags, TAG_LIMIT_EDIT } from '@/lib/ui/tag-overflow';
 import { canAddCustomTag, categoryForTag, orderTags, type TagGroup } from '@/lib/ui/tag-groups';
 
 export type { TagGroup };
@@ -40,27 +42,32 @@ export function InlineTagStrip({
   open, onOpenChange,
 }: Props) {
   const [custom, setCustom] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
   const ordered = orderTags(groups, tags);
+  const split = splitTags(ordered, { limit: TAG_LIMIT_EDIT, expanded });
 
-  const toggle = (tag: string, category?: string) =>
-    onToggle({
-      tag,
-      category: category ?? categoryForTag(groups, tag),
-      active: tags.some((t) => t.toLowerCase() === tag.toLowerCase()),
-    });
+  const toggle = (tag: string, category?: string) => {
+    const active = tags.some((t) => t.toLowerCase() === tag.toLowerCase());
+    // A tag just added must be seen: new custom tags sort last, which is
+    // exactly the part a collapsed strip hides.
+    if (!active) setExpanded(true);
+    onToggle({ tag, category: category ?? categoryForTag(groups, tag), active });
+  };
 
   const submitCustom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canAddCustomTag(tags, custom)) return;
+    setExpanded(true);
     onToggle({ tag: custom.trim(), category: 'custom', active: false });
     setCustom('');
   };
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
+    <div id={listId} className={cn('flex flex-wrap items-center gap-1.5', className)}>
       <TagIcon size={11} className="shrink-0 text-white/30" />
 
-      {ordered.map((tag) => (
+      {split.visible.map((tag) => (
         <span
           key={tag}
           className="group/tag inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] py-1 pl-2.5 pr-1 text-[10px] font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
@@ -147,6 +154,15 @@ export function InlineTagStrip({
           </form>
         </div>
       </Popover>
+
+      {split.canToggle && (
+        <TagOverflowToggle
+          expanded={expanded}
+          hiddenCount={split.hiddenCount}
+          onToggle={() => setExpanded((v) => !v)}
+          controls={listId}
+        />
+      )}
     </div>
   );
 }
