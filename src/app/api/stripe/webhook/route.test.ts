@@ -306,6 +306,8 @@ describe('POST /api/stripe/webhook', () => {
       file_types: ['MP3', 'WAV'],
       stems_included: false,
       is_exclusive: false,
+      terms_v: 1,
+      terms: expect.objectContaining({ file_types: ['MP3', 'WAV'], stems_included: false, is_exclusive: false }),
     }]);
   });
 
@@ -1137,7 +1139,8 @@ describe('POST /api/stripe/webhook — license contract tier terms (LICENSE-02)'
     mockConstructEvent.mockReturnValue(event(LICENSE_ID, 'lease'));
     expect((await POST(req('{}'))).status).toBe(200);
     expect(mockRenderContractPdf).toHaveBeenCalledTimes(1);
-    expect(mockRenderContractPdf.mock.calls[0][0]).toBe('Streams: 250,000 streams\nFiles: MP3, WAV');
+    // The producer's wording is filled exactly as before; the Schedule of Terms follows it.
+    expect(String(mockRenderContractPdf.mock.calls[0][0]).startsWith('Streams: 250,000 streams\nFiles: MP3, WAV' + '\n\n## Schedule of Terms')).toBe(true);
   });
 
   it('still renders the contract, on legacy terms, when the extra licenses columns are missing', async () => {
@@ -1150,7 +1153,8 @@ describe('POST /api/stripe/webhook — license contract tier terms (LICENSE-02)'
     mockConstructEvent.mockReturnValue(event(LICENSE_ID, 'lease'));
     expect((await POST(req('{}'))).status).toBe(200);
     expect(mockRenderContractPdf).toHaveBeenCalledTimes(1);
-    expect(mockRenderContractPdf.mock.calls[0][0]).toBe('Streams: 5,000 streams\nCredit: Credit required: prod. Uche\nFiles: MP3');
+    // The producer's wording is filled exactly as before; the Schedule of Terms follows it.
+    expect(String(mockRenderContractPdf.mock.calls[0][0]).startsWith('Streams: 5,000 streams\nCredit: Credit required: prod. Uche\nFiles: MP3' + '\n\n## Schedule of Terms')).toBe(true);
     expect(mockLog.warn).toHaveBeenCalledWith(expect.stringMatching(/tier terms unavailable/), expect.anything());
   });
 
@@ -1158,7 +1162,8 @@ describe('POST /api/stripe/webhook — license contract tier terms (LICENSE-02)'
     install({ template: TEMPLATE, licenses: { data: [], error: null } });
     mockConstructEvent.mockReturnValue(event('exclusive', 'exclusive'));
     expect((await POST(req('{}'))).status).toBe(200);
-    expect(mockRenderContractPdf.mock.calls[0][0]).toBe('Streams: Unlimited\nFiles: MP3, WAV, STEMS');
+    // The producer's wording is filled exactly as before; the Schedule of Terms follows it.
+    expect(String(mockRenderContractPdf.mock.calls[0][0]).startsWith('Streams: Unlimited\nFiles: MP3, WAV, STEMS' + '\n\n## Schedule of Terms')).toBe(true);
   });
 
   it('an existing template (no tier syntax) renders byte-identically to the plain fill', async () => {
@@ -1166,8 +1171,122 @@ describe('POST /api/stripe/webhook — license contract tier terms (LICENSE-02)'
     install({ template: existing, licenses: { data: [], error: null } });
     mockConstructEvent.mockReturnValue(event('lease', 'lease'));
     expect((await POST(req('{}'))).status).toBe(200);
-    expect(mockRenderContractPdf.mock.calls[0][0]).toBe(
-      'Hi **Buyer**,\n- keep Lease {{unknown_thing}}\n{{#if not valid}}\nprice $25.00',
-    );
+    expect(String(mockRenderContractPdf.mock.calls[0][0]).startsWith(
+      'Hi **Buyer**,\n- keep Lease {{unknown_thing}}\n{{#if not valid}}\nprice $25.00\n\n## Schedule of Terms',
+    )).toBe(true);
+  });
+});
+
+describe('POST /api/stripe/webhook — contract from exact tier terms (LICENSE-04)', () => {
+  const LICENSE = '33333333-3333-4333-8333-333333333333';
+  const tierRow = (over: Record<string, unknown> = {}) => ({
+    id: LICENSE, name: 'Premium', is_exclusive: false, file_types: ['mp3', 'wav'], stems_included: false,
+    streaming_limit: 100000, distribution_limit: 50000, commercial_rights: true, sync_rights: false,
+    broadcast_rights: false, credit_required: true, ...over,
+  });
+  const event = () => ({
+    id: 'evt_terms',
+    type: 'checkout.session.completed',
+    data: { object: {
+      id: 'cs_terms', amount_total: 4900, payment_intent: 'pi_terms', customer: 'cus_t',
+      metadata: {
+        purchase_kind: 'track_license', seller_user_id: SELLER, buyer_email: 'buyer@example.com',
+        cart_items: JSON.stringify([{ track_id: 't1', license_id: LICENSE, license_type: 'lease' }]),
+      },
+    } },
+  });
+
+  function setup(opts: { tier?: Record<string, unknown> | null; existingLineItems?: unknown[] } = {}) {
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.RESEND_FROM_EMAIL = 'sales@example.test';
+    mockConstructEvent.mockReturnValue(event());
+    mockRenderContractPdf.mockResolvedValue(Buffer.from('pdf'));
+    mockUploadContractPdf.mockResolvedValue(null);
+    mockResendSend.mockResolvedValue({ data: { id: 'email_1' }, error: null });
+    const tierReads: string[] = [];
+    const writes = installDb(({ table, op, columns }) => {
+      if (table === 'processed_stripe_events' && op === 'insert') return { error: null, count: null };
+      if (table === 'licenses' && op === 'select') {
+        tierReads.push(columns ?? '');
+        return { data: opts.tier === null ? [] : [opts.tier ?? tierRow()], error: null };
+      }
+      if (table === 'license_purchases' && op === 'select') {
+        if (opts.existingLineItems) return { data: { id: 'lp_t', fulfillment_email_sent: false, line_items: opts.existingLineItems }, error: null };
+        return { data: null, error: null };
+      }
+      if (table === 'license_purchases' && op === 'upsert') return { data: [{ id: 'lp_t' }], error: null };
+      return { data: null, error: null };
+    });
+    return { writes, tierReads };
+  }
+  const contractText = () => String((mockRenderContractPdf.mock.calls[0] ?? [])[0]);
+  const alerts = (w: Array<{ table: string; op: string; payload?: unknown }>) =>
+    w.filter((x) => x.table === 'notifications' && x.op === 'insert'
+      && (x.payload as { data?: { alert_kind?: string } }).data?.alert_kind === 'contract_terms');
+
+  beforeEach(() => { mockRenderContractPdf.mockReset(); mockResendSend.mockReset(); });
+
+  it('states the purchased tier exactly and freezes the validated terms on the line', async () => {
+    const { writes } = setup();
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    const text = contractText();
+    expect(text).toContain('Audio streams: 100,000 streams');
+    expect(text).toContain('Files delivered: MP3, WAV');
+    expect(text).toContain('## Schedule of Terms');
+    expect(text).not.toContain('5,000');
+    const up = writes.find((w) => w.table === 'license_purchases' && w.op === 'upsert')!;
+    const li = (up.payload as { line_items: Array<Record<string, unknown>> }).line_items[0];
+    expect(li.terms_v).toBe(1);
+    expect(li.terms).toMatchObject({ streaming_limit: 100000, file_types: ['MP3', 'WAV'] });
+    expect(alerts(writes)).toHaveLength(0);
+  });
+
+  it('a corrupt tier never becomes Unlimited: standard terms, flagged, producer alerted, buyer still served', async () => {
+    const { writes } = setup({ tier: tierRow({ streaming_limit: -5, file_types: ['MP3', 'OGG'] }) });
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    const text = contractText();
+    expect(text).not.toContain('Unlimited');
+    expect(text).toContain('could not be confirmed');
+    const a = alerts(writes);
+    expect(a).toHaveLength(1);
+    expect((a[0].payload as Record<string, unknown>).kind).toBe('fulfillment_alert');
+    expect(mockResendSend).toHaveBeenCalledTimes(1);
+    const up = writes.find((w) => w.table === 'license_purchases' && w.op === 'upsert')!;
+    expect((up.payload as { line_items: Array<Record<string, unknown>> }).line_items[0].terms).toBeUndefined();
+  });
+
+  it('an unreadable tier row falls back flagged and the purchase still completes', async () => {
+    const { writes } = setup({ tier: null });
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    expect(contractText()).toContain('could not be confirmed');
+    expect(alerts(writes)).toHaveLength(1);
+    expect(mockResendSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('a replay uses the terms stored on the line, not the live tier', async () => {
+    const stored = {
+      track_id: 't1', license_id: LICENSE, license_type: 'lease', file_types: ['MP3'], stems_included: false, is_exclusive: false,
+      terms_v: 1,
+      terms: { name: 'Premium', file_types: ['MP3'], stems_included: false, is_exclusive: false, streaming_limit: 7777, distribution_limit: null, commercial_rights: true, sync_rights: false, broadcast_rights: false, credit_required: false },
+    };
+    const { writes, tierReads } = setup({ tier: tierRow({ streaming_limit: 999999 }), existingLineItems: [stored] });
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    expect(contractText()).toContain('Audio streams: 7,777 streams');
+    expect(contractText()).not.toContain('999,999');
+    expect(tierReads).toHaveLength(0);
+    expect(alerts(writes)).toHaveLength(0);
+  });
+
+  it('contract generation failing does not fail the purchase or the delivery email', async () => {
+    setup();
+    mockRenderContractPdf.mockRejectedValue(new Error('pdf down'));
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    expect(mockResendSend).toHaveBeenCalledTimes(1);
+    expect((mockResendSend.mock.calls[0][0] as { subject: string }).subject).toBe('Your license is ready');
   });
 });
