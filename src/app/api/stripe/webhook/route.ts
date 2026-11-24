@@ -10,6 +10,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { DEFAULT_TEMPLATE_MD, fillTemplate } from '@/lib/contracts/license-template';
+import { termsFlags, termsVariables, tiersForLineItems } from '@/lib/contracts/license-terms';
 import { renderContractPdf } from '@/lib/contracts/pdf';
 import { uploadContractPdf } from '@/lib/storage/upload';
 import { deliverFulfillmentEmail } from '@/lib/fulfillment/email-outbox';
@@ -543,7 +544,27 @@ async function runFulfillment(params: {
 
     const totalCentsForContract = Number(session.amount_total ?? 0);
     const priceLabel = `$${(totalCentsForContract / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Tier terms for {{streaming_limit}} and friends. Best-effort: if the extra
+    // columns cannot be read, each line falls back to its recorded terms (then
+    // the legacy ones) and the contract is still made.
+    const licenseIds = [...new Set(lineItems.map((li) => li.license_id).filter((id) => UUID_RE.test(id)))];
+    let tierRows: Map<string, Record<string, unknown>> | null = null;
+    if (licenseIds.length > 0) {
+      try {
+        const { data: tierData, error: tierErr } = await admin
+          .from('licenses')
+          .select('id, name, is_exclusive, file_types, stems_included, streaming_limit, distribution_limit, commercial_rights, sync_rights, broadcast_rights, credit_required')
+          .in('id', licenseIds);
+        if (tierErr) throw tierErr;
+        tierRows = new Map(((tierData ?? []) as Array<Record<string, unknown>>).map((r) => [String(r.id), r]));
+      } catch (err) {
+        log.warn('contract tier terms unavailable, using recorded terms', { purchaseId, error: errorMessage(err) });
+      }
+    }
+    const tiers = tiersForLineItems(lineItems, tierRows);
+    const producerName = (profAny?.display_name as string | null | undefined) || 'Producer';
     const filled = fillTemplate(templateMd, {
+      ...termsVariables(tiers, producerName),
       buyer_name: session.customer_details?.name || meta.buyer_email || 'Customer',
       buyer_email: meta.buyer_email || '',
       track_titles: orderedTitles.join(' · '),
@@ -553,7 +574,7 @@ async function runFulfillment(params: {
       producer_name: (profAny?.display_name as string | null | undefined) || 'Producer',
       producer_email: (profAny?.contact_email as string | null | undefined) || '',
       price: priceLabel,
-    });
+    }, termsFlags(tiers));
 
     contractPdfBuffer = await renderContractPdf(filled);
     const uploadedUrl = await uploadContractPdf(purchaseId, contractPdfBuffer);
