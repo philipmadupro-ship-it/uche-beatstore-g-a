@@ -308,7 +308,9 @@ export default function ProducerPage({
 
               {/* Social links — resolved, never interpolated: see resolveCreatorLink. */}
               {socialRows.length > 0 && (
-                <ul className={`px-2 py-2 ${creator.bio || creditLines.length > 0 ? 'border-t border-white/10' : ''}`}>
+                <div className={`px-2 pb-2 pt-4 ${creator.bio || creditLines.length > 0 ? 'border-t border-white/10' : ''}`}>
+                  <p id="producer-links-label" className="mb-1 px-3 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">Links</p>
+                <ul aria-labelledby="producer-links-label">
                   {socialRows.map(({ key, link, icon }) => (
                     <li key={key}>
                       <a
@@ -323,6 +325,7 @@ export default function ProducerPage({
                     </li>
                   ))}
                 </ul>
+                </div>
               )}
             </div>
           )}
