@@ -20,17 +20,22 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { InlineText } from '@/components/ui/InlineText';
+import { LinkFilterBar } from '@/components/links/LinkFilterBar';
 import {
-  LINK_FILTERS,
+  DEFAULT_LINK_SORT,
+  emptyLinkFacets,
   filterShareLinks,
+  sortShareLinks,
+  type LinkFacets,
+  type LinkSort,
   fromSharePatchResponse,
   isShareLinkExpired,
   shareLinkEndpoint,
   shareLinkKey,
   toSharePatchBody,
-  type LinkFilter,
   type ShareLinkPatch,
 } from '@/lib/links/share-link';
+import { decodeLinkView, encodeLinkView, hasLinkViewParams } from '@/lib/links/link-filters-url';
 import type { ArtworkKind } from '@/lib/artwork/gradient';
 
 interface ShareLink {
@@ -40,6 +45,7 @@ interface ShareLink {
   title: string | null;
   content_title: string | null;
   kind: string;
+  recipient_kind?: string | null;
   track_ids: string[];
   tracks: Array<{ id: string; title: string; type: string; cover_url: string | null }>;
   plays: number;
@@ -89,7 +95,34 @@ export default function LinksPage() {
   const [search, setSearch] = useState('');
   /** Which row is currently being renamed in place (its linkKey). */
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
-  const [filter, setFilter] = useState<LinkFilter>('All');
+  const [facets, setFacets] = useState<LinkFacets>(emptyLinkFacets);
+  const [sort, setSort] = useState<LinkSort>(DEFAULT_LINK_SORT);
+  const [isMobile, setIsMobile] = useState(false);
+  // View in the URL (lib/links/link-filters-url): read once on mount, then
+  // mirrored with replaceState. `urlReady` is state so the mirror cannot write
+  // the defaults over the URL in the same commit that reads it.
+  const [urlReady, setUrlReady] = useState(false);
+  useEffect(() => {
+    if (hasLinkViewParams(window.location.search)) {
+      const restored = decodeLinkView(window.location.search);
+      setFacets(restored.facets);
+      setSort(restored.sort);
+      setSearch(restored.search);
+    }
+    const media = window.matchMedia('(max-width: 639px)');
+    const sync = () => setIsMobile(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    setUrlReady(true);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+  useEffect(() => {
+    if (!urlReady) return;
+    const qs = encodeLinkView({ facets, sort, search });
+    const { pathname, search: current, hash } = window.location;
+    const next = `${pathname}${qs ? `?${qs}` : ''}${hash}`;
+    if (next !== `${pathname}${current}${hash}`) window.history.replaceState(window.history.state, '', next);
+  }, [urlReady, facets, sort, search]);
 
   const fetchLinks = async () => {
     setLoading(true);
@@ -98,12 +131,9 @@ export default function LinksPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const raw: ShareLink[] = Array.isArray(data) ? data : data.links || [];
-      // Sort by opens descending — most-engaged links at the top. The column
-      // is named `plays`, but both share tables increment it once per page
-      // open (/api/share/[token] and /api/projects/share/[token] GET), not
-      // per track played, so the UI labels it "opens". Per-track listening
-      // lives in share_plays / play_head_pings.
-      setLinks(raw.slice().sort((a, b) => (b.plays ?? 0) - (a.plays ?? 0)));
+      // Order is the toolbar's Sort (default Newest). `plays` counts page
+      // OPENS, not listening — see shareOpensLabel.
+      setLinks(raw);
     } catch (err) {
       console.error('Fetch links error:', err);
     } finally {
@@ -224,9 +254,16 @@ export default function LinksPage() {
   }, [links]);
 
   const visibleLinks = useMemo(
-    () => filterShareLinks(links, { filter, search }),
-    [links, filter, search],
+    () => sortShareLinks(filterShareLinks(links, { search, facets }), sort),
+    [links, search, facets, sort],
   );
+  // "Top" marks the most-opened link overall; the list is no longer sorted by opens.
+  const topKey = useMemo(() => {
+    let best: ShareLink | null = null;
+    for (const l of links) if ((l.plays ?? 0) > (best?.plays ?? 0)) best = l;
+    return best ? shareLinkKey(best) : null;
+  }, [links]);
+  const hasRecipients = useMemo(() => links.some((l) => Boolean(l.recipient_kind)), [links]);
 
   return (
     <DashboardLayout>
@@ -253,48 +290,18 @@ export default function LinksPage() {
               <LinkMetric label="Downloads" value={linkSummary.downloadable.toLocaleString()} icon={<Download size={13} />} />
             </div>
 
-            <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.02] p-2.5">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <div className="relative min-w-0 flex-1">
-                  <Search size={12} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search title, token, kind…"
-                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[11px] text-white transition-colors placeholder:text-white/30 focus:border-white/50 focus:outline-none"
-                  />
-                </div>
-                <div className="flex overflow-x-auto rounded-full border border-white/10 bg-[#090907] p-1">
-                  {LINK_FILTERS.map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setFilter(f)}
-                      className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                        filter === f ? 'bg-white/10 text-white' : 'text-white/60 hover:text-white'
-                      }`}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-2 flex items-center justify-between px-1">
-                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/30">
-                  {visibleLinks.length} shown
-                  {visibleLinks.length !== links.length && ` · ${links.length} total`}
-                </p>
-                {(search.trim() || filter !== 'All') && (
-                  <button
-                    type="button"
-                    onClick={() => { setSearch(''); setFilter('All'); }}
-                    className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/60 transition-colors hover:text-white"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
+            <LinkFilterBar
+              facets={facets}
+              onFacets={setFacets}
+              sort={sort}
+              onSort={setSort}
+              search={search}
+              onSearch={setSearch}
+              shown={visibleLinks.length}
+              total={links.length}
+              hasRecipients={hasRecipients}
+              mobile={isMobile}
+            />
           </>
         )}
 
@@ -319,18 +326,18 @@ export default function LinksPage() {
           <EmptyState
             icon={<Search size={24} aria-hidden="true" />}
             title="No matching links"
-            description="Clear the search or switch filters to see the rest of your share links."
+            description="Clear the filters or search to see the rest of your share links."
             className="border-dashed py-24"
           />
         ) : (
           <>
           {/* Below lg: unified list rows — same language as the rest of the app. */}
           <ListContainer className="lg:hidden">
-            {visibleLinks.map((link, idx) => {
+            {visibleLinks.map((link) => {
               const expired = isExpired(link);
               const key = linkKey(link);
               const selected = selectedTokens.has(key);
-              const isTop = idx === 0 && (link.plays ?? 0) > 0;
+              const isTop = key === topKey;
               return (
                 <ListRow
                   key={key}
@@ -418,13 +425,13 @@ export default function LinksPage() {
 
           {/* lg+: card grid — title leads, one quiet metadata line, icon flags. */}
           <div className="hidden lg:grid grid-cols-3 gap-3">
-            {visibleLinks.map((link, idx) => {
+            {visibleLinks.map((link) => {
               const expired = isExpired(link);
               const key = linkKey(link);
               const selected = selectedTokens.has(key);
               const maxPlays = Math.max(...visibleLinks.map((l) => l.plays ?? 0), 1);
               const playPct = Math.round(((link.plays ?? 0) / maxPlays) * 100);
-              const isTop = idx === 0 && (link.plays ?? 0) > 0;
+              const isTop = key === topKey;
               return (
                 <div
                   key={key}
