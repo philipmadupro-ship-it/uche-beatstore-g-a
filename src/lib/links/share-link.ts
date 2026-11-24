@@ -44,8 +44,6 @@ export interface ShareLinkFacts extends ShareLinkRef {
   /** Full track (default) or the 75 s preview only. Absent = full (mig 121). */
   full_playback?: boolean;
   password_protected: boolean;
-  /** Share variant. Optional: older list responses omit it. */
-  recipient_kind?: string | null;
   /** Buy buttons on the page. Optional for the same reason. */
   sales_enabled?: boolean | null;
 }

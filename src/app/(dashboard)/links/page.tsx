@@ -55,7 +55,6 @@ interface ShareLink {
   /** Full track (default) or the 75 s preview only. Mig 121. */
   full_playback?: boolean;
   password_protected: boolean;
-  recipient_kind?: string | null;
   sales_enabled?: boolean | null;
   created_at: string;
   href: string;
