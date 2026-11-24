@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  emptyLinkFacets,
   filterShareLinks,
+  sortShareLinks,
+  type LinkFacets,
   fromSharePatchResponse,
   isShareLinkExpired,
   shareLinkEndpoint,
@@ -171,5 +174,85 @@ describe('shareOpensLabel', () => {
     expect(shareOpensLabel(null)).toBe('0 opens');
     expect(shareOpensLabel(undefined)).toBe('0 opens');
     expect(shareOpensLabel(-2)).toBe('0 opens');
+  });
+});
+
+describe('facets', () => {
+  const now = new Date('2026-01-10T00:00:00Z');
+  const links = [
+    link({ token: 'a', kind: 'track', plays: 3, recipient_kind: 'client', content_title: 'Midnight Tape' }),
+    link({ token: 'b', kind: 'project', plays: 0, revoked_at: '2026-01-01T00:00:00Z', password_protected: true }),
+    link({ token: 'c', kind: 'playlist', plays: null, expires_at: '2026-01-05T00:00:00Z', allow_downloads: false, recipient_kind: 'rapper' }),
+    link({ token: 'd', kind: 'share', plays: 1, recipient_kind: 'friend' }),
+  ];
+  const f = (over: Partial<Record<keyof LinkFacets, string[]>>): LinkFacets => {
+    const base = emptyLinkFacets();
+    return {
+      status: new Set((over.status ?? []) as never),
+      kind: new Set((over.kind ?? []) as never),
+      recipient: new Set((over.recipient ?? []) as never),
+      options: new Set((over.options ?? []) as never),
+    } as LinkFacets & typeof base;
+  };
+  const tokens = (facets: LinkFacets, search = '') =>
+    filterShareLinks(links, { search, facets, now }).map((l) => l.token);
+
+  it('status: active / expired / revoked / never opened', () => {
+    expect(tokens(f({ status: ['active'] }))).toEqual(['a', 'd']);
+    expect(tokens(f({ status: ['expired'] }))).toEqual(['b', 'c']);
+    expect(tokens(f({ status: ['revoked'] }))).toEqual(['b']);
+    expect(tokens(f({ status: ['unopened'] }))).toEqual(['b', 'c']);
+  });
+  it('kind, and unknown kinds match no kind facet', () => {
+    expect(tokens(f({ kind: ['track'] }))).toEqual(['a']);
+    expect(tokens(f({ kind: ['project', 'playlist'] }))).toEqual(['b', 'c']);
+  });
+  it('recipient only matches rows that carry it', () => {
+    expect(tokens(f({ recipient: ['rapper'] }))).toEqual(['c']);
+    expect(tokens(f({ recipient: ['client', 'friend'] }))).toEqual(['a', 'd']);
+  });
+  it('options', () => {
+    expect(tokens(f({ options: ['password'] }))).toEqual(['b']);
+    expect(tokens(f({ options: ['downloads_off'] }))).toEqual(['c']);
+    expect(tokens(f({ options: ['downloads_on'] }))).toEqual(['a', 'b', 'd']);
+  });
+  it('any within a group, all across groups', () => {
+    expect(tokens(f({ options: ['password', 'downloads_off'] }))).toEqual(['b', 'c']);
+    expect(tokens(f({ status: ['expired'], options: ['password', 'downloads_off'] }))).toEqual(['b', 'c']);
+    expect(tokens(f({ status: ['active'], options: ['password', 'downloads_off'] }))).toEqual([]);
+    expect(tokens(f({ status: ['expired'], kind: ['playlist'], recipient: ['rapper'] }))).toEqual(['c']);
+  });
+  it('search also matches the content title', () => {
+    expect(tokens(emptyLinkFacets(), 'midnight')).toEqual(['a']);
+  });
+});
+
+describe('sortShareLinks', () => {
+  const now = new Date('2026-01-10T00:00:00Z');
+  const rows = [
+    link({ token: 'a', title: 'beta', created_at: '2026-01-02T00:00:00Z', plays: 2, expires_at: '2026-02-01T00:00:00Z' }),
+    link({ token: 'b', title: 'Alpha', created_at: '2026-01-03T00:00:00Z', plays: 9 }),
+    link({ token: 'c', title: null, content_title: 'gamma', created_at: '2026-01-01T00:00:00Z', plays: 2, expires_at: '2026-01-20T00:00:00Z' }),
+    link({ token: 'd', title: 'Delta', created_at: '2026-01-04T00:00:00Z', expires_at: '2026-01-01T00:00:00Z' }),
+    link({ token: 'e', title: 'Eps', created_at: '2026-01-05T00:00:00Z', revoked_at: '2026-01-06T00:00:00Z', expires_at: '2026-01-11T00:00:00Z' }),
+  ];
+  const order = (s: Parameters<typeof sortShareLinks>[1]) => sortShareLinks(rows, s, now).map((l) => l.token);
+  it('newest / oldest', () => {
+    expect(order('newest')).toEqual(['e', 'd', 'b', 'a', 'c']);
+    expect(order('oldest')).toEqual(['c', 'a', 'b', 'd', 'e']);
+  });
+  it('most opened, ties by newest', () => {
+    expect(order('opens')).toEqual(['b', 'a', 'c', 'e', 'd']);
+  });
+  it('expiring soon: nearest live expiry, then no expiry, then expired/revoked last', () => {
+    expect(order('expiring')).toEqual(['c', 'a', 'b', 'e', 'd']);
+  });
+  it('title A–Z uses content title when untitled', () => {
+    expect(order('title')).toEqual(['b', 'a', 'd', 'e', 'c']);
+  });
+  it('does not mutate its input', () => {
+    const copy = rows.map((r) => r.token);
+    sortShareLinks(rows, 'oldest', now);
+    expect(rows.map((r) => r.token)).toEqual(copy);
   });
 });

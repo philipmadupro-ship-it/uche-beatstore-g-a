@@ -291,8 +291,28 @@ export const ProjectSharePatchBodySchema = z.object({
   label: z.string().optional(),
   invited_email: z.string().optional(),
   revoke: z.boolean().optional(),
+  /** Day count from now; 0 = never expires. */
+  expires_days: z.number().int().min(0).max(365).optional(),
+  /** A string sets a new password (bcrypt), null clears it. */
+  password: z.string().min(1).max(200).nullable().optional(),
+  recipient_kind: z.enum(['client', 'producer', 'rapper', 'friend']).optional(),
+  sales_enabled: z.boolean().optional(),
 });
 export type ProjectSharePatchBody = z.infer<typeof ProjectSharePatchBodySchema>;
+
+/** PATCH /api/share/[token] — a token share (`share_links`). */
+export const ShareLinkPatchBodySchema = z.object({
+  title: z.string().max(1000).optional(),
+  allow_downloads: z.boolean().optional(),
+  full_playback: z.boolean().optional(),
+  expires_days: z.number().int().min(0).max(365).optional(),
+  password: z.string().min(1).max(200).nullable().optional(),
+  recipient_kind: z.enum(['client', 'producer', 'rapper', 'friend']).optional(),
+  sales_enabled: z.boolean().optional(),
+  /** The link's whole new track list, in order. Never empty. */
+  track_ids: z.array(z.string().uuid()).min(1).max(500).optional(),
+});
+export type ShareLinkPatchBody = z.infer<typeof ShareLinkPatchBodySchema>;
 
 // ── Playlists ───────────────────────────────────────────────────────────
 

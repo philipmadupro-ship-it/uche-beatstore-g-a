@@ -1,3 +1,5 @@
+import { recordShareEventFor } from '@/lib/links/share-events-server';
+import { tokenRef } from '@/lib/share/token-ref';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -5,7 +7,7 @@ import { selectIn } from '@/lib/db/chunked-in';
 import { errorMessage } from '@/lib/errors';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
-import { streamAudioSource } from '@/lib/audio/stream-source';
+import { sourceSizeBytes, streamAudioSource } from '@/lib/audio/stream-source';
 import { clientIp, rateLimitDurable } from '@/lib/security/rate-limit';
 import { zipStream } from '@/lib/tracks/zip-stream';
 import { grantableTrackIds, projectShareOwnerId } from '@/lib/share/share-owner';
@@ -29,6 +31,8 @@ export const maxDuration = 300;
 /** One archive per IP-minute is plenty; each one streams every master of the share. */
 const ZIPS_PER_MINUTE = 6;
 export const SHARE_ZIP_MAX_TRACKS = 200;
+/** 1.5 GiB of audio per archive; a bigger share is downloaded track by track. */
+export const SHARE_ZIP_MAX_BYTES = 1.5 * 1024 ** 3;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
@@ -91,6 +95,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       return NextResponse.json({ error: `Too many tracks for one download (limit ${SHARE_ZIP_MAX_TRACKS}). Download them one by one.` }, { status: 413 });
     }
 
+    recordShareEventFor(req, admin, resolved, 'download_all');
+
     const rows = await selectIn<{ id: string; title: string | null; audio_url: string | null }>(
       (chunk) => admin.from('tracks').select('id, title, audio_url').in('id', chunk),
       allowed,
@@ -99,17 +105,32 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const files = allowed.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => !!r?.audio_url);
     if (files.length === 0) return NextResponse.json({ error: 'Nothing to download.' }, { status: 404 });
 
+    const sizes = await Promise.all(files.map((f) => sourceSizeBytes(f.audio_url as string)));
+    if (sizes.reduce((a, b) => a + b, 0) > SHARE_ZIP_MAX_BYTES) {
+      return NextResponse.json({ error: 'This share is too large for one download (limit 1.5 GB). Download the tracks one by one.' }, { status: 413 });
+    }
+
     const names = zipEntryNames(files);
     const plain = new NextRequest(req.url);
+    const skipped: string[] = [];
     const entries = files.map((f, i) => ({
       name: names[i],
+      size: sizes[i],
       open: async () => {
         const res = await streamAudioSource(plain, f.audio_url as string, names[i]);
         return res.ok && res.body ? res.body : null;
       },
     }));
-    const body = zipStream(entries, {
-      onSkip: (name, reason) => log.warn('zip entry skipped', { token, name, reason }),
+    const readme = {
+      name: 'README.txt',
+      exempt: true,
+      open: async () => new TextEncoder().encode(
+        skipped.length ? `Some files were left out (size limit or unavailable):\n${skipped.join('\n')}\n` : 'All files of the share are included.\n',
+      ),
+    };
+    const body = zipStream([...entries, readme], {
+      maxBytes: SHARE_ZIP_MAX_BYTES,
+      onSkip: (name, reason) => { skipped.push(name); log.warn('zip entry skipped', { tokenRef: tokenRef(token), name, reason }); },
     });
     const filename = shareZipName((resolved.row as { label?: string | null }).label);
     return new Response(body, {
@@ -121,7 +142,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       },
     });
   } catch (err) {
-    log.error('download-all failed', { token, error: errorMessage(err) });
+    log.error('download-all failed', { tokenRef: tokenRef(token), error: errorMessage(err) });
     return publicError(err);
   }
 }

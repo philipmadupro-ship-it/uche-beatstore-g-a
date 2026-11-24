@@ -30,6 +30,7 @@ import {
   DEFAULT_COLUMNS_PER_SECOND, buildWaveformModel, waveformCacheKey, type AnalysisSource, type WaveformModel,
 } from '@/lib/visuals/waveform-model';
 import { detectPitchSeries, rmsToDb } from '@/lib/audio/pitch';
+import { decodeWaveformFile } from '@/lib/visuals/waveform-file';
 
 /** Slices in the server-written bands sidecar (lib/audio/peaks.ts BANDS_SLICES). */
 const SIDECAR_SLICES = 512;
@@ -50,6 +51,27 @@ function stretchNullable(values: (number | null)[], target: number): (number | n
   }
   return out;
 }
+
+/** Slices the cached bands are kept at (the consumers resample from here). */
+const CACHE_SLICES = 4096;
+
+/** Peak-reduce a Uint8 model column series onto CACHE_SLICES values in 0..1. */
+function modelToSlices(col: Uint8Array): number[] {
+  const out: number[] = new Array(CACHE_SLICES).fill(0);
+  const n = col.length;
+  if (n === 0) return out;
+  for (let i = 0; i < CACHE_SLICES; i++) {
+    const a = Math.floor((i * n) / CACHE_SLICES);
+    const b = Math.max(a + 1, Math.floor(((i + 1) * n) / CACHE_SLICES));
+    let p = 0;
+    for (let j = a; j < b && j < n; j++) if (col[j] > p) p = col[j];
+    out[i] = p / 255;
+  }
+  return out;
+}
+
+/** Track ids whose model file was missing/unreadable this session — decode, and don't ask again. */
+const noModelFile = new Set<string>();
 
 /** Band crossovers live in lib/audio/band-filter.ts (CROSSOVER_LOW_HZ / CROSSOVER_HIGH_HZ): one source. */
 type Status = 'idle' | 'analyzing' | 'ready' | 'unavailable';
@@ -196,6 +218,12 @@ export function useSpectralPeaks(
    * `/api/store/preview/<id>`.
    */
   publicFallback?: string | null,
+  /**
+   * The server-built `.wave.bin` of this audio (lib/visuals/waveform-file): the
+   * deep model plus the dB / Hz readout, so nothing is decoded here. Tried FIRST;
+   * a 404, a bad magic or a short file falls through to the paths below, silently.
+   */
+  modelFileUrl?: string | null,
 ): SpectralPeaksResult {
   const [bands, setBands] = useState<SpectralBands | null>(null);
   const [db, setDb] = useState<number[] | null>(null);
@@ -216,6 +244,7 @@ export function useSpectralPeaks(
     // The coarse server sidecar is cached under ITS OWN key (source + resolution), so it can
     // never be served as, or stretched into, a full analysis.
     const sidecarKey = trackId && audioUrl ? analysisKey(trackId, audioUrl, 'sidecar', SIDECAR_SLICES) : null;
+    const fileKey = trackId && audioUrl ? analysisKey(trackId, audioUrl, 'model-file', DEFAULT_COLUMNS_PER_SECOND) : null;
     activeTrackRef.current = key;
 
     /** Resample a cached analysis down to the requested slice count. */
@@ -236,7 +265,7 @@ export function useSpectralPeaks(
       return;
     }
 
-    const cached = cache.get(key) ?? (sidecarKey ? cache.get(sidecarKey) : undefined);
+    const cached = cache.get(key) ?? (fileKey ? cache.get(fileKey) : undefined) ?? (sidecarKey ? cache.get(sidecarKey) : undefined);
     if (cached) {
       applyResult(cached, sliceCount);
       setStatus('ready');
@@ -252,44 +281,49 @@ export function useSpectralPeaks(
     const controller = new AbortController();
     let cancelled = false;
 
-    // ── Fast path: precomputed sidecar ────────────────────────────────────
-    // Immutable and CDN-cached, so this is usually a disk hit and always
-    // cheaper than decoding. Only on failure do we fall through to the
-    // in-browser analysis below.
-    if (bandsUrl) {
-      setStatus('analyzing');
-      (async () => {
-        try {
-          const res = await fetch(bandsUrl, { signal: controller.signal, cache: 'force-cache' });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const file = await res.json() as Partial<BandsSidecar>;
-          if (cancelled) return;
-          const parsed = parseBandsSidecar(file);
-          if (!parsed) throw new Error('malformed bands sidecar');
-          if (sidecarKey) cache.set(sidecarKey, parsed);
-          if (activeTrackRef.current !== key) return;
-          applyResult(parsed, sliceCount);
-          setStatus('ready');
-        } catch {
-          // Sidecar missing or unreadable — fall back to decoding locally so
-          // a bad sidecar degrades to "slower" rather than "no waveform".
-          if (!cancelled && activeTrackRef.current === key) runLocalAnalysis();
-        }
-      })();
-      return () => { cancelled = true; controller.abort(); };
-    }
-
     const analysisUrl = resolveAnalysisUrl(audioUrl, publicFallback);
-    if (!analysisUrl) {
+
+    // Everything below the model file: the precomputed `.bands.json` sidecar, else
+    // decode the audio here. Kept as one function so the file path can fall into it.
+    function startSidecarOrLocal() {
+      // ── Precomputed sidecar ───────────────────────────────────────────
+      // Immutable and CDN-cached, so this is usually a disk hit and always
+      // cheaper than decoding. Only on failure do we fall through to the
+      // in-browser analysis below.
+      if (bandsUrl) {
+        setStatus('analyzing');
+        (async () => {
+          try {
+            const res = await fetch(bandsUrl, { signal: controller.signal, cache: 'force-cache' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const file = await res.json() as Partial<BandsSidecar>;
+            if (cancelled) return;
+            const parsed = parseBandsSidecar(file);
+            if (!parsed) throw new Error('malformed bands sidecar');
+            if (sidecarKey) cache.set(sidecarKey, parsed);
+            if (activeTrackRef.current !== key) return;
+            applyResult(parsed, sliceCount);
+            setStatus('ready');
+          } catch {
+            // Sidecar missing or unreadable — fall back to decoding locally so
+            // a bad sidecar degrades to "slower" rather than "no waveform".
+            if (!cancelled && activeTrackRef.current === key) runLocalAnalysis();
+          }
+        })();
+        return;
+      }
+
+      if (!analysisUrl) {
+        setBands(null); setDb(null); setHz(null); setModel(null); setSource(null); setResolution(null);
+        setStatus('unavailable');
+        return;
+      }
+
+      setStatus('analyzing');
       setBands(null); setDb(null); setHz(null); setModel(null); setSource(null); setResolution(null);
-      setStatus('unavailable');
-      return;
+
+      runLocalAnalysis();
     }
-
-    setStatus('analyzing');
-    setBands(null); setDb(null); setHz(null); setModel(null); setSource(null); setResolution(null);
-
-    runLocalAnalysis();
 
     // The original in-browser path: fetch the audio, decode it, run three
     // filtered renders. Kept as the fallback for tracks with no sidecar yet.
@@ -318,22 +352,9 @@ export function useSpectralPeaks(
         // The DEEP model: 441 columns/s of true peaks for the mix and three 4th-order
         // bands (lib/visuals/waveform-model.ts). The legacy slice series the older
         // consumers read (bands / db / hz) are derived from it, so there is one analysis.
-        const CACHE_SLICES = 4096;
         const mono = decoded.getChannelData(0);
         const model = buildWaveformModel(mono, decoded.sampleRate, DEFAULT_COLUMNS_PER_SECOND);
-        const toSlices = (col: Uint8Array): number[] => {
-          const out: number[] = new Array(CACHE_SLICES).fill(0);
-          const n = col.length;
-          if (n === 0) return out;
-          for (let i = 0; i < CACHE_SLICES; i++) {
-            const a = Math.floor((i * n) / CACHE_SLICES);
-            const b = Math.max(a + 1, Math.floor(((i + 1) * n) / CACHE_SLICES));
-            let p = 0;
-            for (let j = a; j < b && j < n; j++) if (col[j] > p) p = col[j];
-            out[i] = p / 255;
-          }
-          return out;
-        };
+        const toSlices = modelToSlices;
         const allSlices = toSlices(model.all);
         const result: AnalysisResult = {
           low: toSlices(model.low),
@@ -367,11 +388,46 @@ export function useSpectralPeaks(
       })();
     }
 
+    // ── First choice: the server-built model file ───────────────────────────
+    if (modelFileUrl && fileKey && !noModelFile.has(fileKey)) {
+      setStatus('analyzing');
+      (async () => {
+        try {
+          const res = await fetch(modelFileUrl, { signal: controller.signal, cache: 'force-cache' });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const file = decodeWaveformFile(await res.arrayBuffer());
+          if (!file) throw new Error('malformed wave file');
+          if (cancelled) return;
+          const { model: fileModel, readout } = file;
+          const result: AnalysisResult = {
+            low: modelToSlices(fileModel.low),
+            mid: modelToSlices(fileModel.mid),
+            high: modelToSlices(fileModel.high),
+            db: readout.db,
+            hz: readout.hz,
+            model: fileModel,
+            source: 'model-file',
+            resolution: fileModel.columnsPerSecond,
+          };
+          cache.set(fileKey, result);
+          if (activeTrackRef.current !== key) return;
+          applyResult(result, sliceCount);
+          setStatus('ready');
+        } catch {
+          if (cancelled) return;
+          noModelFile.add(fileKey);
+          if (activeTrackRef.current === key) startSidecarOrLocal();
+        }
+      })();
+    } else {
+      startSidecarOrLocal();
+    }
+
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [trackId, audioUrl, sliceCount, publicFallback]);
+  }, [trackId, audioUrl, sliceCount, publicFallback, bandsUrl, modelFileUrl]);
 
   return { bands, model, source, resolution, db, hz, status };
 }

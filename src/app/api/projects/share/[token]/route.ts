@@ -1,3 +1,4 @@
+import { recordShareEventFor } from '@/lib/links/share-events-server';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   isWellFormedShareToken,
@@ -235,6 +236,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
     // Fire-and-forget play counter (only for real project_shares rows, not paid access tokens)
     if (resolved?.kind === 'project_share') {
+      recordShareEventFor(req, admin, resolved, 'open');
       admin.from('project_shares').update({ plays: (share.plays ?? 0) + 1 }).eq('id', share.id).then(() => {});
     }
 

@@ -6,6 +6,7 @@ import { readBody } from '@/lib/validate';
 import { ArtistPortalActionBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { updateWithFreshToken } from '@/lib/share/token-mint';
 import { ensurePortal, newPortalToken, portalUrl } from '@/lib/artists/portal-send';
 import { isSchemaNotReady, schemaNotReadyResponse } from '@/lib/artists/http';
 
@@ -45,7 +46,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (action === 'revoke') patch.revoked_at = new Date().toISOString();
     if (action === 'reissue') {
-      patch.token = newPortalToken();
       patch.revoked_at = null;
       patch.last_viewed_at = null;
       patch.previous_viewed_at = null;
@@ -65,13 +65,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       patch.password_hash = password ? await bcrypt.hash(password, 10) : null;
     }
 
-    const { data, error } = await admin
+    // A reissue rotates the token: retried on a collision, with a fresh token each time.
+    const write = (extra: Record<string, unknown>) => admin
       .from('artist_portals')
-      .update(patch)
+      .update({ ...patch, ...extra })
       .eq('id', portal.id)
       .eq('user_id', userId)
       .select('*')
       .single();
+    const { data, error } = action === 'reissue'
+      ? await updateWithFreshToken((token) => write({ token }), { mint: newPortalToken })
+      : await write({});
     if (error) throw error;
 
     if (action === 'revoke' || action === 'reissue') {

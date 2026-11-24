@@ -1,8 +1,33 @@
 import { NextRequest } from 'next/server';
-import { getStoredObject, parseR2ObjectRef } from '@/lib/storage/upload';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { HeadObjectCommand } from '@aws-sdk/client-s3';
+import { getStoredObject, parseR2ObjectRef, r2 } from '@/lib/storage/upload';
 
 function isAllowedRelativeSource(src: string): boolean {
   return src.startsWith('/uploads/') && !src.includes('..');
+}
+
+/**
+ * Size in bytes of a stored source without reading it: R2 HeadObject or a
+ * local stat. 0 when it cannot be learned (remote URL, missing object, error).
+ */
+export async function sourceSizeBytes(src: string): Promise<number> {
+  try {
+    const ref = parseR2ObjectRef(src);
+    if (ref) {
+      const allowed = new Set([process.env.R2_PRIVATE_BUCKET_NAME, process.env.R2_BUCKET_NAME].filter(Boolean));
+      if (!allowed.has(ref.bucket)) return 0;
+      const head = await r2.send(new HeadObjectCommand({ Bucket: ref.bucket, Key: ref.key }));
+      return head.ContentLength ?? 0;
+    }
+    if (isAllowedRelativeSource(src)) {
+      return (await fs.stat(path.join(process.cwd(), 'public', src))).size;
+    }
+  } catch {
+    // unknown size counts as 0
+  }
+  return 0;
 }
 
 export async function streamAudioSource(

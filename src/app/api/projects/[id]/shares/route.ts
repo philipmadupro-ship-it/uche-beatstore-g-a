@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUrl } from '@/lib/env';
 import { newShareToken } from '@/lib/share/token-access';
+import { withFreshToken } from '@/lib/share/token-mint';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, insert, query, requireRowOwnership } from '@/lib/db';
 import { readBody } from '@/lib/validate';
@@ -88,12 +89,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const owner = await requireRowOwnership('projects', id);
       if (!owner.ok) return owner.res;
 
-      const { data, error } = await writeWithPlayback(fullPlayback, (fields) =>
+      const { data, error, token: mintedToken } = await withFreshToken((attemptToken) => writeWithPlayback(fullPlayback, (fields) =>
         owner.admin
           .from('project_shares')
           .insert({
             project_id: id,
-            token,
+            token: attemptToken,
             role,
             allow_downloads: allowDownloads,
             password_hash,
@@ -107,12 +108,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           })
           .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, recipient_kind, sales_enabled')
           .single(),
-      );
+      ));
       if (error?.code === 'PLAYBACK_MIGRATION') {
         return NextResponse.json({ error: error.message }, { status: 409 });
       }
       if (error) throw error;
-      return NextResponse.json({ share: { ...data, full_playback: fullPlayback !== false }, url });
+      return NextResponse.json({ share: { ...data, full_playback: fullPlayback !== false }, url: `${APP_URL}/projects/share/${mintedToken}` });
     }
 
     const share = insert('project_shares', {

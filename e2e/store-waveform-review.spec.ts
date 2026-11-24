@@ -46,7 +46,7 @@ async function openAndPlay(page: Page, palette: 'rekordbox3band' | 'rgb') {
   await page.locator('[role="dialog"]').getByRole('button', { name: 'Play', exact: true }).first().click();
   await expect.poll(() => audioTime(page), { timeout: 15_000 }).toBeGreaterThan(0.5);
   const slider = page.locator('[role="dialog"] [data-band-scrubber]').first();
-  await expect(slider).toHaveAttribute('data-wave-source', 'analysis', { timeout: 30_000 });
+  await expect(slider).toHaveAttribute('data-wave-source', /^(analysis|model-file)$/, { timeout: 30_000 });
   return slider;
 }
 

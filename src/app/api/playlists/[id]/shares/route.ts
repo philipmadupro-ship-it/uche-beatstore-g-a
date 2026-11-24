@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUrl } from '@/lib/env';
-import { newShareToken } from '@/lib/share/token-access';
+import { withFreshToken } from '@/lib/share/token-mint';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, requireRowOwnership } from '@/lib/db';
 import { readBody } from '@/lib/validate';
@@ -61,14 +61,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Full track unless the producer explicitly chose the 75 s preview (mig 121).
   const fullPlayback = body.full_playback === false ? false : undefined;
 
-  const token = newShareToken();
   const password_hash = password ? await bcrypt.hash(password, 10) : null;
   const expires_at = expiresDays && expiresDays > 0
     ? new Date(Date.now() + expiresDays * 86400000).toISOString()
     : null;
 
   const APP_URL = getAppUrl();
-  const url = `${APP_URL}/projects/share/${token}`;
 
   try {
     if (!isSupabaseConfigured()) {
@@ -77,14 +75,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const owner = await requireRowOwnership('playlists', id);
     if (!owner.ok) return owner.res;
 
-    const { data, error } = await writeWithPlayback(fullPlayback, (fields) =>
+    const { data, error, token: mintedToken } = await withFreshToken((attemptToken) => writeWithPlayback(fullPlayback, (fields) =>
       owner.admin
         .from('project_shares')
         .insert({
           content_type: 'playlist',
           playlist_id: id,
           project_id: null,
-          token,
+          token: attemptToken,
           role,
           allow_downloads: allowDownloads,
           password_hash,
@@ -98,12 +96,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         })
         .select('id, playlist_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, recipient_kind, sales_enabled, content_type')
         .single(),
-    );
+    ));
     if (error?.code === 'PLAYBACK_MIGRATION') {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
     if (error) throw error;
-    return NextResponse.json({ share: { ...data, full_playback: fullPlayback !== false }, url });
+    return NextResponse.json({ share: { ...data, full_playback: fullPlayback !== false }, url: `${APP_URL}/projects/share/${mintedToken}` });
   } catch (error) {
     log.error('create failed', { playlistId: id, error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
