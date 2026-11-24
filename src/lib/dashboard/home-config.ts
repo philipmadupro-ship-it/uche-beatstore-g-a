@@ -111,51 +111,6 @@ export const DEFAULT_HOME_ROWS: HomeRowConfig[] = [
     maxItems: 8,
   },
   {
-    id: 'genre_drill',
-    title: 'Drill',
-    source: 'tracks',
-    filter: { genres: ['Drill'] },
-    sortBy: 'newest',
-    maxItems: 10,
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'genre_trap',
-    title: 'Trap',
-    source: 'tracks',
-    filter: { genres: ['Trap'] },
-    sortBy: 'newest',
-    maxItems: 10,
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'genre_rnb',
-    title: 'R&B',
-    source: 'tracks',
-    filter: { genres: ['R&B'] },
-    sortBy: 'newest',
-    maxItems: 10,
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'genre_afrobeats',
-    title: 'Afrobeats',
-    source: 'tracks',
-    filter: { genres: ['Afrobeats'] },
-    sortBy: 'newest',
-    maxItems: 10,
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'genre_amapiano',
-    title: 'Amapiano',
-    source: 'tracks',
-    filter: { genres: ['Amapiano'] },
-    sortBy: 'newest',
-    maxItems: 10,
-    hideWhenEmpty: true,
-  },
-  {
     id: 'store',
     title: 'In your store',
     source: 'tracks',
@@ -173,3 +128,87 @@ export const DEFAULT_HOME_ROWS: HomeRowConfig[] = [
     hideWhenEmpty: true,
   },
 ];
+
+// ── Genre rows are the producer's own ────────────────────────────
+// The default list once hard-coded five genres; a producer whose catalogue is
+// UK drill or pop got none, and one with all five got five near-duplicate rows.
+
+/** Genre rows are inserted right after this row. */
+export const GENRE_ROWS_AFTER = 'projects';
+export const MAX_GENRE_ROWS = 3;
+
+/** Row ids the five original genres had; `filtersForHomeRow` and e2e rely on them. */
+const LEGACY_GENRE_SLUGS: Record<string, string> = { 'R&B': 'rnb' };
+
+export function genreRowId(genre: string): string {
+  const slug = LEGACY_GENRE_SLUGS[genre] ?? genre.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return `genre_${slug || 'other'}`;
+}
+
+interface TaggedTrack { track_tags?: Array<{ tag: string; category?: string | null }> | null }
+
+/** The producer's most common genres, most common first (ties: alphabetical). */
+export function topGenreRows(tracks: TaggedTrack[], max = MAX_GENRE_ROWS): HomeRowConfig[] {
+  const counts = new Map<string, number>();
+  for (const t of tracks) {
+    const own = new Set<string>();
+    for (const tt of t.track_tags ?? []) if (tt.category === 'genre' && tt.tag) own.add(tt.tag);
+    for (const g of own) counts.set(g, (counts.get(g) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, max)
+    .map(([genre]) => ({
+      id: genreRowId(genre),
+      title: genre,
+      source: 'tracks' as const,
+      filter: { genres: [genre] },
+      sortBy: 'newest' as const,
+      maxItems: 10,
+      hideWhenEmpty: true,
+    }));
+}
+
+/** DEFAULT_HOME_ROWS with the producer's genre rows spliced in. */
+export function resolveHomeRows(tracks: TaggedTrack[], base: HomeRowConfig[] = DEFAULT_HOME_ROWS): HomeRowConfig[] {
+  const genres = topGenreRows(tracks);
+  const at = base.findIndex((r) => r.id === GENRE_ROWS_AFTER);
+  const index = at === -1 ? base.length : at + 1;
+  return [...base.slice(0, index), ...genres, ...base.slice(index)];
+}
+
+// ── Discovery rows don't repeat each other ───────────────────────
+// Genres, "In your store" and "Top rated" are discovery: the same beat in all
+// four is noise. Status rows (MAQ / WIP / Finished) and Recently played are
+// where a producer LOOKS for a beat, so they never lose one and never feed this.
+
+export const DISCOVERY_MIN_KEEP = 4;
+
+export function isDiscoveryRow(id: string): boolean {
+  return id.startsWith('genre_') || id === 'store' || id === 'top_rated';
+}
+
+/**
+ * Pick each row's tracks from its full pool (already filtered and sorted).
+ * A discovery row skips tracks an earlier discovery row showed, unless that
+ * would leave it thinner than min(4, its pool): then it keeps its own pool.
+ */
+export function selectRowTracks<T extends { id: string }>(
+  pools: Array<{ id: string; maxItems?: number; tracks: T[] }>,
+  minKeep = DISCOVERY_MIN_KEEP,
+): Record<string, T[]> {
+  const shown = new Set<string>();
+  const out: Record<string, T[]> = {};
+  for (const row of pools) {
+    const cap = row.maxItems ?? 10;
+    let picked = row.tracks;
+    if (isDiscoveryRow(row.id)) {
+      const fresh = row.tracks.filter((t) => !shown.has(t.id));
+      if (fresh.length >= Math.min(minKeep, row.tracks.length)) picked = fresh;
+    }
+    picked = picked.slice(0, cap);
+    out[row.id] = picked;
+    if (isDiscoveryRow(row.id)) for (const t of picked) shown.add(t.id);
+  }
+  return out;
+}
