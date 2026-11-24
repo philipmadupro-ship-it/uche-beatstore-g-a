@@ -49,5 +49,5 @@ This schedule states the exact terms of the license(s) purchased. Where this sch
 - Commercial use: Permitted
 - Sync / film: Not permitted
 - Broadcast / TV: Not specified
-- Credit: Credit required: prod. Uche2crazyyyy
+- Credit: prod. Uche2crazyyyy
 - Exclusivity: Non-exclusive; the Producer may license the work to others
