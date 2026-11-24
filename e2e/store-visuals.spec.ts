@@ -233,7 +233,7 @@ test.describe('scrubber close-up @2x', () => {
     await openAndPlay(page);
     await expect.poll(() => audioTime(page), { timeout: 10_000 }).toBeGreaterThan(1);
     const slider = page.locator('[role="dialog"] [data-band-scrubber]').first();
-    await expect(slider).toHaveAttribute('data-wave-source', 'analysis', { timeout: 15_000 });
+    await expect(slider).toHaveAttribute('data-wave-source', /^(analysis|model-file)$/, { timeout: 15_000 });
     await page.evaluate(() => { (document.querySelector('audio') as HTMLAudioElement).currentTime = 11; });
     await page.waitForTimeout(500);
     await slider.screenshot({ path: 'e2e-artifacts/store-visuals/scrubber-closeup-2x-fullmix-playing.png' });

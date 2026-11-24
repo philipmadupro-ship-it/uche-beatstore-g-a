@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSpectralPeaks } from '@/hooks/useSpectralPeaks';
+import { waveModelFileUrl } from '@/lib/visuals/waveform-file';
 import { useVisualPeaks } from '@/hooks/useVisualPeaks';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { keyboardSeekFraction } from '@/lib/audio/seek-accessibility';
@@ -137,7 +138,11 @@ export function BandScrubber({
   const [width, setWidth] = useState(0);
   const [dragging, setDragging] = useState(false);
 
-  const { model: deepModel, status } = useSpectralPeaks(trackId, audioUrl, 4096, undefined, publicAnalysisUrl);
+  // The server-built model file first (store previews have one); decode only when it is absent.
+  const modelFileUrl = useMemo(() => waveModelFileUrl(audioUrl, publicAnalysisUrl), [audioUrl, publicAnalysisUrl]);
+  const { model: deepModel, source: deepSource, status } = useSpectralPeaks(
+    trackId, audioUrl, 4096, undefined, publicAnalysisUrl, modelFileUrl,
+  );
   // Fallback when the full analysis is unavailable: the stored peaks file (about
   // 1 000 points for the whole track). Drawn coarse — never interpolated — and
   // flagged in `data-wave-source`; all three bands equal, so it reads white.
@@ -153,7 +158,7 @@ export function BandScrubber({
     return { all, low: all, mid: all, high: all, columnsPerSecond: peaks.length / trackSeconds, peak: 1 };
   }, [peaks, trackSeconds]);
   const model = deepModel ?? coarseModel;
-  const waveSource = deepModel ? 'analysis' : peaksSource === 'real' ? 'peaks-file' : 'placeholder';
+  const waveSource = deepModel ? (deepSource === 'model-file' ? 'model-file' : 'analysis') : peaksSource === 'real' ? 'peaks-file' : 'placeholder';
 
   const pos = clamp01(progress);
   const posRef = useRef(pos);

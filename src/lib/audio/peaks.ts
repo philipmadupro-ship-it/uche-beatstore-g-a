@@ -185,16 +185,7 @@ export async function extractPeaksAndBands(
     const mono = mixToMono(channels);
     const energies = extractBandEnergies(mono, sampleRate, BANDS_SLICES);
 
-    // Level per slice comes from the *unfiltered* mono signal — the readout
-    // should report what you hear, not the energy of one band.
-    const levelRms = sliceRms(mono, BANDS_SLICES);
-    const db = levelRms.map(rmsToDb);
-
-    // Pitch at lower resolution, then stretched to match the band arrays so
-    // every array in the file shares one index space and the client can look
-    // up all four values with a single slice index.
-    const coarsePitch = detectPitchSeries(mono, sampleRate, BANDS_PITCH_SLICES);
-    const hz = stretchNullable(coarsePitch, BANDS_SLICES);
+    const { db, hz } = readoutFromMono(mono, sampleRate);
 
     bands = {
       version: 2,
@@ -212,6 +203,25 @@ export async function extractPeaksAndBands(
   }
 
   return { peaks, bands };
+}
+
+/**
+ * The level (dBFS) and pitch (Hz) readout series, BANDS_SLICES long. The ONE
+ * place they are computed: the `.bands.json` sidecar and the `.wave.bin` model
+ * file (lib/audio/waveform-model.server) both call it.
+ *
+ * Level per slice comes from the *unfiltered* mono signal — the readout should
+ * report what you hear, not the energy of one band. Pitch is computed at a
+ * lower resolution, then stretched to match so every array shares one index
+ * space and the client can look up all values with a single slice index.
+ */
+export function readoutFromMono(
+  mono: Float32Array,
+  sampleRate: number,
+): { db: number[]; hz: (number | null)[] } {
+  const db = sliceRms(mono, BANDS_SLICES).map(rmsToDb);
+  const hz = stretchNullable(detectPitchSeries(mono, sampleRate, BANDS_PITCH_SLICES), BANDS_SLICES);
+  return { db, hz };
 }
 
 /** Nearest-neighbour stretch of a sparse series onto a denser index space. */

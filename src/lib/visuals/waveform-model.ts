@@ -89,7 +89,8 @@ export function buildWaveformModel(
   };
 }
 
-export type AnalysisSource = 'analysis' | 'sidecar';
+/** 'model-file' is the server-built `.wave.bin` (lib/visuals/waveform-file): FULL resolution, unlike the 512-slice `sidecar`. */
+export type AnalysisSource = 'analysis' | 'sidecar' | 'model-file';
 
 /**
  * Cache identity for an analysis. It names the track, the exact audio file, the
