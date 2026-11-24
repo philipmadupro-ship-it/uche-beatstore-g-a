@@ -149,8 +149,8 @@ export function SessionContextControl() {
               "140 BPM · F minor" would otherwise push the cluster off-screen.
               The button is named by `aria-label` either way. */}
           <span
-            className={`tabular-nums truncate max-w-[7rem] md:max-w-none ${
-              active ? '' : 'hidden md:inline'
+            className={`tabular-nums truncate max-w-[7rem] xl:max-w-none ${
+              active ? '' : 'hidden xl:inline'
             }`}
           >
             {active ? summary : 'Session'}

@@ -1442,7 +1442,7 @@ function StorePage() {
           </div>
 
           {/* Sub-type filters */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden lg:flex items-center gap-1">
               {TYPE_FILTERS.map((f) => (
                 <button
                   key={f}

@@ -139,13 +139,13 @@ export default function CalendarPage() {
               {/* Month nav — glass pill with the month-year label between
                   two chevrons. Backdrop-blur so it lifts off the page. */}
               <div className="inline-flex min-h-11 items-center overflow-hidden rounded-full border border-[var(--border)] bg-[var(--bg-card)]">
-                <button onClick={prevMonth} className="tap px-3 py-2 text-[var(--text-readable)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-primary)]" aria-label="Previous month">
+                <button onClick={prevMonth} className="tap flex items-center self-stretch px-3 text-[var(--text-readable)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-primary)]" aria-label="Previous month">
                   <ChevronLeft size={13} aria-hidden="true" />
                 </button>
                 <span className="min-w-[150px] px-3 text-center text-[11px] font-medium tabular-nums text-[var(--text-primary)]">
                   {monthName}
                 </span>
-                <button onClick={nextMonth} className="tap px-3 py-2 text-[var(--text-readable)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-primary)]" aria-label="Next month">
+                <button onClick={nextMonth} className="tap flex items-center self-stretch px-3 text-[var(--text-readable)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-primary)]" aria-label="Next month">
                   <ChevronRight size={13} aria-hidden="true" />
                 </button>
               </div>
@@ -236,7 +236,7 @@ export default function CalendarPage() {
                         empty cells don't carry pixel noise. */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowAddModal(true); }}
-                      className="tap absolute bottom-1.5 right-1.5 flex size-6 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-white/60 opacity-0 transition-opacity hover:border-white/20 hover:text-white group-hover:opacity-100"
+                      className="tap absolute bottom-1 right-1 flex size-8 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-white/60 opacity-0 transition-opacity hover:border-white/20 hover:text-white group-hover:opacity-100"
                       aria-label={`Add event on ${day.fullDate.toLocaleDateString()}`}
                     >
                       <Plus size={10} aria-hidden="true" />
