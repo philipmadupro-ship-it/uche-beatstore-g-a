@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, requireUser } from '@/lib/db';
 import { selectIn } from '@/lib/db/chunked-in';
+import { contactRefOf, type ContactRef } from '@/lib/share/collaborator';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
     // The caller's own share rows (owner filter), for the token and counters.
     // share_links carries user_id; project_shares has none — its owner is the
     // owner of the project / playlist / track it points at.
-    const shareRows = new Map<string, { id: string; source: Ref['source']; token: string | null; plays: number | null; created_at: string }>();
+    const shareRows = new Map<string, { id: string; source: Ref['source']; token: string | null; plays: number | null; created_at: string; contact_id?: string | null }>();
     const legacyIds = refs.filter((r) => r.source === 'share_links').map((r) => r.id);
     for (const r of await selectIn<any>(
       (slice) => admin.from('share_links').select('id, token, plays, created_at').eq('user_id', userId).in('id', slice),
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
       shareRows.set(`share_links:${r.id}`, { id: r.id, source: 'share_links', token: r.token ?? null, plays: r.plays ?? null, created_at: r.created_at });
     }
     const modernRows = await selectIn<any>(
-      (slice) => admin.from('project_shares').select('id, token, plays, created_at, content_type, project_id, playlist_id, track_id').in('id', slice),
+      (slice) => admin.from('project_shares').select('id, token, plays, created_at, content_type, project_id, playlist_id, track_id, contact_id').in('id', slice),
       refs.filter((r) => r.source === 'project_shares').map((r) => r.id),
     );
     const parentOf = (r: any): { table: 'projects' | 'playlists' | 'tracks'; id: string } | null => {
@@ -85,7 +86,7 @@ export async function GET(req: NextRequest) {
     for (const r of modernRows) {
       const parent = parentOf(r);
       if (!parent || !mine.has(`${parent.table}:${parent.id}`)) continue;
-      shareRows.set(`project_shares:${r.id}`, { id: r.id, source: 'project_shares', token: r.token ?? null, plays: r.plays ?? null, created_at: r.created_at });
+      shareRows.set(`project_shares:${r.id}`, { id: r.id, source: 'project_shares', token: r.token ?? null, plays: r.plays ?? null, created_at: r.created_at, contact_id: r.contact_id ?? null });
     }
     const owned = refs.filter((r) => shareRows.has(`${r.source}:${r.id}`));
     if (owned.length === 0) return NextResponse.json({ schemaReady: true, activity: {} });
@@ -139,7 +140,16 @@ export async function GET(req: NextRequest) {
       sendsByToken.set(s.share_token, list);
     }
 
-    const activity: Record<string, LinkActivity> = {};
+    // The contact each project share was issued to (id + name only, producer's
+    // own contacts only), so per-person activity shows. No new events.
+    const shareContactIds = [...new Set([...shareRows.values()].map((r) => r.contact_id).filter((v): v is string => !!v))];
+    const contactRefs = new Map<string, ContactRef>();
+    for (const c of await selectIn<any>((slice) => admin.from('contacts').select('id, name').eq('user_id', userId).in('id', slice), shareContactIds)) {
+      const ref = contactRefOf(c);
+      if (ref) contactRefs.set(ref.id, ref);
+    }
+
+    const activity: Record<string, LinkActivity & { contact?: ContactRef | null }> = {};
     for (const r of owned) {
       const key = `${r.source}:${r.id}`;
       const row = shareRows.get(key)!;
@@ -148,6 +158,7 @@ export async function GET(req: NextRequest) {
         events: eventsByShare.get(key) ?? [],
         sends: row.token ? sendsByToken.get(row.token) ?? [] : [],
       });
+      if (row.contact_id) activity[key].contact = contactRefs.get(row.contact_id) ?? null;
     }
     return NextResponse.json({ schemaReady: true, activity });
   } catch (err) {

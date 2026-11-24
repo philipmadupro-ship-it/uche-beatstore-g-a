@@ -51,6 +51,7 @@ const KIND_META: Record<ActivityKind, { icon: React.ComponentType<{ size?: numbe
   file_downloaded:  { icon: FileDown,    tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
   file_uploaded:    { icon: FileUp,      tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
   portal_comment:   { icon: MessageSquare, tint: '#c8a47a', ring: 'rgba(200,164,122,0.25)' },
+  share_comment:    { icon: MessageSquare, tint: '#c8a47a', ring: 'rgba(200,164,122,0.25)' },
   artist_message:   { icon: MessageCircle, tint: '#c8a47a', ring: 'rgba(200,164,122,0.25)' },
   artist_request:   { icon: HandHelping,   tint: '#c8a47a', ring: 'rgba(200,164,122,0.25)' },
   artist_request_resolved: { icon: CircleCheck, tint: 'rgba(255,255,255,0.7)', ring: 'rgba(255,255,255,0.25)' },
