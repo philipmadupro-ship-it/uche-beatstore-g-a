@@ -149,8 +149,8 @@ export function ShareTemplateStudio({ value, onChange, tracks, artist, accent }:
         <p className="text-xs text-white/40">List a beat in the store to preview templates with real data. Showing a sample.</p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-[minmax(0,320px)_1fr]">
-        <div className="space-y-3">
+      <div className="grid items-start gap-4 md:grid-cols-[minmax(0,320px)_1fr]">
+        <div className="min-w-0 space-y-3">
           <div data-testid="share-preview" data-preset={presetId} data-style={style}>
             <Frame svg={previews.main} ratio={ratio} label={`${style} template, ${preset.label}`} />
           </div>
@@ -166,7 +166,8 @@ export function ShareTemplateStudio({ value, onChange, tracks, artist, accent }:
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4" role="radiogroup" aria-label="Template">
+        <div className="min-w-0 space-y-2">
+        <div className="grid grid-cols-2 content-start items-start gap-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4" role="radiogroup" aria-label="Template">
           {CARD_STYLE_META.map((meta) => {
             const active = style === meta.id;
             const thumb = previews.thumbs.find((t) => t.id === meta.id);
@@ -186,11 +187,14 @@ export function ShareTemplateStudio({ value, onChange, tracks, artist, accent }:
                 <Frame svg={thumb?.svg ?? ''} ratio={ratio} label={`${meta.label} preview`} />
                 <div className="bg-white/[0.04] px-2 py-1.5">
                   <p className="text-[11px] font-medium text-white">{meta.label}</p>
-                  <p className="line-clamp-2 text-[10px] text-white/40">{meta.description}</p>
                 </div>
               </button>
             );
           })}
+        </div>
+        <p className="text-[11px] text-white/40" data-testid="share-template-description">
+          {CARD_STYLE_META.find((m) => m.id === style)?.description}
+        </p>
         </div>
       </div>
     </div>

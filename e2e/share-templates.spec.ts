@@ -79,6 +79,13 @@ test('preview each size, pick a template, download a PNG of the preset size', as
     await expect(preview.locator('svg')).toContainText(/Night\s*Shift/);
   }
 
+  // Phone width: the whole section fits, no sideways scroll.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByTestId('share-download')).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  await page.setViewportSize({ width: 1280, height: 720 });
+
   await page.getByTestId('share-template-mono').click();
   await expect(preview).toHaveAttribute('data-style', 'mono');
 
