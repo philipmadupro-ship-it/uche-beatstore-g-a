@@ -8,6 +8,8 @@ import {
 import { readBody } from '@/lib/validate';
 import { ProjectCommentCreateBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
+import { isMissingSchema } from '@/lib/artists/workspace-load';
+import { contactRefOf, type ContactRef } from '@/lib/share/collaborator';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.projects.comments');
@@ -50,14 +52,38 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       const owner = await requireRowOwnership('projects', id);
       if (!owner.ok) return owner.res;
 
-      const { data, error } = await owner.admin
+      const read = (select: string) => owner.admin
         .from('project_comments')
-        .select(REGION_SELECT)
+        .select(select)
         .eq('project_id', id)
         .is('deleted_at', null)
         .order('created_at', { ascending: true });
+      // `share_contact_id` (mig 204) names the contact a share link was issued
+      // to. Producer-only: this route is owner-gated and the public share JSON
+      // never carries it. Before 204 the read steps down to the old columns.
+      let { data, error } = await read(`${REGION_SELECT}, share_contact_id`);
+      if (error && isMissingSchema(error)) ({ data, error } = await read(REGION_SELECT));
       if (error) throw error;
-      return NextResponse.json({ comments: data ?? [] });
+      const rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
+      const contactIds = [...new Set(rows.map((r) => r.share_contact_id).filter((v): v is string => typeof v === 'string'))];
+      const refs = new Map<string, ContactRef>();
+      if (contactIds.length > 0) {
+        const { data: contacts } = await owner.admin
+          .from('contacts')
+          .select('id, name')
+          .eq('user_id', owner.userId)
+          .in('id', contactIds);
+        for (const c of contacts ?? []) {
+          const ref = contactRefOf(c);
+          if (ref) refs.set(ref.id, ref);
+        }
+      }
+      return NextResponse.json({
+        comments: rows.map(({ share_contact_id, ...rest }) => ({
+          ...rest,
+          share_contact: typeof share_contact_id === 'string' ? refs.get(share_contact_id) ?? null : null,
+        })),
+      });
     }
 
     const comments = (getAll('project_comments') as unknown as CommentRow[])

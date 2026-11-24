@@ -7,7 +7,8 @@ import { createLogger } from '@/lib/log';
 import { buildProjectSendRow } from '@/lib/crm/project-send';
 import { buildBeatSendEmail } from '@/lib/email/beat-send-template';
 import { beatSendEmailInput, sharePathFor, type BeatSendRole } from '@/lib/email/beat-send-input';
-import { loadProducerName, loadProjectPack } from '@/lib/email/beat-send-context';
+import { loadProducerName, loadProducerReplyTo, loadProjectPack } from '@/lib/email/beat-send-context';
+import { inviteSharePatch, replyToFor } from '@/lib/share/collaborator';
 import { isFullPlayback } from '@/lib/share/playback';
 import { z } from 'zod';
 
@@ -101,7 +102,8 @@ export async function POST(
         .eq('user_id', owner.userId)
         .maybeSingle();
       if (contactErr) throw contactErr;
-      if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+      // Not the producer's contact: refuse before anything is sent or linked.
+      if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 403 });
     }
 
     const recipient = overrideEmail || share.invited_email;
@@ -115,9 +117,10 @@ export async function POST(
     // The email is built by the same pure input builder the SendBeatModal
     // preview uses (lib/email/beat-send-input.ts), so what the producer
     // previewed is what goes out.
-    const [pack, producerName] = await Promise.all([
+    const [pack, producerName, producerReplyTo] = await Promise.all([
       loadProjectPack(owner.admin, owner.userId, id),
       loadProducerName(owner.admin, owner.userId),
+      loadProducerReplyTo(owner.admin, owner.userId),
     ]);
 
     const shareUrl = `${getAppUrl()}${sharePathFor('project', share.token)}`;
@@ -146,19 +149,23 @@ export async function POST(
       to: recipient,
       subject: input.subject,
       html: buildBeatSendEmail(input.template),
+      // Only the producer's public contact address, and only when set.
+      ...(replyToFor(producerReplyTo) ? { replyTo: replyToFor(producerReplyTo) } : {}),
     });
 
     if (sendErr) {
       return NextResponse.json({ error: sendErr.message || 'Email send failed' }, { status: 502 });
     }
 
-    // Persist the email on the share row if the override differed, so the
-    // owner sees "this is who the link is for" next time.
-    if (overrideEmail && overrideEmail !== share.invited_email) {
-      await owner.admin
+    // The producer picked this contact (or typed this address), so that is who
+    // the link is for: record the contact and the address actually used. A
+    // typed address that differs from the contact's own is the producer's call.
+    if (contactId || (recipient && recipient !== share.invited_email)) {
+      const { error: linkErr } = await owner.admin
         .from('project_shares')
-        .update({ invited_email: overrideEmail })
+        .update(inviteSharePatch({ contactId, recipient }))
         .eq('id', shareId);
+      if (linkErr) log.warn('invite sent but share was not linked to the contact', { error: errorMessage(linkErr), shareId });
     }
 
     let sendId: string | null = null;

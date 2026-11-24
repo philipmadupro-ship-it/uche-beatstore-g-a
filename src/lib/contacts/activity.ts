@@ -23,7 +23,7 @@
  *      that it is no longer a new link.
  *   Stored: `portal_opened`, `track_played` / `track_downloaded` (portal),
  *   `decision_changed`, `artist_notified`, `file_downloaded` (a project file
- *   from the portal), `portal_comment`, `artist_message` / `artist_request` / `producer_message` /
+ *   from the portal), `portal_comment`, `share_comment` (a comment left through a share link issued to this contact), `artist_message` / `artist_request` / `producer_message` /
  *   `artist_request_resolved` (mig 130's thread) — real events with no other
  *   record.
  *
@@ -50,6 +50,7 @@ export type ActivityKind =
   | 'file_downloaded'
   | 'file_uploaded'
   | 'portal_comment'
+  | 'share_comment'
   | 'artist_message'
   | 'artist_request'
   | 'artist_request_resolved'
@@ -273,7 +274,7 @@ export function activityFromStored(rows: StoredActivityRow[]): ContactActivity[]
   const known: ActivityKind[] = [
     'beat_sent', 'email_opened', 'link_clicked', 'track_played', 'favorited', 'purchase', 'note', 'stage_change',
     'project_linked', 'track_added', 'portal_opened', 'track_downloaded', 'decision_changed', 'artist_notified',
-    'file_downloaded', 'file_uploaded', 'portal_comment', 'artist_message', 'artist_request', 'artist_request_resolved',
+    'file_downloaded', 'file_uploaded', 'portal_comment', 'share_comment', 'artist_message', 'artist_request', 'artist_request_resolved',
     'producer_message',
   ];
   return rows.map((r) => ({
