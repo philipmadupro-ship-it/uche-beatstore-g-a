@@ -37,6 +37,7 @@ import { errorMessage } from '@/lib/errors';
 import Link from 'next/link';
 import { DEFAULT_TEMPLATE_MD, VARIABLE_LIST } from '@/lib/contracts/license-template';
 import { CARD_STYLE_META, VIDEO_STYLE_META } from '@/lib/share/styles';
+import { ShareTemplateStudio } from '@/components/share-templates/ShareTemplateStudio';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
 import { ArtistBioBlock } from '@/components/store/ArtistBioBlock';
@@ -3045,11 +3046,12 @@ export default function StoreEditorPage() {
               onToggle={() => toggleSection('share-templates')}
               badge={`${form.share_card_style || 'default'} card · ${form.share_video_style || 'default'} video`}
             >
-              <ShareStylePicker
-                kind="card"
+              <ShareTemplateStudio
                 value={form.share_card_style}
                 onChange={(v) => setForm((f) => ({ ...f, share_card_style: v }))}
                 tracks={allTracks}
+                artist={form.display_name}
+                accent={normalizeThemeColor(form.accent_color)}
               />
               <ShareStylePicker
                 kind="video"

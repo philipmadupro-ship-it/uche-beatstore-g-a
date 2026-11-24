@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { asCardStyle, type CardStyle } from '@/lib/share/styles';
 import { normalizeThemeColor } from '@/lib/theme/colors';
+import { publicImageUrl } from '@/lib/share/redact';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -57,7 +58,9 @@ export async function GET(req: NextRequest) {
       if (track) {
         const trackRow = track as ShareCardTrackRow;
         title = trackRow.title || title;
-        cover = trackRow.cover_url ?? null;
+        // Only a public https / site-relative cover may reach the image: an
+        // r2:// reference or a presigned URL must never be drawn or leaked.
+        cover = publicImageUrl(trackRow.cover_url);
         const sellerId = trackRow.user_id;
         if (sellerId) {
           const { data: prof } = await admin
