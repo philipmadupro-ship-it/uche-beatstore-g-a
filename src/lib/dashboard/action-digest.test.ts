@@ -37,8 +37,18 @@ describe('buildActionDigest', () => {
     ];
     const d = buildActionDigest({ sales: [], offers, leads: [] });
     expect(d.total).toBe(1);
-    expect(d.items[0].detail).toBe('A — a@x.com');
+    expect(d.items[0].detail).toBe('A');
     expect(d.countsByDomain.offers).toBe(1);
+  });
+
+  it('never prints the buyer email on Home; shows a name only when one is known', () => {
+    const offers: DigestOfferRow[] = [
+      { id: 'o1', track_title: 'A', buyer_email: 'a@x.com', status: 'pending', created_at: '2026-02-01T10:00:00Z' },
+      { id: 'o2', track_title: 'B', buyer_email: 'b@x.com', buyer_name: 'Bea', status: 'pending', created_at: '2026-02-02T10:00:00Z' },
+    ];
+    const details = buildActionDigest({ sales: [], offers, leads: [] }).items.map((i) => i.detail);
+    expect(details).toEqual(['B — Bea', 'A']);
+    expect(details.join(' ')).not.toMatch(/@/);
   });
 
   it('emits one item per new lead, linking to their contact page', () => {
