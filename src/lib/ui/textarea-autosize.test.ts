@@ -22,9 +22,9 @@ describe('autosizeHeight', () => {
 });
 
 describe('LicenseTemplateEditor source pin', () => {
-  const src = fs.readFileSync(path.join(process.cwd(), 'src/app/(dashboard)/store-editor/page.tsx'), 'utf8');
-  const start = src.indexOf('function LicenseTemplateEditor');
-  const body = src.slice(start, src.indexOf('function ShareStylePicker', start));
+  const src = fs.readFileSync(path.join(process.cwd(), 'src/components/store-editor/LicenseTemplateEditor.tsx'), 'utf8');
+  const start = src.indexOf('export function LicenseTemplateEditor');
+  const body = src.slice(start);
   it('does not reserve a fixed row count for the contract textarea', () => {
     expect(body).toContain('<textarea');
     expect(body).not.toMatch(/rows=\{\d+\}/);

@@ -1063,3 +1063,111 @@ describe('POST /api/stripe/webhook — live-mode failures are visible', () => {
     expect(JSON.stringify(call![1])).not.toContain('buyer@example.test');
   });
 });
+
+describe('POST /api/stripe/webhook — license contract tier terms (LICENSE-02)', () => {
+  const LICENSE_ID = '11111111-1111-4111-8111-111111111111';
+  const profile = (template: string | null) => ({
+    data: { display_name: 'Uche', contact_email: 'p@example.test', license_template_md: template },
+    error: null,
+  });
+
+  function install(opts: { template: string | null; licenses: unknown }) {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'processed_stripe_events') {
+        return {
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })) })) })),
+          insert: vi.fn(() => ({ select: vi.fn(() => Promise.resolve({ error: null, count: null })) })),
+        };
+      }
+      if (table === 'abandoned_carts') return { update: vi.fn(() => resolvedEq({ error: null })) };
+      if (table === 'license_purchases') {
+        let n = 0;
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(() => Promise.resolve(
+                n++ === 0 ? { data: null, error: null } : { data: { fulfillment_email_sent: false }, error: null },
+              )),
+            })),
+          })),
+          upsert: vi.fn(() => ({ select: vi.fn(() => Promise.resolve({ data: [{ id: 'purchase_1' }], error: null })) })),
+          update: vi.fn(() => resolvedEq({ error: null })),
+        };
+      }
+      if (table === 'creator_profiles') {
+        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve(profile(opts.template))) })) })) };
+      }
+      if (table === 'tracks') {
+        return { select: vi.fn(() => ({ in: vi.fn(() => Promise.resolve({ data: [{ id: 'track_1', title: 'Night Shift' }], error: null })) })) };
+      }
+      if (table === 'licenses') {
+        // Every licenses read in this flow (line-item resolution AND the contract's tier read).
+        return { select: vi.fn((cols: string) => ({ in: vi.fn(() => Promise.resolve(
+          typeof opts.licenses === 'function' ? (opts.licenses as (c: string) => unknown)(cols) : opts.licenses,
+        )) })) };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    });
+    mockRenderContractPdf.mockResolvedValue(Buffer.from('pdf'));
+    mockUploadContractPdf.mockResolvedValue(null);
+  }
+
+  const event = (licenseId: string, type: string) => checkoutCompletedEvent({
+    metadata: {
+      buyer_email: 'buyer@example.test',
+      seller_user_id: 'seller_1',
+      cart_items: JSON.stringify([{ track_id: 'track_1', license_id: licenseId, license_type: type }]),
+    },
+  });
+
+  const TEMPLATE = 'Streams: {{streaming_limit}}\n{{#if credit_required}}\nCredit: {{credit_requirement}}\n{{/if}}\nFiles: {{file_types}}';
+
+  it('fills tier terms from the purchased tier', async () => {
+    install({
+      template: TEMPLATE,
+      licenses: {
+        data: [{
+          id: LICENSE_ID, name: 'Premium', is_exclusive: false, file_types: ['MP3', 'WAV'], stems_included: false,
+          streaming_limit: 250000, distribution_limit: null, commercial_rights: true, sync_rights: false,
+          broadcast_rights: false, credit_required: false,
+        }],
+        error: null,
+      },
+    });
+    mockConstructEvent.mockReturnValue(event(LICENSE_ID, 'lease'));
+    expect((await POST(req('{}'))).status).toBe(200);
+    expect(mockRenderContractPdf).toHaveBeenCalledTimes(1);
+    expect(mockRenderContractPdf.mock.calls[0][0]).toBe('Streams: 250,000 streams\nFiles: MP3, WAV');
+  });
+
+  it('still renders the contract, on legacy terms, when the extra licenses columns are missing', async () => {
+    install({
+      template: TEMPLATE,
+      licenses: (cols: string) => cols.includes('streaming_limit')
+        ? { data: null, error: { message: 'column licenses.streaming_limit does not exist' } }
+        : { data: [{ id: LICENSE_ID, name: 'Premium', is_exclusive: false, file_types: ['MP3'], stems_included: false }], error: null },
+    });
+    mockConstructEvent.mockReturnValue(event(LICENSE_ID, 'lease'));
+    expect((await POST(req('{}'))).status).toBe(200);
+    expect(mockRenderContractPdf).toHaveBeenCalledTimes(1);
+    expect(mockRenderContractPdf.mock.calls[0][0]).toBe('Streams: 5,000 streams\nCredit: Credit required: prod. Uche\nFiles: MP3');
+    expect(mockLog.warn).toHaveBeenCalledWith(expect.stringMatching(/tier terms unavailable/), expect.anything());
+  });
+
+  it('a legacy type purchase (no licenses row) renders on legacy terms without querying tiers', async () => {
+    install({ template: TEMPLATE, licenses: { data: [], error: null } });
+    mockConstructEvent.mockReturnValue(event('exclusive', 'exclusive'));
+    expect((await POST(req('{}'))).status).toBe(200);
+    expect(mockRenderContractPdf.mock.calls[0][0]).toBe('Streams: Unlimited\nFiles: MP3, WAV, STEMS');
+  });
+
+  it('an existing template (no tier syntax) renders byte-identically to the plain fill', async () => {
+    const existing = 'Hi **{{buyer_name}}**,\n- keep {{license_type}} {{unknown_thing}}\n{{#if not valid}}\nprice {{price}}';
+    install({ template: existing, licenses: { data: [], error: null } });
+    mockConstructEvent.mockReturnValue(event('lease', 'lease'));
+    expect((await POST(req('{}'))).status).toBe(200);
+    expect(mockRenderContractPdf.mock.calls[0][0]).toBe(
+      'Hi **Buyer**,\n- keep Lease {{unknown_thing}}\n{{#if not valid}}\nprice $25.00',
+    );
+  });
+});

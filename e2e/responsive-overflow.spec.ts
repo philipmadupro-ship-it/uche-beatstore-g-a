@@ -123,7 +123,7 @@ test.describe('mobile tap targets', () => {
     const add = page.getByRole('button', { name: /^Add event on/ }).first();
     const a = (await add.boundingBox())!;
     expect(Math.min(a.width, a.height)).toBeGreaterThanOrEqual(32);
-    const logo = (await page.getByRole('link', { name: 'Home', exact: true }).first().boundingBox())!;
+    const logo = (await page.getByRole('link', { name: 'U2C Beatstore home', exact: true }).first().boundingBox())!;
     expect(Math.min(logo.width, logo.height)).toBeGreaterThanOrEqual(32);
   });
 

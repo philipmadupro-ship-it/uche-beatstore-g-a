@@ -245,7 +245,7 @@ export function TopBar() {
               rather than covered: a wide wordmark cropped to fill loses its
               ends, and this is the one place the mark has to stay legible at
               24px. */}
-          <Link href={homeHref} aria-label={shell ? `${shell.org.name} home` : 'Home'} className="flex items-center gap-2.5 group shrink-0 -m-2.5 p-2.5">
+          <Link href={homeHref} aria-label={shell ? `${shell.org.name} home` : 'U2C Beatstore home'} className="flex items-center gap-2.5 group shrink-0 -m-2.5 p-2.5">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -258,9 +258,14 @@ export function TopBar() {
                 <span className="text-[10px] font-black text-black tracking-tighter">U2C</span>
               </div>
             )}
-            <span className="max-w-[16rem] truncate text-[11px] font-semibold tracking-[0.22em] uppercase text-white/90 group-hover:text-white hidden xl:inline">
-              {shell ? shell.org.name : 'u2c beatstore'}
-            </span>
+            {/* The logo mark already says U2C, so the producer bar carries no
+                text label. Inside an org shell the name stays: it tells a
+                member which organisation they are in. */}
+            {shell && (
+              <span className="max-w-[16rem] truncate text-[11px] font-semibold tracking-[0.22em] uppercase text-white/90 group-hover:text-white hidden xl:inline">
+                {shell.org.name}
+              </span>
+            )}
           </Link>
 
           {/* Organization switcher (Label OS). Renders nothing with the flag
