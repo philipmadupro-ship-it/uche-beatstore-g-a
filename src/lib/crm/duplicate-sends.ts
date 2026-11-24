@@ -168,3 +168,37 @@ export function outcomeParts(o: DuplicateOutcome): string[] {
 export function describeEarlierSend(entry: Pick<DuplicateEntry, 'lastSentAt' | 'outcome'>, now: number = Date.now()): string {
   return [agoLabel(entry.lastSentAt, now), ...outcomeParts(entry.outcome)].filter(Boolean).join(' · ');
 }
+
+/** The recipient reference the check (and the notice) key a modal recipient by. */
+export function recipientRefFor(r: { id: string; email?: string | null }): RecipientRef {
+  return r.id.startsWith('adhoc:') ? { email: r.email ?? r.id.slice('adhoc:'.length) } : { contact_id: r.id };
+}
+
+export interface DuplicateChoices {
+  /** recipient key → tracks the producer dropped for that recipient. */
+  removed: Readonly<Record<string, readonly string[]>>;
+  /** recipient keys the producer chose to skip. */
+  skipped: ReadonlySet<string>;
+}
+
+/**
+ * What one recipient actually gets. Choices only count while the check still
+ * reports that recipient as a duplicate (`dupKeys`): change the picked tracks
+ * and a stale "skip" must not silently drop someone. A recipient left with no
+ * tracks is skipped. With `perTrack` false (a project send) tracks cannot be
+ * dropped, only the recipient skipped.
+ */
+export function planRecipientSend(
+  key: string | null,
+  selectedTrackIds: readonly string[],
+  choices: DuplicateChoices,
+  dupKeys: ReadonlySet<string>,
+  perTrack = true,
+): { skip: boolean; trackIds: string[]; trimmed: boolean } {
+  if (!key || !dupKeys.has(key)) return { skip: false, trackIds: [...selectedTrackIds], trimmed: false };
+  if (choices.skipped.has(key)) return { skip: true, trackIds: [], trimmed: false };
+  if (!perTrack) return { skip: false, trackIds: [...selectedTrackIds], trimmed: false };
+  const drop = new Set(choices.removed[key] ?? []);
+  const trackIds = selectedTrackIds.filter((id) => !drop.has(id));
+  return { skip: trackIds.length === 0 && selectedTrackIds.length > 0, trackIds, trimmed: trackIds.length !== selectedTrackIds.length };
+}

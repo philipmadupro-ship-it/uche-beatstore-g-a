@@ -144,3 +144,40 @@ describe('wording', () => {
     expect(describeEarlierSend({ lastSentAt: at, outcome: { emailOpened: false, linkClicked: false, activity: null } }, NOW)).toBe('3 days ago');
   });
 });
+
+import { planRecipientSend, recipientRefFor } from './duplicate-sends';
+
+describe('recipientRefFor', () => {
+  it('saved contacts by id, typed addresses by email', () => {
+    expect(recipientRefFor({ id: 'c1', email: 'a@b.com' })).toEqual({ contact_id: 'c1' });
+    expect(recipientRefFor({ id: 'adhoc:new@x.com', email: 'new@x.com' })).toEqual({ email: 'new@x.com' });
+  });
+});
+
+describe('planRecipientSend', () => {
+  const none = { removed: {}, skipped: new Set<string>() };
+  const dups = new Set(['c1']);
+
+  it('sends everything to a recipient who is not a duplicate, whatever was chosen', () => {
+    const choices = { removed: { c2: ['t1'] }, skipped: new Set(['c2']) };
+    expect(planRecipientSend('c2', ['t1', 't2'], choices, dups)).toEqual({ skip: false, trackIds: ['t1', 't2'], trimmed: false });
+  });
+
+  it('drops the removed tracks for that recipient only', () => {
+    expect(planRecipientSend('c1', ['t1', 't2'], { ...none, removed: { c1: ['t1'] } }, dups)).toEqual({ skip: false, trackIds: ['t2'], trimmed: true });
+  });
+
+  it('skips a recipient who is skipped or left with nothing', () => {
+    expect(planRecipientSend('c1', ['t1'], { ...none, skipped: new Set(['c1']) }, dups).skip).toBe(true);
+    expect(planRecipientSend('c1', ['t1'], { ...none, removed: { c1: ['t1'] } }, dups).skip).toBe(true);
+  });
+
+  it('a stale choice is ignored once the check no longer reports the recipient', () => {
+    expect(planRecipientSend('c1', ['t9'], { ...none, skipped: new Set(['c1']) }, new Set()).skip).toBe(false);
+  });
+
+  it('a project send cannot drop tracks, only skip', () => {
+    expect(planRecipientSend('c1', [], { ...none, removed: { c1: ['t1'] } }, dups, false)).toEqual({ skip: false, trackIds: [], trimmed: false });
+    expect(planRecipientSend('c1', [], { ...none, skipped: new Set(['c1']) }, dups, false).skip).toBe(true);
+  });
+});

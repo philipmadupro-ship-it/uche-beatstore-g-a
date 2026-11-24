@@ -15,6 +15,8 @@ import { Modal } from '@/components/ui/Modal';
 import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { PlaybackChoice } from '@/components/share/PlaybackChoice';
+import { DuplicateSendNotice, useDuplicateSends } from '@/components/crm/DuplicateSendNotice';
+import { planRecipientSend, recipientKey, recipientRefFor } from '@/lib/crm/duplicate-sends';
 
 // Simple avatar color from name — used in preview recipient chip.
 const PREVIEW_PALETTES = [
@@ -346,12 +348,26 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
     setRecipients((prev) => prev.filter((c) => c.id !== id));
   };
 
+  // ── Duplicate sends (SHARE-08): a heads-up, never a block ─────────────
+  const dupRows = useDuplicateSends({
+    recipients: recipients.map(recipientRefFor),
+    trackIds: mode === 'tracks' ? selectedTrackIds : [],
+    projectId: mode === 'project' ? selectedProjectId : null,
+  });
+  const [dupRemoved, setDupRemoved] = useState<Record<string, string[]>>({});
+  const [dupSkipped, setDupSkipped] = useState<ReadonlySet<string>>(new Set());
+  const dupKeys = useMemo(() => new Set(dupRows.map((d) => d.key)), [dupRows]);
+  const dupChoices = { removed: dupRemoved, skipped: dupSkipped };
+  const planFor = (r: Contact) => planRecipientSend(recipientKey(recipientRefFor(r)), selectedTrackIds, dupChoices, dupKeys, mode === 'tracks');
+  const skippedCount = recipients.filter((r) => r.email && planFor(r).skip).length;
+
   // ── Send dispatch (single OR bulk) ───────────────────────────────────
   const handleSend = async () => {
     if (!summary.valid || recipients.length === 0) return;
     setSending(true);
 
     let succeeded = 0;
+    let skippedDuplicates = 0;
     const failures: { name: string; reason: string }[] = [];
 
     try {
@@ -363,6 +379,10 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
           failures.push({ name: r.name, reason: 'no email' });
           continue;
         }
+        const plan = planFor(r);
+        if (plan.skip) { skippedDuplicates += 1; continue; }
+        const trackIds = plan.trackIds;
+        const picked = plan.trimmed ? selectedTracks.filter((t) => trackIds.includes(t.id)) : selectedTracks;
         try {
           // Ad-hoc recipient — find-or-create a real contact so the send is
           // tracked and the person enters the CRM. Replaces the synthetic id.
@@ -431,7 +451,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                track_ids: selectedTrackIds,
+                track_ids: trackIds,
                 expires_days: expiresDays,
                 allow_downloads: allowDownloads,
                 full_playback: fullPlayback,
@@ -448,17 +468,17 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 contactId,
                 email: r.email,
                 recipientName: r.name,
-                trackIds: selectedTrackIds,
+                trackIds,
                 shareToken: shareData.token,
                 campaignId: campaignId || null,
                 message,
                 subject: resolvedSubject,
-                packTitle: summary.title,
-                packMeta: summary.countLabel,
-                coverUrl: summary.cover,
+                packTitle: plan.trimmed ? (picked.length === 1 ? picked[0].title : `${picked.length} tracks`) : summary.title,
+                packMeta: plan.trimmed ? `${picked.length} track${picked.length === 1 ? '' : 's'}` : summary.countLabel,
+                coverUrl: plan.trimmed ? picked[0]?.cover_url ?? null : summary.cover,
                 allowDownloads,
                 expiresDays,
-                tracks: selectedTracks.map((t) => ({ title: t.title, bpm: t.bpm, key: t.key, type: t.type })),
+                tracks: picked.map((t) => ({ title: t.title, bpm: t.bpm, key: t.key, type: t.type })),
               }),
             });
             // Two-stage check: HTTP status first (a 500 with non-JSON
@@ -493,6 +513,8 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
           `Sent ${succeeded}/${recipients.length}`,
           `Failed: ${failures.map((f) => f.name).join(', ')}`,
         );
+      } else if (failures.length === 0 && skippedDuplicates > 0) {
+        toast.info('Nothing sent', `${skippedDuplicates} skipped: already sent`);
       } else {
         toast.error('Send failed', failures[0]?.reason || 'No recipients with email');
       }
@@ -585,6 +607,18 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
           </span>
         </div>
 
+        <DuplicateSendNotice
+          rows={dupRows}
+          names={Object.fromEntries(recipients.map((r) => [recipientKey(recipientRefFor(r)) ?? r.id, r.name]))}
+          removed={dupRemoved}
+          skipped={dupSkipped}
+          bulk={recipients.length > 1}
+          canRemoveTracks={mode === 'tracks'}
+          onRemoveTracks={(k, ids) => setDupRemoved((p) => ({ ...p, [k]: ids }))}
+          onSkip={(keys) => setDupSkipped((p) => new Set([...p, ...keys]))}
+          onUndo={(k) => { setDupRemoved((p) => Object.fromEntries(Object.entries(p).filter(([key]) => key !== k))); setDupSkipped((p) => { const n = new Set(p); n.delete(k); return n; }); }}
+        />
+
         {/* Mode + tab segmented controls */}
         <div className="px-4 sm:px-8 py-3 border-b border-white/10 flex flex-wrap items-center gap-3 sm:gap-4 bg-[#090907]/40">
           <div className="flex items-center gap-1 bg-[#090907] border border-white/10 rounded-md p-0.5">
@@ -612,7 +646,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
             </SegBtn>
           </div>
           <LiquidGlassButton
-            disabled={sending || !summary.valid || recipientsWithEmail === 0}
+            disabled={sending || !summary.valid || recipientsWithEmail - skippedCount <= 0}
             onClick={handleSend}
             active
           >
@@ -621,9 +655,9 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
             ) : (
               <>
                 <Send size={12} />
-                Send to {recipientsWithEmail === 1
-                  ? (recipients.find((r) => r.email)?.name || '').split(' ')[0]
-                  : `${recipientsWithEmail} contact${recipientsWithEmail === 1 ? '' : 's'}`}
+                Send to {recipientsWithEmail - skippedCount === 1
+                  ? (recipients.find((r) => r.email && !planFor(r).skip)?.name || '').split(' ')[0]
+                  : `${recipientsWithEmail - skippedCount} contact${recipientsWithEmail - skippedCount === 1 ? '' : 's'}`}
               </>
             )}
           </LiquidGlassButton>
