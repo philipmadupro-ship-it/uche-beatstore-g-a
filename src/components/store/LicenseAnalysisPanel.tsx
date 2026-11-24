@@ -23,7 +23,7 @@ function Row({ f }: { f: Finding }) {
     <li className="flex gap-2.5" data-testid="license-finding" data-code={f.code}>
       <span aria-hidden className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${SEVERITY_DOT[f.severity]}`} />
       <div className="min-w-0">
-        <p className="text-[12px] leading-snug text-white/80">
+        <p className="text-[11px] leading-snug text-white/80">
           <span className="mr-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">{SEVERITY_LABEL[f.severity]}</span>
           {f.message}
         </p>
@@ -47,10 +47,11 @@ export function LicenseAnalysisPanel({ tierId, analysis }: { tierId: string; ana
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
+        aria-label="Check this tier"
         className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
       >
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Check this tier</span>
-        <span className="flex items-center gap-2 text-[11px] text-white/60">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Check</span>
+        <span className="flex items-center gap-2 whitespace-nowrap text-[11px] text-white/60">
           {count === 0 ? 'Nothing to flag' : `${count} to look at`}
           {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </span>
@@ -59,7 +60,7 @@ export function LicenseAnalysisPanel({ tierId, analysis }: { tierId: string; ana
         <div className="space-y-3 border-t border-white/10 px-3 py-3">
           <p className="text-[10px] text-white/40">{DISCLAIMER}</p>
           {count === 0 ? (
-            <p className="text-[12px] text-white/60">No conflicts or gaps found in this tier.</p>
+            <p className="text-[11px] text-white/60">No conflicts or gaps found in this tier.</p>
           ) : (
             <ul className="space-y-2.5">
               {shown.map((f, i) => <Row key={`${f.code}-${f.tierId ?? 'set'}-${i}`} f={f} />)}
