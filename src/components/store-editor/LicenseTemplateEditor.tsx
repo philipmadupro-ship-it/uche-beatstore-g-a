@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { autosizeHeight } from '@/lib/ui/textarea-autosize';
 import {
   ALL_VARIABLE_KEYS, DEFAULT_TEMPLATE_MD, TIER_AWARE_TEMPLATE_MD, VARIABLE_LIST, previewTemplate,
 } from '@/lib/contracts/license-template';
@@ -34,6 +35,18 @@ export function LicenseTemplateEditor({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [preview, setPreview] = useState(false);
   const [previewAs, setPreviewAs] = useState<string>('sample-lease');
+
+  // Grow with the content (min 160px, max 480px, scroll past it). Runs on every
+  // value change (typing, a chip, a clause wrap, either default) and when leaving
+  // Preview, because that remounts the textarea.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const { height, scroll } = autosizeHeight(el.scrollHeight);
+    el.style.height = `${height}px`;
+    el.style.overflowY = scroll ? 'auto' : 'hidden';
+  }, [value, preview]);
 
   const insertVar = (key: string) => {
     const el = textareaRef.current;
@@ -206,7 +219,6 @@ export function LicenseTemplateEditor({
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          rows={20}
           placeholder="Leave empty to use the default template."
           className={`${textareaCls} font-mono text-[11px] leading-relaxed`}
         />
