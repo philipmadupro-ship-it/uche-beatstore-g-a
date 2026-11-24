@@ -38,7 +38,7 @@ jobs:
             exit 0
           fi
           status=0
-          for route in publish-scheduled process-uploads process-fulfillment-emails; do
+          for route in publish-scheduled process-uploads process-stems process-fulfillment-emails; do
             code=$(curl -sS -o /tmp/out.json -w '%{http_code}' --max-time 300 \
               -H "Authorization: Bearer $CRON_SECRET" "${APP_URL%/}/api/cron/$route" || echo 000)
             echo "$route -> HTTP $code: $(head -c 300 /tmp/out.json 2>/dev/null)"

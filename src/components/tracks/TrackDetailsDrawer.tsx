@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast, confirmToast } from '@/hooks/useToast';
@@ -67,13 +67,8 @@ interface ApiErrorResponse {
   error?: string;
 }
 
-interface StemStartResponse extends ApiErrorResponse {
-  jobId?: string;
-}
-
-interface StemJob {
-  status?: string;
-  progress?: number;
+interface StemJobView {
+  status: 'none' | 'queued' | 'processing' | 'ready' | 'failed';
   error?: string | null;
   stems?: {
     vocals?: string | null;
@@ -83,8 +78,8 @@ interface StemJob {
   } | null;
 }
 
-interface StemStatusResponse {
-  job?: StemJob | null;
+interface StemStatusResponse extends ApiErrorResponse {
+  job?: StemJobView | null;
 }
 
 export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projectId }: TrackDetailsDrawerProps) {
@@ -106,23 +101,60 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
   const [showStems, setShowStems] = useState(false);
   const [stemData, setStemData] = useState<StemData | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [stemStatus, setStemStatus] = useState<'idle' | 'processing' | 'ready'>('idle');
-  const [stemProgress, setStemProgress] = useState<number>(0);
+  // The server owns the job (AUDIO-05): this mirrors GET /api/stems?track_id,
+  // so a reload, a closed drawer or a second tab all show the same state.
+  const [stemStatus, setStemStatus] = useState<'idle' | 'queued' | 'processing' | 'ready' | 'failed'>('idle');
+  const [stemError, setStemError] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [versionsRefreshKey, setVersionsRefreshKey] = useState(0);
 
-  // Holds the active stem-poll interval so we can clear it on unmount or when
-  // the user closes the drawer mid-job. Without this, closing the drawer
-  // leaves the poll running forever.
-  const stemPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (stemPollRef.current) {
-        clearInterval(stemPollRef.current);
-        stemPollRef.current = null;
-      }
-    };
+  const stemTrackId = trackProp?.id ?? null;
+
+  const applyStemJob = useCallback((job: StemJobView | null | undefined) => {
+    if (!job || job.status === 'none') { setStemStatus('idle'); setStemError(null); return; }
+    setStemStatus(job.status);
+    setStemError(job.status === 'failed' ? job.error || 'Stem separation failed.' : null);
+    if (job.status === 'ready' && job.stems) {
+      setStemData({
+        vocals_url: job.stems.vocals || '',
+        drums_url: job.stems.drums || '',
+        bass_url: job.stems.bass || '',
+        other_url: job.stems.other || '',
+      });
+    }
   }, []);
+
+  const refreshStems = useCallback(async (id: string): Promise<StemJobView | null> => {
+    try {
+      const res = await fetch(`/api/stems?track_id=${encodeURIComponent(id)}`, { cache: 'no-store' });
+      if (!res.ok) return null;
+      const body = await res.json() as StemStatusResponse;
+      return body.job ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Pick the job up again whenever a track is opened.
+  useEffect(() => {
+    setStemData(null);
+    setStemStatus('idle');
+    setStemError(null);
+    if (!stemTrackId) return;
+    let cancelled = false;
+    void refreshStems(stemTrackId).then((job) => { if (!cancelled) applyStemJob(job); });
+    return () => { cancelled = true; };
+  }, [stemTrackId, refreshStems, applyStemJob]);
+
+  // While a job is queued or running, ask the server every 4 s. The poll only
+  // reads; the pipeline advances the job whether or not this drawer is open.
+  useEffect(() => {
+    if (!stemTrackId || (stemStatus !== 'queued' && stemStatus !== 'processing')) return;
+    const id = setInterval(() => {
+      void refreshStems(stemTrackId).then((job) => { if (job) applyStemJob(job); });
+    }, 4000);
+    return () => clearInterval(id);
+  }, [stemTrackId, stemStatus, refreshStems, applyStemJob]);
 
   // Notes editor (and its save/rollback) moved to drawer/TrackNotesEditor;
   // optimistic overlay sync still happens here via callbacks.
@@ -206,91 +238,29 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         toast.error('No audio file', 'This track has no associated audio file.');
         return;
       }
-      setStemStatus('processing');
-      setStemProgress(0);
+      // A finished split just opens; only a failed or missing one is (re)queued.
+      if (stemStatus === 'ready' && stemData) {
+        setShowStems(true);
+        return;
+      }
       setShowStems(true);
-
+      if (stemStatus === 'queued' || stemStatus === 'processing') return;
+      setStemStatus('queued');
+      setStemError(null);
       try {
-        // Submit job to Demucs service via Next.js API
         const res = await fetch('/api/stems', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trackId: track.id, audioUrl: track.audio_url }),
+          body: JSON.stringify({ trackId: track.id }),
         });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({})) as ApiErrorResponse;
-          throw new Error(err.error || `Failed to start stem split (${res.status})`);
-        }
-
-        const { jobId } = await res.json() as StemStartResponse;
-        if (!jobId) throw new Error('Stem service did not return a job id.');
-
-        // Clear any prior poll (e.g. user retried before the previous one
-        // finished) to avoid stacking duplicate intervals.
-        if (stemPollRef.current) clearInterval(stemPollRef.current);
-
-        const startedAt = Date.now();
-        const MAX_POLL_MS = 10 * 60 * 1000; // give up after 10 minutes
-
-        const stop = () => {
-          if (stemPollRef.current) {
-            clearInterval(stemPollRef.current);
-            stemPollRef.current = null;
-          }
-        };
-
-        // Poll every 4 seconds until done or error
-        stemPollRef.current = setInterval(async () => {
-          try {
-            // Hard timeout — Demucs jobs that exceed 10 min are stuck;
-            // stop polling so we don't burn requests forever.
-            if (Date.now() - startedAt > MAX_POLL_MS) {
-              stop();
-              setStemStatus('idle');
-              setShowStems(false);
-              toast.error('Stem separation timed out', 'Job exceeded 10 minutes — try again or check the service logs.');
-              return;
-            }
-            const statusRes = await fetch(`/api/stems/${jobId}`);
-            const { job } = await statusRes.json() as StemStatusResponse;
-
-            if (!job) return;
-
-            if (typeof job.progress === 'number') {
-              // Demucs reports 0..1 sometimes, 0..100 other times — normalize.
-              const raw = job.progress;
-              const pct = raw <= 1 ? Math.round(raw * 100) : Math.round(raw);
-              setStemProgress(Math.max(0, Math.min(99, pct)));
-            }
-
-            if (job.status === 'completed' || job.status === 'done') {
-              stop();
-              setStemData({
-                vocals_url: job.stems?.vocals || '',
-                drums_url: job.stems?.drums || '',
-                bass_url: job.stems?.bass || '',
-                other_url: job.stems?.other || '',
-              });
-              setStemStatus('ready');
-            } else if (job.status === 'error' || job.status === 'failed') {
-              stop();
-              setStemStatus('idle');
-              setShowStems(false);
-              toast.error('Stem separation failed', job.error || 'Unknown error');
-            }
-          } catch {
-            stop();
-            setStemStatus('idle');
-          }
-        }, 4000);
-
+        const body = await res.json().catch(() => ({})) as StemStatusResponse;
+        if (!res.ok) throw new Error(body.error || `Failed to start stem split (${res.status})`);
+        applyStemJob(body.job);
       } catch (err: unknown) {
         console.error('Stem split error:', err);
         setStemStatus('idle');
         setShowStems(false);
-        // Dispatcher now bubbles a combined "Demucs + Moises" message —
-        // surface that verbatim so the user knows which side to fix.
+        // The dispatcher's combined "Demucs + Moises" message is surfaced verbatim.
         toast.error(
           'Stem separation unavailable',
           errorMessage(err) || 'Start the Demucs service or set MOISES_API_KEY.',
@@ -699,9 +669,10 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
       <DrawerStemOverlay
         open={showStems}
         status={stemStatus}
-        progress={stemProgress}
+        error={stemError}
         data={stemData}
-        onClose={() => { setShowStems(false); setStemData(null); setStemStatus('idle'); }}
+        onRetry={() => { void handleAction('Split stems'); }}
+        onClose={() => setShowStems(false)}
       />
 
       {showShareModal && track && (
