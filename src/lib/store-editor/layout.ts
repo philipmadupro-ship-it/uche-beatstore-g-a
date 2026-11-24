@@ -23,6 +23,11 @@
  * inside a component is exactly what gets silently reverted.
  */
 
+import { defaultStoreTheme, parseStoreTheme, type StoreTheme } from './theme-schema';
+
+export { defaultStoreTheme };
+export type { StoreTheme };
+
 export const storeBreakpoints = ['desktop', 'tablet', 'mobile'] as const;
 export type StoreBreakpoint = (typeof storeBreakpoints)[number];
 
@@ -150,24 +155,6 @@ export type StoreSection = {
   content?: SectionContent;
 };
 
-export type StoreTheme = {
-  accent: string;
-  background: string;
-  surface: string;
-  text: string;
-  muted: string;
-  border: string;
-  headingFont: 'heading' | 'body' | 'mono';
-  bodyFont: 'heading' | 'body' | 'mono';
-  /** Base type size in px; every section scales from it. */
-  typeScale: number;
-  radius: number;
-  borderWidth: number;
-  /** Multiplier on the spacing steps. */
-  spacingScale: number;
-  buttonStyle: 'solid' | 'outline' | 'ghost';
-  shadow: 'none' | 'soft' | 'hard';
-};
 
 export type StoreLayout = {
   version: number;
@@ -180,29 +167,6 @@ export const LAYOUT_VERSION = 1;
 
 /* ── Defaults ───────────────────────────────────────────────────────────── */
 
-/**
- * The theme that reproduces the storefront as it looks today.
- *
- * These are the app's documented tokens — near-black surfaces, white-at-alpha
- * text, tan accent — rather than a fresh palette, so an untouched storefront
- * is byte-for-byte the current design and "open the editor" is not a restyle.
- */
-export const defaultStoreTheme: StoreTheme = {
-  accent: '#c8a47a',
-  background: '#090907',
-  surface: '#0D0D0A',
-  text: '#FFFFFF',
-  muted: 'rgba(255,255,255,0.6)',
-  border: 'rgba(255,255,255,0.1)',
-  headingFont: 'heading',
-  bodyFont: 'body',
-  typeScale: 14,
-  radius: 0,
-  borderWidth: 1,
-  spacingScale: 1,
-  buttonStyle: 'outline',
-  shadow: 'none',
-};
 
 type SectionSeed = {
   kind: StoreSectionKind;
@@ -597,7 +561,7 @@ export function normalizeLayout(value: unknown): StoreLayout {
         base: { ...defaultSectionSettings, ...section.base },
         overrides: section.overrides ?? {},
       })),
-    theme: { ...defaultStoreTheme, ...value.theme },
+    theme: parseStoreTheme(value.theme),
     updatedAt: value.updatedAt ?? new Date().toISOString(),
   };
 }

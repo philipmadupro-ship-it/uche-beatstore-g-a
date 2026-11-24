@@ -14,6 +14,7 @@
  * Convention: every export pair is `XSchema` (Zod) + `X` (the inferred TS
  * type). e.g. `RateBodySchema` and `RateBody = z.infer<typeof RateBodySchema>`.
  */
+import { sanitizeStoreTheme } from '@/lib/store-editor/theme-schema';
 import { z } from 'zod';
 import { isCurrency as isFinanceCurrency } from '@/lib/labelos/finance/currency';
 import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
@@ -626,7 +627,10 @@ const StoreLayoutSchema = z.object({
         .passthrough(),
     )
     .max(60),
-  theme: z.record(z.string(), z.unknown()),
+  // Lenient (PROFILE-04): an object is required, but every theme value is
+  // coerced to its stock value when invalid — never a 400 — and unknown keys
+  // are kept. See lib/store-editor/theme-schema.ts.
+  theme: z.record(z.string(), z.unknown()).transform(sanitizeStoreTheme),
   updatedAt: z.string().max(40).optional(),
 });
 

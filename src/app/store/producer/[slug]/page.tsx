@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import {
-  Music, Loader2, Globe, Mail, AtSign, Link2,
+  Music, Loader2, Globe, Mail, AtSign, X as XIcon,
   Heart, UserPlus, ArrowLeft, Music2,
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
@@ -172,12 +172,13 @@ export default function ProducerPage({
   const signatureLine = formatSignature(producerSignature(tracks));
   const socialRows = ([
     ['instagram', resolveCreatorLink('instagram', creator?.instagram_handle), <AtSign key="i" size={12} />],
-    ['x', resolveCreatorLink('x', creator?.twitter_handle), <Link2 key="x" size={12} />],
+    ['x', resolveCreatorLink('x', creator?.twitter_handle), <XIcon key="x" size={12} />],
     ['spotify', resolveCreatorLink('spotify', creator?.spotify_url), <Music key="s" size={12} />],
     ['soundcloud', resolveCreatorLink('soundcloud', creator?.soundcloud_url), <Music2 key="c" size={12} />],
     ['website', resolveCreatorLink('website', creator?.website_url), <Globe key="w" size={12} />],
     ['email', resolveCreatorLink('email', creator?.contact_email), <Mail key="m" size={12} />],
   ] as const).flatMap(([key, link, icon]) => (link ? [{ key, link, icon }] : []));
+  const collectionCount = playlists.length + projects.length;
   const creditLines = (creator?.credits ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
 
   if (loading) {
@@ -207,64 +208,67 @@ export default function ProducerPage({
       {/* ── Hero ── */}
       <div className="relative isolate">
         <MusicReactiveBackdrop className="inset-0 z-[1]" />
-        {/* Hero background image */}
         {creator.hero_image_url ? (
-          <div className="h-[220px] md:h-[320px] w-full relative overflow-hidden">
+          <div className="relative h-[160px] w-full overflow-hidden md:h-[240px]">
             <img
               src={creator.hero_image_url}
               alt=""
-              className="w-full h-full object-cover opacity-40"
+              className="h-full w-full object-cover opacity-40"
             />
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#090907]/60 to-[#090907]" />
           </div>
         ) : (
-          <div className="h-[140px] md:h-[200px] w-full bg-gradient-to-b from-[#0D0D0A] to-[#090907]" />
+          <div className="h-[104px] w-full bg-gradient-to-b from-[#0D0D0A] to-[#090907] md:h-[128px]" />
         )}
 
-        {/* Back link */}
-        <div className="absolute top-4 left-4 md:left-8">
+        {/* Scrim under the back link so it reads over any hero image. */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-20 bg-gradient-to-b from-[#090907]/80 to-transparent" />
+        <div className="absolute left-2 top-2 z-10 md:left-6">
           <Link
             href="/store"
-            className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-white/40 hover:text-white/80 transition-colors"
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
           >
             <ArrowLeft size={11} />
             Store
           </Link>
         </div>
 
-        {/* Producer header card */}
-        <div className="max-w-6xl mx-auto px-4 md:px-10 -mt-12 md:-mt-20 relative z-10">
-          <div className="flex flex-col md:flex-row md:items-end gap-4 md:gap-6">
-            {/* The producer's mark — the logo from Settings → Brand artwork.
-                A generic music glyph here said nothing about whose page it is. */}
-            <div className="w-20 h-20 md:w-28 md:h-28 rounded-[20px] overflow-hidden bg-[#0D0D0A] border border-white/10 flex items-center justify-center shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] shrink-0">
+        {/* Identity: logo + Follow on one row on a phone, all inline from md up. */}
+        <div className="relative z-10 mx-auto -mt-10 max-w-6xl px-4 md:-mt-12 md:px-10">
+          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 md:flex md:items-end md:gap-6">
+            {/* The producer's mark — the logo from Settings → Brand artwork. */}
+            <div className="row-start-1 flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[20px] border border-white/10 bg-[#0D0D0A] md:h-24 md:w-24">
               {creator.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={creator.logo_url} alt="" className="h-full w-full object-cover" />
               ) : (
-                <span className="font-heading text-[28px] md:text-[40px] text-white/80">
+                <span className="font-heading text-[28px] text-white/80 md:text-[36px]">
                   {(creator.display_name || 'P').trim().charAt(0).toUpperCase()}
                 </span>
               )}
             </div>
 
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-1.5">Producer</p>
-              <h1 className="font-heading text-[28px] md:text-[40px] text-white leading-[1.05]">
+            <div className="col-span-2 row-start-2 min-w-0 flex-1 md:col-auto md:row-auto">
+              <h1 className="font-heading text-[28px] leading-[1.05] text-white md:text-[40px]">
                 {creator.display_name || 'Producer'}
               </h1>
+              <p className="mt-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">
+                {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
+                {collectionCount > 0 && ` · ${collectionCount} ${collectionCount === 1 ? 'collection' : 'collections'}`}
+              </p>
               {signatureLine && (
-                <p className="mt-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">{signatureLine}</p>
+                <p className="mt-1 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">{signatureLine}</p>
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="col-start-2 row-start-1 flex items-end justify-self-end md:col-auto md:row-auto md:shrink-0">
               <button
                 onClick={handleFollow}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all border ${
+                aria-pressed={isFollowing}
+                className={`inline-flex h-10 items-center gap-1.5 rounded-lg border px-4 text-[11px] font-medium uppercase tracking-wider transition-colors ${
                   isFollowing
-                    ? 'bg-transparent border-white/40 text-white/40 hover:border-white/30 hover:text-white'
-                    : 'bg-white border-white/30 text-black hover:bg-white/90'
+                    ? 'border-white/30 bg-white/[0.14] text-white hover:bg-white/[0.10]'
+                    : 'border-transparent bg-white text-black hover:bg-white/90'
                 }`}
               >
                 {isFollowing ? <Heart size={12} fill="currentColor" /> : <UserPlus size={12} />}
@@ -276,71 +280,62 @@ export default function ProducerPage({
       </div>
 
       {/* ── Main content ── */}
-      <div className="max-w-6xl mx-auto px-4 md:px-10 py-8 md:py-12">
-        <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-8 md:gap-14 items-start">
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-10 md:py-12">
+        <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-[280px_1fr] md:gap-12">
 
-          {/* Left sidebar: Bio + social */}
-          <div className="flex flex-col gap-5 md:sticky md:top-24">
-            {creator.bio && (
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Bio</p>
-                <p className="text-[11px] text-white/80 leading-relaxed">{creator.bio}</p>
-              </div>
-            )}
+          {/* About: bio, credits and links in one card. Rendered only when the
+              producer has set any of them. */}
+          {(creator.bio || creditLines.length > 0 || socialRows.length > 0) && (
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] md:sticky md:top-24">
+              {creator.bio && (
+                <div className="p-5">
+                  <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">About</p>
+                  <p className="whitespace-pre-wrap text-xs leading-relaxed text-white/80">{creator.bio}</p>
+                </div>
+              )}
 
-            {/* Credits are stored one per line (the profile field says so);
-                rendered as one run-on sentence they read as a typo. */}
-            {creditLines.length > 0 && (
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Credits</p>
-                <ul className="space-y-1.5">
-                  {creditLines.map((line) => (
-                    <li key={line} className="text-[11px] text-white/80 leading-snug">{line}</li>
+              {/* Credits are stored one per line (the profile field says so). */}
+              {creditLines.length > 0 && (
+                <div className={`p-5 ${creator.bio ? 'border-t border-white/10' : ''}`}>
+                  <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">Credits</p>
+                  <ul className="space-y-1.5">
+                    {creditLines.map((line) => (
+                      <li key={line} className="text-[11px] leading-snug text-white/80">{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Social links — resolved, never interpolated: see resolveCreatorLink. */}
+              {socialRows.length > 0 && (
+                <div className={`px-2 pb-2 pt-4 ${creator.bio || creditLines.length > 0 ? 'border-t border-white/10' : ''}`}>
+                  <p id="producer-links-label" className="mb-1 px-3 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">Links</p>
+                <ul aria-labelledby="producer-links-label">
+                  {socialRows.map(({ key, link, icon }) => (
+                    <li key={key}>
+                      <a
+                        href={link.href}
+                        target={link.href.startsWith('mailto:') ? undefined : '_blank'}
+                        rel="noopener noreferrer"
+                        className="flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-[11px] text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
+                      >
+                        <span className="shrink-0">{icon}</span>
+                        <span className="min-w-0 break-words">{link.label}</span>
+                      </a>
+                    </li>
                   ))}
                 </ul>
-              </div>
-            )}
-
-            {/* Social links — resolved, never interpolated: see resolveCreatorLink. */}
-            {socialRows.length > 0 && (
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 space-y-2">
-                <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Links</p>
-                {socialRows.map(({ key, link, icon }) => (
-                  <a
-                    key={key}
-                    href={link.href}
-                    target={link.href.startsWith('mailto:') ? undefined : '_blank'}
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors"
-                  >
-                    {icon} {link.label}
-                  </a>
-                ))}
-              </div>
-            )}
-
-            {/* Stats */}
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-[18px] font-bold text-white">{tracks.length}</p>
-                <p className="text-[9px] font-mono uppercase tracking-wider text-white/40">Tracks</p>
-              </div>
-              <div>
-                <p className="text-[18px] font-bold text-white">{playlists.length + projects.length}</p>
-                <p className="text-[9px] font-mono uppercase tracking-wider text-white/40">Collections</p>
-              </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
-          {/* Right: Track grid + collections */}
-          <div className="flex flex-col gap-8">
-            {/* Tracks */}
+          {/* Tracks + collections */}
+          <div className={`flex min-w-0 flex-col gap-10 ${creator.bio || creditLines.length > 0 || socialRows.length > 0 ? '' : 'md:col-span-2'}`}>
             {tracks.length > 0 && (
               <section>
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-4">
-                  All Tracks
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <SectionLabel>All tracks</SectionLabel>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {tracks.map((t) => (
                     <TrackCard
                       key={t.id}
@@ -354,66 +349,41 @@ export default function ProducerPage({
               </section>
             )}
 
-            {/* Featured playlists */}
             {playlists.length > 0 && (
               <section>
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-4">
-                  Playlists
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <SectionLabel count={playlists.length}>Playlists</SectionLabel>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
                   {playlists.map((pl) => (
-                    <Link
-                      key={pl.id}
-                      href={`/store/playlists/${pl.id}`}
-                      className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden hover:border-white/20 transition-all"
-                    >
-                      <div className="relative w-full aspect-square bg-[#090907]">
-                        <ArtworkFallback src={pl.cover_url} seed={pl.id} kind="playlist" alt={pl.name} sizes="220px" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]">
-                          <Music size={20} aria-hidden="true" />
-                        </ArtworkFallback>
-                      </div>
-                      <div className="p-2.5">
-                        <p className="text-[11px] font-medium text-white truncate">{pl.name}</p>
-                      </div>
-                    </Link>
+                    <CollectionCard key={pl.id} href={`/store/playlists/${pl.id}`} id={pl.id} name={pl.name} cover={pl.cover_url} kind="playlist" />
                   ))}
                 </div>
               </section>
             )}
 
-            {/* Featured projects */}
             {projects.length > 0 && (
               <section>
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-4">
-                  Projects
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <SectionLabel count={projects.length}>Projects</SectionLabel>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
                   {projects.map((proj) => (
-                    <Link
+                    <CollectionCard
                       key={proj.id}
                       href={`/store/projects/${proj.id}`}
-                      className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden hover:border-white/20 transition-all"
-                    >
-                      <div className="relative w-full aspect-square bg-[#090907]">
-                        <ArtworkFallback src={proj.cover_url} seed={proj.id} kind="project" alt={proj.name} sizes="220px" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]">
-                          <Music size={20} aria-hidden="true" />
-                        </ArtworkFallback>
-                      </div>
-                      <div className="p-2.5">
-                        <p className="text-[11px] font-medium text-white truncate">{proj.name}</p>
-                        {proj.price_usd != null && Number(proj.price_usd) > 0 && (
-                          <p className="text-[9px] font-mono text-white/40 mt-0.5">${Number(proj.price_usd)} bundle</p>
-                        )}
-                      </div>
-                    </Link>
+                      id={proj.id}
+                      name={proj.name}
+                      cover={proj.cover_url}
+                      kind="project"
+                      note={proj.price_usd != null && Number(proj.price_usd) > 0 ? `$${Number(proj.price_usd)} bundle` : undefined}
+                    />
                   ))}
                 </div>
               </section>
             )}
 
             {tracks.length === 0 && playlists.length === 0 && projects.length === 0 && (
-              <div className="text-center py-16 text-white/40 text-[11px]">
-                No public releases yet.
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/10 px-6 py-14 text-center">
+                <Music size={20} className="text-white/40" aria-hidden="true" />
+                <p className="text-xs text-white/80">Nothing public yet</p>
+                <p className="text-[11px] text-white/40">New releases from {creator.display_name || 'this producer'} will show up here.</p>
               </div>
             )}
           </div>
@@ -421,6 +391,40 @@ export default function ProducerPage({
       </div>
     </div>
     </ArtworkThemeProvider>
+  );
+}
+
+function SectionLabel({ children, count }: { children: React.ReactNode; count?: number }) {
+  return (
+    <p className="mb-4 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+      {children}
+      {count != null && <span className="ml-2 text-white/30">{count}</span>}
+    </p>
+  );
+}
+
+/* ─── Collection card (playlist / project) ─────────────────── */
+
+function CollectionCard({
+  href, id, name, cover, kind, note,
+}: {
+  href: string; id: string; name: string; cover: string | null; kind: 'playlist' | 'project'; note?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] transition-colors hover:border-white/20"
+    >
+      <div className="relative aspect-square w-full bg-[#090907]">
+        <ArtworkFallback src={cover} seed={id} kind={kind} alt={name} sizes="160px" className="h-full w-full object-cover">
+          <Music size={18} aria-hidden="true" />
+        </ArtworkFallback>
+      </div>
+      <div className="p-2.5">
+        <p className="line-clamp-2 text-[11px] font-medium text-white">{name}</p>
+        {note && <p className="mt-0.5 truncate text-[10px] font-mono text-white/40">{note}</p>}
+      </div>
+    </Link>
   );
 }
 
@@ -438,53 +442,48 @@ function TrackCard({
   onPlay: () => void;
 }) {
   const reducedMotion = useReducedMotion();
+  const playingNow = isCurrent && isPlaying;
+  // The card is a plain element with a stretched link behind its content, so
+  // the play button is a SIBLING of the link, never nested inside an anchor
+  // (see ui/ListRow and the rule in CLAUDE.md).
   return (
-    <Link
-      href={`/store/${track.id}`}
-      className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden hover:border-white/20 transition-all"
-    >
-      <div className="relative w-full aspect-square bg-[#090907]">
+    <div className="group relative flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] transition-colors hover:border-white/20">
+      <Link href={`/store/${track.id}`} aria-label={track.title} className="absolute inset-0 z-0" />
+      <div className="pointer-events-none relative aspect-square w-full bg-[#090907]">
         <ArtworkFallback
           src={track.cover_url}
           seed={track.id}
           kind="track"
-          alt={track.title}
+          alt=""
           sizes="220px"
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
         >
           <Music size={20} aria-hidden="true" />
         </ArtworkFallback>
-        {/* Play overlay */}
         <button
-          onClick={(e) => { e.preventDefault(); onPlay(); }}
-          className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+          type="button"
+          onClick={onPlay}
+          aria-label={`${playingNow ? 'Pause' : 'Play'} ${track.title}`}
+          className="pointer-events-auto absolute bottom-2 right-2 z-10 opacity-100 transition-opacity focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
         >
-          <div className="glass-play-surface w-12 h-12 rounded-full flex items-center justify-center" data-playing={isCurrent && isPlaying ? 'true' : 'false'}>
-            {isCurrent && isPlaying ? (
-              <PauseGlyph size={18} />
-            ) : (
-              <PlayGlyph size={18} className="ml-0.5" />
-            )}
-          </div>
+          <span className="glass-play-surface flex h-10 w-10 items-center justify-center rounded-full" data-playing={playingNow ? 'true' : 'false'}>
+            {playingNow ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5" />}
+          </span>
         </button>
         {isCurrent && (
-          <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur text-[8px] font-mono uppercase tracking-wider text-white flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full bg-[#6DC6A4] ${reducedMotion ? '' : 'animate-pulse'}`} />
+          <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.2em] text-white backdrop-blur">
+            <span className={`h-1.5 w-1.5 rounded-full bg-[#6DC6A4] ${reducedMotion ? '' : 'animate-pulse'}`} />
             {isPlaying ? 'Playing' : 'Paused'}
           </div>
         )}
       </div>
-      <div className="p-2.5">
-        <p className="text-[11px] font-medium text-white truncate">{track.title}</p>
-        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider">
-            {TYPE_LABELS[track.type] ?? track.type}
-          </span>
-          {track.bpm && (
-            <span className="text-[9px] font-mono text-white/40">· {track.bpm} BPM</span>
-          )}
-        </div>
+      <div className="pointer-events-none p-2.5">
+        <p className="truncate text-[11px] font-medium text-white">{track.title}</p>
+        <p className="mt-1 flex flex-wrap gap-x-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+          <span>{TYPE_LABELS[track.type] ?? track.type}</span>
+          {track.bpm ? <span className="whitespace-nowrap">{track.bpm} BPM</span> : null}
+        </p>
       </div>
-    </Link>
+    </div>
   );
 }
