@@ -7,7 +7,7 @@ export function EmptyHome({ onUpload }: { onUpload: () => void }) {
   return (
     <section data-testid="empty-home" className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-5 py-6 text-center">
       <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Your library is empty</p>
-      <p className="mx-auto mt-2 max-w-sm text-[12px] text-white/60">
+      <p className="mx-auto mt-2 max-w-sm text-[11px] text-white/60">
         Upload your first beat. BPM and key are read from the file, and you can tag and price it once it lands.
       </p>
       <button

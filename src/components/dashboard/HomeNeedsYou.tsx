@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Check, ChevronDown, ChevronUp, Handshake, ShoppingBag, UserPlus } from 'lucide-react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { buildActionDigest, type DigestItem, type DigestLeadRow, type DigestOfferRow, type DigestSaleRow } from '@/lib/dashboard/action-digest';
 import { buildHomeAttention, type AttentionSources, type HomeAttention, type SourceState } from '@/lib/dashboard/home-attention';
 
@@ -38,6 +39,7 @@ export function HomeNeedsYouView({
   /** Secondary diagnostics (sell readiness) live inside the same block. */
   children?: React.ReactNode;
 }) {
+  const reducedMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
   const rows = expanded ? allItems.slice(0, 50) : attention.rows;
   const failed = attention.failedSources.map((k) => SOURCE_NAMES[k]).join(', ');
@@ -46,7 +48,7 @@ export function HomeNeedsYouView({
     return (
       <div className="space-y-3">
         <div className={SHELL} data-testid="needs-you" data-status="loading" aria-busy="true">
-          <div className="h-3 w-40 animate-pulse rounded bg-white/[0.08] motion-reduce:animate-none" />
+          <div className={`h-3 w-40 rounded bg-white/[0.08] ${reducedMotion ? '' : 'animate-pulse'}`} />
         </div>
         {children}
       </div>
