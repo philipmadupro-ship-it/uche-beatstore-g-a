@@ -5,6 +5,8 @@ const mockRequireRowOwnership = vi.fn();
 const mockEmailSend = vi.fn();
 const mockBeatSendInsert = vi.fn();
 const mockContactResult = vi.fn();
+const mockShareUpdate = vi.fn();
+const mockProfileResult = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   isSupabaseConfigured: () => true,
@@ -48,7 +50,7 @@ function adminClient() {
             },
             error: null,
           })),
-          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+          update: (patch: unknown) => ({ eq: () => { mockShareUpdate(patch); return Promise.resolve({ error: null }); } }),
         };
       }
       if (table === 'projects') {
@@ -56,6 +58,9 @@ function adminClient() {
       }
       if (table === 'contacts') {
         return { select: () => eqChain(() => mockContactResult()) };
+      }
+      if (table === 'creator_profiles') {
+        return { select: () => eqChain(() => mockProfileResult()) };
       }
       if (table === 'project_tracks') {
         return {
@@ -91,6 +96,7 @@ describe('POST /api/projects/[id]/shares/[shareId]/invite', () => {
     mockRequireRowOwnership.mockResolvedValue({ ok: true, userId: 'owner-1', admin: adminClient() });
     mockEmailSend.mockResolvedValue({ data: { id: 'resend-1' }, error: null });
     mockContactResult.mockReturnValue({ data: { id: CONTACT_ID }, error: null });
+    mockProfileResult.mockReturnValue({ data: { display_name: 'Uche', contact_email: null }, error: null });
     mockBeatSendInsert.mockReturnValue({
       select: () => ({ single: () => Promise.resolve({ data: { id: 'send-1' }, error: null }) }),
     });
@@ -130,9 +136,38 @@ describe('POST /api/projects/[id]/shares/[shareId]/invite', () => {
     const { POST } = await import('./route');
     const res = await POST(inviteRequest({ email: 'artist@example.com', contact_id: CONTACT_ID }), params);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
     expect(mockEmailSend).not.toHaveBeenCalled();
+    expect(mockShareUpdate).not.toHaveBeenCalled();
     expect(mockBeatSendInsert).not.toHaveBeenCalled();
+  });
+
+  it('links the share to the picked contact and stores the address actually used', async () => {
+    const { POST } = await import('./route');
+    const res = await POST(inviteRequest({ email: 'other-address@example.com', contact_id: CONTACT_ID }), params);
+
+    expect(res.status).toBe(200);
+    expect(mockShareUpdate).toHaveBeenCalledWith({ invited_email: 'other-address@example.com', contact_id: CONTACT_ID });
+  });
+
+  it('does not touch the share when nothing about the recipient changed', async () => {
+    const { POST } = await import('./route');
+    const res = await POST(inviteRequest({ email: 'artist@example.com' }), params);
+
+    expect(res.status).toBe(200);
+    expect(mockShareUpdate).not.toHaveBeenCalled();
+  });
+
+  it('sets Reply-To to the producer\'s public contact address only when it is set', async () => {
+    const { POST } = await import('./route');
+    mockProfileResult.mockReturnValue({ data: { display_name: 'Uche', contact_email: 'beats@uche.example' }, error: null });
+    await POST(inviteRequest({ email: 'artist@example.com' }), params);
+    expect(mockEmailSend.mock.calls[0][0].replyTo).toBe('beats@uche.example');
+
+    mockEmailSend.mockClear();
+    mockProfileResult.mockReturnValue({ data: { display_name: 'Uche', contact_email: null }, error: null });
+    await POST(inviteRequest({ email: 'artist@example.com' }), params);
+    expect(mockEmailSend.mock.calls[0][0]).not.toHaveProperty('replyTo');
   });
 
   it('rejects a malformed contact id', async () => {

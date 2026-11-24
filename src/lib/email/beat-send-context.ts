@@ -29,6 +29,25 @@ export async function loadProducerName(admin: Admin, ownerId: string): Promise<s
   }
 }
 
+/**
+ * The producer's PUBLIC contact address (`creator_profiles.contact_email`) for
+ * a Reply-To, or null. Never the account email: that is private and would
+ * reach every recipient. Best effort like the rest of this file.
+ */
+export async function loadProducerReplyTo(admin: Admin, ownerId: string): Promise<string | null> {
+  try {
+    const { data } = await admin
+      .from('creator_profiles')
+      .select('contact_email')
+      .eq('user_id', ownerId)
+      .maybeSingle();
+    const email = (data as { contact_email?: string | null } | null)?.contact_email;
+    return typeof email === 'string' && email.trim() ? email.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The caller's own tracks among `trackIds`, in the order given. */
 export async function loadTrackPack(
   admin: Admin,

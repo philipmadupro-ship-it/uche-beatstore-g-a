@@ -273,6 +273,8 @@ export const ProjectShareCreateBodySchema = z.object({
   expires_days: z.number().int().min(0).max(365).optional(),
   password: z.string().min(1).max(200).optional().nullable(),
   invited_email: z.string().email().optional().nullable(),
+  /** SHARE-07: the producer's own contact this link is for. Checked against the owner; the identity of comments left through the link. */
+  contact_id: z.string().uuid().optional().nullable(),
   label: z.string().max(200).optional().nullable(),
   recipient_kind: z.enum(['client', 'producer', 'rapper', 'friend']).optional(),
   // When true the share page renders Buy buttons on the license
