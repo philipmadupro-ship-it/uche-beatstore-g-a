@@ -34,7 +34,7 @@ import {
 import { toast } from '@/hooks/useToast';
 import { errorMessage } from '@/lib/errors';
 import Link from 'next/link';
-import { DEFAULT_TEMPLATE_MD, VARIABLE_LIST } from '@/lib/contracts/license-template';
+import { LicenseTemplateEditor } from '@/components/store-editor/LicenseTemplateEditor';
 import { CARD_STYLE_META, VIDEO_STYLE_META } from '@/lib/share/styles';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
@@ -232,100 +232,6 @@ function Label({ children }: { children: React.ReactNode }) {
     <label className="text-[10px] font-mono uppercase tracking-wider text-white/60 block mb-1.5">
       {children}
     </label>
-  );
-}
-
-/**
- * Markdown editor for the producer's license-contract template.
- * Click any variable chip to insert {{key}} at the cursor. Hit
- * "Use default" to populate with the system template — useful as
- * a starting point or to recover if the producer wiped their copy.
- * Preview toggles between the raw template and a sample-filled
- * version using a fake buyer so producers can sanity-check the
- * substitution.
- */
-function LicenseTemplateEditor({
-  value,
-  onChange,
-}: { value: string; onChange: (v: string) => void }) {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [preview, setPreview] = useState(false);
-
-  const insertVar = (key: string) => {
-    const el = textareaRef.current;
-    if (!el) {
-      onChange((value ?? '') + ` {{${key}}}`);
-      return;
-    }
-    const start = el.selectionStart ?? value.length;
-    const end = el.selectionEnd ?? value.length;
-    const next = `${value.slice(0, start)}{{${key}}}${value.slice(end)}`;
-    onChange(next);
-    requestAnimationFrame(() => {
-      el.focus();
-      const cursor = start + `{{${key}}}`.length;
-      el.setSelectionRange(cursor, cursor);
-    });
-  };
-
-  const filledPreview = (() => {
-    const sample = Object.fromEntries(VARIABLE_LIST.map((v) => [v.key, v.sample])) as Record<string, string>;
-    const tpl = (value && value.trim()) || DEFAULT_TEMPLATE_MD;
-    return tpl.replace(/\{\{([a-z_]+)\}\}/g, (m, k) => sample[k] ?? m);
-  })();
-
-  return (
-    <div className="space-y-3">
-      <p className="text-[11px] text-white/40">
-        Filled in at every purchase and attached as a PDF to the delivery email. Markdown supported (# heading, ** bold **, - bullet). Leave empty to use the default template.
-      </p>
-
-      <div className="flex flex-wrap gap-1.5">
-        {VARIABLE_LIST.map((v) => (
-          <button
-            key={v.key}
-            type="button"
-            onClick={() => insertVar(v.key)}
-            title={`Insert {{${v.key}}} — sample: ${v.sample}`}
-            className="px-2 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wider bg-white/[0.04] border border-white/10 text-white/80 hover:text-white hover:border-white/20 transition-colors"
-          >
-            +{v.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => onChange(DEFAULT_TEMPLATE_MD)}
-          className="ml-auto px-3 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wider bg-white/[0.04] border border-white/20 text-white/80 hover:text-white transition-colors"
-        >
-          Use default
-        </button>
-        <button
-          type="button"
-          onClick={() => setPreview((p) => !p)}
-          className="px-3 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wider border transition-colors"
-          style={preview
-            ? { backgroundColor: '#FFFFFF', color: '#000', borderColor: 'rgba(255,255,255,0.3)' }
-            : { backgroundColor: 'transparent', color: 'rgba(255,255,255,0.8)', borderColor: 'rgba(255,255,255,0.2)' }}
-        >
-          {preview ? 'Edit' : 'Preview'}
-        </button>
-      </div>
-
-      {preview ? (
-        <pre className="bg-[#090907] border border-white/10 rounded-lg p-4 text-[11px] text-white leading-relaxed whitespace-pre-wrap font-sans max-h-[480px] overflow-auto">
-          {filledPreview}
-        </pre>
-      ) : (
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          rows={20}
-          placeholder="Leave empty to use the default template."
-          className={`${textareaCls} font-mono text-[11px] leading-relaxed`}
-        />
-      )}
-    </div>
   );
 }
 
@@ -3078,6 +2984,7 @@ export default function StoreEditorPage() {
               <LicenseTemplateEditor
                 value={form.license_template_md}
                 onChange={(v) => setForm((f) => ({ ...f, license_template_md: v }))}
+                tiers={globalLicenses as unknown as Array<Record<string, unknown> & { id: string; name: string }>}
               />
             </Section>
 
