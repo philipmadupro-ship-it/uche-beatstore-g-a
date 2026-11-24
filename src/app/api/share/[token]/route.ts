@@ -1,3 +1,4 @@
+import { tokenRef } from '@/lib/share/token-ref';
 import { grantableTrackIds } from '@/lib/share/share-owner';
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll, update, deleteRow, insert, createServiceClient } from '@/lib/db';
@@ -205,7 +206,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const safeShare = { ...withoutPasswordHash(share), full_playback: isFullPlayback(share) };
     return NextResponse.json({ share: safeShare, tracks, creator, stems });
   } catch (error) {
-    log.error('share GET failed', { token, error: errorMessage(error) });
+    log.error('share GET failed', { tokenRef: tokenRef(token), error: errorMessage(error) });
     return publicError(error);
   }
 }
@@ -374,7 +375,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     };
     return NextResponse.json({ share: safe });
   } catch (error) {
-    log.error('share PATCH failed', { token, error: errorMessage(error) });
+    log.error('share PATCH failed', { tokenRef: tokenRef(token), error: errorMessage(error) });
     return publicError(error);
   }
 }

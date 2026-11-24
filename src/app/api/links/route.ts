@@ -37,6 +37,8 @@ type ShareListItem = {
   title: string | null;
   content_title: string | null;
   kind: string;
+  /** client | producer | rapper | friend; null when the row does not carry it. */
+  recipient_kind: string | null;
   track_ids: string[];
   tracks: TrackSummary[];
   plays: number;
@@ -102,6 +104,7 @@ function localLinks(): ShareListItem[] {
       title: share.title ?? null,
       content_title: null,
       kind: share.kind ?? (trackIds.length > 1 ? 'project' : 'track'),
+      recipient_kind: share.recipient_kind ?? null,
       track_ids: trackIds,
       tracks: linkTracks,
       plays: share.plays ?? 0,
@@ -144,6 +147,7 @@ function localLinks(): ShareListItem[] {
       title: share.label ?? parent?.name ?? parent?.title ?? null,
       content_title: parent?.name ?? parent?.title ?? null,
       kind: contentType,
+      recipient_kind: share.recipient_kind ?? null,
       track_ids: trackIds,
       tracks: linkTracks,
       plays: share.plays ?? 0,
@@ -267,6 +271,7 @@ export async function GET() {
         title: share.title ?? null,
         content_title: null,
         kind: share.kind ?? (ids.length > 1 ? 'project' : 'track'),
+        recipient_kind: share.recipient_kind ?? null,
         track_ids: ids,
         tracks,
         plays: share.plays ?? 0,
@@ -313,6 +318,7 @@ export async function GET() {
         title: share.label ?? parent?.name ?? parent?.title ?? null,
         content_title: parent?.name ?? parent?.title ?? null,
         kind: contentType,
+        recipient_kind: share.recipient_kind ?? null,
         track_ids: ids,
         tracks,
         plays: share.plays ?? 0,
