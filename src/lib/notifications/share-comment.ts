@@ -19,6 +19,8 @@ export interface ShareCommentInput {
   shareLabel?: string | null;
   trackId?: string | null;
   isReply?: boolean;
+  /** The contact the producer invited with this link, when it was issued to one. */
+  contactId?: string | null;
 }
 
 export interface NotificationInsert {
@@ -50,6 +52,7 @@ export function shareCommentNotification(input: ShareCommentInput): Notification
       share_token: input.shareToken,
       share_label: input.shareLabel ?? null,
       track_id: input.trackId ?? null,
+      ...(input.contactId ? { contact_id: input.contactId } : {}),
     },
   };
 }
