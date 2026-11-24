@@ -36,7 +36,7 @@ import {
 } from '@/components/store/types';
 import { appearanceStyle } from '@/lib/store/typography';
 import { sanitizeUrl } from '@/components/store/helpers';
-import { effectiveStoreTheme, resolveStoreAppearance } from '@/lib/store/appearance';
+import { parseCustomization, resolveCustomization } from '@/lib/store/customization';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
@@ -45,7 +45,7 @@ import { FreeDownloadModal } from '@/components/store/FreeDownloadModal';
 import { StoreContactForm } from '@/components/store/StoreContactForm';
 import { ArtistBioBlock } from '@/components/store/ArtistBioBlock';
 import {
-  isFullyHidden, isPinnedSection, normalizeLayout, resolveSection, visibilityClasses,
+  isFullyHidden, isPinnedSection, resolveSection, visibilityClasses,
   type SectionSettings, type StoreSectionKind,
 } from '@/lib/store-editor/layout';
 import { hasLiveContent, isContentSection, renderBreakpointFor } from '@/lib/store-editor/content-sections';
@@ -1083,14 +1083,18 @@ function StorePage() {
   /**
    * The producer's storefront layout.
    *
-   * `normalizeLayout` turns a missing, older or malformed document into the
+   * `parseCustomization` (normalizeLayout) turns a missing, older or malformed document into the
    * default layout, which is this page's original section order — so a
    * storefront that has never been arranged renders exactly as it always has.
    */
   // Memoised on the stored document: normalising builds new section objects,
   // and the page re-renders on every player progress tick.
   const storedLayout = creator?.store_layout;
-  const storeLayout = useMemo(() => normalizeLayout(storedLayout), [storedLayout]);
+  // One parse + one resolver (`lib/store/customization.ts`) for layout, colours
+  // and type; the producer page and the editor previews resolve through the same code.
+  const customization = useMemo(() => parseCustomization({ profile: creator, layout: storedLayout }), [creator, storedLayout]);
+  const storeLayout = customization.layout;
+  const resolved = useMemo(() => resolveCustomization(customization), [customization]);
   /**
    * The viewer's device, for the one thing CSS cannot express: the hero's
    * particle-vs-plain title picks a different COMPONENT, and hiding one with
@@ -1101,7 +1105,7 @@ function StorePage() {
   // Profile colours, overridden by any theme colour the producer changed in
   // Design (`lib/store/appearance.ts`), spread on the root as the same style
   // object the Store Editor's previews use.
-  const appearance = useMemo(() => resolveStoreAppearance(creator, storeLayout.theme), [creator, storeLayout.theme]);
+  const appearance = resolved.appearance;
   const accentColor = appearance.accent;
   const themeStyle = useMemo(() => appearanceStyle(appearance), [appearance]);
   /**
@@ -1111,7 +1115,7 @@ function StorePage() {
    * the theme defers to the profile's accent and text colour wherever Design
    * left them at the default, so these sections match the page around them.
    */
-  const sectionTheme = useMemo(() => effectiveStoreTheme(storeLayout.theme, creator), [storeLayout.theme, creator]);
+  const sectionTheme = resolved.sectionTheme;
   // Content sections read only the creator. Memoised so a player tick does
   // not hand the renderer a new object.
   const sectionData = useMemo<StorefrontData>(
