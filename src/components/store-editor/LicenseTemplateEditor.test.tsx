@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { useState } from 'react';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { LicenseTemplateEditor, type TemplateTier } from './LicenseTemplateEditor';
@@ -70,5 +70,29 @@ describe('LicenseTemplateEditor', () => {
   it('shows no problem list for a clean template', () => {
     render(<Harness initial={DEFAULT_TEMPLATE_MD} />);
     expect(screen.queryByTestId('license-template-problems')).toBeNull();
+  });
+
+  it('re-measures the textarea height after chips, clause wraps and the defaults (LICENSE-01 auto-size)', () => {
+    let measured = 100;
+    vi.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get').mockImplementation(() => measured);
+    render(<Harness initial="short" />);
+    expect(area().style.height).toBe('160px');           // min
+    measured = 300;
+    fireEvent.click(screen.getByRole('button', { name: '+Streaming limit' }));
+    expect(area().style.height).toBe('300px');           // grows after a chip
+    measured = 900;
+    fireEvent.click(screen.getByRole('button', { name: 'Use tier-aware default' }));
+    expect(area().style.height).toBe('480px');           // capped, then scrolls
+    expect(area().style.overflowY).toBe('auto');
+    measured = 200;
+    fireEvent.click(screen.getByRole('button', { name: 'If Credit required' }));
+    expect(area().style.height).toBe('200px');           // shrinks after a clause wrap
+    expect(area().style.overflowY).toBe('hidden');
+    // Preview -> Edit remounts the textarea and re-measures it.
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    measured = 250;
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(area().style.height).toBe('250px');
+    vi.restoreAllMocks();
   });
 });
