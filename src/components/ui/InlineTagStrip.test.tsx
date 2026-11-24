@@ -124,3 +124,16 @@ describe('InlineTagStrip overflow', () => {
     expect(screen.getByRole('button', { name: 'Remove tag Drill' })).toBeTruthy();
   });
 });
+
+describe('InlineTagStrip collapsed set', () => {
+  it('shows exactly the first N of the order the strip renders when expanded', () => {
+    const names = Array.from({ length: 60 }, (_, i) => `Tag number ${i + 1}`);
+    renderStrip(names);
+    const order = () => screen.getAllByRole('button', { name: /^Remove tag/ }).map((b) => b.getAttribute('aria-label'));
+    const collapsed = order();
+    fireEvent.click(screen.getByRole('button', { name: '+50 more' }));
+    const expanded = order();
+    expect(collapsed).toHaveLength(10);
+    expect(collapsed).toEqual(expanded.slice(0, 10));
+  });
+});
