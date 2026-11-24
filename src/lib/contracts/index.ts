@@ -380,6 +380,30 @@ export const CampaignTargetsDeleteBodySchema = z.object({
 });
 export type CampaignTargetsDeleteBody = z.infer<typeof CampaignTargetsDeleteBodySchema>;
 
+// ── Duplicate-send check (SHARE-08) ─────────────────────────────────────
+// One entry per recipient: a saved contact (`contact_id`) or a typed address
+// (`email`, matched to a contact by normalised email). `track_ids` and
+// `project_id` describe what is about to be sent; a project counts as its
+// current tracks.
+export const BeatSendsDuplicatesBodySchema = z
+  .object({
+    recipients: z
+      .array(
+        z
+          .object({
+            contact_id: z.string().uuid().optional(),
+            email: z.string().trim().min(3).max(320).optional(),
+          })
+          .refine((r) => !!r.contact_id || !!r.email, { message: 'contact_id or email required' }),
+      )
+      .min(1)
+      .max(200),
+    track_ids: z.array(z.string().uuid()).max(500).optional(),
+    project_id: z.string().uuid().optional(),
+  })
+  .refine((b) => (b.track_ids?.length ?? 0) > 0 || !!b.project_id, { message: 'track_ids or project_id required' });
+export type BeatSendsDuplicatesBody = z.infer<typeof BeatSendsDuplicatesBodySchema>;
+
 // ── Project share invites ───────────────────────────────────────────────
 
 /**
