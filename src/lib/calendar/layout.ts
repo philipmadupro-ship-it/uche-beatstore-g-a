@@ -41,6 +41,12 @@ export function eventDayRange(ev: LayoutEvent): { startKey: string; endKey: stri
   return { startKey, endKey: end < startKey ? startKey : end };
 }
 
+/** True when the event covers more than one local day. */
+export function isMultiDay(ev: LayoutEvent): boolean {
+  const { startKey, endKey } = eventDayRange(ev);
+  return endKey > startKey;
+}
+
 export interface WeekBar<T extends LayoutEvent = LayoutEvent> {
   event: T;
   lane: number;

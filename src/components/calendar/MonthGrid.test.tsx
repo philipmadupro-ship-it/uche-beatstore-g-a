@@ -70,17 +70,26 @@ describe('MonthGrid busy day (desktop)', () => {
 describe('MonthGrid busy day (phone)', () => {
   beforeEach(() => setPhone(true));
 
-  it('keeps a lone event as its pill and gives a busy day only "+K"', () => {
+  it('shows one total-count chip per day with events, never "E…" pills or "+N"', () => {
     mount();
-    expect(screen.getByRole('button', { name: /^Solo day/ })).toBeTruthy();
+    const solo = screen.getByRole('button', { name: /^1 event on November 3, open list$/ });
+    expect(solo.textContent).toBe('1');
+    const busy = screen.getByRole('button', { name: /^15 events on November 21, open list$/ });
+    expect(busy.textContent).toBe('15');
     expect(screen.queryByRole('button', { name: /^Busy \d+, / })).toBeNull();
-    const pill = screen.getByRole('button', { name: /15 more events on November 21/ });
-    expect(pill.textContent).toBe('+15');
+    expect(screen.queryByRole('button', { name: /^Solo day/ })).toBeNull();
+    expect(screen.queryByText(/^\+\d+/)).toBeNull();
+  });
+
+  it('keeps the multi-day bar and counts it on each day it covers', () => {
+    mount();
+    expect(screen.getAllByRole('button', { name: /^Studio camp, Nov 9 – Nov 11$/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /^1 event on November 10, open list$/ })).toBeTruthy();
   });
 
   it('opens the bottom drawer with the whole day', () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: /15 more events/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^15 events on November 21/ }));
     const drawer = screen.getByRole('dialog');
     expect(within(drawer).getAllByRole('listitem')).toHaveLength(15);
   });

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Bell, Mic, Music, Plus, Users } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Drawer } from '@/components/ui/Drawer';
-import { dayKey, eventsOnDay, laneCap, layoutMonth, type LayoutEvent, type WeekBar } from '@/lib/calendar/layout';
+import { dayKey, eventsOnDay, isMultiDay, laneCap, layoutMonth, type LayoutEvent, type WeekBar } from '@/lib/calendar/layout';
 
 export interface MonthGridEvent extends LayoutEvent {
   type?: string | null;
@@ -94,8 +94,19 @@ export function MonthGrid({
 }) {
   const isPhone = useIsPhone();
   const lanes = laneCap(isPhone);
-  const height = rowHeight(lanes);
-  const weeks = useMemo(() => layoutMonth(days.map((d) => d.fullDate), events, lanes), [days, events, lanes]);
+  // Phone: multi-day bars keep their single lane; every day with events gets ONE count chip in a row of its own
+  // (the total for the day, not "+N more"). Single-day events are not drawn at all there.
+  const rows = isPhone ? lanes + 1 : lanes;
+  const height = rowHeight(rows);
+  const dayDates = useMemo(() => days.map((d) => d.fullDate), [days]);
+  const weeks = useMemo(
+    () => layoutMonth(dayDates, isPhone ? events.filter(isMultiDay) : events, lanes),
+    [dayDates, events, lanes, isPhone],
+  );
+  const totals = useMemo(
+    () => (isPhone ? layoutMonth(dayDates, events, lanes).flatMap((w) => w.counts) : []),
+    [dayDates, events, lanes, isPhone],
+  );
   const [open, setOpen] = useState<Open | null>(null);
   const todayKey = dayKey(new Date());
   const selectedKey = dayKey(selectedDay);
@@ -198,18 +209,33 @@ export function MonthGrid({
 
           <div
             className="pointer-events-none absolute inset-x-0 z-20 grid grid-cols-7 gap-y-0.5"
-            style={{ top: DATE_ROW, gridTemplateRows: `repeat(${lanes}, ${LANE_H}px)` }}
+            style={{ top: DATE_ROW, gridTemplateRows: `repeat(${rows}, ${LANE_H}px)` }}
           >
             {wk.bars.map((bar) => barNode(bar, w))}
-            {wk.overflow.map((k, c) => k > 0 && (
+            {!isPhone && wk.overflow.map((k, c) => k > 0 && (
               <div key={`more-${c}`} className="pointer-events-none flex min-w-0 px-1" style={{ gridColumn: c + 1, gridRow: lanes }}>
                 {trigger(`more:${dayKey(days[w * 7 + c].fullDate)}`, days[w * 7 + c].fullDate, null, {
                   label: `${k} more event${k === 1 ? '' : 's'} on ${days[w * 7 + c].fullDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`,
                   className: 'pointer-events-auto h-5 min-w-0 flex-1 truncate rounded-full border border-white/10 bg-white/[0.06] px-1.5 text-center text-[9px] font-medium text-white/60 outline-none transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white/80 focus-visible:ring-1 focus-visible:ring-white/40',
-                  children: isPhone ? `+${k}` : `+${k} more`,
+                  children: `+${k} more`,
                 })}
               </div>
             ))}
+            {isPhone && wk.counts.map((_, c) => {
+              const total = totals[w * 7 + c] ?? 0;
+              if (total === 0) return null;
+              const date = days[w * 7 + c].fullDate;
+              const first = eventsOnDay(events, date)[0];
+              return (
+                <div key={`count-${c}`} className="pointer-events-none flex min-w-0 justify-center px-1" style={{ gridColumn: c + 1, gridRow: rows }}>
+                  {trigger(`count:${dayKey(date)}`, date, null, {
+                    label: `${total} event${total === 1 ? '' : 's'} on ${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}, open list`,
+                    className: 'pointer-events-auto inline-flex h-5 min-w-[28px] items-center justify-center gap-1 rounded-full border border-white/10 bg-white/[0.06] px-1.5 text-[9px] font-medium tabular-nums text-white/70 outline-none transition-colors hover:border-white/20 hover:bg-white/[0.10] focus-visible:ring-1 focus-visible:ring-white/40',
+                    children: (<><span aria-hidden="true" className="size-1 rounded-full" style={{ background: first?.color || '#FFFFFF' }} />{total}</>),
+                  })}
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
