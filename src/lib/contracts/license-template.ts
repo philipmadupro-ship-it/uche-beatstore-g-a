@@ -11,6 +11,8 @@
  * keys we look for can never drift.
  */
 
+import { applyClauses, termsVariables, termsFlags, TERM_KEYS, TERM_VARIABLE_LIST, type ClauseFlag, type TermsVariables, type TierTerms } from './license-terms';
+
 export interface ContractVariables {
   buyer_name: string;
   buyer_email: string;
@@ -84,14 +86,98 @@ This agreement is binding upon payment and is governed by the laws of the produc
 `;
 
 /**
+ * A default that states the purchased tier's own terms instead of the fixed
+ * Lease / Exclusive prose in DEFAULT_TEMPLATE_MD. Offered as a second choice
+ * in the editor; DEFAULT_TEMPLATE_MD itself never changes, because a producer
+ * who left the template empty is already sending it to buyers.
+ */
+export const TIER_AWARE_TEMPLATE_MD = `# License Agreement
+
+This document confirms that **{{buyer_name}}** ({{buyer_email}}) purchased a **{{tier_name}}** license to the following musical work(s):
+
+**{{track_titles}}**
+
+Granted by **{{producer_name}}** on {{purchase_date}}.
+
+## Grant of Rights
+
+The Producer grants the Licensee the right to use the above work in original musical compositions, subject to the terms below.
+
+- Files delivered: {{file_types}}
+- Stems: {{stems}}
+- Audio streams: {{streaming_limit}}
+- Downloads / physical units: {{distribution_limit}}
+- Commercial use: {{commercial_use}}
+- Sync / film: {{sync_use}}
+- Broadcast / TV: {{broadcast_use}}
+{{#if credit_required}}
+- {{credit_requirement}}
+{{/if}}
+{{#if is_exclusive}}
+- The Producer will not re-sell or re-list the work after this date
+{{/if}}
+{{#unless is_exclusive}}
+- The Producer retains all underlying composition and master rights
+{{/if}}
+
+## Restrictions
+
+- The Licensee may not resell, sublicense, or redistribute the raw work
+- The Licensee may not register the work to a publishing administrator without producer's written consent
+- The Licensee may not claim authorship of the underlying composition
+
+## Receipt
+
+Receipt ID: {{purchase_id}}
+Amount paid: {{price}}
+Producer contact: {{producer_email}}
+
+---
+
+This agreement is binding upon payment and is governed by the laws of the producer's jurisdiction. Both parties acknowledge receipt of this document upon delivery via email.
+`;
+
+export type TemplateVariables = ContractVariables & Partial<TermsVariables>;
+
+/** Every {{key}} the template may use: purchase details + tier terms. */
+export const ALL_VARIABLE_KEYS: readonly string[] = [...VARIABLE_LIST.map((v) => v.key), ...TERM_KEYS];
+
+/**
  * Replace every {{var}} in the template. Unknown variables are left
  * as-is rather than blanked out, so a producer who customises with a
  * variable we haven't defined yet sees their literal text instead of
  * empty space (easier to spot + fix).
+ *
+ * `flags` switches on clause blocks ({{#if flag}}…{{/if}}). Without it the
+ * template is treated exactly as before, directive lines included.
  */
-export function fillTemplate(template: string, vars: ContractVariables): string {
-  return template.replace(/\{\{([a-z_]+)\}\}/g, (match, key) => {
-    if (key in vars) return String(vars[key as keyof ContractVariables]);
+export function fillTemplate(
+  template: string,
+  vars: TemplateVariables,
+  flags?: Record<ClauseFlag, boolean>,
+): string {
+  const body = flags ? applyClauses(template, flags) : template;
+  return body.replace(/\{\{([a-z_]+)\}\}/g, (match, key) => {
+    if (key in vars) return String((vars as unknown as Record<string, string>)[key]);
     return match;
   });
 }
+
+/** Sample purchase details used by every preview. */
+export const SAMPLE_VARIABLES: ContractVariables = Object.fromEntries(
+  VARIABLE_LIST.map((v) => [v.key, v.sample]),
+) as unknown as ContractVariables;
+
+/** Fill a template as a purchase of `tiers` would, with sample purchase details. */
+export function previewTemplate(template: string, tiers: TierTerms[]): string {
+  const tpl = template.trim() ? template : DEFAULT_TEMPLATE_MD;
+  const producer = SAMPLE_VARIABLES.producer_name;
+  const terms = termsVariables(tiers, producer);
+  return fillTemplate(
+    tpl,
+    { ...SAMPLE_VARIABLES, ...terms, license_type: tiers.some((t) => t.is_exclusive) ? 'Exclusive' : 'Lease' },
+    termsFlags(tiers),
+  );
+}
+
+export { TERM_VARIABLE_LIST };
