@@ -48,6 +48,17 @@ const mockLog = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn()
 vi.mock('@/lib/log', () => ({
   createLogger: () => mockLog,
 }));
+const contractFlags = vi.hoisted(() => ({ throwResolve: false }));
+vi.mock('@/lib/contracts/license-contract', async (orig) => {
+  const actual = await orig<typeof import('@/lib/contracts/license-contract')>();
+  return {
+    ...actual,
+    resolveContractTiers: (...args: Parameters<typeof actual.resolveContractTiers>) => {
+      if (contractFlags.throwResolve) throw new Error('resolve boom');
+      return actual.resolveContractTiers(...args);
+    },
+  };
+});
 vi.mock('@/lib/env', () => ({ getAppUrl: () => 'https://example.test' }));
 vi.mock('@/lib/contracts/pdf', () => ({
   renderContractPdf: (...args: unknown[]) => mockRenderContractPdf(...args),
@@ -1279,6 +1290,21 @@ describe('POST /api/stripe/webhook — contract from exact tier terms (LICENSE-0
     expect(contractText()).not.toContain('999,999');
     expect(tierReads).toHaveLength(0);
     expect(alerts(writes)).toHaveLength(0);
+  });
+
+  it('a failure while freezing terms before the upsert never fails a paid checkout', async () => {
+    const { writes } = setup();
+    contractFlags.throwResolve = true;
+    try {
+      const res = await POST(req('{}'));
+      expect(res.status).toBe(200);
+    } finally { contractFlags.throwResolve = false; }
+    const up = writes.find((w) => w.table === 'license_purchases' && w.op === 'upsert')!;
+    expect(up).toBeTruthy();
+    const li = (up.payload as { line_items: Array<Record<string, unknown>> }).line_items[0];
+    expect(li.terms).toBeUndefined();
+    expect(mockLog.warn).toHaveBeenCalledWith(expect.stringMatching(/could not freeze contract terms/), expect.anything());
+    expect(mockResendSend).toHaveBeenCalledTimes(1);
   });
 
   it('contract generation failing does not fail the purchase or the delivery email', async () => {

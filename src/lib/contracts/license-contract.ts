@@ -96,7 +96,7 @@ export function scheduleLines(t: TierTerms, producerName: string): string[] {
     `- Commercial use: ${permitted(t.commercial_rights)}`,
     `- Sync / film: ${permitted(t.sync_rights)}`,
     `- Broadcast / TV: ${permitted(t.broadcast_rights)}`,
-    `- Credit: ${t.credit_required ? (producerName ? `Credit required: prod. ${producerName}` : 'Credit required') : 'No credit required'}`,
+    `- Credit: ${t.credit_required ? (producerName ? `prod. ${producerName}` : 'Required') : 'Not required'}`,
     `- Exclusivity: ${t.is_exclusive ? 'The Producer will not re-sell or re-list the work after the purchase date' : 'Non-exclusive; the Producer may license the work to others'}`,
   ];
 }

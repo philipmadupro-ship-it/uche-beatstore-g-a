@@ -1168,14 +1168,20 @@ export async function POST(req: NextRequest) {
           // contract can be regenerated or checked later whatever the producer
           // edits afterwards. Best-effort: a line that cannot be validated simply
           // carries no `terms` and the contract resolves it (flagged) as before.
-          const termRows = await loadTierRows(admin, customLicenseUUIDs, 'pending');
-          const frozen = resolveContractTiers(resolvedLineItems, termRows);
-          resolvedLineItems.forEach((li, idx) => {
-            if (frozen[idx].source === 'licenses-row') {
-              li.terms = frozen[idx].terms;
-              li.terms_v = TERMS_SNAPSHOT_VERSION;
-            }
-          });
+          try {
+            const termRows = await loadTierRows(admin, customLicenseUUIDs, 'pending');
+            const frozen = resolveContractTiers(resolvedLineItems, termRows);
+            resolvedLineItems.forEach((li, idx) => {
+              if (frozen[idx].source === 'licenses-row') {
+                li.terms = frozen[idx].terms;
+                li.terms_v = TERMS_SNAPSHOT_VERSION;
+              }
+            });
+          } catch (err) {
+            // Paid checkout: nothing here may turn into a 500 and a Stripe retry.
+            for (const li of resolvedLineItems) { delete li.terms; delete li.terms_v; }
+            log.warn('could not freeze contract terms on line items', { sessionId: session.id, error: errorMessage(err) });
+          }
 
           const trackIds = resolvedLineItems.map((i) => i.track_id);
 
