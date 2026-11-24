@@ -20,7 +20,7 @@
  */
 
 import {
-  startStemSplit as demucsStart,
+  startStemSplitFromBlob as demucsStartBlob,
   getStemJob as demucsPoll,
   type DemucsJob,
 } from '@/lib/stems/demucs';
@@ -28,6 +28,8 @@ import {
   startStemSplit as moisesStart,
   getStemSplitStatus as moisesPoll,
 } from '@/lib/stems/moises';
+
+import { getPresignedUrl, readStoredObject } from '@/lib/storage/upload';
 
 const DEMUCS_URL = process.env.DEMUCS_SERVICE_URL ?? 'http://localhost:8001';
 
@@ -89,22 +91,27 @@ export async function pickBackend(): Promise<
 // ---------- start --------------------------------------------------
 
 /**
- * Start a stem-split job on the selected backend. Returns a *prefixed* job_id
- * so polling can route correctly later.
+ * Start a stem-split job on the selected backend from the track's stored audio
+ * reference (an `r2://` master, a local path or an https URL). Demucs gets the
+ * bytes, read server-side, so a private master never needs a public URL;
+ * Moises can only fetch a URL, so a private reference gets a short-lived
+ * presigned one. Returns a *prefixed* job_id so polling can route later.
  */
-export async function startJob(
-  audioUrl: string,
+export async function startJobFromSource(
+  sourceRef: string,
   model: string = 'htdemucs',
 ): Promise<{ jobId: string; backend: StemBackend }> {
   const pick = await pickBackend();
   if (!pick.ok) throw new Error(pick.reason);
 
   if (pick.backend === 'demucs') {
-    const id = await demucsStart(audioUrl, model);
+    const bytes = await readStoredObject(sourceRef);
+    const filename = sourceRef.split('/').pop()?.split('?')[0] || 'audio.wav';
+    const id = await demucsStartBlob(new Blob([new Uint8Array(bytes)]), filename, model);
     return { jobId: `demucs:${id}`, backend: 'demucs' };
   }
-  // Moises
-  const id = await moisesStart(audioUrl);
+  const url = sourceRef.startsWith('r2://') ? await getPresignedUrl(sourceRef) : sourceRef;
+  const id = await moisesStart(url);
   return { jobId: `moises:${id}`, backend: 'moises' };
 }
 

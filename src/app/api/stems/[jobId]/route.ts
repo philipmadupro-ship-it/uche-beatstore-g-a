@@ -1,209 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { pollJob, downloadStem } from '@/lib/stems/dispatch';
-import { isSupabaseConfigured, getAll, update, getById, createServiceClient } from '@/lib/db';
-import { uploadAudio } from '@/lib/storage/upload';
-import { stemName } from '@/lib/naming';
-import { autoDeliverStems } from '@/lib/stems/auto-deliver';
+import { isSupabaseConfigured } from '@/lib/db';
+import { defaultStemStore } from '@/lib/stems/store';
+import { authorizeStemJob, isValidJobId } from '@/lib/stems/authorize';
+import { toStemJobView } from '@/lib/stems/view';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { authorizeStemJob, isValidJobId } from '@/lib/stems/authorize';
 const log = createLogger('api.stems.jobId');
 
-const CORE_STEMS = ['vocals', 'drums', 'bass', 'other'] as const;
-
-interface StemRow {
-  id: string;
-  track_id?: string | null;
-  job_id: string;
-  status?: string | null;
-  vocals_url?: string | null;
-  drums_url?: string | null;
-  bass_url?: string | null;
-  other_url?: string | null;
-  created_at?: string | null;
-}
-
 /**
- * GET /api/stems/[jobId]
+ * GET /api/stems/[jobId] — read-only status of one job (AUDIO-05).
  *
- * Polls the Demucs service. When the job completes, downloads each stem
- * from the service and re-uploads to R2 with semantic filenames
- * (`{Track Title} — {Stem}.wav`), so final stem URLs are durable and meaningful.
+ * This used to poll the backend and, on completion, download and re-upload
+ * every stem inside the request. That work is the pipeline driver's now
+ * (`lib/stems/pipeline.ts`); a poll only reads the row, so a closed tab no
+ * longer strands a job and two polls cannot both ingest.
  */
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
   const { jobId } = await params;
-
-  // Ownership gate — only the track's owner may read this job (was previously
-  // resolvable by anyone who knew the opaque job id).
   if (!isValidJobId(jobId)) return NextResponse.json({ error: 'Invalid job id' }, { status: 400 });
   const denied = await authorizeStemJob(jobId);
   if (denied) return denied;
 
   try {
-    // pollJob() parses the prefix and routes to demucs/moises. Bare ids
-    // (pre-dispatcher rows) are treated as demucs for back-compat.
-    const job = await pollJob(jobId).catch(() => null);
-
-    if (!job) {
-      const allStems = getAll<StemRow>('stems');
-      const localJob = allStems.find((s) => s.job_id === jobId);
-      if (!localJob) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-      return NextResponse.json({ job: localJob });
+    const store = defaultStemStore(isSupabaseConfigured());
+    const candidates = jobId.includes(':') ? [jobId] : [jobId, `demucs:${jobId}`, `moises:${jobId}`];
+    let row = null;
+    for (const id of candidates) {
+      row = await store.findByJobId(id);
+      if (row) break;
     }
+    if (!row) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
 
-    const appStatus =
-      job.status === 'done'
-        ? 'completed'
-        : job.status === 'error'
-          ? 'failed'
-          : job.status;
-
-    // If already persisted, short-circuit and return the stored URLs
-    if (job.status === 'done') {
-      const existing = await loadStemRow(jobId);
-      if (existing && existing.vocals_url && !existing.vocals_url.startsWith('/api/stems/')) {
-        return NextResponse.json({
-          job: {
-            job_id: jobId,
-            status: 'completed',
-            progress: 100,
-            model: job.model,
-            stems: {
-              vocals: existing.vocals_url,
-              drums: existing.drums_url,
-              bass: existing.bass_url,
-              other: existing.other_url,
-            },
-            error: null,
-          },
-        });
-      }
-    }
-
-    const stemUrls: Record<string, string> = {};
-    if (job.status === 'done') {
-      // Resolve track title for semantic naming
-      const trackTitle = await resolveTrackTitle(jobId);
-
-      // Download each stem from whichever backend produced it and re-upload
-      // to R2 so the final URLs are durable (Moises CDN links may rotate;
-      // local Demucs paths only work while the service is running).
-      for (const [name, cdnUrl] of Object.entries(job.stems)) {
-        try {
-          const buffer = await downloadStem(jobId, name, cdnUrl);
-          const semantic = stemName(trackTitle, name);
-          const filename = `${semantic.replace(/[^\w\-— ]+/g, '').trim() || `stem-${name}`}.wav`;
-          const url = await uploadAudio(buffer, filename, 'audio/wav');
-          stemUrls[name] = url;
-        } catch (err) {
-          log.warn(`Stem upload failed for ${name}:`, { error: errorMessage(err) });
-        }
-      }
-    }
-
-    const uploadedAllCoreStems = CORE_STEMS.every((name) => !!stemUrls[name]);
-
-    if (job.status === 'done') {
-      const dbUpdate = {
-        status: uploadedAllCoreStems ? 'done' : 'failed',
-        vocals_url: stemUrls['vocals'] ?? null,
-        drums_url: stemUrls['drums'] ?? null,
-        bass_url: stemUrls['bass'] ?? null,
-        other_url: stemUrls['other'] ?? null,
-      };
-      let trackId: string | null = null;
-
-      if (isSupabaseConfigured()) {
-        const supabase = createServiceClient();
-        const { data: stemRow } = await supabase
-          .from('stems')
-          .select('track_id')
-          .eq('job_id', jobId)
-          .maybeSingle();
-        trackId = stemRow?.track_id ?? null;
-        await supabase.from('stems').update(dbUpdate).eq('job_id', jobId);
-        if (trackId) {
-          await supabase
-            .from('tracks')
-            .update({ stems_status: uploadedAllCoreStems ? 'done' : 'failed' })
-            .eq('id', trackId);
-        }
-        if (uploadedAllCoreStems && trackId) {
-          void autoDeliverStems(supabase, trackId);
-        }
-      } else {
-        const allStems = getAll<StemRow>('stems');
-        const localJob = allStems.find((s) => s.job_id === jobId);
-        if (localJob) {
-          trackId = localJob.track_id ?? null;
-          update('stems', localJob.id, dbUpdate);
-          if (trackId) update('tracks', trackId, { stems_status: uploadedAllCoreStems ? 'done' : 'failed' });
-        }
-      }
-
-      if (!uploadedAllCoreStems) {
-        return NextResponse.json({
-          job: {
-            job_id: jobId,
-            status: 'failed',
-            progress: 100,
-            model: job.model,
-            stems: stemUrls,
-            error: 'Stem extraction finished, but one or more stems could not be stored. Retry the split or upload stems manually.',
-          },
-        });
-      }
-    }
-
+    const view = toStemJobView(row);
     return NextResponse.json({
       job: {
         job_id: jobId,
-        status: appStatus,
-        progress: job.progress,
-        model: job.model,
-        stems: stemUrls,
-        error: job.error ?? null,
+        // 'completed' / 'failed' keep the wire words older clients branch on.
+        status: view.status === 'ready' ? 'completed' : view.status === 'queued' ? 'pending' : view.status,
+        progress: view.status === 'ready' ? 100 : null,
+        stems: view.stems ?? {},
+        error: view.error,
       },
     });
   } catch (error: unknown) {
-    log.error('Stem poll error:', { error: errorMessage(error) });
+    log.error('Stem status error:', { error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
-}
-
-async function loadStemRow(jobId: string): Promise<StemRow | null> {
-  if (isSupabaseConfigured()) {
-    const supabase = createServiceClient();
-    const { data } = await supabase.from('stems').select('*').eq('job_id', jobId).maybeSingle();
-    return data ?? null;
-  }
-  const all = getAll<StemRow>('stems');
-  return all.find((s) => s.job_id === jobId) ?? null;
-}
-
-async function resolveTrackTitle(jobId: string): Promise<string> {
-  try {
-    if (isSupabaseConfigured()) {
-      const supabase = createServiceClient();
-      const { data: stemRow } = await supabase.from('stems').select('track_id').eq('job_id', jobId).maybeSingle();
-      if (stemRow?.track_id) {
-        const { data: track } = await supabase.from('tracks').select('title').eq('id', stemRow.track_id).maybeSingle();
-        if (track?.title) return track.title;
-      }
-    } else {
-      const stemRow = getAll<StemRow>('stems').find((s) => s.job_id === jobId);
-      if (stemRow?.track_id) {
-        const track = getById<{ title?: string | null }>('tracks', stemRow.track_id);
-        if (track?.title) return track.title;
-      }
-    }
-  } catch (err) {
-    log.warn('Resolve track title failed:', { error: errorMessage(err) });
-  }
-  return 'Track';
 }
 
 export async function HEAD() {

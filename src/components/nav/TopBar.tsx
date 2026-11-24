@@ -240,12 +240,12 @@ export function TopBar() {
     <>
       <header className="fixed top-0 left-0 right-0 bg-[var(--background-primary)]/95 backdrop-blur-md border-b border-white/10 z-30">
         {/* ── Row 1: brand · hubs · utilities ─────────────────────── */}
-        <div className="h-14 flex items-center px-4 md:px-6 gap-3 md:gap-5">
+        <div className="h-14 flex items-center px-4 md:px-6 gap-3 md:gap-2.5 xl:gap-5">
           {/* Brand — the producer's logo when they have set one. Contained
               rather than covered: a wide wordmark cropped to fill loses its
               ends, and this is the one place the mark has to stay legible at
               24px. */}
-          <Link href={homeHref} aria-label={shell ? `${shell.org.name} home` : 'Home'} className="flex items-center gap-2.5 group shrink-0">
+          <Link href={homeHref} aria-label={shell ? `${shell.org.name} home` : 'Home'} className="flex items-center gap-2.5 group shrink-0 -m-2.5 p-2.5">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -258,7 +258,7 @@ export function TopBar() {
                 <span className="text-[10px] font-black text-black tracking-tighter">U2C</span>
               </div>
             )}
-            <span className="max-w-[16rem] truncate text-[11px] font-semibold tracking-[0.22em] uppercase text-white/90 group-hover:text-white hidden lg:inline">
+            <span className="max-w-[16rem] truncate text-[11px] font-semibold tracking-[0.22em] uppercase text-white/90 group-hover:text-white hidden xl:inline">
               {shell ? shell.org.name : 'u2c beatstore'}
             </span>
           </Link>
@@ -282,12 +282,13 @@ export function TopBar() {
           {/* Search (⌘K) — desktop. /api/search is producer-only. */}
           {producerChrome && (<button
             onClick={() => openPalette(true)}
-            className="hidden md:flex items-center gap-2 w-48 lg:w-56 bg-white/[0.04] border border-white/10 rounded-md py-1.5 px-3 text-[11px] text-white/60 hover:border-white/20 hover:text-white transition-colors shrink-0"
+            className="hidden md:flex items-center justify-center gap-2 size-9 xl:size-auto xl:w-56 xl:justify-start bg-white/[0.04] border border-white/10 rounded-md xl:py-1.5 xl:px-3 text-[11px] text-white/60 hover:border-white/20 hover:text-white transition-colors shrink-0"
             title="Search (⌘K)"
+            aria-label="Search"
           >
             <Search size={14} />
-            <span className="flex-1 text-left">Search</span>
-            <kbd className="text-[9px] font-mono border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
+            <span className="hidden xl:inline flex-1 text-left">Search</span>
+            <kbd className="hidden xl:inline text-[9px] font-mono border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
           </button>)}
 
           {/* Session tempo + key. The only always-visible chrome that can host

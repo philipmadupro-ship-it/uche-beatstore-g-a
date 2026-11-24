@@ -20,7 +20,8 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { compareFeatured } from '@/lib/store/newest';
 import { appearanceStyle } from '@/lib/store/typography';
 import { PageContainer } from '@/components/layout/PageHeader';
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { autosizeHeight } from '@/lib/ui/textarea-autosize';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import Image from 'next/image';
 import {
@@ -251,6 +252,18 @@ function LicenseTemplateEditor({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [preview, setPreview] = useState(false);
 
+  // Grow with the content (min 160px, max 480px, scroll past it). Runs on every
+  // value change — typing, "Use default", a placeholder chip — and when leaving
+  // Preview, because that remounts the textarea.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const { height, scroll } = autosizeHeight(el.scrollHeight);
+    el.style.height = `${height}px`;
+    el.style.overflowY = scroll ? 'auto' : 'hidden';
+  }, [value, preview]);
+
   const insertVar = (key: string) => {
     const el = textareaRef.current;
     if (!el) {
@@ -320,7 +333,6 @@ function LicenseTemplateEditor({
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          rows={20}
           placeholder="Leave empty to use the default template."
           className={`${textareaCls} font-mono text-[11px] leading-relaxed`}
         />
@@ -1937,7 +1949,7 @@ export default function StoreEditorPage() {
       <PageContainer className="md:pt-10 pb-32">
 
         {/* ── Page header ── */}
-        <div className="mb-5 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mb-5 flex flex-col gap-4 sm:mb-8 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-1">Dashboard</p>
             <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">
@@ -1947,7 +1959,7 @@ export default function StoreEditorPage() {
               Customise your public beatstore — changes go live instantly on save.
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1 sm:mt-1 sm:justify-end sm:pb-0">
+          <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1 lg:mt-1 lg:justify-end lg:pb-0">
             <div className="flex shrink-0 items-center rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
               {(['design', 'content'] as const).map((mode) => (
                 <button

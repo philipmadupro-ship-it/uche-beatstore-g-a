@@ -41,7 +41,15 @@ export async function startStemSplit(
 
   const audioBlob = await audioRes.blob();
   const filename = audioUrl.split('/').pop() ?? 'audio.wav';
+  return startStemSplitFromBlob(audioBlob, filename, model);
+}
 
+/** Submit audio bytes the caller already holds (a private object read server-side). */
+export async function startStemSplitFromBlob(
+  audioBlob: Blob,
+  filename: string,
+  model: string = 'htdemucs',
+): Promise<string> {
   const form = new FormData();
   form.append('file', audioBlob, filename);
   form.append('model', model);
