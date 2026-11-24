@@ -197,7 +197,7 @@ export function MonthGrid({
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onAddEvent(day.fullDate); }}
-                    className="tap absolute right-1.5 top-1 flex size-5 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-white/60 opacity-0 transition-opacity hover:border-white/20 hover:text-white focus-visible:opacity-100 group-hover:opacity-100"
+                    className="tap absolute right-1 top-1 flex size-8 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-white/60 opacity-0 transition-opacity hover:border-white/20 hover:text-white focus-visible:opacity-100 group-hover:opacity-100"
                     aria-label={`Add event on ${day.fullDate.toLocaleDateString()}`}
                   >
                     <Plus size={10} aria-hidden="true" />

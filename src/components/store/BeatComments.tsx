@@ -154,7 +154,7 @@ export function BeatComments({
               placeholder={`Say something at ${fmtTs(effectiveTs)}…`}
               maxLength={500}
               onKeyDown={(e) => { if (e.key === 'Enter' && canPost) post.mutate(); }}
-              className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
+              className="min-w-0 flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
             />
             <button
               type="button"
