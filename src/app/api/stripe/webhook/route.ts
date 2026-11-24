@@ -21,6 +21,7 @@ import {
   emailFailureHint,
 } from '@/lib/stripe/payments-config';
 import { linkBuyerToCrm } from '@/lib/contacts/link-buyer';
+import { formatUsd } from '@/lib/notifications/presentation';
 import {
   legacyLicenseFileTypes,
   normalizeLicenseFileTypes,
@@ -1179,7 +1180,7 @@ export async function POST(req: NextRequest) {
               await admin.from('notifications').insert({
                 user_id: meta.seller_user_id,
                 kind: 'purchase',
-                title: `New sale — ${beatLabel} ($${amountUsd})`,
+                title: `New sale — ${beatLabel} (${formatUsd(amountUsd)})`,
                 body: `From ${meta.buyer_email || session.customer_email || 'a buyer'}`,
                 data: {
                   session_id: session.id,
@@ -1221,15 +1222,15 @@ export async function POST(req: NextRequest) {
               .maybeSingle();
             const partial = partialPurchase as PurchaseNotificationRow | null;
             if (partial?.seller_user_id) {
-              const refunded = typeof charge.amount_refunded === 'number'
-                ? `$${(charge.amount_refunded / 100).toFixed(2)}`
-                : 'Part';
+              const refundedLabel = typeof charge.amount_refunded === 'number'
+                ? `${formatUsd(charge.amount_refunded / 100)} of ${formatUsd(partial.amount_usd)}`
+                : `of ${formatUsd(partial.amount_usd)}`;
               await admin.from('notifications').insert({
                 user_id: partial.seller_user_id,
                 kind: 'refund',
-                title: `Partial refund — ${refunded} of $${Number(partial.amount_usd ?? 0).toFixed(2)}`,
+                title: `Partial refund — ${refundedLabel}`,
                 body: `${partial.buyer_email ?? 'The buyer'} keeps their downloads. Refund the rest in Stripe to revoke them.`,
-                data: { payment_intent: charge.payment_intent, amount_refunded: charge.amount_refunded ?? null },
+                data: { payment_intent: charge.payment_intent, amount_refunded: charge.amount_refunded ?? null, outcome: 'partial' },
               });
             }
           } catch (ne) {
@@ -1304,7 +1305,7 @@ export async function POST(req: NextRequest) {
           const purchaseNotification = purchaseForNotif as PurchaseNotificationRow | null;
           if (purchaseNotification?.seller_user_id) {
             const kindLabel = event.type === 'charge.refunded' ? 'refund' : 'dispute';
-            const amtLabel = `$${Number(purchaseNotification.amount_usd ?? 0).toFixed(2)}`;
+            const amtLabel = formatUsd(purchaseNotification.amount_usd);
             await admin.from('notifications').insert({
               user_id: purchaseNotification.seller_user_id,
               kind: kindLabel,
@@ -1312,7 +1313,7 @@ export async function POST(req: NextRequest) {
                 ? `Refund issued — ${amtLabel}`
                 : `Dispute opened — ${amtLabel}`,
               body: purchaseNotification.buyer_email ?? undefined,
-              data: { payment_intent: charge.payment_intent, amount_usd: purchaseNotification.amount_usd },
+              data: { payment_intent: charge.payment_intent, amount_usd: purchaseNotification.amount_usd, outcome: event.type === 'charge.refunded' ? 'full' : 'opened' },
             });
           }
         } catch (ne) {
@@ -1446,7 +1447,7 @@ export async function POST(req: NextRequest) {
                 .maybeSingle();
           const sale = (licenseSale ?? bundleSale) as PurchaseNotificationRow | null;
           if (sale?.seller_user_id) {
-            const amount = `$${Number(sale.amount_usd ?? 0).toFixed(2)}`;
+            const amount = formatUsd(sale.amount_usd);
             const won = effect === 'restore';
             await admin.from('notifications').insert({
               user_id: sale.seller_user_id,
@@ -1457,7 +1458,12 @@ export async function POST(req: NextRequest) {
               body: won
                 ? `${sale.buyer_email ?? 'The buyer'}'s downloads ${restored ? 'are restored' : 'could not be restored automatically — check /sales'}.`
                 : `${sale.buyer_email ?? 'The buyer'}'s downloads stay revoked.`,
-              data: { payment_intent: paymentIntent, dispute_status: dispute.status ?? null, restored },
+              data: {
+                payment_intent: paymentIntent,
+                dispute_status: dispute.status ?? null,
+                restored,
+                outcome: dispute.status === 'warning_closed' ? 'inquiry_closed' : won ? 'won' : 'lost',
+              },
             });
           }
         } catch (ne) {

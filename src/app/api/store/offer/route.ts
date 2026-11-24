@@ -9,6 +9,7 @@ import { createLogger } from '@/lib/log';
 import { emailShell, emailHeading, escapeHtml } from '@/lib/email/templates';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { sessionBuyerEmail } from '@/lib/store/buyer-purchases';
+import { formatUsd } from '@/lib/notifications/presentation';
 import { isMissingOfferVerifiedColumn, resolveOfferIdentity } from '@/lib/store/offer-identity';
 
 export const runtime = 'nodejs';
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest) {
     }
     if (offerErr || !offer) throw offerErr ?? new Error('offer insert returned no row');
 
-    const priceLabel = `$${offered_price_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+    const priceLabel = formatUsd(offered_price_usd);
 
     // 2. Producer notification (real-time bell).
     await admin.from('notifications').insert({

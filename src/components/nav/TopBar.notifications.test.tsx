@@ -92,7 +92,7 @@ describe('TopBar bell', () => {
   it('clicking an unread ask reads it through the org route and opens the song it is about', async () => {
     render(<OrgShellProvider value={shell()}><TopBar /></OrgShellProvider>);
     fireEvent.click(bell());
-    fireEvent.click(await screen.findByRole('button', { name: /Open "Ada assigned you a task"/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Ada assigned you a task/ }));
     await waitFor(() => expect(push).toHaveBeenCalledWith(`/o/night-shift/songs/${SONG}`));
     expect(urls).toContain('PATCH /api/org/o1/notifications?action=read');
   });
