@@ -70,7 +70,7 @@ function DayList({ events, focusId }: { events: MonthGridEvent[]; focusId: strin
         >
           <span className="mt-0.5 shrink-0" style={{ color: ev.color || '#FFFFFF' }}><EventIcon type={ev.type} size={11} /></span>
           <span className="min-w-0 flex-1">
-            <span className="block break-words text-[12px] leading-snug text-white/80">{ev.title}</span>
+            <span className="block break-words text-[11px] leading-snug text-white/80">{ev.title}</span>
             <span className="mt-0.5 block text-[10px] font-mono uppercase tracking-wider text-white/40">
               {ev.type || 'event'} · {spanLabel(ev)}
             </span>
