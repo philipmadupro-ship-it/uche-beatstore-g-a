@@ -20,7 +20,8 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { compareFeatured } from '@/lib/store/newest';
 import { appearanceStyle } from '@/lib/store/typography';
 import { PageContainer } from '@/components/layout/PageHeader';
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { autosizeHeight } from '@/lib/ui/textarea-autosize';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import Image from 'next/image';
 import {
@@ -251,6 +252,18 @@ function LicenseTemplateEditor({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [preview, setPreview] = useState(false);
 
+  // Grow with the content (min 160px, max 480px, scroll past it). Runs on every
+  // value change — typing, "Use default", a placeholder chip — and when leaving
+  // Preview, because that remounts the textarea.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const { height, scroll } = autosizeHeight(el.scrollHeight);
+    el.style.height = `${height}px`;
+    el.style.overflowY = scroll ? 'auto' : 'hidden';
+  }, [value, preview]);
+
   const insertVar = (key: string) => {
     const el = textareaRef.current;
     if (!el) {
@@ -320,7 +333,6 @@ function LicenseTemplateEditor({
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          rows={20}
           placeholder="Leave empty to use the default template."
           className={`${textareaCls} font-mono text-[11px] leading-relaxed`}
         />
