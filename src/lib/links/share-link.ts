@@ -29,6 +29,9 @@ export interface ShareLinkFacts extends ShareLinkRef {
   title: string | null;
   content_title?: string | null;
   kind?: string | null;
+  /** client | producer | rapper | friend — only rows that carry it get the Recipient facet. */
+  recipient_kind?: string | null;
+  created_at?: string | null;
   /**
    * Page opens, despite the column name: both share routes increment it each
    * time the page is loaded, before anything is played. Show it through
@@ -141,29 +144,154 @@ export function fromSharePatchResponse<T extends ShareLinkFacts>(
 export const LINK_FILTERS = ['All', 'Active', 'Expired', 'Protected', 'Downloads'] as const;
 export type LinkFilter = (typeof LINK_FILTERS)[number];
 
+// ── Facets ───────────────────────────────────────────────────────────────
+// Within a group any selection matches; across groups all must — the same rule
+// as the Library's Tags facet.
+export const LINK_STATUS_FACETS = ['active', 'expired', 'revoked', 'unopened'] as const;
+export const LINK_KIND_FACETS = ['track', 'project', 'playlist'] as const;
+export const LINK_RECIPIENT_FACETS = ['client', 'producer', 'rapper', 'friend'] as const;
+export const LINK_OPTION_FACETS = ['password', 'downloads_on', 'downloads_off'] as const;
+export const LINK_SORTS = ['newest', 'oldest', 'opens', 'expiring', 'title'] as const;
+
+export type LinkStatusFacet = (typeof LINK_STATUS_FACETS)[number];
+export type LinkKindFacet = (typeof LINK_KIND_FACETS)[number];
+export type LinkRecipientFacet = (typeof LINK_RECIPIENT_FACETS)[number];
+export type LinkOptionFacet = (typeof LINK_OPTION_FACETS)[number];
+export type LinkSort = (typeof LINK_SORTS)[number];
+
+export const DEFAULT_LINK_SORT: LinkSort = 'newest';
+
+export interface LinkFacets {
+  status: ReadonlySet<LinkStatusFacet>;
+  kind: ReadonlySet<LinkKindFacet>;
+  recipient: ReadonlySet<LinkRecipientFacet>;
+  options: ReadonlySet<LinkOptionFacet>;
+}
+
+export function emptyLinkFacets(): LinkFacets {
+  return { status: new Set(), kind: new Set(), recipient: new Set(), options: new Set() };
+}
+
+export function hasActiveLinkFacets(f: LinkFacets): boolean {
+  return f.status.size + f.kind.size + f.recipient.size + f.options.size > 0;
+}
+
+/** What the row's `kind` says, folded to the three facet values ('share'/unknown → none). */
+export function linkKindOf(link: Pick<ShareLinkFacts, 'kind'>): LinkKindFacet | null {
+  const k = (link.kind ?? '').toLowerCase();
+  return (LINK_KIND_FACETS as readonly string[]).includes(k) ? (k as LinkKindFacet) : null;
+}
+
+function statusMatches(link: ShareLinkFacts, s: LinkStatusFacet, now: Date): boolean {
+  switch (s) {
+    case 'revoked':
+      return Boolean(link.revoked_at);
+    case 'expired':
+      return isShareLinkExpired(link, now);
+    case 'active':
+      return !isShareLinkExpired(link, now);
+    case 'unopened':
+      return !(typeof link.plays === 'number' && link.plays > 0);
+  }
+}
+
+function optionMatches(link: ShareLinkFacts, o: LinkOptionFacet): boolean {
+  switch (o) {
+    case 'password':
+      return link.password_protected;
+    case 'downloads_on':
+      return link.allow_downloads !== false;
+    case 'downloads_off':
+      return link.allow_downloads === false;
+  }
+}
+
 /**
  * Facet + text filter for the list.
  *
- * Matches title, token and kind, because a link the producer has not titled is
- * only findable by its token — which is exactly the link they are most likely
- * to be hunting for.
+ * Text matches title, content title, token and kind: a link the producer has
+ * not titled is only findable by its token, and a renamed one by what it points
+ * at. `facets` is optional so the legacy single-select `filter` keeps working.
  */
 export function filterShareLinks<T extends ShareLinkFacts>(
   links: T[],
-  opts: { filter: LinkFilter; search: string; now?: Date },
+  opts: { filter?: LinkFilter; search: string; facets?: LinkFacets; now?: Date },
 ): T[] {
   const q = opts.search.trim().toLowerCase();
   const now = opts.now ?? new Date();
+  const filter = opts.filter ?? 'All';
+  const f = opts.facets;
   return links.filter((link) => {
     const expired = isShareLinkExpired(link, now);
-    if (opts.filter === 'Active' && expired) return false;
-    if (opts.filter === 'Expired' && !expired) return false;
-    if (opts.filter === 'Protected' && !link.password_protected) return false;
-    if (opts.filter === 'Downloads' && link.allow_downloads === false) return false;
+    if (filter === 'Active' && expired) return false;
+    if (filter === 'Expired' && !expired) return false;
+    if (filter === 'Protected' && !link.password_protected) return false;
+    if (filter === 'Downloads' && link.allow_downloads === false) return false;
+    if (f) {
+      if (f.status.size && !Array.from(f.status).some((s) => statusMatches(link, s, now))) return false;
+      if (f.kind.size) {
+        const k = linkKindOf(link);
+        if (!k || !f.kind.has(k)) return false;
+      }
+      if (f.recipient.size) {
+        const r = (link.recipient_kind ?? '').toLowerCase() as LinkRecipientFacet;
+        if (!f.recipient.has(r)) return false;
+      }
+      if (f.options.size && !Array.from(f.options).some((o) => optionMatches(link, o))) return false;
+    }
     if (q) {
-      const haystack = `${link.title ?? ''} ${link.token} ${link.kind ?? ''}`.toLowerCase();
+      const haystack =
+        `${link.title ?? ''} ${link.content_title ?? ''} ${link.token} ${link.kind ?? ''}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;
+  });
+}
+
+function time(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+function labelOf(l: ShareLinkFacts): string {
+  return (l.title || l.content_title || l.token || '').toLowerCase();
+}
+
+/**
+ * Sorted copy. Ties fall back to newest, then token, so the order is stable
+ * between renders. "Expiring soon" lists live links by nearest expiry; links
+ * with no expiry follow, and expired/revoked ones go last.
+ */
+export function sortShareLinks<T extends ShareLinkFacts>(
+  links: T[],
+  sort: LinkSort,
+  now: Date = new Date(),
+): T[] {
+  const created = (l: T) => time(l.created_at) ?? 0;
+  const tie = (a: T, b: T) => created(b) - created(a) || a.token.localeCompare(b.token);
+  const rank = (l: T): number => {
+    if (isShareLinkExpired(l, now)) return 2;
+    return time(l.expires_at) === null ? 1 : 0;
+  };
+  return links.slice().sort((a, b) => {
+    switch (sort) {
+      case 'oldest':
+        return created(a) - created(b) || a.token.localeCompare(b.token);
+      case 'opens':
+        return (b.plays ?? 0) - (a.plays ?? 0) || tie(a, b);
+      case 'title':
+        return labelOf(a).localeCompare(labelOf(b)) || tie(a, b);
+      case 'expiring': {
+        const ra = rank(a);
+        const rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        if (ra === 0) return (time(a.expires_at) ?? 0) - (time(b.expires_at) ?? 0) || tie(a, b);
+        return tie(a, b);
+      }
+      case 'newest':
+      default:
+        return tie(a, b);
+    }
   });
 }

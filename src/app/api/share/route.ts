@@ -4,6 +4,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured, insert, getAll, createServiceClient } from '@/lib/db';
 import { requireProducer } from '@/lib/auth/ownership';
 import { newShareToken } from '@/lib/share/token-access';
+import { withFreshToken } from '@/lib/share/token-mint';
 import bcrypt from 'bcryptjs';
 import { errorMessage } from '@/lib/errors';
 import { writeWithPlayback } from '@/lib/share/playback';
@@ -108,22 +109,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const { data, error } = await writeWithPlayback(fullPlayback, (fields) =>
+      const { data, error, token: mintedToken } = await withFreshToken((attemptToken) => writeWithPlayback(fullPlayback, (fields) =>
         owner.admin
           .from('share_links')
-          .insert({ ...payload, ...fields, user_id: owner.userId })
+          .insert({ ...payload, token: attemptToken, ...fields, user_id: owner.userId })
           .select()
           .single(),
-      );
+      ));
 
       if (error?.code === 'PLAYBACK_MIGRATION') {
         return NextResponse.json({ error: error.message }, { status: 409 });
       }
       if (error) throw error;
       return NextResponse.json({
-        url: `${APP_URL}/share/${token}`,
+        url: `${APP_URL}/share/${mintedToken}`,
         ...data,
-        token,
+        token: mintedToken,
       });
     } else {
       const data = insert('share_links', { ...payload, full_playback: fullPlayback !== false });
