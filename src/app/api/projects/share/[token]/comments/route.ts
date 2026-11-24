@@ -14,6 +14,7 @@ import { createLogger } from '@/lib/log';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { shareCommentNotification } from '@/lib/notifications/share-comment';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
+import { attributedAuthor, contactRefOf, type ContactRef } from '@/lib/share/collaborator';
 import { PUBLIC_COMMENT_VISIBILITY } from '@/lib/labelos/comment-visibility';
 const log = createLogger('api.projects.share.token.comments');
 
@@ -151,50 +152,91 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       );
     }
 
-    const { data, error } = await gate.admin
+    // Who the producer invited with this link, if anyone. Taken from the share
+    // row only — a name typed on this public page is never identity — and read
+    // under the project owner's id so a stale or foreign contact is ignored.
+    const projectId = gate.share.project_id;
+    const { data: project } = projectId
+      ? await gate.admin.from('projects').select('user_id, name').eq('id', projectId).maybeSingle()
+      : { data: null };
+    let invited: ContactRef | null = null;
+    const shareContactId = (gate.share as { contact_id?: string | null }).contact_id;
+    if (shareContactId && project?.user_id) {
+      const { data: contact, error: contactErr } = await gate.admin
+        .from('contacts')
+        .select('id, name')
+        .eq('id', shareContactId)
+        .eq('user_id', project.user_id)
+        .maybeSingle();
+      if (contactErr) log.warn('share contact lookup failed', { error: contactErr.message });
+      invited = contactRefOf(contact);
+    }
+
+    const row = {
+      project_id: gate.share.project_id,
+      track_id: trackId,
+      user_id: null,
+      share_token: token,
+      author_name: authorName,
+      body: text,
+      parent_id: parentId,
+      region_start: regionStart,
+      region_end: regionEnd,
+    };
+    let { data, error } = await gate.admin
       .from('project_comments')
-      .insert({
-        project_id: gate.share.project_id,
-        track_id: trackId,
-        user_id: null,
-        share_token: token,
-        author_name: authorName,
-        body: text,
-        parent_id: parentId,
-        region_start: regionStart,
-        region_end: regionEnd,
-      })
+      .insert(invited ? { ...row, share_contact_id: invited.id } : row)
       .select()
       .single();
+    // Before migration 204 the column is missing: save the comment without the
+    // attribution rather than losing the feedback.
+    if (error && invited && isMissingSchema(error)) {
+      invited = null;
+      ({ data, error } = await gate.admin.from('project_comments').insert(row).select().single());
+    }
     if (error) throw error;
 
     // Tell the producer. Best-effort: the comment is saved either way, and a
     // failed notification must not turn a successful post into an error.
     try {
-      const projectId = gate.share.project_id;
-      const { data: project } = projectId
-        ? await gate.admin.from('projects').select('user_id, name').eq('id', projectId).maybeSingle()
-        : { data: null };
       if (projectId && project?.user_id) {
-        const { error: notifyErr } = await gate.admin.from('notifications').insert(shareCommentNotification({
+        const note = shareCommentNotification({
           ownerId: project.user_id,
           projectId,
           projectName: project.name,
-          authorName,
+          authorName: attributedAuthor(authorName, invited?.name),
           body: text,
           commentId: data.id,
           shareToken: token,
           shareLabel: typeof gate.share.label === 'string' ? gate.share.label : null,
           trackId,
           isReply: parentId != null,
-        }));
-        if (notifyErr) log.warn('share comment notification insert failed', { error: notifyErr.message });
+          contactId: invited?.id ?? null,
+        });
+        const [nRes, aRes] = await Promise.all([
+          gate.admin.from('notifications').insert(note),
+          invited
+            ? gate.admin.from('contact_activity').insert({
+                contact_id: invited.id,
+                user_id: project.user_id,
+                kind: 'share_comment',
+                title: note.title,
+                body: text.slice(0, 1000),
+                metadata: { comment_id: data.id, project_id: projectId, track_id: trackId },
+              })
+            : Promise.resolve({ error: null }),
+        ]);
+        if (nRes.error) log.warn('share comment notification insert failed', { error: nRes.error.message });
+        if (aRes.error) log.warn('share comment timeline row failed', { error: aRes.error.message });
       }
     } catch (notifyError) {
       log.warn('share comment notification failed', { error: errorMessage(notifyError) });
     }
 
-    return NextResponse.json({ comment: data });
+    // The poster gets their own comment back as the public shape: never the contact link.
+    const { share_contact_id: _hidden, ...publicComment } = data as Record<string, unknown>;
+    void _hidden;
+    return NextResponse.json({ comment: publicComment });
   } catch (error: unknown) {
     log.error('Project comment error:', { error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });

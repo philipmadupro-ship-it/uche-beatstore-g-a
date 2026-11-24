@@ -273,6 +273,8 @@ export const ProjectShareCreateBodySchema = z.object({
   expires_days: z.number().int().min(0).max(365).optional(),
   password: z.string().min(1).max(200).optional().nullable(),
   invited_email: z.string().email().optional().nullable(),
+  /** SHARE-07: the producer's own contact this link is for. Checked against the owner; the identity of comments left through the link. */
+  contact_id: z.string().uuid().optional().nullable(),
   label: z.string().max(200).optional().nullable(),
   recipient_kind: z.enum(['client', 'producer', 'rapper', 'friend']).optional(),
   // When true the share page renders Buy buttons on the license
@@ -379,6 +381,30 @@ export const CampaignTargetsDeleteBodySchema = z.object({
   contact_id: z.string().uuid(),
 });
 export type CampaignTargetsDeleteBody = z.infer<typeof CampaignTargetsDeleteBodySchema>;
+
+// ── Duplicate-send check (SHARE-08) ─────────────────────────────────────
+// One entry per recipient: a saved contact (`contact_id`) or a typed address
+// (`email`, matched to a contact by normalised email). `track_ids` and
+// `project_id` describe what is about to be sent; a project counts as its
+// current tracks.
+export const BeatSendsDuplicatesBodySchema = z
+  .object({
+    recipients: z
+      .array(
+        z
+          .object({
+            contact_id: z.string().uuid().optional(),
+            email: z.string().trim().min(3).max(320).optional(),
+          })
+          .refine((r) => !!r.contact_id || !!r.email, { message: 'contact_id or email required' }),
+      )
+      .min(1)
+      .max(200),
+    track_ids: z.array(z.string().uuid()).max(500).optional(),
+    project_id: z.string().uuid().optional(),
+  })
+  .refine((b) => (b.track_ids?.length ?? 0) > 0 || !!b.project_id, { message: 'track_ids or project_id required' });
+export type BeatSendsDuplicatesBody = z.infer<typeof BeatSendsDuplicatesBodySchema>;
 
 // ── Project share invites ───────────────────────────────────────────────
 

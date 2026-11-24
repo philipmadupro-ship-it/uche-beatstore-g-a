@@ -4,6 +4,7 @@ import { useEffect, useId, useState, useCallback } from 'react';
 import { MessageSquare, Send, Trash2, Loader2, User, RefreshCw, Filter, Pin } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { createClient } from '@/lib/supabase/client';
+import { attributedAuthor } from '@/lib/share/collaborator';
 
 interface Comment {
   id: string;
@@ -12,6 +13,8 @@ interface Comment {
   user_id: string | null;
   share_token: string | null;
   author_name: string;
+  /** The contact the producer invited with the share this was posted through (producer view only). */
+  share_contact?: { id: string; name: string } | null;
   body: string;
   parent_id: string | null;
   // Region anchor — see migration 013. Both set or both null.
@@ -140,6 +143,9 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
               if (prev.some((c) => c.id === row.id)) return prev;
               return [...prev, row];
             });
+            // A realtime row carries the contact's id, not its name: reload so
+            // the producer sees "Nova (Alex)" without a refresh.
+            if ((row as { share_contact_id?: string | null }).share_contact_id) void fetchComments();
           } else if (payload.eventType === 'UPDATE') {
             const row = payload.new as Comment;
             setComments((prev) =>
@@ -277,7 +283,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                 }`}
               >
                 <div className="flex items-start justify-between gap-3 mb-1.5">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                     <div
                       className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
                         isOwner ? 'bg-white/80 text-white' : 'bg-white/[0.05] text-white/80'
@@ -285,8 +291,8 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                     >
                       <User size={9} />
                     </div>
-                    <span className="text-[11px] font-medium text-white truncate">
-                      {c.author_name}
+                    <span className="text-[11px] font-medium text-white min-w-0 break-words">
+                      {attributedAuthor(c.author_name, c.share_contact?.name)}
                     </span>
                     {isOwner && (
                       <span className="text-[8px] font-bold text-white uppercase tracking-wider">

@@ -89,6 +89,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const owner = await requireRowOwnership('projects', id);
       if (!owner.ok) return owner.res;
 
+      // The producer's own contact is the link's identity. Another producer's
+      // contact is refused before anything is written.
+      let contactId: string | null = null;
+      let shareInvitedEmail = invitedEmail;
+      if (body.contact_id) {
+        const { data: contact, error: contactErr } = await owner.admin
+          .from('contacts')
+          .select('id, email')
+          .eq('id', body.contact_id)
+          .eq('user_id', owner.userId)
+          .maybeSingle();
+        if (contactErr) throw contactErr;
+        if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 403 });
+        contactId = contact.id;
+        shareInvitedEmail = invitedEmail ?? (typeof contact.email === 'string' && contact.email.trim() ? contact.email.trim() : null);
+      }
+
       const { data, error, token: mintedToken } = await withFreshToken((attemptToken) => writeWithPlayback(fullPlayback, (fields) =>
         owner.admin
           .from('project_shares')
@@ -99,7 +116,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             allow_downloads: allowDownloads,
             password_hash,
             expires_at,
-            invited_email: invitedEmail,
+            invited_email: shareInvitedEmail,
+            ...(contactId ? { contact_id: contactId } : {}),
             label,
             created_by: owner.userId,
             recipient_kind: recipientKind,
