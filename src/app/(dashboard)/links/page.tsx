@@ -4,14 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Link2, Copy, Trash2, Check, Loader2, ExternalLink, Lock, Clock,
-  X, Share2, Music, Pencil, Download, Save, Plus, Search, BarChart3, Headphones,
+  X, Share2, Music, SlidersHorizontal, Download, Plus, Search, BarChart3, Headphones,
 } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
-import { Dropdown } from '@/components/ui/Dropdown';
 import { copyToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { ListContainer, ListRow } from '@/components/ui/ListRow';
+import { LinkSettingsForm } from '@/components/links/LinkSettingsForm';
 import { QuickShareModal } from '@/components/share/QuickShareModal';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
@@ -20,17 +20,23 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { InlineText } from '@/components/ui/InlineText';
+import { LinkFilterBar } from '@/components/links/LinkFilterBar';
+import { LinkActivity } from '@/components/links/LinkActivity';
 import {
-  LINK_FILTERS,
+  DEFAULT_LINK_SORT,
+  emptyLinkFacets,
   filterShareLinks,
+  sortShareLinks,
+  type LinkFacets,
+  type LinkSort,
   fromSharePatchResponse,
   isShareLinkExpired,
   shareLinkEndpoint,
   shareLinkKey,
   toSharePatchBody,
-  type LinkFilter,
   type ShareLinkPatch,
 } from '@/lib/links/share-link';
+import { decodeLinkView, encodeLinkView, hasLinkViewParams } from '@/lib/links/link-filters-url';
 import type { ArtworkKind } from '@/lib/artwork/gradient';
 
 interface ShareLink {
@@ -40,6 +46,7 @@ interface ShareLink {
   title: string | null;
   content_title: string | null;
   kind: string;
+  recipient_kind?: string | null;
   track_ids: string[];
   tracks: Array<{ id: string; title: string; type: string; cover_url: string | null }>;
   plays: number;
@@ -49,6 +56,7 @@ interface ShareLink {
   /** Full track (default) or the 75 s preview only. Mig 121. */
   full_playback?: boolean;
   password_protected: boolean;
+  sales_enabled?: boolean | null;
   created_at: string;
   href: string;
   cover_url: string | null;
@@ -89,7 +97,34 @@ export default function LinksPage() {
   const [search, setSearch] = useState('');
   /** Which row is currently being renamed in place (its linkKey). */
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
-  const [filter, setFilter] = useState<LinkFilter>('All');
+  const [facets, setFacets] = useState<LinkFacets>(emptyLinkFacets);
+  const [sort, setSort] = useState<LinkSort>(DEFAULT_LINK_SORT);
+  const [isMobile, setIsMobile] = useState(false);
+  // View in the URL (lib/links/link-filters-url): read once on mount, then
+  // mirrored with replaceState. `urlReady` is state so the mirror cannot write
+  // the defaults over the URL in the same commit that reads it.
+  const [urlReady, setUrlReady] = useState(false);
+  useEffect(() => {
+    if (hasLinkViewParams(window.location.search)) {
+      const restored = decodeLinkView(window.location.search);
+      setFacets(restored.facets);
+      setSort(restored.sort);
+      setSearch(restored.search);
+    }
+    const media = window.matchMedia('(max-width: 639px)');
+    const sync = () => setIsMobile(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    setUrlReady(true);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+  useEffect(() => {
+    if (!urlReady) return;
+    const qs = encodeLinkView({ facets, sort, search });
+    const { pathname, search: current, hash } = window.location;
+    const next = `${pathname}${qs ? `?${qs}` : ''}${hash}`;
+    if (next !== `${pathname}${current}${hash}`) window.history.replaceState(window.history.state, '', next);
+  }, [urlReady, facets, sort, search]);
 
   const fetchLinks = async () => {
     setLoading(true);
@@ -98,12 +133,9 @@ export default function LinksPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const raw: ShareLink[] = Array.isArray(data) ? data : data.links || [];
-      // Sort by opens descending — most-engaged links at the top. The column
-      // is named `plays`, but both share tables increment it once per page
-      // open (/api/share/[token] and /api/projects/share/[token] GET), not
-      // per track played, so the UI labels it "opens". Per-track listening
-      // lives in share_plays / play_head_pings.
-      setLinks(raw.slice().sort((a, b) => (b.plays ?? 0) - (a.plays ?? 0)));
+      // Order is the toolbar's Sort (default Newest). `plays` counts page
+      // OPENS, not listening — see shareOpensLabel.
+      setLinks(raw);
     } catch (err) {
       console.error('Fetch links error:', err);
     } finally {
@@ -224,9 +256,16 @@ export default function LinksPage() {
   }, [links]);
 
   const visibleLinks = useMemo(
-    () => filterShareLinks(links, { filter, search }),
-    [links, filter, search],
+    () => sortShareLinks(filterShareLinks(links, { search, facets }), sort),
+    [links, search, facets, sort],
   );
+  // "Top" marks the most-opened link overall; the list is no longer sorted by opens.
+  const topKey = useMemo(() => {
+    let best: ShareLink | null = null;
+    for (const l of links) if ((l.plays ?? 0) > (best?.plays ?? 0)) best = l;
+    return best ? shareLinkKey(best) : null;
+  }, [links]);
+  const hasRecipients = useMemo(() => links.some((l) => Boolean(l.recipient_kind)), [links]);
 
   return (
     <DashboardLayout>
@@ -253,48 +292,18 @@ export default function LinksPage() {
               <LinkMetric label="Downloads" value={linkSummary.downloadable.toLocaleString()} icon={<Download size={13} />} />
             </div>
 
-            <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.02] p-2.5">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <div className="relative min-w-0 flex-1">
-                  <Search size={12} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search title, token, kind…"
-                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[11px] text-white transition-colors placeholder:text-white/30 focus:border-white/50 focus:outline-none"
-                  />
-                </div>
-                <div className="flex overflow-x-auto rounded-full border border-white/10 bg-[#090907] p-1">
-                  {LINK_FILTERS.map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setFilter(f)}
-                      className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                        filter === f ? 'bg-white/10 text-white' : 'text-white/60 hover:text-white'
-                      }`}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-2 flex items-center justify-between px-1">
-                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/30">
-                  {visibleLinks.length} shown
-                  {visibleLinks.length !== links.length && ` · ${links.length} total`}
-                </p>
-                {(search.trim() || filter !== 'All') && (
-                  <button
-                    type="button"
-                    onClick={() => { setSearch(''); setFilter('All'); }}
-                    className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/60 transition-colors hover:text-white"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
+            <LinkFilterBar
+              facets={facets}
+              onFacets={setFacets}
+              sort={sort}
+              onSort={setSort}
+              search={search}
+              onSearch={setSearch}
+              shown={visibleLinks.length}
+              total={links.length}
+              hasRecipients={hasRecipients}
+              mobile={isMobile}
+            />
           </>
         )}
 
@@ -319,18 +328,18 @@ export default function LinksPage() {
           <EmptyState
             icon={<Search size={24} aria-hidden="true" />}
             title="No matching links"
-            description="Clear the search or switch filters to see the rest of your share links."
+            description="Clear the filters or search to see the rest of your share links."
             className="border-dashed py-24"
           />
         ) : (
           <>
           {/* Below lg: unified list rows — same language as the rest of the app. */}
           <ListContainer className="lg:hidden">
-            {visibleLinks.map((link, idx) => {
+            {visibleLinks.map((link) => {
               const expired = isExpired(link);
               const key = linkKey(link);
               const selected = selectedTokens.has(key);
-              const isTop = idx === 0 && (link.plays ?? 0) > 0;
+              const isTop = key === topKey;
               return (
                 <ListRow
                   key={key}
@@ -418,13 +427,13 @@ export default function LinksPage() {
 
           {/* lg+: card grid — title leads, one quiet metadata line, icon flags. */}
           <div className="hidden lg:grid grid-cols-3 gap-3">
-            {visibleLinks.map((link, idx) => {
+            {visibleLinks.map((link) => {
               const expired = isExpired(link);
               const key = linkKey(link);
               const selected = selectedTokens.has(key);
               const maxPlays = Math.max(...visibleLinks.map((l) => l.plays ?? 0), 1);
               const playPct = Math.round(((link.plays ?? 0) / maxPlays) * 100);
-              const isTop = idx === 0 && (link.plays ?? 0) > 0;
+              const isTop = key === topKey;
               return (
                 <div
                   key={key}
@@ -711,32 +720,10 @@ function LinkPopup({
   const panelRef = useDialogBehavior({ open: true, onClose });
   const tracks = link.tracks ?? [];
 
-  // Edit mode: expiry + password only — the two properties that need a
-  // deliberate save. Title renames from the heading and downloads toggles from
-  // the ⋯ menu, both in place, so neither has a second editor in here.
+  // Settings form (expiry, password, recipient, selling, tracks) lives in
+  // components/links/LinkSettingsForm; the popup only toggles it.
   const [editing, setEditing] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
   const [renamingHeader, setRenamingHeader] = useState(false);
-  const [editExpiresDays, setEditExpiresDays] = useState<string>(
-    link.expires_at ? '7' : '0',
-  );
-  const [editPassword, setEditPassword] = useState('');
-  const [editClearPassword, setEditClearPassword] = useState(false);
-  const handleSave = async () => {
-    setSavingEdit(true);
-    // Title and downloads are edited in place (header field / ⋯ menu), so this
-    // form owns only the two properties that genuinely need a deliberate save.
-    const patch: ShareLinkPatch = { expires_days: Number(editExpiresDays || 0) };
-    if (editClearPassword) patch.password = null;
-    else if (editPassword) patch.password = editPassword;
-    const ok = await onPatch(link, patch);
-    setSavingEdit(false);
-    if (ok) {
-      setEditing(false);
-      setEditPassword('');
-      setEditClearPassword(false);
-    }
-  };
 
   return (
     <div
@@ -751,7 +738,7 @@ function LinkPopup({
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          'w-full md:max-w-[480px] rounded-t-3xl md:rounded-2xl overflow-hidden relative focus:outline-none',
+          'w-full md:max-w-[480px] max-h-[92dvh] overflow-y-auto rounded-t-3xl md:rounded-2xl relative focus:outline-none',
           'bg-gradient-to-b from-[#0A0A0A]/95 via-[#070707]/95 to-[#090907]/98',
           'backdrop-blur-2xl border border-white/[0.06]',
           'shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]',
@@ -835,9 +822,11 @@ function LinkPopup({
             )}
           </div>
 
+          <LinkActivity linkId={link.id} source={link.source} />
+
           {/* Tracks on this link — small avatar + title row. Empty
               state shown while loading or if the share is empty. */}
-          <div className="mb-5">
+          {!editing && <div className="mb-5">
             <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2">Tracks on this link</p>
             {tracks.length === 0 ? (
               <p className="text-[10px] text-white/30 font-mono">No tracks resolved</p>
@@ -856,75 +845,11 @@ function LinkPopup({
                 ))}
               </ul>
             )}
-          </div>
+          </div>}
 
-          {/* Edit-mode form. Toggled by the Edit button in the
-              secondary action row. */}
           {editing && (
-            <div className="mb-5 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white">Expiry &amp; password</p>
-
-              <div className="grid grid-cols-2 gap-3">
-                {link.source === 'share_links' && <div>
-                  <label className="text-[9px] font-mono uppercase tracking-wider text-white/60 mb-1 block">Expires in</label>
-                  <Dropdown
-                    value={editExpiresDays}
-                    onChange={(v) => setEditExpiresDays(v)}
-                    options={[
-                      { value: '0', label: 'Never' },
-                      { value: '1', label: '1 day' },
-                      { value: '3', label: '3 days' },
-                      { value: '7', label: '7 days' },
-                      { value: '14', label: '14 days' },
-                      { value: '30', label: '30 days' },
-                    ]}
-                    className="w-full bg-[#090907] border border-white/10 rounded-md px-2.5 py-2 text-[11px] text-white focus:outline-none focus:border-white/50"
-                  />
-                </div>}
-              </div>
-
-              {link.source === 'share_links' && <div>
-                <label className="text-[9px] font-mono uppercase tracking-wider text-white/60 mb-1 flex items-center justify-between">
-                  <span>Password {link.password_protected && <span className="text-white/40 normal-case">(currently set)</span>}</span>
-                  {link.password_protected && (
-                    <button
-                      type="button"
-                      onClick={() => setEditClearPassword((v) => !v)}
-                      className={cn(
-                        'text-[9px] uppercase tracking-wider transition-colors',
-                        editClearPassword ? 'text-red-400' : 'text-white/60 hover:text-red-400',
-                      )}
-                    >
-                      {editClearPassword ? 'Will clear' : 'Clear it'}
-                    </button>
-                  )}
-                </label>
-                <input
-                  type="password"
-                  value={editPassword}
-                  onChange={(e) => setEditPassword(e.target.value)}
-                  disabled={editClearPassword}
-                  placeholder={link.password_protected ? '••••••' : 'No password'}
-                  className="w-full bg-[#090907] border border-white/10 rounded-md px-2.5 py-2 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 disabled:opacity-40"
-                />
-              </div>}
-
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  onClick={handleSave}
-                  disabled={savingEdit}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-white hover:bg-white/90 disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-colors"
-                >
-                  {savingEdit ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
-                  Save
-                </button>
-                <button
-                  onClick={() => { setEditing(false); setEditPassword(''); setEditClearPassword(false); }}
-                  className="px-4 py-2.5 rounded-md border border-white/10 hover:border-white/20 text-white/60 hover:text-white text-[11px] uppercase tracking-wider transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
+            <div className="mb-5">
+              <LinkSettingsForm link={link} onPatch={onPatch} formatDate={formatDate} />
             </div>
           )}
 
@@ -959,17 +884,13 @@ function LinkPopup({
               <ExternalLink size={11} />
               Open
             </a>
-            {/* Only token shares carry an expiry and a password, so for a
-                project share this form would open with nothing in it. */}
-            {link.source === 'share_links' && (
-              <button
-                onClick={() => setEditing((v) => !v)}
-                className="inline-flex items-center gap-1.5 text-[11px] text-white/80 hover:text-white transition-colors px-2 py-1"
-              >
-                <Pencil size={11} />
-                {editing ? 'Close' : 'Expiry & password'}
-              </button>
-            )}
+            <button
+              onClick={() => setEditing((v) => !v)}
+              className="inline-flex items-center gap-1.5 text-[11px] text-white/80 hover:text-white transition-colors px-2 py-1"
+            >
+              {!editing && <SlidersHorizontal size={11} />}
+              {editing ? 'Done' : 'Settings'}
+            </button>
             <button
               onClick={() => onDelete(link)}
               className="inline-flex items-center gap-1.5 text-[11px] text-white/60 hover:text-red-400 transition-colors px-2 py-1"

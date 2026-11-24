@@ -1,3 +1,6 @@
+import { recordShareEventFor } from '@/lib/links/share-events-server';
+import { shouldLogGrant } from '@/lib/store/download-audit';
+import { tokenRef } from '@/lib/share/token-ref';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -110,9 +113,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const extMatch = track.audio_url.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i);
     const ext = (extMatch?.[1] ?? 'mp3').toLowerCase();
     const filename = `${track.title || 'track'}.${ext}`;
+    if (shouldLogGrant(req.headers.get('range'), req.headers.has('x-download-probe'))) recordShareEventFor(req, admin, resolved, 'download', trackId);
     return streamAudioSource(req, track.audio_url, filename);
   } catch (err) {
-    log.error('download gate failed', { token, trackId, error: errorMessage(err) });
+    log.error('download gate failed', { tokenRef: tokenRef(token), trackId, error: errorMessage(err) });
     return publicError(err);
   }
 }

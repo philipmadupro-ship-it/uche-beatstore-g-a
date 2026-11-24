@@ -13,6 +13,7 @@
  */
 
 import { nanoid } from 'nanoid';
+import { insertWithFreshToken } from '@/lib/share/token-mint';
 import { Resend } from 'resend';
 import { getAppUrl } from '@/lib/env';
 import { selectIn } from '@/lib/db/chunked-in';
@@ -53,11 +54,14 @@ export async function ensurePortal(admin: Admin, userId: string, contactId: stri
   if (error) throw error;
   if (existing) return { portal: existing as PortalRecord, created: false };
 
-  const { data, error: insertErr } = await admin
-    .from('artist_portals')
-    .insert({ user_id: userId, contact_id: contactId, token: newPortalToken() })
-    .select('id, token, revoked_at')
-    .single();
+  // A token clash is retried inside the helper; a 23505 that reaches here is
+  // the contact_id constraint (migration 125).
+  const { data, error: insertErr } = await insertWithFreshToken(
+    admin,
+    'artist_portals',
+    (token) => ({ user_id: userId, contact_id: contactId, token }),
+    { select: 'id, token, revoked_at', mint: newPortalToken },
+  ) as { data: unknown; error: { code?: string } | null };
   if (insertErr) {
     // Two tabs pressing Share at once: the unique contact_id lost the race.
     if ((insertErr as { code?: string }).code === '23505') return ensurePortal(admin, userId, contactId);

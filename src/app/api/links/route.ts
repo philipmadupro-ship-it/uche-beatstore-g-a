@@ -37,6 +37,8 @@ type ShareListItem = {
   title: string | null;
   content_title: string | null;
   kind: string;
+  /** client | producer | rapper | friend; null when the row does not carry it. */
+  recipient_kind: string | null;
   track_ids: string[];
   tracks: TrackSummary[];
   plays: number;
@@ -46,6 +48,8 @@ type ShareListItem = {
   /** Full track (default) or the 75 s preview only. Mig 121. */
   full_playback: boolean;
   password_protected: boolean;
+  /** Buy buttons on the share page (client links only). Null before mig 020. */
+  sales_enabled: boolean | null;
   created_at: string;
   href: string;
   /** The subject's own cover, when it has one. Null falls back to brand artwork. */
@@ -100,6 +104,7 @@ function localLinks(): ShareListItem[] {
       title: share.title ?? null,
       content_title: null,
       kind: share.kind ?? (trackIds.length > 1 ? 'project' : 'track'),
+      recipient_kind: share.recipient_kind ?? null,
       track_ids: trackIds,
       tracks: linkTracks,
       plays: share.plays ?? 0,
@@ -108,6 +113,7 @@ function localLinks(): ShareListItem[] {
       allow_downloads: share.allow_downloads !== false,
       full_playback: share.full_playback !== false,
       password_protected: Boolean(share.password_hash),
+      sales_enabled: share.sales_enabled ?? null,
       created_at: share.created_at,
       href: `/share/${share.token}`,
       cover_url: lead?.cover_url ?? null,
@@ -141,6 +147,7 @@ function localLinks(): ShareListItem[] {
       title: share.label ?? parent?.name ?? parent?.title ?? null,
       content_title: parent?.name ?? parent?.title ?? null,
       kind: contentType,
+      recipient_kind: share.recipient_kind ?? null,
       track_ids: trackIds,
       tracks: linkTracks,
       plays: share.plays ?? 0,
@@ -149,6 +156,7 @@ function localLinks(): ShareListItem[] {
       allow_downloads: share.allow_downloads !== false,
       full_playback: share.full_playback !== false,
       password_protected: Boolean(share.password_hash),
+      sales_enabled: share.sales_enabled ?? null,
       created_at: share.created_at,
       href: `/projects/share/${share.token}`,
       cover_url: parent?.cover_url ?? lead?.cover_url ?? null,
@@ -263,6 +271,7 @@ export async function GET() {
         title: share.title ?? null,
         content_title: null,
         kind: share.kind ?? (ids.length > 1 ? 'project' : 'track'),
+        recipient_kind: share.recipient_kind ?? null,
         track_ids: ids,
         tracks,
         plays: share.plays ?? 0,
@@ -271,6 +280,7 @@ export async function GET() {
         allow_downloads: share.allow_downloads !== false,
         full_playback: share.full_playback !== false,
         password_protected: Boolean(share.password_hash),
+        sales_enabled: share.sales_enabled ?? null,
         created_at: share.created_at,
         href: `/share/${share.token}`,
         cover_url: lead?.cover_url ?? null,
@@ -308,6 +318,7 @@ export async function GET() {
         title: share.label ?? parent?.name ?? parent?.title ?? null,
         content_title: parent?.name ?? parent?.title ?? null,
         kind: contentType,
+        recipient_kind: share.recipient_kind ?? null,
         track_ids: ids,
         tracks,
         plays: share.plays ?? 0,
@@ -316,6 +327,7 @@ export async function GET() {
         allow_downloads: share.allow_downloads !== false,
         full_playback: share.full_playback !== false,
         password_protected: Boolean(share.password_hash),
+        sales_enabled: share.sales_enabled ?? null,
         created_at: share.created_at,
         href: `/projects/share/${share.token}`,
         // The collection's own cover wins; a coverless project borrows its

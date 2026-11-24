@@ -283,4 +283,27 @@ describe('GET /api/links', () => {
       value: ['project-owned'],
     });
   });
+
+  it('passes recipient_kind through, and is null when the row has none', async () => {
+    const rows: RowsByTable = {
+      share_links: [
+        { id: 'l1', user_id: 'owner-1', token: 't1', kind: 'track', track_ids: [], created_at: '2026-06-01T00:00:00Z' },
+      ],
+      projects: [{ id: 'p1', user_id: 'owner-1', name: 'Tape' }],
+      playlists: [],
+      tracks: [],
+      track_tags: [],
+      project_shares: [
+        { id: 's1', token: 't2', content_type: 'project', project_id: 'p1', recipient_kind: 'rapper', created_at: '2026-06-02T00:00:00Z' },
+        { id: 's2', token: 't3', content_type: 'project', project_id: 'p1', created_at: '2026-06-03T00:00:00Z' },
+      ],
+      project_tracks: [],
+      playlist_tracks: [],
+    };
+    mockRequireUser.mockResolvedValue({ ok: true, userId: 'owner-1', admin: adminClient(rows) });
+    const route = await loadRoute();
+    const { links } = await (await route.GET()).json();
+    const byToken = Object.fromEntries(links.map((l: any) => [l.token, l.recipient_kind]));
+    expect(byToken).toEqual({ t1: null, t2: 'rapper', t3: null });
+  });
 });

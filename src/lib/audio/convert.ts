@@ -202,6 +202,37 @@ export async function convertToWavBuffer(input: Buffer): Promise<Buffer | null> 
 }
 
 /**
+ * Decode any audio ffmpeg can read to MONO float PCM at `sampleRate` (44.1 kHz
+ * by default) — the input of `buildWaveformModel` on the server. Float32 little-
+ * endian straight off the pipe, so there is no 16-bit rounding before the peaks
+ * are taken. Returns null when ffmpeg is unavailable or the input is unreadable.
+ */
+export async function decodeToMonoFloat32(input: Buffer, sampleRate = 44100): Promise<Float32Array | null> {
+  if (!(await checkFfmpeg())) return null;
+  try {
+    const raw = await runFfmpegToBuffer([
+        '-i', 'pipe:0',
+        '-vn',
+        '-ac', '1',
+        '-ar', String(sampleRate),
+        '-f', 'f32le',
+        'pipe:1',
+      ],
+      input,
+      30_000,
+    );
+    if (!raw || raw.length < 4) return null;
+    // Copy into a fresh, aligned buffer: a pooled Buffer's byteOffset need not be a multiple of 4.
+    const samples = new Float32Array(Math.floor(raw.length / 4));
+    new Uint8Array(samples.buffer).set(raw.subarray(0, samples.length * 4));
+    return samples;
+  } catch (err) {
+    console.warn('ffmpeg float decode failed:', err);
+    return null;
+  }
+}
+
+/**
  * Create the public listening derivative for a private master.
  *
  * 96 kbps MP3 is intentionally good enough for store discovery while being

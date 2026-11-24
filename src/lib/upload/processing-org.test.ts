@@ -55,6 +55,8 @@ vi.mock('@/lib/storage/upload', () => ({
   uploadPublicPreview: storage.uploadPublicPreview,
 }));
 vi.mock('@/lib/audio/mp3-deliverable.server', () => ({ realMp3Deps: {} }));
+const waveModel = vi.hoisted(() => ({ ensureWaveformModelFile: vi.fn(async () => 'written') }));
+vi.mock('@/lib/audio/waveform-model.server', () => waveModel);
 vi.mock('@/lib/storage/org-media', () => ({
   uploadOrgPeaks: storage.uploadOrgPeaks,
   uploadOrgPreview: storage.uploadOrgPreview,
@@ -70,6 +72,7 @@ beforeEach(() => {
   trackOrgError = null;
   for (const fn of Object.values(storage)) fn.mockClear();
   audd.getAuddFeatures.mockClear();
+  waveModel.ensureWaveformModelFile.mockClear();
 });
 
 describe('processing: where an upload\'s derived files go', () => {
@@ -92,6 +95,25 @@ describe('processing: where an upload\'s derived files go', () => {
     // An org track has no owner (142): addressed by its org, never by user_id.
     expect(trackUpdate()?.ops).toContainEqual(['match', { org_id: 'o1' }]);
     expect(trackUpdate()?.ops.some((o) => o[0] === 'eq' && o[1] === 'user_id')).toBe(false);
+    // Nothing of an org recording is written to the public bucket — not even its waveform model.
+    expect(waveModel.ensureWaveformModelFile).not.toHaveBeenCalled();
+  });
+
+  it('a producer track gets its waveform model built from the public preview; a failure never fails the job', async () => {
+    await processUploadProcessingJobById('job1');
+    expect(waveModel.ensureWaveformModelFile).toHaveBeenCalledWith('https://pub.example/previews/x.mp3');
+    waveModel.ensureWaveformModelFile.mockClear();
+    waveModel.ensureWaveformModelFile.mockRejectedValueOnce(new Error('boom') as never);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = await processUploadProcessingJobById('job1');
+    warn.mockRestore();
+    expect(res).toMatchObject({ ok: true });
+  });
+
+  it('a producer track with no preview gets no waveform model', async () => {
+    storage.uploadPublicPreview.mockResolvedValueOnce(null as never);
+    await processUploadProcessingJobById('job1');
+    expect(waveModel.ensureWaveformModelFile).not.toHaveBeenCalled();
   });
 
   it('a producer track (org_id NULL): exactly the public path as before', async () => {
