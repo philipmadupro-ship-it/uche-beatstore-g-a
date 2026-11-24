@@ -18,6 +18,8 @@ import { toast } from '@/hooks/useToast';
 import { gridTemplate, type LibraryColumn, type TrackWithTags } from '@/lib/library/columns';
 import type { TrackStatsMap } from '@/lib/library/track-stats';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { TagOverflowChip } from '@/components/ui/TagOverflowToggle';
+import { hiddenTagsTitle, splitTags, TAG_LIMIT_ROW } from '@/lib/ui/tag-overflow';
 
 interface TrackCardProps {
   /** When set, the row renders these data columns instead of its fixed
@@ -284,6 +286,10 @@ function TrackCardImpl({
   const { rate: rateTrack, rating: currentRating } = useRating(track.id, track.rating || 0);
   const durationLabel = formatDuration(track.duration_seconds ?? null);
   const genreMoodTags = trackTags.filter((tt) => tt.category === 'genre' || tt.category === 'mood');
+  const rowTags = splitTags(genreMoodTags, { limit: TAG_LIMIT_ROW, strict: true });
+  const rowTagsMore = rowTags.hiddenCount > 0
+    ? <TagOverflowChip count={rowTags.hiddenCount} title={hiddenTagsTitle(rowTags.hidden.map((t) => t.tag))} />
+    : null;
   // Genre first, then mood — the gradient leads on the first entry, and genre
   // is the axis a producer actually browses by.
   const tagsForCategory = (category: string) =>
@@ -640,11 +646,12 @@ function TrackCardImpl({
                     {track.lease_price_usd != null ? `$${track.lease_price_usd}` : 'Listed'}
                   </span>
                 ) : null}
-                {genreMoodTags.slice(0, 2).map((tt) => (
+                {rowTags.visible.map((tt) => (
                   <span key={`${tt.category}-${tt.tag}`} className="truncate text-[11px] text-white/50">
                     #{tt.tag}
                   </span>
                 ))}
+                {rowTagsMore}
                 {genreMoodTags.length === 0 && !track.store_listed ? (
                   <span className="text-[11px] text-white/20">—</span>
                 ) : null}
@@ -710,7 +717,7 @@ function TrackCardImpl({
             {track.lease_price_usd != null ? `$${track.lease_price_usd}` : 'Listed'}
           </span>
         ) : null}
-        {genreMoodTags.slice(0, 2).map((tt) => (
+        {rowTags.visible.map((tt) => (
           <span
             key={`${tt.category}-${tt.tag}`}
             className="truncate text-[11px] text-white/50"
@@ -718,6 +725,7 @@ function TrackCardImpl({
             #{tt.tag}
           </span>
         ))}
+        {rowTagsMore}
       </div>
 
       {/* Time / added */}

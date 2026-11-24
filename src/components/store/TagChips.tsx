@@ -1,5 +1,8 @@
 'use client';
 
+import { useId, useState } from 'react';
+import { TagOverflowToggle } from '@/components/ui/TagOverflowToggle';
+import { splitTags } from '@/lib/ui/tag-overflow';
 import type { TrackTag } from './types';
 
 interface Props {
@@ -9,15 +12,14 @@ interface Props {
 }
 
 export function TagChips({ tags, max = 3, accentGenre = false }: Props) {
-  const display = tags
-    .filter((t) => t.category === 'genre' || t.category === 'mood')
-    .slice(0, max + 1);
-  if (display.length === 0) return null;
-  const visible = display.slice(0, max);
-  const overflow = display.length - max;
+  const [expanded, setExpanded] = useState(false);
+  const id = useId();
+  const all = tags.filter((t) => t.category === 'genre' || t.category === 'mood');
+  const split = splitTags(all, { limit: max, expanded });
+  if (all.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-1 mt-1.5">
-      {visible.map((t) => {
+    <div id={id} className="flex flex-wrap gap-1 mt-1.5">
+      {split.visible.map((t) => {
         const isGenre = t.category === 'genre';
         return (
           <span
@@ -32,10 +34,14 @@ export function TagChips({ tags, max = 3, accentGenre = false }: Props) {
           </span>
         );
       })}
-      {overflow > 0 && (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 bg-white/[0.05]">
-          +{overflow}
-        </span>
+      {split.canToggle && (
+        <TagOverflowToggle
+          size="sm"
+          expanded={expanded}
+          hiddenCount={split.hiddenCount}
+          onToggle={() => setExpanded((v) => !v)}
+          controls={id}
+        />
       )}
     </div>
   );

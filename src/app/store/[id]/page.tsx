@@ -25,6 +25,7 @@ import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import { ExpandableTagList } from '@/components/store/ExpandableTagList';
 import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
 import { resolveCreatorLink } from '@/lib/store/social-links';
 import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
@@ -401,18 +402,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
               </div>
 
               {/* Tags */}
-              {tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                  {tags.map(({ tag, category }) => (
-                    <span
-                      key={`${category}:${tag}`}
-                      className="px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider border border-white/10 bg-white/[0.03] text-white/60"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
+              <ExpandableTagList tags={tags} />
 
               {/* Play + share row */}
               <div className="flex items-center gap-3 mt-5">
