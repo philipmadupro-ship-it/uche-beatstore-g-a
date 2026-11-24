@@ -6,6 +6,7 @@ vi.mock('@/lib/audio/analyze.server', () => ({ analyzeAudio: vi.fn() }));
 vi.mock('@/lib/audio/audd', () => ({ getAuddFeatures: vi.fn() }));
 vi.mock('@/lib/audio/peaks', () => ({ extractPeaks: vi.fn() }));
 vi.mock('@/lib/audio/mp3-deliverable.server', () => ({ realMp3Deps: {} }));
+vi.mock('@/lib/audio/waveform-model.server', () => ({ ensureWaveformModelFile: vi.fn() }));
 vi.mock('@/lib/storage/upload', () => ({
   readStoredObject: vi.fn(), uploadPeaksSidecar: vi.fn(), uploadPublicPreview: vi.fn(),
 }));

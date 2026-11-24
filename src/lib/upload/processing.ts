@@ -7,6 +7,7 @@ import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { readStoredObject, uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
+import { ensureWaveformModelFile } from '@/lib/audio/waveform-model.server';
 import { uploadOrgPeaks, uploadOrgPreview } from '@/lib/storage/org-media';
 import { prepareMp3Deliverable } from '@/lib/audio/mp3-deliverable';
 import { realMp3Deps } from '@/lib/audio/mp3-deliverable.server';
@@ -256,6 +257,13 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
       if (!previewUrl) console.warn('Upload processing: no preview clip (ffmpeg unavailable and master not mp3/wav)');
     } catch (err) {
       console.warn('Upload processing preview failed:', err);
+    }
+
+    // The server-built waveform model (.wave.bin) for the PUBLIC clip, so the store's
+    // scrubber need not decode audio in the browser. Best effort — it never throws —
+    // and never for an org recording, whose preview is private.
+    if (!orgId && previewUrl) {
+      try { await ensureWaveformModelFile(previewUrl); } catch (err) { console.warn('Upload processing waveform model failed:', err); }
     }
 
     // The MP3 a lease on this track delivers, made now from the master already

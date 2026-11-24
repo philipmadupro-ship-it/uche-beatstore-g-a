@@ -37,7 +37,7 @@ describe('isPublicApiPath', () => {
 
 describe('requiresProducerForApi', () => {
   it('lets a signed-in buyer reach the preview and peaks routes (owners stream delisted beats)', () => {
-    for (const p of ['/api/store/preview/abc', '/api/store/peaks/abc', '/api/store/offer']) {
+    for (const p of ['/api/store/preview/abc', '/api/store/peaks/abc', '/api/store/wave/abc', '/api/store/offer']) {
       expect(requiresProducerForApi(p, true)).toBe(false);
     }
   });
