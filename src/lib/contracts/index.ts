@@ -544,9 +544,11 @@ export function parsePurchaseLineItems(raw: unknown): PurchaseLineItem[] {
 // POST /api/stems — kick off a Demucs/Moises split. Gated on track
 // ownership; validated so a bad body 400s instead of throwing on a
 // missing field deep in the dispatcher.
+// The audio always comes from the owned track row. `audioUrl` and `model` are
+// still accepted so an older client's body validates, but both are ignored.
 export const StemStartBodySchema = z.object({
   trackId: z.string().min(1),
-  audioUrl: z.string().min(1).max(2000),
+  audioUrl: z.string().max(2000).optional(),
   model: z.string().max(40).optional(),
 });
 export type StemStartBody = z.infer<typeof StemStartBodySchema>;
