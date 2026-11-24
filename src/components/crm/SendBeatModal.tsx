@@ -12,7 +12,8 @@ import { toast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { Modal } from '@/components/ui/Modal';
-import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
+import { buildBeatSendEmail } from '@/lib/email/beat-send-template';
+import { beatSendEmailInput, previewShareUrl } from '@/lib/email/beat-send-input';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { PlaybackChoice } from '@/components/share/PlaybackChoice';
 import { DuplicateSendNotice, useDuplicateSends } from '@/components/crm/DuplicateSendNotice';
@@ -182,6 +183,20 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
 
   // Preview recipient index — lets the user flip through recipients to see personalised versions
   const [previewIdx, setPreviewIdx] = useState(0);
+
+  // The From and producer name a real send will use (GET /api/email), so the
+  // preview shows them as the inbox will, not a placeholder.
+  const [sendContext, setSendContext] = useState<{ from: string; producerName: string } | null>(null);
+  useEffect(() => {
+    let aborted = false;
+    fetch('/api/email')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!aborted && d && typeof d.from === 'string' && typeof d.producerName === 'string') setSendContext(d);
+      })
+      .catch(() => {});
+    return () => { aborted = true; };
+  }, []);
 
   useEffect(() => {
     let aborted = false;
@@ -418,7 +433,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               headers: { 'Content-Type': 'application/json' },
               // Outside a campaign the invite route records the send itself;
               // inside one, the campaign targets call below records it.
-              body: JSON.stringify({ email: r.email, message, ...(campaignId ? {} : { contact_id: contactId }) }),
+              body: JSON.stringify({ email: r.email, message, subject: resolvedSubject, recipient_name: r.name, ...(campaignId ? {} : { contact_id: contactId }) }),
             });
             if (!inviteRes.ok) {
               const e = await inviteRes.json().catch(() => ({}));
@@ -474,7 +489,6 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 message,
                 subject: resolvedSubject,
                 packTitle: plan.trimmed ? (picked.length === 1 ? picked[0].title : `${picked.length} tracks`) : summary.title,
-                packMeta: plan.trimmed ? `${picked.length} track${picked.length === 1 ? '' : 's'}` : summary.countLabel,
                 coverUrl: plan.trimmed ? picked[0]?.cover_url ?? null : summary.cover,
                 allowDownloads,
                 expiresDays,
@@ -529,21 +543,29 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
   const validPreviewIdx = Math.min(previewIdx, Math.max(0, recipients.length - 1));
   const previewContact = recipients[validPreviewIdx] ?? null;
   const previewRecipient = previewContact?.name ?? 'Recipient';
-  const resolvedSubject = subject.trim() || defaultSubject('U2C Beatstore', summary.title, mode);
-  const previewHtml = useMemo(() => buildBeatSendEmail({
+  // One builder for the preview AND the server's send (lib/email/beat-send-input):
+  // the only difference is the link, which does not exist until send time.
+  const previewInput = useMemo(() => beatSendEmailInput({
+    kind: mode,
+    shareUrl: previewShareUrl(mode, typeof window !== 'undefined' ? window.location.origin : ''),
     recipientName: previewRecipient,
-    shareUrl: '#preview',
     packTitle: summary.title,
-    packMeta: summary.countLabel,
+    trackCount: mode === 'tracks' ? selectedTracks.length : (selectedProject?.track_count ?? null),
     coverUrl: summary.cover,
-    message: message.trim(),
+    message,
     allowDownloads,
     // The share row is created at send time, so its expires_at will be
     // now + N days — the same date the server reads back for the real email.
     expiresAt: expiresDays > 0 ? new Date(Date.now() + expiresDays * 86400000).toISOString() : null,
-    kind: mode,
+    fullPlayback,
+    role: mode === 'project' ? role : null,
     tracks: mode === 'tracks' ? selectedTracks.map((t) => ({ title: t.title, bpm: t.bpm, key: t.key, type: t.type })) : [],
-  }), [previewRecipient, summary, message, mode, allowDownloads, expiresDays, selectedTracks]);
+    producerName: sendContext?.producerName,
+    subject,
+    fromAddress: sendContext?.from,
+  }), [previewRecipient, summary, selectedProject, message, mode, allowDownloads, expiresDays, fullPlayback, role, selectedTracks, sendContext, subject]);
+  const resolvedSubject = previewInput.subject;
+  const previewHtml = useMemo(() => buildBeatSendEmail(previewInput.template), [previewInput]);
 
   const recipientsWithoutEmail = recipients.filter((r) => !r.email);
   const recipientsWithEmail = recipients.length - recipientsWithoutEmail.length;
@@ -669,7 +691,12 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
             content and both sides scrolled as one page. */}
         <div className="flex flex-col md:flex-row h-[min(680px,calc(88dvh-190px))] min-h-0">
           {/* Left — source selection */}
-          <div className="md:w-5/12 h-1/2 md:h-auto border-b md:border-b-0 md:border-r border-white/10 flex flex-col min-h-0">
+          {/* Below md the two panes stack, and a preview under a half-height
+              picker overlapped it — so the preview tab shows only the preview. */}
+          <div
+            data-testid="send-picker-pane"
+            className={`md:w-5/12 h-1/2 md:h-auto border-b md:border-b-0 md:border-r border-white/10 flex-col min-h-0 ${tab === 'preview' ? 'hidden md:flex' : 'flex'}`}
+          >
             <div className="px-6 pt-4 pb-3 border-b border-white/10 space-y-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={12} />
@@ -1088,7 +1115,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                     <div className="px-4 py-3 border-b border-white/10 space-y-1.5">
                       <div className="flex items-center gap-2.5">
                         <span className="text-[9px] font-mono text-white/40 w-9 shrink-0 uppercase tracking-wider">From</span>
-                        <span className="text-[11px] text-white/70">U2C Beatstore &lt;beats@uche.co&gt;</span>
+                        <span className="text-[11px] text-white/70">{previewInput.from}</span>
                       </div>
                       <div className="flex items-center gap-2.5">
                         <span className="text-[9px] font-mono text-white/40 w-9 shrink-0 uppercase tracking-wider">To</span>

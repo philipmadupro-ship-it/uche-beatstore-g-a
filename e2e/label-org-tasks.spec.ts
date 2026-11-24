@@ -245,7 +245,7 @@ test('5 · the pages: My work, tick-off, the bell opens the song, tasks inline o
   // The bell shows the ask under THIS org and opens the song it is about.
   await page.getByRole('button', { name: /^Notifications/ }).click();
   await expect(page.getByText('assigned you a task').first()).toBeVisible();
-  await page.getByRole('button', { name: /Open ".*assigned you a task"/ }).first().click();
+  await page.getByRole('button', { name: /assigned you a task/ }).first().click();
   await expect(page).toHaveURL(new RegExp(`/o/${SLUG}/songs/${MIDNIGHT}`));
   expect((await notesOf(request, BUYER_ID))[0].read).toBe(true);
 
