@@ -51,6 +51,12 @@ export interface BeatSendEmailOpts {
   tracks?: Array<{ title: string; bpm?: number | null; key?: string | null; type?: string | null }>;
   /** Producer display name. Falls back to "U2C Beatstore". */
   producerName?: string;
+  /**
+   * What the recipient may do on the page beyond listening ("You can leave
+   * feedback on this project."). Rendered under the meta line; omitted for a
+   * viewer. Built by `accessNoteFor` in beat-send-input.ts.
+   */
+  accessNote?: string | null;
 }
 
 /**
@@ -69,8 +75,9 @@ export function shareExpiryText(expiresAt: string | null | undefined): string {
 export function buildBeatSendEmail(opts: BeatSendEmailOpts): string {
   const {
     recipientName, shareUrl, packTitle, packMeta, coverUrl, message,
-    allowDownloads, expiresAt, kind = 'tracks', tracks = [], producerName = 'U2C Beatstore',
+    allowDownloads, expiresAt, kind = 'tracks', tracks = [], producerName = 'U2C Beatstore', accessNote,
   } = opts;
+  const safeAccessNote = accessNote ? escapeHtml(accessNote) : '';
 
   const first = escapeHtml(recipientName.split(' ')[0] || recipientName);
   const safeUrl = escapeHtml(shareUrl);
@@ -128,7 +135,8 @@ export function buildBeatSendEmail(opts: BeatSendEmailOpts): string {
         <!-- Eyebrow + title -->
         <p style="font-size:10px;color:${MUTED};letter-spacing:3px;text-transform:uppercase;margin:0 0 10px">${eyebrow}</p>
         <h1 style="font-size:24px;font-weight:700;color:${TEXT};margin:0 0 6px;line-height:1.2">${safeTitle}</h1>
-        <p style="font-size:12px;color:${FAINT};font-family:monospace;margin:0 0 28px;letter-spacing:1px;text-transform:uppercase">${safeMeta}</p>
+        <p style="font-size:12px;color:${FAINT};font-family:monospace;margin:0 0 ${safeAccessNote ? '6px' : '28px'};letter-spacing:1px;text-transform:uppercase">${safeMeta}</p>
+        ${safeAccessNote ? `<p style="font-size:12px;color:${FAINT};font-family:monospace;margin:0 0 28px;letter-spacing:1px;text-transform:uppercase">${safeAccessNote}</p>` : ''}
 
         <!-- Greeting -->
         <p style="font-size:14px;color:${TEXT};line-height:1.6;margin:0 0 16px">Hey ${first},</p>

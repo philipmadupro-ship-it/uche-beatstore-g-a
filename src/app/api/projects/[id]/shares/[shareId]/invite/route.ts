@@ -5,6 +5,10 @@ import { isSupabaseConfigured, requireRowOwnership } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { buildProjectSendRow } from '@/lib/crm/project-send';
+import { buildBeatSendEmail } from '@/lib/email/beat-send-template';
+import { beatSendEmailInput, sharePathFor, type BeatSendRole } from '@/lib/email/beat-send-input';
+import { loadProducerName, loadProjectPack } from '@/lib/email/beat-send-context';
+import { isFullPlayback } from '@/lib/share/playback';
 import { z } from 'zod';
 
 const log = createLogger('api.projects.shares.invite');
@@ -46,6 +50,8 @@ export async function POST(
     const body = await req.json().catch(() => ({}));
     const overrideEmail: string | null = typeof body.email === 'string' ? body.email.trim() : null;
     const message: string = typeof body.message === 'string' ? body.message.trim() : '';
+    const customSubject: string | null = typeof body.subject === 'string' ? body.subject : null;
+    const recipientNameBody: string = typeof body.recipient_name === 'string' ? body.recipient_name.trim() : '';
     let contactId: string | null = null;
     if (body.contact_id != null) {
       const parsedContact = ContactIdSchema.safeParse(body.contact_id);
@@ -77,7 +83,7 @@ export async function POST(
 
     const { data: share, error: shareErr } = await owner.admin
       .from('project_shares')
-      .select('id, project_id, token, role, allow_downloads, invited_email, expires_at, revoked_at')
+      .select('*')
       .eq('id', shareId)
       .maybeSingle();
     if (shareErr) throw shareErr;
@@ -106,37 +112,40 @@ export async function POST(
       );
     }
 
-    // Pull the project name for a nicer subject line.
-    const { data: project } = await owner.admin
-      .from('projects')
-      .select('name, cover_url')
-      .eq('id', id)
-      .maybeSingle();
+    // The email is built by the same pure input builder the SendBeatModal
+    // preview uses (lib/email/beat-send-input.ts), so what the producer
+    // previewed is what goes out.
+    const [pack, producerName] = await Promise.all([
+      loadProjectPack(owner.admin, owner.userId, id),
+      loadProducerName(owner.admin, owner.userId),
+    ]);
 
-    const appUrl = getAppUrl();
-    const shareUrl = `${appUrl}/projects/share/${share.token}`;
-
-    const roleHuman = share.role === 'editor' ? 'edit'
-      : share.role === 'commenter' ? 'leave feedback on'
-      : 'listen to';
+    const shareUrl = `${getAppUrl()}${sharePathFor('project', share.token)}`;
+    const role: BeatSendRole = share.role === 'editor' || share.role === 'commenter' ? share.role : 'viewer';
+    const input = beatSendEmailInput({
+      kind: 'project',
+      shareUrl,
+      recipientName: recipientNameBody || recipient.split('@')[0],
+      packTitle: pack.name || 'a project',
+      trackCount: pack.trackCount,
+      coverUrl: pack.coverUrl,
+      message,
+      allowDownloads: !!share.allow_downloads,
+      expiresAt: share.expires_at ?? null,
+      fullPlayback: isFullPlayback(share),
+      role,
+      producerName,
+      subject: customSubject,
+      fromAddress: process.env.RESEND_FROM_EMAIL,
+    });
 
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const projectName = project?.name || 'a project';
 
     const { data: sent, error: sendErr } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+      from: input.from,
       to: recipient,
-      subject: `You've been invited to ${roleHuman} "${projectName}"`,
-      html: renderInviteHtml({
-        projectName,
-        coverUrl: project?.cover_url || null,
-        roleLabel: share.role,
-        roleHuman,
-        allowDownloads: !!share.allow_downloads,
-        expiresAt: share.expires_at,
-        message,
-        shareUrl,
-      }),
+      subject: input.subject,
+      html: buildBeatSendEmail(input.template),
     });
 
     if (sendErr) {
@@ -190,50 +199,4 @@ export async function POST(
     log.error('invite failed', { error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
-}
-
-// ----------------------------------------------------------------------
-
-function renderInviteHtml(opts: {
-  projectName: string;
-  coverUrl: string | null;
-  roleLabel: 'viewer' | 'commenter' | 'editor';
-  roleHuman: string;
-  allowDownloads: boolean;
-  expiresAt: string | null;
-  message: string;
-  shareUrl: string;
-}): string {
-  // We escape user-controlled strings — the inviter could otherwise inject
-  // HTML into the recipient's inbox via the `message` field.
-  const escape = (s: string) => s.replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string),
-  );
-  const safeMessage = escape(opts.message).replace(/\n/g, '<br>');
-  const safeProject = escape(opts.projectName);
-  const roleBadge = opts.roleLabel.charAt(0).toUpperCase() + opts.roleLabel.slice(1);
-  const expiresLine = opts.expiresAt
-    ? `<p style="font-size:11px;color:#7a6d54;margin:8px 0 0;">Link expires ${new Date(opts.expiresAt).toLocaleDateString()}</p>`
-    : '';
-  const downloadsLine = opts.allowDownloads
-    ? '<span style="color:#FFFFFF">· Downloads enabled</span>'
-    : '<span style="color:#AAA294">· Downloads off</span>';
-
-  return `
-  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#090907;color:#FFFFFF;padding:40px 24px;">
-    <table style="max-width:520px;margin:0 auto;background:#0D0D0A;border:1px solid #1f1a10;border-radius:16px;overflow:hidden;">
-      <tr><td style="padding:32px;">
-        <p style="font-size:11px;color:#FFFFFF;text-transform:uppercase;letter-spacing:0.25em;margin:0 0 12px;">You've been invited</p>
-        <h1 style="font-size:22px;font-weight:600;margin:0 0 6px;color:#fff;">${safeProject}</h1>
-        <p style="font-size:13px;color:#C7B89D;margin:0 0 18px;">
-          Role: <strong style="color:#FFFFFF;">${roleBadge}</strong> ${downloadsLine}
-        </p>
-        ${safeMessage ? `<div style="font-size:14px;line-height:1.6;color:#ccc;background:#090907;border-left:2px solid #C7B89D;padding:14px 18px;border-radius:6px;margin:0 0 24px;">${safeMessage}</div>` : ''}
-        <a href="${opts.shareUrl}" style="display:inline-block;background:#FFFFFF;color:#fff;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;font-size:12px;">Open project</a>
-        ${expiresLine}
-        <p style="font-size:11px;color:#706B61;margin:28px 0 0;">Or paste this link: <a href="${opts.shareUrl}" style="color:#FFFFFF;text-decoration:none;">${opts.shareUrl}</a></p>
-      </td></tr>
-    </table>
-    <p style="text-align:center;font-size:10px;color:#706B61;text-transform:uppercase;letter-spacing:0.3em;margin-top:24px;">U2C Beatstore</p>
-  </div>`;
 }

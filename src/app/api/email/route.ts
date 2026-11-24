@@ -7,10 +7,27 @@ import { errorMessage } from '@/lib/errors';
 import { requireProducer } from '@/lib/auth/ownership';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.email');
-import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
+import { buildBeatSendEmail } from '@/lib/email/beat-send-template';
+import { beatSendEmailInput, type BeatSendRole } from '@/lib/email/beat-send-input';
+import { loadProducerName, loadProjectPack, loadTrackPack } from '@/lib/email/beat-send-context';
 import { resolveEmailShare } from '@/lib/share/email-share';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+/**
+ * GET /api/email — what the SendBeatModal preview needs to show the From and
+ * the producer name exactly as a real send will use them.
+ */
+export async function GET() {
+  const producer = await requireProducer();
+  if (!producer.ok) return producer.res;
+  const producerName = isSupabaseConfigured() ? await loadProducerName(producer.admin, producer.userId) : null;
+  const probe = beatSendEmailInput({
+    kind: 'tracks', shareUrl: '', recipientName: '', packTitle: '', trackCount: null,
+    allowDownloads: true, expiresAt: null, producerName, fromAddress: process.env.RESEND_FROM_EMAIL,
+  });
+  return NextResponse.json({ from: probe.from, producerName: probe.producerName });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,7 +45,7 @@ export async function POST(req: NextRequest) {
     const producer = await requireProducer();
     if (!producer.ok) return producer.res;
 
-    const { contactId, email, subject, message, trackIds, shareToken, packTitle, packMeta, coverUrl, recipientName, expiresDays, allowDownloads, tracks, campaignId } = await req.json();
+    const { contactId, email, subject, message, trackIds, shareToken, packTitle: reqPackTitle, coverUrl, recipientName, expiresDays, allowDownloads, tracks, campaignId } = await req.json();
 
     if (!email || !shareToken) {
       return NextResponse.json({ error: 'Missing email or shareToken' }, { status: 400 });
@@ -46,6 +63,10 @@ export async function POST(req: NextRequest) {
     let emailKind: 'tracks' | 'project' = 'tracks';
     let expiresAt: string | null = null;
     let linkAllowsDownloads = allowDownloads !== false;
+    let fullPlayback: boolean | null = null;
+    let role: BeatSendRole | null = null;
+    let projectId: string | null = null;
+    let producerName: string | null = null;
     if (isSupabaseConfigured()) {
       const share = await resolveEmailShare(producer.admin, producer.userId, String(shareToken));
       if (!share.ok) return NextResponse.json({ error: share.error }, { status: share.status });
@@ -53,35 +74,65 @@ export async function POST(req: NextRequest) {
       emailKind = share.kind;
       expiresAt = share.expiresAt;
       linkAllowsDownloads = share.allowDownloads;
+      fullPlayback = share.fullPlayback;
+      role = share.role;
+      projectId = share.projectId;
+      producerName = await loadProducerName(producer.admin, producer.userId);
     } else if (typeof expiresDays === 'number' && expiresDays > 0) {
       // Local-store dev mode has no share row to read.
       expiresAt = new Date(Date.now() + expiresDays * 86400000).toISOString();
     }
 
     const shareUrl = `${getAppUrl()}${sharePath}`;
-    const resolvedTitle = typeof packTitle === 'string' && packTitle.trim() ? packTitle.trim() : 'New music';
-    const resolvedSubject = (typeof subject === 'string' && subject.trim())
-      ? subject.trim().slice(0, 200)
-      : defaultSubject('U2C Beatstore', resolvedTitle, emailKind);
 
-    const html = buildBeatSendEmail({
-      recipientName: typeof recipientName === 'string' && recipientName.trim() ? recipientName : email.split('@')[0],
+    // The modal sends the pack it previewed. A re-send that carries only ids
+    // (the follow-up nudge) has the pack read back from the caller's own rows.
+    let packTitle: string = typeof reqPackTitle === 'string' ? reqPackTitle.trim() : '';
+    let packCover: string | null = typeof coverUrl === 'string' ? coverUrl : null;
+    let packTracks: Array<{ title: string; bpm?: number | null; key?: string | null; type?: string | null }> | null =
+      Array.isArray(tracks) ? tracks : null;
+    let trackCount: number | null = packTracks ? packTracks.length : null;
+    if (isSupabaseConfigured()) {
+      if (emailKind === 'project' && projectId) {
+        const pack = await loadProjectPack(producer.admin, producer.userId, projectId);
+        packTitle = packTitle || pack.name || '';
+        packCover = packCover ?? pack.coverUrl;
+        trackCount = trackCount ?? pack.trackCount;
+      } else if (!packTracks) {
+        const pack = await loadTrackPack(producer.admin, producer.userId, trackIds);
+        packTracks = pack.tracks;
+        packCover = packCover ?? pack.coverUrl;
+        trackCount = pack.tracks.length;
+        if (!packTitle && pack.tracks.length) {
+          packTitle = pack.tracks.length === 1 ? pack.tracks[0].title : `${pack.tracks.length} tracks`;
+        }
+      }
+    }
+
+    const input = beatSendEmailInput({
+      kind: emailKind,
       shareUrl,
-      packTitle: resolvedTitle,
-      packMeta: typeof packMeta === 'string' ? packMeta : '',
-      coverUrl: typeof coverUrl === 'string' ? coverUrl : null,
+      recipientName: typeof recipientName === 'string' && recipientName.trim() ? recipientName : email.split('@')[0],
+      packTitle,
+      trackCount,
+      coverUrl: packCover,
       message: typeof message === 'string' ? message : '',
       allowDownloads: linkAllowsDownloads,
       expiresAt,
-      kind: emailKind,
-      tracks: Array.isArray(tracks) ? tracks : [],
+      fullPlayback,
+      role,
+      tracks: packTracks ?? [],
+      producerName,
+      subject: typeof subject === 'string' ? subject : null,
+      fromAddress: process.env.RESEND_FROM_EMAIL,
     });
+    const html = buildBeatSendEmail(input.template);
 
     // 1. Send Email via Resend
     const { data: resendData, error: resendError } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+      from: input.from,
       to: email,
-      subject: resolvedSubject,
+      subject: input.subject,
       html,
     });
 
