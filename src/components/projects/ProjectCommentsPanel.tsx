@@ -283,7 +283,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                 }`}
               >
                 <div className="flex items-start justify-between gap-3 mb-1.5">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                     <div
                       className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
                         isOwner ? 'bg-white/80 text-white' : 'bg-white/[0.05] text-white/80'
@@ -291,7 +291,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                     >
                       <User size={9} />
                     </div>
-                    <span className="text-[11px] font-medium text-white truncate">
+                    <span className="text-[11px] font-medium text-white min-w-0 break-words">
                       {attributedAuthor(c.author_name, c.share_contact?.name)}
                     </span>
                     {isOwner && (
