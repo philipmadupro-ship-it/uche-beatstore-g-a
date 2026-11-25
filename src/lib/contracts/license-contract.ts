@@ -123,6 +123,14 @@ export function scheduleOfTerms(tiers: ResolvedTier[], producerName: string): st
 
 // ── Verify ──────────────────────────────────────────────────────────────────
 
+/** Where the generated schedule starts: the LAST line that is exactly its heading (never a mention of it inside prose). */
+export function scheduleStart(text: string): number {
+  const marker = `\n${SCHEDULE_HEADING}\n`;
+  const i = text.lastIndexOf(marker);
+  if (i !== -1) return i + 1;
+  return text.startsWith(`${SCHEDULE_HEADING}\n`) || text === SCHEDULE_HEADING ? 0 : -1;
+}
+
 export interface Verification { ok: boolean; missing: string[]; contradicted: string[] }
 
 const NUM_STREAMS = /(\d[\d,]*)\s+(?:audio\s+)?streams/i;
@@ -145,7 +153,7 @@ function numIn(line: string, re: RegExp): number | null {
  */
 export function verifyContractTerms(text: string, tiers: ResolvedTier[], producerName: string): Verification {
   const terms = distinctTiers(tiers).map((t) => t.terms);
-  const at = text.indexOf(SCHEDULE_HEADING);
+  const at = scheduleStart(text);
   const body = at === -1 ? text : text.slice(0, at);
   const schedule = at === -1 ? '' : text.slice(at);
   const missing: string[] = [];
@@ -180,6 +188,60 @@ export function verifyContractTerms(text: string, tiers: ResolvedTier[], produce
   return { ok: missing.length === 0 && contradicted.length === 0, missing, contradicted };
 }
 
+// ── Locked section ──────────────────────────────────────────────────────────
+
+/** The heading level and text of a markdown heading line, or null. String work only. */
+function headingOf(line: string): { level: number; text: string } | null {
+  const t = line.trim();
+  let n = 0;
+  while (n < t.length && t[n] === '#') n += 1;
+  if (n === 0 || n > 6 || t[n] !== ' ') return null;
+  return { level: n, text: t.slice(n + 1).trim() };
+}
+
+const isScheduleHeading = (line: string) => headingOf(line)?.text.toLowerCase() === 'schedule of terms';
+
+/** True when the text has a "Schedule of Terms" heading of any level: that section is generated, never written. */
+export function hasScheduleSection(text: string): boolean {
+  return text.split('\n').some(isScheduleHeading);
+}
+
+/**
+ * Remove every "Schedule of Terms" section (its heading through the line before
+ * the next heading of the same or a higher level, or the end). A producer who
+ * pastes a generated contract back into the template, or a buyer-controlled
+ * value that carries a heading, can then never add a second schedule beside
+ * the generated one.
+ */
+export function stripScheduleSection(text: string): { text: string; removed: boolean } {
+  const lines = text.split('\n');
+  const out: string[] = [];
+  let removed = false;
+  let level = 0; // > 0 while inside a schedule section
+  for (const line of lines) {
+    const h = headingOf(line);
+    if (level > 0) {
+      if (h && h.level <= level && !isScheduleHeading(line)) level = 0;
+      else if (!(h && isScheduleHeading(line))) continue;
+    }
+    if (h && isScheduleHeading(line)) { level = Math.min(h.level, 2); removed = true; continue; }
+    out.push(line);
+  }
+  return { text: out.join('\n'), removed };
+}
+
+/** A purchase value as one plain line: a buyer-supplied name must not be able to start a heading or a clause. */
+function oneLine(v: string): string {
+  return String(v ?? '').replace(/\s*[\r\n]+\s*/g, ' ').slice(0, 2000);
+}
+
+/** What the producer is told when wording carries the generated section: the save refuses it. */
+export const SCHEDULE_HEADING_ERROR =
+  'License contract not saved: delete the line "## Schedule of Terms" and everything under it. That section is generated for every contract and cannot be part of your wording.';
+
+export const SCHEDULE_REMOVED_NOTE =
+  'A "Schedule of Terms" section in your wording was removed: the generated schedule is added to every contract and cannot be edited.';
+
 // ── Build ───────────────────────────────────────────────────────────────────
 
 export interface ContractSnapshot {
@@ -192,6 +254,8 @@ export interface ContractSnapshot {
 
 export interface BuiltContract {
   text: string;
+  /** the generated Schedule of Terms: the text from its heading to the end of `text`, never editable */
+  schedule: string;
   snapshot: ContractSnapshot;
   /** the generated text against the terms: must always be ok */
   verification: Verification;
@@ -207,20 +271,28 @@ export function buildLicenseContract(params: {
   vars: ContractVariables;
   tiers: ResolvedTier[];
 }): BuiltContract {
-  const { vars } = params;
+  const vars = Object.fromEntries(
+    Object.entries(params.vars).map(([k, v]) => [k, oneLine(v as string)]),
+  ) as unknown as ContractVariables;
   const tiers = params.tiers.length ? params.tiers : [{ terms: legacyTierTerms('lease'), source: 'legacy' as const, issues: [] }];
   const custom = (params.template ?? '').trim();
   const template = custom || TIER_AWARE_TEMPLATE_MD;
   const terms = tiers.map((t) => t.terms);
-  const body = fillTemplate(template, { ...vars, ...termsVariables(terms, vars.producer_name) }, termsFlags(terms));
-  const text = `${body.trimEnd()}\n\n${scheduleOfTerms(tiers, vars.producer_name)}`;
+  const filled = fillTemplate(template, { ...vars, ...termsVariables(terms, vars.producer_name) }, termsFlags(terms));
+  // The filled text (after clauses and placeholders) is what is stripped, so no template trick
+  // and no purchase value can leave a second schedule in the body.
+  const stripped = stripScheduleSection(filled);
+  const schedule = scheduleOfTerms(tiers, vars.producer_name);
+  const text = `${stripped.text.trimEnd()}\n\n${schedule}`;
   const verification = verifyContractTerms(text, tiers, vars.producer_name);
   const alerts: string[] = [];
+  if (stripped.removed) alerts.push(SCHEDULE_REMOVED_NOTE);
   for (const t of tiers) if (t.source === 'fallback') alerts.push(`Tier "${t.terms.name}": ${t.issues.join('; ') || 'terms unconfirmed'} (standard terms were used)`);
   if (verification.missing.length) alerts.push(`The generated contract does not state: ${verification.missing.join('; ')}`);
   for (const c of verification.contradicted) alerts.push(`Your template wording ${c}`);
   return {
     text,
+    schedule,
     verification,
     bodyConflicts: verification.contradicted,
     alerts,

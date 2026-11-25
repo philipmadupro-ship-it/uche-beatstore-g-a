@@ -23,6 +23,8 @@ vi.mock('@/lib/auth/ownership', () => ({
   createServiceClient: () => serviceClient,
 }));
 
+import { getCreatorProfile } from '@/lib/actions/profile';
+import { SCHEDULE_HEADING_ERROR } from '@/lib/contracts/license-contract';
 import { POST } from './route';
 
 const PRODUCER = '00000000-0000-4000-8000-000000000001';
@@ -206,5 +208,57 @@ describe('POST /api/profile → personal org (LABEL-07)', () => {
     mockUpdate.mockImplementationOnce(async (payload: Record<string, unknown>) => ({ profile: { user_id: 'local-user', ...payload } }));
     expect((await post(profileSaveBody(form))).status).toBe(200);
     expect(mockEnsure).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * LICENSE-05: wording that carries the generated "Schedule of Terms" is never stored.
+ * The Store Editor saves its whole form, so a template that ALREADY holds the heading
+ * and comes back unchanged must not block saving the bio or the prices.
+ */
+describe('POST /api/profile — license template with a Schedule of Terms section', () => {
+  const WITH_SCHEDULE = '# Deal\n\nThanks.\n\n## Schedule of Terms\n\n### Gold\n- Audio streams: Unlimited\n';
+  const stored = (tpl: string | null) =>
+    vi.mocked(getCreatorProfile).mockResolvedValue({ profile: { user_id: 'u1', license_template_md: tpl } } as never);
+
+  it('a CHANGED template carrying the heading is a 400 that names the field and the heading, and nothing is written', async () => {
+    stored('# Old wording');
+    const res = await post({ bio: 'New bio', license_template_md: WITH_SCHEDULE });
+    expect(res.status).toBe(400);
+    const j = await res.json();
+    expect(j.field).toBe('license_template_md');
+    expect(j.error).toBe(SCHEDULE_HEADING_ERROR);
+    expect(j.error).toMatch(/"## Schedule of Terms"/);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('the same wording sent back UNCHANGED saves the other fields and leaves the stored template alone', async () => {
+    stored(WITH_SCHEDULE);
+    const res = await post({ bio: 'New bio', license_lease_price_usd: 150, license_template_md: WITH_SCHEDULE });
+    expect(res.status).toBe(200);
+    const written = mockUpdate.mock.calls[0][0];
+    expect(written).toMatchObject({ bio: 'New bio', license_lease_price_usd: 150 });
+    expect(written).not.toHaveProperty('license_template_md');
+  });
+
+  it('fails closed when the stored profile cannot be read', async () => {
+    vi.mocked(getCreatorProfile).mockResolvedValue({ error: 'boom', profile: null } as never);
+    const res = await post({ bio: 'x', license_template_md: WITH_SCHEDULE });
+    expect(res.status).toBe(400);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('wording without the heading saves as before, with no extra read', async () => {
+    vi.mocked(getCreatorProfile).mockClear();
+    const res = await post({ license_template_md: '# Deal\n\nWords about a schedule of terms below.' });
+    expect(res.status).toBe(200);
+    expect(mockUpdate.mock.calls[0][0].license_template_md).toBe('# Deal\n\nWords about a schedule of terms below.');
+    expect(getCreatorProfile).not.toHaveBeenCalled();
+  });
+
+  it('clearing the template is allowed', async () => {
+    const res = await post({ license_template_md: '' });
+    expect(res.status).toBe(200);
+    expect(mockUpdate.mock.calls[0][0].license_template_md).toBeNull();
   });
 });

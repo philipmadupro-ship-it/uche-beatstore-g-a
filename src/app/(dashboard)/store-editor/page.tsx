@@ -35,6 +35,7 @@ import { toast } from '@/hooks/useToast';
 import { errorMessage } from '@/lib/errors';
 import Link from 'next/link';
 import { LicenseTemplateEditor } from '@/components/store-editor/LicenseTemplateEditor';
+import { SCHEDULE_HEADING_ERROR, hasScheduleSection } from '@/lib/contracts/license-contract';
 import { CARD_STYLE_META, VIDEO_STYLE_META } from '@/lib/share/styles';
 import { ShareTemplateStudio } from '@/components/share-templates/ShareTemplateStudio';
 import { normalizeThemeColor } from '@/lib/theme/colors';
@@ -1663,6 +1664,7 @@ export default function StoreEditorPage() {
     setSaving(true);
     try {
       // 1. Profile fields
+      const templateHasSchedule = hasScheduleSection(form.license_template_md);
       const profilePayload = {
         display_name: form.display_name || null,
         bio: form.bio || null,
@@ -1685,7 +1687,9 @@ export default function StoreEditorPage() {
         seo_title: form.seo_title || null,
         seo_description: form.seo_description || null,
         og_image_url: form.og_image_url || null,
-        license_template_md: form.license_template_md || null,
+        // Wording that carries the generated Schedule of Terms is not sent (the editor says why);
+        // everything else on this page still saves.
+        ...(templateHasSchedule ? {} : { license_template_md: form.license_template_md || null }),
         share_card_style: form.share_card_style || null,
         share_video_style: form.share_video_style || null,
         voice_tag_url: form.voice_tag_url || null,
@@ -1705,6 +1709,7 @@ export default function StoreEditorPage() {
       // storefront will not show rather than letting a visitor find out.
       const badLinks = unusableLinksWarning(form);
       if (badLinks) toast.warning(badLinks.title, badLinks.description);
+      if (templateHasSchedule) toast.warning('License contract not saved', SCHEDULE_HEADING_ERROR.replace('License contract not saved: ', ''));
 
       // 2. Persist each featured playlist's order + featured flag
       const featuredIds = new Set(featured.map((f) => f.id));

@@ -20,6 +20,7 @@ import { toast } from '@/hooks/useToast';
 import { errorMessage } from '@/lib/errors';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { LicenseAnalysisPanel } from '@/components/store/LicenseAnalysisPanel';
+import { LicenseContractDraft } from '@/components/store/LicenseContractDraft';
 import { analyzeLicenseTiers, tierDraftFromRow } from '@/lib/license/analysis';
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -431,6 +432,7 @@ export function LicenseBuilder({ template = null }: { template?: string | null }
                 </div>
 
                 <LicenseAnalysisPanel tierId={l.id} analysis={analysis} />
+                <LicenseContractDraft tierId={l.id} template={template} dirty={Object.keys(drafts[l.id] ?? {}).length > 0} />
 
                 {/* Action row */}
                 <div className="flex items-center justify-between pt-2">

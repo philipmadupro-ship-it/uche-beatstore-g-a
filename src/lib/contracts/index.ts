@@ -546,6 +546,12 @@ export type ContactsBulkTagsBody = z.infer<typeof ContactsBulkTagsBodySchema>;
 // consumers (/api/sales, /api/analytics, future delivery checks) validate
 // rows on read instead of trusting whatever the webhook last wrote.
 
+// POST /api/licenses/[id]/contract-draft — wording to draft with when it is not saved yet.
+export const LicenseContractDraftBodySchema = z.object({
+  template: z.string().max(50000).nullish(),
+}).strict();
+export type LicenseContractDraftBody = z.infer<typeof LicenseContractDraftBodySchema>;
+
 export const PurchaseLineItemSchema = z.object({
   track_id: z.string().min(1),
   license_id: z.string().min(1),

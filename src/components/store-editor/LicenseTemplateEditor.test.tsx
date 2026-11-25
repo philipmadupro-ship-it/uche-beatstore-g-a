@@ -101,4 +101,24 @@ describe('LicenseTemplateEditor', () => {
     expect(area().style.height).toBe('250px');
     vi.restoreAllMocks();
   });
+
+  it('shows the generated Schedule of Terms read-only under the wording', () => {
+    render(<Harness initial="# Mine" />);
+    const block = screen.getByTestId('license-template-schedule');
+    expect(block.textContent).toContain('generated, cannot be edited');
+    expect(block.textContent).toContain('Audio streams: 5,000 streams');
+    expect(block.querySelector('textarea, input')).toBeNull();
+  });
+
+  it('says exactly what to delete when the wording holds a Schedule of Terms section', () => {
+    render(<Harness initial={'# Mine\n\n## Schedule of Terms\n- x'} />);
+    const msg = screen.getByTestId('license-template-schedule-error');
+    expect(msg.textContent).toContain('Delete the line “## Schedule of Terms” and everything under it');
+    expect(msg.textContent).toContain('will not be saved');
+  });
+
+  it('shows no such message for ordinary wording', () => {
+    render(<Harness initial={'# Mine\n\nThe schedule of terms is below.'} />);
+    expect(screen.queryByTestId('license-template-schedule-error')).toBeNull();
+  });
 });

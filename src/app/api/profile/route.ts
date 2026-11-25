@@ -6,6 +6,7 @@ import { createLogger } from '@/lib/log';
 const log = createLogger('api.profile');
 import { isUUID, readBody } from '@/lib/validate';
 import { CreatorProfilePatchSchema } from '@/lib/contracts';
+import { SCHEDULE_HEADING_ERROR, hasScheduleSection } from '@/lib/contracts/license-contract';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { ensurePersonalOrg } from '@/lib/labelos/personal-org';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
@@ -69,6 +70,21 @@ export async function POST(req: NextRequest) {
       store_layout,
     } = body;
 
+    // The Schedule of Terms is generated for every contract; wording that carries one is never
+    // STORED (LICENSE-05). A template that already holds the heading and is sent back UNCHANGED
+    // (the Store Editor saves its whole form) is left as it is, so a bio or price save is not
+    // blocked by it; the contract build strips the section at every sale. A changed one is a 400.
+    let namedBody: Record<string, unknown> = body;
+    if (typeof license_template_md === 'string' && hasScheduleSection(license_template_md)) {
+      const current = await getCreatorProfile();
+      const stored = (current.profile as { license_template_md?: string | null } | null)?.license_template_md ?? null;
+      if (current.error || stored !== license_template_md) {
+        return NextResponse.json({ error: SCHEDULE_HEADING_ERROR, field: 'license_template_md' }, { status: 400 });
+      }
+      namedBody = { ...body };
+      delete namedBody.license_template_md;
+    }
+
     const payload = {
       display_name: display_name || null,
       bio: bio || null,
@@ -125,7 +141,7 @@ export async function POST(req: NextRequest) {
       ...(store_layout !== undefined && { store_layout: store_layout ?? null }),
     };
 
-    const result = await updateCreatorProfile(pickProvidedProfileFields(payload, body));
+    const result = await updateCreatorProfile(pickProvidedProfileFields(payload, namedBody));
     if (result.error) {
       const status = result.error === 'Not authenticated' ? 401 : 'forbidden' in result && result.forbidden ? 403 : 500;
       // A pending migration is the most common cause of a failed profile

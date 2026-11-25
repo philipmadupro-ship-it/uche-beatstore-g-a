@@ -5,7 +5,7 @@ import { autosizeHeight } from '@/lib/ui/textarea-autosize';
 import {
   ALL_VARIABLE_KEYS, DEFAULT_TEMPLATE_MD, TIER_AWARE_TEMPLATE_MD, VARIABLE_LIST,
 } from '@/lib/contracts/license-template';
-import { previewContract } from '@/lib/contracts/license-contract';
+import { hasScheduleSection, previewContract } from '@/lib/contracts/license-contract';
 import {
   CLAUSE_FLAG_LIST, TERM_VARIABLE_LIST, legacyTierTerms, lintTemplate, tierTermsFromRow, wrapInClause,
   type ClauseFlag, type TierTerms,
@@ -93,6 +93,7 @@ export function LicenseTemplateEditor({
     [value, selected],
   );
   const filledPreview = built.text;
+  const scheduleInWording = useMemo(() => hasScheduleSection(value ?? ''), [value]);
   const problems = useMemo(
     () => [
       ...lintTemplate(value ?? '', ALL_VARIABLE_KEYS),
@@ -194,6 +195,13 @@ export function LicenseTemplateEditor({
         </ul>
       )}
 
+      {scheduleInWording && (
+        <p data-testid="license-template-schedule-error" role="alert" className="text-[11px] text-[#ffb7a8] leading-relaxed">
+          Delete the line &ldquo;## Schedule of Terms&rdquo; and everything under it. That section is generated for every
+          contract and cannot be part of your wording, so this wording will not be saved until it is removed.
+        </p>
+      )}
+
       {preview ? (
         <div className="space-y-2">
           <div role="radiogroup" aria-label="Preview as" className="flex flex-wrap items-center gap-1.5">
@@ -231,6 +239,16 @@ export function LicenseTemplateEditor({
           className={`${textareaCls} font-mono text-[11px] leading-relaxed`}
         />
       )}
+
+      <div data-testid="license-template-schedule" className="space-y-1.5">
+        <p className={groupLabelCls}>Schedule of Terms &middot; generated, cannot be edited</p>
+        <p className="text-[10px] text-white/40 leading-relaxed">
+          Added to the end of every contract from the tier the buyer picks (shown for {selected.label}). Where it and your wording differ, it governs.
+        </p>
+        <pre className="bg-[#090907] border border-white/10 rounded-lg p-3 text-[11px] text-white/60 leading-relaxed whitespace-pre-wrap break-words font-sans max-h-40 overflow-auto">
+          {built.schedule}
+        </pre>
+      </div>
     </div>
   );
 }
