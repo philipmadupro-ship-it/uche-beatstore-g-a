@@ -51,6 +51,8 @@ export interface DigestOfferRow {
   id: string;
   track_title: string | null;
   buyer_email: string;
+  /** Not stored on offers today; used if a source ever provides it. */
+  buyer_name?: string | null;
   status: string;
   created_at: string;
 }
@@ -106,7 +108,8 @@ export function buildActionDigest(input: {
       id: `offer-${o.id}`,
       domain: 'offers',
       label: 'Pending offer',
-      detail: `${o.track_title ?? 'a track'} — ${o.buyer_email}`,
+      // The buyer's email stays on /sales (where this row links), not on Home.
+      detail: o.buyer_name ? `${o.track_title ?? 'a track'} — ${o.buyer_name}` : (o.track_title ?? 'a track'),
       href: '/sales?view=offers',
       occurredAt: o.created_at,
     });

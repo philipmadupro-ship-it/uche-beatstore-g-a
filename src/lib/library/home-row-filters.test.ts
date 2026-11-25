@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_HOME_ROWS } from '@/lib/dashboard/home-config';
+import { DEFAULT_HOME_ROWS, resolveHomeRows } from '@/lib/dashboard/home-config';
 import { matchesRating } from '@/lib/library/rating-filter';
 import { triageStage, TRIAGE_STAGE_ORDER } from '@/lib/library/triage';
 import type { LibraryFilters } from '@/components/library/FilterBar';
@@ -24,7 +24,9 @@ function empty(): LibraryFilters {
 }
 
 const row = (id: string) => {
-  const cfg = DEFAULT_HOME_ROWS.find((r) => r.id === id);
+  // Genre rows are the producer's own now; the ids they get are what must not change.
+  const genre = (tag: string) => ({ track_tags: [{ tag, category: 'genre' }] });
+  const cfg = resolveHomeRows([genre('R&B'), genre('Drill')], DEFAULT_HOME_ROWS).find((r) => r.id === id);
   if (!cfg) throw new Error(`no default row ${id}`);
   return cfg.filter;
 };
