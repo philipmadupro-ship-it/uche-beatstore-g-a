@@ -18,7 +18,7 @@ export const LICENSE_FILE_TYPES = ['MP3', 'WAV', 'FLAC', 'AIFF', 'STEMS', 'MIDI'
 const limit = z.number().int().positive().max(1_000_000_000).nullable();
 
 export const TierTermsSchema = z.object({
-  name: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(80).refine((n) => !/[\r\n]/.test(n), 'name must be one line'),
   file_types: z.array(z.enum(LICENSE_FILE_TYPES)).max(LICENSE_FILE_TYPES.length),
   stems_included: z.boolean(),
   is_exclusive: z.boolean(),
