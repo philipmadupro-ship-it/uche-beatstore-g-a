@@ -17,7 +17,7 @@
  * the 30-day countdown lives.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Download, Mail } from 'lucide-react';
+import { TriangleAlert, Download, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { confirmToast, toast } from '@/hooks/useToast';
 import { createClient } from '@/lib/supabase/client';
@@ -202,7 +202,7 @@ export function OrgDataPanel({ org, isOwner, exportable = true }: { org: Org; is
 
       <section className="rounded-xl border border-[#5a241c] bg-[var(--surface-primary)] p-5 sm:p-6" aria-labelledby="org-danger-heading">
         <p id="org-danger-heading" className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--error-text)]">
-          <AlertTriangle size={12} aria-hidden="true" />
+          <TriangleAlert size={12} aria-hidden="true" />
           Danger zone
         </p>
         {deletable ? (

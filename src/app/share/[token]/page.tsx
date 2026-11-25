@@ -788,15 +788,15 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
 
             {/* Controls */}
             <div className="flex items-center gap-3">
-              <button onClick={prevTrack} disabled={activeIndex === 0}
+              <button aria-label="Previous track" onClick={prevTrack} disabled={activeIndex === 0}
                 className="w-8 h-8 flex items-center justify-center text-white/40 hover:text-white disabled:opacity-20 transition-colors shrink-0">
                 <SkipBack size={16} fill="currentColor" />
               </button>
-              <button onClick={togglePlay}
+              <button aria-label={isPlaying ? "Pause" : "Play"} onClick={togglePlay}
                 className="glass-play glass-play-surface w-10 h-10 rounded-full flex items-center justify-center shrink-0">
                 {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-0.5" />}
               </button>
-              <button onClick={nextTrack} disabled={activeIndex === tracks.length - 1}
+              <button aria-label="Next track" onClick={nextTrack} disabled={activeIndex === tracks.length - 1}
                 className="w-8 h-8 flex items-center justify-center text-white/40 hover:text-white disabled:opacity-20 transition-colors shrink-0">
                 <SkipForward size={16} fill="currentColor" />
               </button>
@@ -861,7 +861,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                     <span className="text-[11px] font-mono text-white/40 tabular-nums">{fmt(track.duration_seconds)}</span>
                   )}
                   {allowDownloads && (
-                    <button onClick={(e) => { e.stopPropagation(); downloadTrack(track); }}
+                    <button aria-label={`Download ${track.title}`} onClick={(e) => { e.stopPropagation(); downloadTrack(track); }}
                       className="p-2 text-white/40 hover:text-white transition-colors opacity-0 group-hover:opacity-100">
                       <Download size={12} />
                     </button>

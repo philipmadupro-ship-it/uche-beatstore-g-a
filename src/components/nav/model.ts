@@ -1,9 +1,9 @@
 import {
-  Home, Layers, ListMusic, Users, Calendar, Link2, Settings, Sliders,
-  CloudOff, User, Store, ShoppingBag, Library, BarChart3, Send, Palette,
-  Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2, FileText,
-  SlidersHorizontal, ShieldCheck, Coins, LayoutDashboard,
+  Layers, ListMusic, Users, Calendar, User, BarChart3, Palette,
+  Building2, UsersRound, Mic2, Inbox, Disc3, Scale, Music2,
+  ShieldCheck, LayoutDashboard,
 } from 'lucide-react';
+import { ICONS } from '@/lib/ui/icons';
 import { ORG_KINDS, type Capability } from '@/lib/labelos/capabilities';
 import { canSeeLegalQueue } from '@/lib/labelos/legal-queue';
 import { canSeeParties } from '@/lib/labelos/parties-view';
@@ -40,21 +40,21 @@ export interface NavGroup {
 
 export const NAV_GROUPS: NavGroup[] = [
   {
-    key: 'catalog', label: 'Catalog', icon: Library,
+    key: 'catalog', label: 'Catalog', icon: ICONS.library,
     items: [
-      { label: 'Library', href: '/library', icon: Home },
+      { label: 'Library', href: '/library', icon: ICONS.library },
       { label: 'Projects', href: '/projects', icon: Layers },
       { label: 'Playlists', href: '/playlists', icon: ListMusic },
-      { label: 'Studio', href: '/studio', icon: Sliders },
-      { label: 'Offline', href: '/offline', icon: CloudOff },
+      { label: 'Studio', href: '/studio', icon: ICONS.studio },
+      { label: 'Offline', href: '/offline', icon: ICONS.offline },
     ],
   },
   {
-    key: 'store', label: 'Store', icon: Store,
+    key: 'store', label: 'Store', icon: ICONS.store,
     items: [
-      { label: 'Editor', href: '/store-editor', icon: Store },
+      { label: 'Editor', href: '/store-editor', icon: ICONS.store },
       { label: 'Cover Art', href: '/cover-art', icon: Palette },
-      { label: 'Sales', href: '/sales', icon: ShoppingBag },
+      { label: 'Sales', href: '/sales', icon: ICONS.sales },
       { label: 'Analytics', href: '/analytics', icon: BarChart3 },
     ],
   },
@@ -62,9 +62,9 @@ export const NAV_GROUPS: NavGroup[] = [
     key: 'crm', label: 'CRM', icon: Users,
     items: [
       { label: 'Contacts', href: '/contacts', icon: Users },
-      { label: 'Campaigns', href: '/campaigns', icon: Send },
+      { label: 'Campaigns', href: '/campaigns', icon: ICONS.send },
       { label: 'Calendar', href: '/calendar', icon: Calendar },
-      { label: 'Links', href: '/links', icon: Link2 },
+      { label: 'Links', href: '/links', icon: ICONS.link },
     ],
   },
 ];
@@ -75,7 +75,7 @@ export const ACCOUNT_GROUP: NavGroup = {
   key: 'account', label: 'Account', icon: User,
   items: [
     { label: 'Profile', href: '/profile', icon: User },
-    { label: 'Settings', href: '/settings', icon: Settings },
+    { label: 'Settings', href: '/settings', icon: ICONS.settings },
   ],
 };
 
@@ -132,17 +132,17 @@ function orgGroup(slug: string, orgKind: string, caps: ReadonlySet<Capability | 
   const items: NavGroup['items'] = [{ label: 'Members', href: `${base}/settings/members`, icon: UsersRound }];
   // LABEL-71: the page where a credited artist answers "may this go on the store?" (the bell links to it) and where the
   // store owner sees the music of connected artists. Every member can open it; it shows each of them only what is theirs.
-  if (storeLicensed) items.push({ label: 'Store listings', href: `${base}/releases/store`, icon: Store });
+  if (storeLicensed) items.push({ label: 'Store listings', href: `${base}/releases/store`, icon: ICONS.store });
   // Doc 25 phase 3: the admin centre, first, for whoever runs the team of a label or artist org (lib/labelos/admin-centre's rule).
   if ((orgKind === 'label' || orgKind === 'artist') && caps?.has(ADMIN_CENTRE_CAPABILITY)) {
     items.unshift({ label: 'Admin', href: `${base}/settings`, icon: ShieldCheck });
   }
   // LABEL-41: label and artist orgs connect to each other; the people who run the org manage it.
   if ((orgKind === 'label' || orgKind === 'artist') && caps?.has('org.manage')) {
-    items.push({ label: 'Connections', href: `${base}/settings/connections`, icon: Link2 });
+    items.push({ label: 'Connections', href: `${base}/settings/connections`, icon: ICONS.link });
   }
   // LABEL-51: the owner's settings (gates, thresholds, departments).
-  if (isOwner && orgKind !== 'producer') items.push({ label: 'Settings', href: `${base}/settings/organization`, icon: SlidersHorizontal });
+  if (isOwner && orgKind !== 'producer') items.push({ label: 'Settings', href: `${base}/settings/organization`, icon: ICONS.settings });
   return { key: 'org', label: 'Organization', icon: Building2, items };
 }
 
@@ -196,7 +196,7 @@ function releasesGroup(slug: string): NavGroup {
 function rightsGroup(slug: string, items: { parties: boolean; legal: boolean; contracts: boolean }): NavGroup | null {
   const links = [
     ...(items.parties ? [{ label: 'Parties', href: `/o/${slug}/rights/parties`, icon: UsersRound }] : []),
-    ...(items.contracts ? [{ label: 'Contracts', href: `/o/${slug}/rights/contracts`, icon: FileText }] : []),
+    ...(items.contracts ? [{ label: 'Contracts', href: `/o/${slug}/rights/contracts`, icon: ICONS.contract }] : []),
     ...(items.legal ? [{ label: 'Legal queue', href: `/o/${slug}/rights/legal`, icon: Scale }] : []),
   ];
   return links.length === 0 ? null : { key: 'rights', label: 'Rights', icon: Scale, items: links };
@@ -209,11 +209,11 @@ function rightsGroup(slug: string, items: { parties: boolean; legal: boolean; co
  * ledger (LABEL-64) live here too.
  */
 function financeGroup(slug: string): NavGroup {
-  return { key: 'finance', label: 'Finance', icon: Coins, items: [
-      { label: 'Overview', href: `/o/${slug}/finance`, icon: Coins, exact: true },
-      { label: 'Earnings', href: `/o/${slug}/finance/earnings`, icon: Coins },
-      { label: 'Advances', href: `/o/${slug}/finance/advances`, icon: Coins },
-      { label: 'Statements', href: `/o/${slug}/finance/statements`, icon: Coins },
+  return { key: 'finance', label: 'Finance', icon: ICONS.financeOverview, items: [
+      { label: 'Overview', href: `/o/${slug}/finance`, icon: ICONS.financeOverview, exact: true },
+      { label: 'Earnings', href: `/o/${slug}/finance/earnings`, icon: ICONS.financeEarnings },
+      { label: 'Advances', href: `/o/${slug}/finance/advances`, icon: ICONS.financeAdvances },
+      { label: 'Statements', href: `/o/${slug}/finance/statements`, icon: ICONS.financeStatements },
     ],
   };
 }
@@ -261,7 +261,7 @@ export function navGroupsFor(
   const ownStatements =
     orgKind !== 'producer' && caps && !caps.has('finance.read') &&
     pageAllowed('statements', { kind: orgKind, role: org.role ?? (org.isOwner ? 'owner' : ''), capabilities: caps, modules: org.modules })
-      ? [{ key: 'finance', label: 'Finance', icon: Coins, items: [{ label: 'My statements', href: `/o/${org.slug}/finance/statements`, icon: Coins }] } as NavGroup]
+      ? [{ key: 'finance', label: 'Finance', icon: ICONS.financeOverview, items: [{ label: 'My statements', href: `/o/${org.slug}/finance/statements`, icon: ICONS.financeStatements }] } as NavGroup]
       : [];
   const exec = orgKind !== 'producer' && caps && pageAllowed('exec', { kind: orgKind, role: org.role ?? (org.isOwner ? 'owner' : ''), capabilities: caps, modules: org.modules }) ? [execGroup(org.slug)] : [];
   return [...producerHubs, ...roster, ...releases, ...rights, ...finance, ...ownStatements, ...exec, orgGroup(org.slug, orgKind, caps, org.isOwner === true, licensed(org, 'store'))];

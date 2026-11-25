@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Music, Mail, Globe, ExternalLink,
   ChevronRight, Mic2, ShoppingCart,
-  CheckCircle2, XCircle, X as CloseIcon, Tag, Zap,
+  CheckCircle2, CircleX, X as CloseIcon, Tag, Zap,
   SkipForward, SkipBack,
 } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
@@ -300,13 +300,13 @@ export function ClientShareVariant({
             : 'bg-[#1f1010] border-red-500/30 text-red-300'
         }`}>
           <div className="max-w-5xl mx-auto flex items-center gap-3">
-            {purchaseStatus === 'success' ? <CheckCircle2 size={16} className="shrink-0" /> : <XCircle size={16} className="shrink-0" />}
+            {purchaseStatus === 'success' ? <CheckCircle2 size={16} className="shrink-0" /> : <CircleX size={16} className="shrink-0" />}
             <p className="text-[11px] font-medium flex-1">
               {purchaseStatus === 'success'
                 ? 'Purchase complete — check your inbox for the receipt and download link.'
                 : 'Checkout cancelled. No payment was taken.'}
             </p>
-            <button onClick={dismissBanner} className="text-current/60 hover:text-current shrink-0">
+            <button aria-label="Dismiss message" onClick={dismissBanner} className="text-current/60 hover:text-current shrink-0">
               <CloseIcon size={14} />
             </button>
           </div>
@@ -342,6 +342,7 @@ export function ClientShareVariant({
                             const origPrice = selTier?.is_exclusive ? exclOrig : leaseOrig;
                             if (price == null) return (
                               <button
+                                aria-label={`Details for ${t.title}`}
                                 onClick={() => setSelectedTrackForDetails(t)}
                                 className="text-white/30 group-hover:text-white transition-colors p-1"
                               >
@@ -376,6 +377,7 @@ export function ClientShareVariant({
                           })()
                         ) : (
                           <button
+                            aria-label={`Details for ${t.title}`}
                             onClick={() => setSelectedTrackForDetails(t)}
                             className="text-white/30 group-hover:text-white transition-colors p-1"
                           >

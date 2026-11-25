@@ -1,7 +1,7 @@
 'use client';
 
 import { SpectralWaveform } from '@/components/player/SpectralWaveform';
-import { X, Play, Pause, Music, ShoppingCart, Info, CheckCircle, XCircle, Tag } from 'lucide-react';
+import { X, Play, Pause, Music, ShoppingCart, Info, CheckCircle2, CircleX, Tag } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import type { Track as CartTrack } from '@/lib/types';
@@ -444,9 +444,9 @@ function LicenseCard({
         {features.map((f) => (
           <li key={f.label} className="flex items-center gap-2 text-[10px]">
             {f.included ? (
-              <CheckCircle size={10} className={`shrink-0 ${isExclusive ? 'text-white' : 'text-[#8ecf9f]'}`} />
+              <CheckCircle2 size={10} className={`shrink-0 ${isExclusive ? 'text-white' : 'text-[#8ecf9f]'}`} />
             ) : (
-              <XCircle size={10} className="shrink-0 text-white/30" />
+              <CircleX size={10} className="shrink-0 text-white/30" />
             )}
             <span className={f.included ? 'text-white/80' : 'text-white/30'}>{f.label}</span>
           </li>

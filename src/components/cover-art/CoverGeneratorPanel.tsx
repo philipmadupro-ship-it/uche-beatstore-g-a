@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Sparkles, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Sparkles, TriangleAlert, Image as ImageIcon } from 'lucide-react';
 import type { ArtworkPalette } from './cover-art-document';
 
 type Provider = 'openai' | 'gemini';
@@ -126,7 +126,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
     <div className="space-y-4">
       {noProviders ? (
         <div className="flex gap-2 border border-[#A9523566] bg-[#A952351A] p-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#A95235]" />
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#A95235]" />
           <div className="space-y-1">
             <p className="text-[11px] text-white/90">No image provider configured.</p>
             <p className="text-[11px] leading-relaxed text-white/40">
@@ -242,7 +242,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
 
       {error ? (
         <div className="flex gap-2 border border-[#A9523566] bg-[#A952351A] p-2.5">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A95235]" />
+          <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A95235]" />
           <p className="text-[11px] leading-relaxed text-white/90">{error}</p>
         </div>
       ) : null}

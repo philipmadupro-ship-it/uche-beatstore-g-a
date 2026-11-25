@@ -6,8 +6,8 @@ import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import {
   Play, Pause, SkipBack, SkipForward, Download,
-  Music, Lock, Loader2, Shield, MessageSquare, Send, Eye, Edit3,
-  ChevronUp, ChevronDown, Check, X as XIcon, Pencil,
+  Music, Lock, Loader2, Shield, MessageSquare, Send, Eye, Pencil,
+  ChevronUp, ChevronDown, Check, X as XIcon,
 } from 'lucide-react';
 import { publicAudioSrc } from '@/lib/audio/url';
 import { useWaveSurfer } from '@/hooks/useWaveSurfer';
@@ -1072,15 +1072,15 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
               {/* Track-level transport stays visible in DAW mode too —
                   PlayerCanvas only owns intra-track play/pause; switching
                   tracks is still the share-page's responsibility. */}
-              <button onClick={prevTrack} className="text-white/40 hover:text-white transition-colors disabled:opacity-30" disabled={activeIndex === 0}>
+              <button aria-label="Previous track" onClick={prevTrack} className="text-white/40 hover:text-white transition-colors disabled:opacity-30" disabled={activeIndex === 0}>
                 <SkipBack size={14} fill="currentColor" />
               </button>
               {!useDawCanvas && (
-                <button onClick={togglePlay} className="glass-play glass-play-surface w-10 h-10 rounded-full flex items-center justify-center">
+                <button aria-label={isPlaying ? "Pause" : "Play"} onClick={togglePlay} className="glass-play glass-play-surface w-10 h-10 rounded-full flex items-center justify-center">
                   {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
                 </button>
               )}
-              <button onClick={nextTrack} className="text-white/40 hover:text-white transition-colors disabled:opacity-30" disabled={activeIndex === tracks.length - 1}>
+              <button aria-label="Next track" onClick={nextTrack} className="text-white/40 hover:text-white transition-colors disabled:opacity-30" disabled={activeIndex === tracks.length - 1}>
                 <SkipForward size={14} fill="currentColor" />
               </button>
 
@@ -1324,7 +1324,7 @@ function RoleBadge({ role }: { role: ShareInfo['role'] }) {
   const map = {
     viewer:    { icon: Eye,           label: 'View only' },
     commenter: { icon: MessageSquare, label: 'Commenter' },
-    editor:    { icon: Edit3,         label: 'Editor' },
+    editor:    { icon: Pencil,         label: 'Editor' },
   } as const;
   const { icon: Icon, label } = map[role];
   return (

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Lock, MessageSquare, Edit3, Headphones } from 'lucide-react';
+import { Lock, MessageSquare, Pencil, Headphones } from 'lucide-react';
 import { playbackLabel } from '@/lib/share/playback';
 
 interface Props {
@@ -38,7 +38,7 @@ export function ShareActions({ allowDownloads, fullPlayback, collaboration, chil
       {children}
       {collaboration && (
         <button type="button" onClick={collaboration.onOpen} className={PILL}>
-          {collaboration.role === 'editor' ? <Edit3 size={12} aria-hidden="true" /> : <MessageSquare size={12} aria-hidden="true" />}
+          {collaboration.role === 'editor' ? <Pencil size={12} aria-hidden="true" /> : <MessageSquare size={12} aria-hidden="true" />}
           {collaboration.role === 'editor' ? 'Comment & edit' : 'Leave feedback'}
           {collaboration.commentCount > 0 && <span className="text-white/40">({collaboration.commentCount})</span>}
         </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Scissors, AlertTriangle } from 'lucide-react';
+import { X, Scissors, TriangleAlert } from 'lucide-react';
 import { StemPlayer } from '@/components/stems/StemPlayer';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
@@ -84,7 +84,7 @@ export function DrawerStemOverlay({ open, status, error, onRetry, data, onClose 
           </div>
         ) : status === 'failed' ? (
           <div className="bg-[#0D0D0A] border border-white/10 rounded-[2rem] sm:rounded-[3rem] p-10 sm:p-24 flex flex-col items-center justify-center gap-6 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
-            <AlertTriangle className="text-[#ff8b73]" size={40} />
+            <TriangleAlert className="text-[#ff8b73]" size={40} />
             <div className="text-center max-w-md" role="alert">
               <p className="text-xl font-black text-white uppercase tracking-widest mb-2">Stem split failed</p>
               <p className="text-[11px] text-white/60 leading-relaxed">{error || 'Stem separation failed.'}</p>

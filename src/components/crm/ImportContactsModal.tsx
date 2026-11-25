@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import {
-  X, Upload, FileSpreadsheet, Loader2, Check, AlertTriangle, Info,
+  X, Upload, FileSpreadsheet, Loader2, Check, TriangleAlert, Info,
   Mail, Phone, Tag, AtSign,
 } from 'lucide-react';
 import { errorMessage } from '@/lib/errors';
@@ -220,7 +220,7 @@ export function ImportContactsModal({ onClose, onSuccess }: Props) {
               </div>
               {error && (
                 <div className="mt-4 flex items-start gap-2 p-3 rounded border border-red-900/50 bg-red-950/20 text-[11px] text-red-300">
-                  <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                  <TriangleAlert size={12} className="mt-0.5 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
@@ -314,7 +314,7 @@ export function ImportContactsModal({ onClose, onSuccess }: Props) {
                         {/* row badge */}
                         <div className="flex items-center justify-center">
                           {r.errors.length > 0 ? (
-                            <AlertTriangle size={10} className="text-red-400" />
+                            <TriangleAlert size={10} className="text-red-400" />
                           ) : r.warnings.length > 0 ? (
                             <Info size={10} className="text-amber-500" />
                           ) : (
@@ -353,7 +353,7 @@ export function ImportContactsModal({ onClose, onSuccess }: Props) {
                           )}
                           {r.errors.map((err, j) => (
                             <p key={j} className="text-[9px] text-red-400 flex items-center gap-1">
-                              <AlertTriangle size={8} /> {err}
+                              <TriangleAlert size={8} /> {err}
                             </p>
                           ))}
                         </div>
@@ -414,7 +414,7 @@ export function ImportContactsModal({ onClose, onSuccess }: Props) {
 
               {error && (
                 <div className="mt-4 flex items-start gap-2 p-3 rounded border border-red-900/50 bg-red-950/20 text-[11px] text-red-300">
-                  <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                  <TriangleAlert size={12} className="mt-0.5 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}

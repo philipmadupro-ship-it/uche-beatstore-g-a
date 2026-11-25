@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { AlertTriangle, ChevronDown, Loader2, Music } from 'lucide-react';
+import { TriangleAlert, ChevronDown, Loader2, Music } from 'lucide-react';
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { MarqueeText } from './MarqueeText';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
@@ -99,7 +99,7 @@ export function PlayerPill({
             </span>
             {badgeLabel ? (
               <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider leading-none text-red-200 bg-red-950/50 border border-red-400/20">
-                <AlertTriangle size={9} />
+                <TriangleAlert size={9} />
                 {badgeLabel}
               </span>
             ) : track.key && (

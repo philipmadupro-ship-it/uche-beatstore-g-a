@@ -43,10 +43,10 @@ export function CalendarView() {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex bg-[#090907] border border-white/10 rounded-xl p-1">
-            <button onClick={prevMonth} className="p-2 hover:bg-white/[0.05] rounded-lg transition-colors text-white/40 hover:text-white">
+            <button aria-label="Previous month" onClick={prevMonth} className="p-2 hover:bg-white/[0.05] rounded-lg transition-colors text-white/40 hover:text-white">
               <ChevronLeft size={18} />
             </button>
-            <button onClick={nextMonth} className="p-2 hover:bg-white/[0.05] rounded-lg transition-colors text-white/40 hover:text-white">
+            <button aria-label="Next month" onClick={nextMonth} className="p-2 hover:bg-white/[0.05] rounded-lg transition-colors text-white/40 hover:text-white">
               <ChevronRight size={18} />
             </button>
           </div>

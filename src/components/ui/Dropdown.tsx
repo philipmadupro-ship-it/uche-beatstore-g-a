@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ICON_SIZE } from '@/lib/ui/icons';
 
 export interface DropdownOption<T extends string = string> {
   value: T;
@@ -190,7 +191,7 @@ export function Dropdown<T extends string = string>({
       >
         {label && <span className="text-white/60 font-mono uppercase tracking-wider text-[10px]">{label}</span>}
         <span className="flex-1 text-left truncate">{display}</span>
-        <ChevronDown size={11} className={cn('text-white/60 transition-transform shrink-0', open && 'rotate-180')} />
+        <ChevronDown size={ICON_SIZE.xs} aria-hidden className={cn('text-white/60 transition-transform shrink-0', open && 'rotate-180')} />
       </button>
 
       {/* Portaled menu. Top-level z-200 keeps it above modals
@@ -233,7 +234,7 @@ export function Dropdown<T extends string = string>({
                 )}
               >
                 <span className="w-3.5 flex items-center justify-center">
-                  {opt.value === value && <Check size={11} className="text-white" />}
+                  {opt.value === value && <Check size={ICON_SIZE.xs} className="text-white" aria-hidden />}
                 </span>
                 <span className="flex-1 truncate">{opt.label}</span>
                 {opt.hint && <span className="text-[10px] text-white/40 font-mono">{opt.hint}</span>}

@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Loader2, Mail, Phone, Globe, Tag, MapPin,
-  Edit2, Check, X, Send, Trash2, FileText, BellRing,
+  Pencil, Check, X, Send, Trash2, FileText, BellRing,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContainer } from '@/components/layout/PageHeader';
@@ -528,7 +528,7 @@ function EditableLine({
       className={cn('group inline-flex items-center gap-1.5 w-full text-left', className)}
     >
       <span className="truncate">{value || placeholder}</span>
-      <Edit2 size={11} className="opacity-0 group-hover:opacity-60 text-white/60 shrink-0" />
+      <Pencil size={11} className="opacity-0 group-hover:opacity-60 text-white/60 shrink-0" />
     </button>
   );
 }

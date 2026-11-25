@@ -9,7 +9,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContainer } from '@/components/layout/PageHeader';
-import { Loader2, Check, X, Edit2, Music, Download, Share2, Activity, Sliders } from 'lucide-react';
+import { Loader2, Check, X, Pencil, Music, Download, Share2, Activity, Sliders } from 'lucide-react';
 import { PlayGlyph } from '@/components/player/TransportIcons';
 import { useRouter } from 'next/navigation';
 import { Track, TrackStatus, TrackType } from '@/lib/types';
@@ -422,14 +422,14 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                     onChange={(e) => setTempTitle(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRename()}
                   />
-                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white"><Check size={14} /></button>
-                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(track?.title || ''); }} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white/40"><X size={14} /></button>
+                  <button aria-label="Save title" onClick={handleRename} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white"><Check size={14} /></button>
+                  <button aria-label="Cancel rename" onClick={() => { setIsEditingTitle(false); setTempTitle(track?.title || ''); }} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white/40"><X size={14} /></button>
                 </div>
               ) : (
                 <div className="group flex items-center gap-2 mb-2 sm:mb-3">
                   <h1 className="text-[24px] sm:text-3xl font-medium text-white leading-tight sm:leading-none tracking-tight truncate font-heading">{track.title}</h1>
-                  <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-white/40 hover:text-white transition-all">
-                    <Edit2 size={13} />
+                  <button aria-label="Rename track" onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-white/40 hover:text-white transition-all">
+                    <Pencil size={13} />
                   </button>
                 </div>
               )}
