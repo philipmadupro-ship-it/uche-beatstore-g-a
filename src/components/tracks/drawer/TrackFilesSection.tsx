@@ -30,11 +30,12 @@ interface Props {
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
 
 export function TrackFilesSection({ trackId, title, audioUrl, wavUrl, stemsDone }: Props) {
-  const [stems, setStems] = useState<StemRefs | null>(null);
+  // Keyed by track so a previous track's stems never show against the next one.
+  const [loaded, setLoaded] = useState<{ trackId: string; refs: StemRefs } | null>(null);
+  const stems = stemsDone && loaded?.trackId === trackId ? loaded.refs : null;
   const { cached } = useOfflineCache();
 
   useEffect(() => {
-    setStems(null);
     if (!stemsDone) return;
     let cancelled = false;
     fetch(`/api/stems?track_id=${encodeURIComponent(trackId)}`)
@@ -42,7 +43,7 @@ export function TrackFilesSection({ trackId, title, audioUrl, wavUrl, stemsDone 
       .then((d) => {
         const s = d?.stem || d?.stems || d;
         if (cancelled || !s) return;
-        setStems({ vocals: s.vocals_url, drums: s.drums_url, bass: s.bass_url, other: s.other_url });
+        setLoaded({ trackId, refs: { vocals: s.vocals_url, drums: s.drums_url, bass: s.bass_url, other: s.other_url } });
       })
       .catch(() => {});
     return () => {
@@ -67,7 +68,7 @@ export function TrackFilesSection({ trackId, title, audioUrl, wavUrl, stemsDone 
         {rows.map((a) => {
           const word = offlineLabel(a.offline);
           return (
-            <li key={a.id} className="flex items-center justify-between gap-3 py-2 text-[12px]" data-testid={`track-file-${a.source}${a.kind === 'stem' ? `-${a.id.split(':').pop()}` : ''}`}>
+            <li key={a.id} className="flex items-center justify-between gap-3 py-2 text-[11px]" data-testid={`track-file-${a.source}${a.kind === 'stem' ? `-${a.id.split(':').pop()}` : ''}`}>
               <span className="min-w-0 truncate text-white/80">{a.label}</span>
               <span className="flex shrink-0 items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
                 <span>{assetKindLabel(a.kind)} · {locationLabel(a.location)}</span>

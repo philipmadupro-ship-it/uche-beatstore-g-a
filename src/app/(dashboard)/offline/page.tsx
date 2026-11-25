@@ -105,8 +105,8 @@ export default function OfflinePage() {
                     <Music2 size={12} className="text-white" />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-[11px] text-[var(--text-primary)]">{m.title || m.id}</p>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{describeCacheId(m.id).label}</p>
+                    <p className="line-clamp-2 break-words text-[11px] text-[var(--text-primary)]">{m.title || m.id}</p>
+                    <p className="break-words font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{describeCacheId(m.id).label}</p>
                   </div>
                   <p className="font-mono text-[10px] text-[var(--text-readable)]">{formatMB(m.size)}</p>
                   <p className="hidden font-mono text-[10px] text-[var(--text-readable)] sm:block">

@@ -46,21 +46,21 @@ export function useOfflineFirstSrc(
   contentKey?: string | null,
 ) {
   const online = audioSrc(rawUrl);
-  const [offline, setOffline] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  // The saved copy is remembered WITH the inputs it was resolved for, so a change of
+  // track/file simply stops matching — no reset inside the effect.
+  const inputs = `${cacheId ?? ''}|${rawUrl ?? ''}|${contentKey ?? ''}`;
+  const [found, setFound] = useState<{ inputs: string; src: string; failed: boolean } | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    setOffline(null);
-    setFailed(false);
     if (!cacheId) return;
+    let cancelled = false;
     (async () => {
       try {
         const meta = await getCachedMeta(cacheId);
         if (!meta || cancelled) return;
         if (contentKey && meta.contentKey && meta.contentKey !== contentKey) return;
         const src = await getOfflineSrc(cacheId);
-        if (!cancelled && src) setOffline(src);
+        if (!cancelled && src) setFound({ inputs, src, failed: false });
       } catch {
         /* IndexedDB unavailable: stay online */
       }
@@ -68,15 +68,16 @@ export function useOfflineFirstSrc(
     return () => {
       cancelled = true;
     };
-  }, [cacheId, contentKey, rawUrl]);
+  }, [cacheId, contentKey, rawUrl, inputs]);
+
+  const current = found && found.inputs === inputs && !found.failed ? found : null;
 
   const onError = useCallback(() => {
-    if (!offline) return;
-    setFailed(true);
+    if (!current) return;
+    setFound({ ...current, failed: true });
     // The blob URL is bad; drop it so the next lookup rebuilds it from the blob.
     if (cacheId) revokeOfflineSrc(cacheId);
-  }, [offline, cacheId]);
+  }, [current, cacheId]);
 
-  const usingOffline = !!offline && !failed;
-  return { src: usingOffline ? (offline as string) : online, usingOffline, onError };
+  return { src: current ? current.src : online, usingOffline: !!current, onError };
 }
