@@ -16,7 +16,8 @@ import {
   type ProjectAssetKind,
 } from '@/lib/projects/assets';
 import { PROJECT_ASSET_COLUMNS, toProjectAssetView, type ProjectAssetRow } from '@/lib/projects/asset-view';
-import { deleteProjectAssetObject, projectAssetBuckets, projectAssetSize, storeProjectAsset } from '@/lib/storage/project-assets';
+import { DAW_EXTENSIONS, DAW_SNIFF_BYTES, dawMismatchMessage, dawOf, sniffDaw } from '@/lib/projects/daw';
+import { deleteProjectAssetObject, projectAssetBuckets, projectAssetSize, readProjectAssetHead, storeProjectAsset } from '@/lib/storage/project-assets';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
 import { loadAssetUploaders, loadUploaderNames } from '@/lib/artist-portal/uploads';
 
@@ -115,12 +116,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!fields.success) return NextResponse.json({ error: fields.error.issues[0]?.message ?? 'Invalid fields' }, { status: 400 });
       const check = validateAssetFile({ name: file.name, size: file.size });
       if (!check.ok) return NextResponse.json({ error: assetValidationMessage(check.error) }, { status: check.error === 'too-large' ? 413 : 415 });
+      const bytes = Buffer.from(await file.arrayBuffer());
+      const head = bytes.subarray(0, DAW_SNIFF_BYTES);
+      // A DAW file must be what its extension says (FL Studio / Ableton / Reaper have a signature).
+      if (sniffDaw(check.extension, head) === 'mismatch') {
+        return NextResponse.json({ error: dawMismatchMessage(check.extension) }, { status: 415 });
+      }
       fileName = file.name;
       ({ kind, label } = fields.data);
-      inPortal = fields.data.in_portal ?? false;
+      // A session holds unreleased stems and local paths: it never defaults into the artist portal.
+      inPortal = dawOf(file.name, head) ? false : (fields.data.in_portal ?? false);
       mime = check.mime;
       size = file.size;
-      url = await storeProjectAsset(Buffer.from(await file.arrayBuffer()), assetObjectKey(id, nanoid(16), check.extension), mime);
+      url = await storeProjectAsset(bytes, assetObjectKey(id, nanoid(16), check.extension), mime);
       storedHere = true;
     } else {
       const parsed = ProjectAssetRegisterBodySchema.safeParse(await req.json().catch(() => null));
@@ -136,10 +144,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await deleteProjectAssetObject(body.url).catch(() => {});
         return NextResponse.json({ error: assetValidationMessage(check.error) }, { status: check.error === 'too-large' ? 413 : 415 });
       }
+      // The bytes were never in this request, so read the head of the stored object: a
+      // DAW file must match its signature, and a zip may be a bundled session.
+      let head: Uint8Array | null = null;
+      if (DAW_EXTENSIONS[check.extension] || check.extension === 'zip') {
+        head = await readProjectAssetHead(body.url, DAW_SNIFF_BYTES).catch(() => null);
+      }
+      if (DAW_EXTENSIONS[check.extension]) {
+        const sniff = head ? sniffDaw(check.extension, head) : sniffDaw(check.extension, new Uint8Array(0));
+        if (sniff === 'mismatch') {
+          // Refused: the object must not stay in the bucket.
+          await deleteProjectAssetObject(body.url).catch(() => {});
+          return NextResponse.json({ error: dawMismatchMessage(check.extension) }, { status: 415 });
+        }
+      }
       fileName = body.file_name;
       kind = body.kind;
       label = body.label;
-      inPortal = body.in_portal;
+      inPortal = dawOf(body.file_name, head) ? false : body.in_portal;
       mime = check.mime;
       size = stored;
       url = body.url;

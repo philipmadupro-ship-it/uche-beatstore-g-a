@@ -1,6 +1,7 @@
 import { assetContentKey } from './content-key';
 import type { Asset, AssetKind } from './types';
 import type { ProjectAssetView } from '@/lib/projects/asset-view';
+import { dawOf } from '@/lib/projects/daw';
 
 /**
  * A project file as an Asset. The input is `ProjectAssetView` — the shape the
@@ -8,7 +9,8 @@ import type { ProjectAssetView } from '@/lib/projects/asset-view';
  * cannot get in here. The fingerprint is therefore built from what a re-upload
  * changes in the view (size, created/updated time, file name).
  */
-function kindOf(view: Pick<ProjectAssetView, 'kind' | 'mime'>): AssetKind {
+function kindOf(view: Pick<ProjectAssetView, 'kind' | 'mime' | 'file_name'>): AssetKind {
+  if (dawOf(view.file_name)) return 'project';
   if (view.mime?.startsWith('audio/') || view.kind === 'audio') return 'audio';
   if (view.kind === 'artwork' || view.mime?.startsWith('image/')) return 'artwork';
   if (view.kind === 'document' || view.kind === 'lyrics') return 'document';
@@ -18,6 +20,7 @@ function kindOf(view: Pick<ProjectAssetView, 'kind' | 'mime'>): AssetKind {
 export function assetsOfProject(views: readonly ProjectAssetView[]): Asset[] {
   return views.map((v): Asset => {
     const kind = kindOf(v);
+    const daw = dawOf(v.file_name);
     return {
       id: `project:${v.project_id}:file:${v.id}`,
       source: 'project_file',
@@ -34,6 +37,7 @@ export function assetsOfProject(views: readonly ProjectAssetView[]): Asset[] {
       playable: kind === 'audio',
       openUrl: v.downloadUrl,
       offline: 'none',
+      ...(daw ? { daw: { app: daw.app, label: daw.label } } : {}),
     };
   });
 }
