@@ -2,42 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  Bell, X, Upload, GitBranch, MessageSquare, Send, Star, Loader2,
-} from 'lucide-react';
-import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { Bell, X, Loader2 } from 'lucide-react';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
-
-interface ActivityItem {
-  id: string;
-  kind: 'upload' | 'version' | 'comment' | 'send' | 'rating';
-  at: string;
-  title: string;
-  subject_id?: string | null;
-  subject_kind?: 'track' | 'project' | 'contact' | null;
-  meta?: Record<string, unknown>;
-}
+import {
+  ACTIVITY_GROUPS, GROUP_LABEL, filterByGroup, groupByDay, groupCounts,
+  type ActivityGroup, type ActivityItem,
+} from '@/lib/dashboard/activity-taxonomy';
+import { formatRelativeTime } from '@/lib/notifications/presentation';
+import { ActivityRow, chipClass } from './activity-ui';
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-const KIND_META: Record<ActivityItem['kind'], { icon: React.ElementType; color: string }> = {
-  upload:  { icon: Upload,        color: 'text-white' },
-  version: { icon: GitBranch,     color: 'text-[#6DC6A4]' },
-  comment: { icon: MessageSquare, color: 'text-[#e8b76a]' },
-  send:    { icon: Send,          color: 'text-[#7aa8e8]' },
-  rating:  { icon: Star,          color: 'text-white' },
-};
-
 /**
  * Slide-in activity feed anchored to the right edge.
  *
- * Pulls /api/activity for the last 7 days when opened. Each item links
- * to the relevant subject — tracks open the library detail page,
- * comments jump to the project, sends jump to the contact.
+ * Pulls /api/activity for the last 7 days when opened. What counts as an
+ * event, its group, wording and link live in lib/dashboard/activity-taxonomy;
+ * rows are grouped by day and filtered by group (Music / Sales / Artists / Sharing).
  *
  * Implementation notes:
  *  - Portaled to <body> so the panel escapes any parent stacking context
@@ -48,7 +33,7 @@ const KIND_META: Record<ActivityItem['kind'], { icon: React.ElementType; color: 
  *    user's intent signal, so we don't need to keep it warm in the
  *    background.
  */
-type ActivityFilter = 'all' | ActivityItem['kind'];
+type ActivityFilter = 'all' | ActivityGroup;
 
 export function ActivityPanel({ open, onClose }: Props) {
   const panelRef = useDialogBehavior({ open, onClose });
@@ -60,6 +45,7 @@ export function ActivityPanel({ open, onClose }: Props) {
   // so the chips advertise scope honestly even when the active chip
   // is hiding rows.
   const [filter, setFilter] = useState<ActivityFilter>('all');
+  const counts = groupCounts(items);
 
   useEffect(() => {
     if (!open) return;
@@ -126,33 +112,23 @@ export function ActivityPanel({ open, onClose }: Props) {
           </button>
         </div>
 
-        {/* Filter chips — All + one per kind. Each carries the count
-            of matching rows so the user knows what's hiding behind a
-            chip before clicking. The strip stays mounted even while
-            loading; rendering chips with zero counts is fine. */}
-        <div className="px-3 pt-3 pb-2 border-b border-white/[0.04] overflow-x-auto scrollbar-hide">
-          <div className="flex items-center gap-1.5">
-            {(['all', 'upload', 'version', 'comment', 'send', 'rating'] as const).map((k) => {
-              const count = k === 'all' ? items.length : items.filter((i) => i.kind === k).length;
+        {/* Group chips — All + Music / Sales / Artists / Sharing. A group with
+            no rows is not offered; counts come from the unfiltered list. */}
+        <div className="px-3 pt-3 pb-2 border-b border-white/[0.04]">
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter activity by group">
+            {(['all', ...ACTIVITY_GROUPS.filter((g) => counts[g] > 0)] as ActivityFilter[]).map((k) => {
+              const count = k === 'all' ? items.length : counts[k];
               const active = filter === k;
-              const meta = k === 'all' ? null : KIND_META[k];
-              const Icon = meta?.icon;
               return (
                 <button
                   key={k}
+                  type="button"
+                  aria-pressed={active}
                   onClick={() => setFilter(k)}
-                  className={cn(
-                    'shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider transition-colors border',
-                    active
-                      ? 'bg-white/10 text-white border-white/20'
-                      : 'bg-transparent text-white/60 border-white/[0.06] hover:text-white hover:border-white/[0.12]',
-                  )}
+                  className={chipClass(active)}
                 >
-                  {Icon && <Icon size={9} className={active ? 'text-white' : meta!.color} />}
-                  <span>{k === 'all' ? 'All' : k}</span>
-                  <span className={cn('font-bold tabular-nums', active ? 'text-white' : 'text-white/40')}>
-                    {count}
-                  </span>
+                  <span>{k === 'all' ? 'All' : GROUP_LABEL[k]}</span>
+                  <span className={cn('font-bold tabular-nums', active ? 'text-white' : 'text-white/40')}>{count}</span>
                 </button>
               );
             })}
@@ -172,14 +148,14 @@ export function ActivityPanel({ open, onClose }: Props) {
           ) : items.length === 0 ? (
             <div className="px-3 py-16 text-center text-white/40">
               <p className="text-[11px]">Nothing yet in the last 7 days.</p>
-              <p className="text-[10px] mt-1.5 text-white/30">Uploads, comments, sends and ratings will land here.</p>
+              <p className="text-[10px] mt-1.5 text-white/30">Uploads, sales, artist replies and sends will land here.</p>
             </div>
           ) : (() => {
-            const visible = filter === 'all' ? items : items.filter((i) => i.kind === filter);
+            const visible = filterByGroup(items, filter);
             if (visible.length === 0) {
               return (
                 <div className="px-3 py-16 text-center text-white/40">
-                  <p className="text-[11px]">No {filter} activity in the last 7 days.</p>
+                  <p className="text-[11px]">No {filter === 'all' ? '' : `${GROUP_LABEL[filter].toLowerCase()} `}activity in the last 7 days.</p>
                   <button
                     onClick={() => setFilter('all')}
                     className="text-[10px] mt-2 text-white hover:text-white transition-colors underline underline-offset-2"
@@ -190,11 +166,18 @@ export function ActivityPanel({ open, onClose }: Props) {
               );
             }
             return (
-              <ul className="space-y-0.5">
-                {visible.map((item) => (
-                  <ActivityRow key={item.id} item={item} onNavigate={onClose} />
+              <div className="space-y-3">
+                {groupByDay(visible).map((day) => (
+                  <section key={day.key} aria-label={day.label}>
+                    <h3 className="px-3 pb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{day.label}</h3>
+                    <ul className="space-y-0.5">
+                      {day.items.map((item) => (
+                        <ActivityRow key={item.id} item={item} onNavigate={onClose} timeLabel={formatRelativeTime(item.at)} />
+                      ))}
+                    </ul>
+                  </section>
                 ))}
-              </ul>
+              </div>
             );
           })()}
         </div>
@@ -202,73 +185,4 @@ export function ActivityPanel({ open, onClose }: Props) {
     </>,
     document.body,
   );
-}
-
-/**
- * Single activity row. Hover-highlights subtly; clicking jumps to the
- * subject (track / project / contact) and dismisses the panel so the
- * user lands directly on the relevant view.
- */
-function ActivityRow({ item, onNavigate }: { item: ActivityItem; onNavigate: () => void }) {
-  const { icon: Icon, color } = KIND_META[item.kind];
-  const href = subjectHref(item);
-  const time = relativeTime(item.at);
-
-  const body = (
-    <div className="flex gap-3 px-3 py-2.5 rounded-md hover:bg-white/[0.03] transition-colors cursor-pointer group">
-      <div className={cn(
-        'w-7 h-7 rounded-full flex items-center justify-center shrink-0 border border-white/[0.05]',
-        'bg-white/[0.03]',
-      )}>
-        <Icon size={12} className={color} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] text-white leading-snug line-clamp-2 group-hover:text-white transition-colors">
-          {item.title}
-        </p>
-        <p className="text-[10px] text-white/40 mt-0.5 font-mono tabular-nums">
-          {time}
-        </p>
-      </div>
-    </div>
-  );
-
-  return (
-    <li>
-      {href ? (
-        <Link href={href} onClick={onNavigate}>{body}</Link>
-      ) : (
-        body
-      )}
-    </li>
-  );
-}
-
-function subjectHref(item: ActivityItem): string | null {
-  if (!item.subject_id || !item.subject_kind) return null;
-  switch (item.subject_kind) {
-    case 'track':   return `/library/${item.subject_id}`;
-    case 'project': return `/projects/${item.subject_id}`;
-    case 'contact': return `/contacts`; // CRM is list-only — no per-contact route
-    default:        return null;
-  }
-}
-
-/**
- * Compact "5m ago / 3h ago / 2d ago" formatter. Falls back to a full
- * date once we're past 7 days (the activity window itself is 7 days,
- * so this branch is mostly defensive against clock skew).
- */
-function relativeTime(iso: string): string {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return '';
-  const diff = Date.now() - t;
-  const min = Math.floor(diff / 60_000);
-  if (min < 1)    return 'just now';
-  if (min < 60)   return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24)    return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 7)    return `${day}d ago`;
-  return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
