@@ -3,8 +3,9 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { autosizeHeight } from '@/lib/ui/textarea-autosize';
 import {
-  ALL_VARIABLE_KEYS, DEFAULT_TEMPLATE_MD, TIER_AWARE_TEMPLATE_MD, VARIABLE_LIST, previewTemplate,
+  ALL_VARIABLE_KEYS, DEFAULT_TEMPLATE_MD, TIER_AWARE_TEMPLATE_MD, VARIABLE_LIST,
 } from '@/lib/contracts/license-template';
+import { previewContract } from '@/lib/contracts/license-contract';
 import {
   CLAUSE_FLAG_LIST, TERM_VARIABLE_LIST, legacyTierTerms, lintTemplate, tierTermsFromRow, wrapInClause,
   type ClauseFlag, type TierTerms,
@@ -87,16 +88,23 @@ export function LicenseTemplateEditor({
   ] as Array<{ id: string; label: string; terms: TierTerms }>), [tiers]);
   const selected = previewOptions.find((o) => o.id === previewAs) ?? previewOptions[0];
 
-  const filledPreview = useMemo(
-    () => previewTemplate(value ?? '', [selected.terms]),
+  const built = useMemo(
+    () => previewContract(value ?? '', [selected.terms]),
     [value, selected],
   );
-  const problems = useMemo(() => lintTemplate(value ?? '', ALL_VARIABLE_KEYS), [value]);
+  const filledPreview = built.text;
+  const problems = useMemo(
+    () => [
+      ...lintTemplate(value ?? '', ALL_VARIABLE_KEYS),
+      ...built.bodyConflicts.map((c) => `Your wording ${c}. The Schedule of Terms governs.`),
+    ],
+    [value, built],
+  );
 
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-white/40">
-        Filled in at every purchase and attached as a PDF to the delivery email. Markdown supported (# heading, ** bold **, - bullet). Leave empty to use the default template.
+        Filled in at every purchase and attached as a PDF to the delivery email. Markdown supported (# heading, ** bold **, - bullet). Leave empty to use the default template. A Schedule of Terms, generated from the tier the buyer picked, is added to every contract and governs over any wording above it.
       </p>
 
       <div className="space-y-2">

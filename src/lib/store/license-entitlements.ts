@@ -1,3 +1,6 @@
+import { parseTierTerms } from '@/lib/contracts/license-terms-snapshot';
+import type { TierTerms } from '@/lib/contracts/license-terms';
+
 export type StoreLicenseType = 'lease' | 'exclusive';
 
 export type PurchaseLineItem = {
@@ -7,6 +10,9 @@ export type PurchaseLineItem = {
   file_types: string[];
   stems_included: boolean;
   is_exclusive: boolean;
+  /** The validated tier terms at purchase (LICENSE-04). Absent on older rows and when the tier could not be read. */
+  terms?: TierTerms;
+  terms_v?: number;
 };
 
 const STEM_FORMATS = new Set(['vocals', 'drums', 'bass', 'other']);
@@ -42,7 +48,9 @@ export function parsePurchaseLineItem(value: unknown): PurchaseLineItem | null {
     ? item.stems_included
     : !hasPersistedFileTypes && licenseType === 'exclusive';
 
+  const parsedTerms = item.terms === undefined ? null : parseTierTerms(item.terms);
   return {
+    ...(parsedTerms?.ok ? { terms: parsedTerms.terms, terms_v: typeof item.terms_v === 'number' ? item.terms_v : 1 } : {}),
     track_id: item.track_id,
     license_id: typeof item.license_id === 'string' ? item.license_id : licenseType,
     license_type: licenseType,
