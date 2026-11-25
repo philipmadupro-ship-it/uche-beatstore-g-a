@@ -110,3 +110,11 @@ export const RETIRED_ICONS: Readonly<Record<string, string>> = {
   Edit3: 'Pencil',
   Settings2: 'SlidersHorizontal',
 };
+
+/** "saveOffline" → "Save offline", "financeEarnings" → "Finance · earnings". For the gallery. */
+export function iconLabel(concept: IconConcept): string {
+  const words = concept.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().split(' ');
+  const head = words[0].charAt(0).toUpperCase() + words[0].slice(1);
+  if (head === 'Finance' && words.length > 1) return `${head} · ${words.slice(1).join(' ')}`;
+  return [head, ...words.slice(1)].join(' ');
+}

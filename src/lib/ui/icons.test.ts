@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import * as lucide from 'lucide-react';
-import { ICONS, ICON_SIZES, ICON_STROKES, RETIRED_ICONS } from './icons';
+import { ICONS, ICON_SIZES, ICON_STROKES, RETIRED_ICONS, iconLabel } from './icons';
 
 /**
  * Guards for the icon system (UI-02). Source-text scans, like
@@ -89,6 +89,15 @@ describe('icon map module', () => {
       expect(replacement in lucide, `${replacement} (replacing ${retired}) is not a lucide export`).toBe(true);
       expect(Object.keys(RETIRED_ICONS)).not.toContain(replacement);
     }
+  });
+});
+
+describe('icon labels', () => {
+  it('reads as words, not camelCase keys', () => {
+    expect(iconLabel('saveOffline')).toBe('Save offline');
+    expect(iconLabel('noConnection')).toBe('No connection');
+    expect(iconLabel('financeOverview')).toBe('Finance · overview');
+    expect(iconLabel('store')).toBe('Store');
   });
 });
 

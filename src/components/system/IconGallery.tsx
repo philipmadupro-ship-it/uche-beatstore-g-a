@@ -1,4 +1,4 @@
-import { ICONS, ICON_SIZE, ICON_STROKE, type IconConcept } from '@/lib/ui/icons';
+import { ICONS, ICON_SIZE, ICON_STROKE, iconLabel, type IconConcept } from '@/lib/ui/icons';
 
 /**
  * The icon map made visible: every concept in `lib/ui/icons.ts` with its one
@@ -27,7 +27,7 @@ export function IconGallery() {
               <li key={concept} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-3">
                 <Icon size={ICON_SIZE.lg} aria-hidden className="shrink-0 text-white/80" />
                 <div className="min-w-0">
-                  <p className="truncate text-[11px] text-white/80">{concept}</p>
+                  <p className="truncate text-[11px] text-white/80">{iconLabel(concept)}</p>
                   <p className="truncate font-mono text-[10px] text-white/40">{Icon.displayName ?? ''}</p>
                 </div>
               </li>
