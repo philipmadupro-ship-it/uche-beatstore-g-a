@@ -138,7 +138,7 @@ export function SessionContextControl() {
           // the control is. Named explicitly so it does both.
           aria-label={active ? `Session: ${summary}. Change tempo and key` : 'Set your session tempo and key'}
           title={active ? `Session: ${summary}` : 'Set your session tempo and key'}
-          className={`tap flex items-center gap-2 bg-white/[0.04] border rounded-md py-1.5 px-2 md:px-3 text-[11px] transition-colors shrink-0 ${
+          className={`ctl-tap [--tap-y:4px] flex min-w-10 items-center justify-center gap-2 bg-white/[0.04] border rounded-md h-9 px-2 md:px-3 text-[11px] transition-colors shrink-0 ${
             active ? 'border-white/20 text-white/80' : 'border-white/10 text-white/60 hover:border-white/20 hover:text-white'
           }`}
         >

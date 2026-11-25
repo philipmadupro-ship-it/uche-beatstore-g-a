@@ -1212,7 +1212,7 @@ export default function LibraryPage() {
                   ? [currentTrack.bpm && `${currentTrack.bpm} BPM`, currentTrack.key && `${currentTrack.key}${currentTrack.scale === 'minor' ? 'm' : ''}`].filter(Boolean).join(' · ')
                   : `${tracks.length} track${tracks.length !== 1 ? 's' : ''}${totalDurationLabel ? ` · ${totalDurationLabel}` : ''}`}
               </p>
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-x-2 gap-y-3 flex-wrap">
                 <LiquidGlassButton onClick={playAll} disabled={!filtered.length}>
                   <PlayGlyph size={12} className="mr-1.5" /> Play all
                 </LiquidGlassButton>
@@ -1250,8 +1250,8 @@ export default function LibraryPage() {
         </div>
 
         {/* ── Quick actions ──────────────────────────────────────── */}
-        <div className="flex items-center gap-2 mb-5 flex-wrap">
-          <LiquidGlassButton onClick={() => { if (uploadOpenRef.current) uploadOpenRef.current(); else window.scrollTo({ top: 9999, behavior: 'smooth' }); }}>
+        <div className="flex items-center gap-x-2 gap-y-3 mb-5 flex-wrap">
+          <LiquidGlassButton size="md" onClick={() => { if (uploadOpenRef.current) uploadOpenRef.current(); else window.scrollTo({ top: 9999, behavior: 'smooth' }); }}>
             <Upload size={13} /> Upload beat
           </LiquidGlassButton>
           {/* Type, state, tags and destination for the NEXT upload — the drop zone
@@ -1260,11 +1260,11 @@ export default function LibraryPage() {
 
           {/* New Release — split button with dropdown */}
           <div className="relative">
-            <div className="flex items-center overflow-hidden rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-white transition-colors">
+            <div className="flex h-9 items-center rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-white transition-colors">
               <button
                 onClick={() => handleNewRelease('both')}
                 disabled={creatingRelease}
-                className="flex items-center gap-1.5 pl-3.5 pr-2.5 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
+                className="ctl-tap [--tap-y:5px] flex h-full items-center gap-1.5 rounded-l-full pl-3.5 pr-2.5 text-[11px] font-semibold transition-colors disabled:opacity-60"
               >
                 {creatingRelease ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />}
                 New release
@@ -1272,7 +1272,7 @@ export default function LibraryPage() {
               <div className="h-4 w-px bg-white/[0.12]" />
               <button
                 onClick={() => setReleaseDropdownOpen((v) => !v)}
-                className="px-2 py-2 transition-colors hover:bg-white/[0.08]"
+                className="ctl-tap [--tap-y:5px] flex h-full items-center rounded-r-full px-2.5 transition-colors hover:bg-white/[0.08]"
                 aria-label="Release options"
               >
                 <ChevronDown size={12} />
