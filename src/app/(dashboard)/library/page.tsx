@@ -17,7 +17,8 @@ import { PlayGlyph } from '@/components/player/TransportIcons';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DEFAULT_HOME_ROWS, type HomeRowConfig } from '@/lib/dashboard/home-config';
+import { resolveHomeRows, selectRowTracks, type HomeRowConfig } from '@/lib/dashboard/home-config';
+import { pickUpWhereLeftOff } from '@/lib/dashboard/continue';
 import { getCached, setCached } from '@/lib/client-cache';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
@@ -48,7 +49,9 @@ import { buildTagFacetOptions } from '@/lib/library/tag-filter';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
 import { summarizeTriage, type TriageStage } from '@/lib/library/triage';
 import { SellReadinessPanel } from '@/components/library/SellReadinessPanel';
-import { ActionDigestPanel } from '@/components/library/ActionDigestPanel';
+import { HomeNeedsYou } from '@/components/dashboard/HomeNeedsYou';
+import { PickUpStrip } from '@/components/dashboard/PickUpStrip';
+import { EmptyHome } from '@/components/dashboard/EmptyHome';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { gridTemplate, resolveColumns } from '@/lib/library/columns';
 import { useLibraryColumns } from '@/hooks/useLibraryColumns';
@@ -710,10 +713,20 @@ export default function LibraryPage() {
         case 'alphabetical': pool = [...pool].sort((a, b) => a.title.localeCompare(b.title)); break;
         default: pool = [...pool].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
       }
-      return pool.slice(0, cfg.maxItems ?? 10);
+      return pool;
     };
 
-    return DEFAULT_HOME_ROWS
+    // Rows come from the config plus the producer's own top genres. Track rows are
+    // filtered + sorted first, then capped together so discovery rows (genres,
+    // store, top rated) can skip beats an earlier discovery row already showed.
+    const rowConfigs = resolveHomeRows(tracks as TrackWithInlineTags[]);
+    const picked = selectRowTracks(
+      rowConfigs
+        .filter((cfg) => cfg.source === 'tracks')
+        .map((cfg) => ({ id: cfg.id, maxItems: cfg.maxItems, tracks: applyTrackFilter(cfg) })),
+    );
+
+    return rowConfigs
       .map((cfg) => {
         if (cfg.source === 'recent') {
           // "Recently played" comes from player history (Zustand persist)
@@ -728,7 +741,7 @@ export default function LibraryPage() {
           return { cfg, tracks: [] as Track[], playlists: [] as HomePlaylist[], projects: pr, isRecent: false };
         }
         // tracks
-        const rowTracks = applyTrackFilter(cfg);
+        const rowTracks = picked[cfg.id] ?? [];
         return { cfg, tracks: rowTracks, playlists: [] as HomePlaylist[], projects: [] as HomeProject[], isRecent: false };
       })
       .filter((row) => {
@@ -739,6 +752,24 @@ export default function LibraryPage() {
         return true;
       });
   }, [tracks, playlists, projects, playsByTrack, filters, cachedIds, hasDefaultPrice]);
+
+  // "Pick up where you left off": data Home already holds, no extra fetch. The
+  // lone Playlists / Projects rows below drop out only when the strip already
+  // shows every one of them; otherwise they stay (and the strip links to both).
+  const stripItems = useMemo(
+    () => pickUpWhereLeftOff({ recentTracks: history as Track[], projects, playlists }),
+    [history, projects, playlists],
+  );
+  const stripProjectCount = stripItems.filter((i) => i.kind === 'project').length;
+  const stripPlaylistCount = stripItems.filter((i) => i.kind === 'playlist').length;
+  const browseRows = useMemo(
+    () => homeRows.filter((row) => {
+      if (row.cfg.source === 'projects') return row.projects.some((p) => !stripItems.some((i) => i.kind === 'project' && i.id === p.id));
+      if (row.cfg.source === 'playlists') return row.playlists.some((p) => !stripItems.some((i) => i.kind === 'playlist' && i.id === p.id));
+      return true;
+    }),
+    [homeRows, stripItems],
+  );
 
   // Total library duration shown in the hero.
   const totalDurationLabel = useMemo(() => {
@@ -1281,6 +1312,23 @@ export default function LibraryPage() {
         {showHomeContent && (
         <div className="mb-6 space-y-4">
 
+          {/* What needs me, then where I left off — before the nav shortcuts below.
+              Upload previously ended in silence (untagged, unpriced, unlisted beats
+              were invisible everywhere); SellReadinessPanel names them and lives in
+              this block so there is one place to look. */}
+          {!loading && tracks.length === 0 ? (
+            <EmptyHome onUpload={() => uploadOpenRef.current?.()} />
+          ) : null}
+          <HomeNeedsYou quietWhenClear={!loading && tracks.length === 0}>
+            <SellReadinessPanel tracks={tracks} hasDefaultPrice={hasDefaultPrice} />
+          </HomeNeedsYou>
+          <PickUpStrip
+            items={stripItems}
+            onPlayTrack={(t) => { setTrack(t); setQueue(history as Track[]); }}
+            moreProjects={projects.length > stripProjectCount}
+            morePlaylists={playlists.length > stripPlaylistCount}
+          />
+
           {/* Row A: Spotify pinned-style grid — 2 per row on mobile, 4 on md */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {([
@@ -1341,16 +1389,8 @@ export default function LibraryPage() {
               (TopBar), alongside everything else demanding the producer's
               attention, rather than competing for space on the homepage. */}
 
-          {/* Cross-surface digest first — stuck sales, pending offers, and new
-              CRM leads are fresher/more time-sensitive than catalog readiness,
-              and otherwise require checking three other pages to notice. */}
-          <ActionDigestPanel />
-
-          {/* Upload previously ended in silence: the beat landed untagged,
-              unpriced and unlisted with nothing saying so, and the store
-              editor's own "needs attention" panel only inspects beats that are
-              ALREADY listed — so these were invisible everywhere. */}
-          <SellReadinessPanel tracks={tracks} hasDefaultPrice={hasDefaultPrice} />
+          {/* The hub tiles above stay as shortcuts; what needs the producer and where
+              they left off come first (see the block below, rendered before them). */}
         </div>
         )}
 
@@ -1382,7 +1422,7 @@ export default function LibraryPage() {
           <div className="mb-6 space-y-1">
             {/* ── Config-driven rows ───────────────────────────────── */}
             <div className="space-y-6">
-              {homeRows.map((row) => (
+              {browseRows.map((row) => (
                 <HomeRow
                   key={row.cfg.id}
                   cfg={row.cfg}
