@@ -25,6 +25,8 @@ const flp = {
 };
 const wav = { ...flp, id: 'f2', kind: 'audio', label: 'Hook sketch', file_name: 'hook.wav', mime: 'audio/wav', size_bytes: 1_048_576, downloadUrl: '/api/projects/p1/assets/f2/download' };
 
+const bundle = { ...flp, id: 'z1', label: 'Glass Rain bundle', file_name: 'Glass Rain.zip', mime: 'application/zip', size_bytes: 52_428_800, position: 2, downloadUrl: '/api/projects/p1/assets/z1/download' };
+
 test.beforeEach(async ({ page, context, baseURL }) => {
   if (stub) await context.addCookies([signInCookie(baseURL!)]);
   await page.route('**/api/tracks?*', (r) => r.fulfill({ json: [] }));
@@ -41,13 +43,14 @@ test('an uploaded FLP reopens as an FL Studio project with its metadata, off the
       uploaded = true;
       return route.fulfill({ status: 201, json: { asset: flp } });
     }
-    return route.fulfill({ json: { schemaReady: true, sharedWithArtists: true, assets: uploaded ? [wav, flp] : [wav] } });
+    return route.fulfill({ json: { schemaReady: true, sharedWithArtists: true, assets: uploaded ? [wav, flp, bundle] : [wav, bundle] } });
   });
   await page.route('**/api/projects/p1/assets/f1/meta', (route) => {
     metaCalls.push(route.request().url());
     return route.fulfill({ json: { app: 'FL Studio', appVersion: '21.2.3.3586', bpm: 140 }, headers: { 'cache-control': 'private, no-store' } });
   });
 
+  await page.route('**/api/projects/p1/assets/z1/meta', (route) => route.fulfill({ json: { app: 'FL Studio', appVersion: null, bpm: null } }));
   await page.goto('/projects/p1');
   const input = page.locator('input[type=file][aria-label="Add files to this project"]');
   await input.setInputFiles({ name: 'Night Shift.flp', mimeType: 'application/octet-stream', buffer: Buffer.from('FLhd\0\0\0\0') });
@@ -61,6 +64,11 @@ test('an uploaded FLP reopens as an FL Studio project with its metadata, off the
   // (dev StrictMode rehearses effects, so the count is not asserted; the target is.)
   expect(metaCalls.length).toBeGreaterThan(0);
   expect(metaCalls.every((u) => u.endsWith('/api/projects/p1/assets/f1/meta'))).toBe(true);
+
+  // A zipped session reads as one: its own kind label (not "Other") and no paperclip.
+  const zipRow = page.getByTestId('project-file-z1');
+  await expect(zipRow).toContainText('Bundled FL Studio project');
+  await expect(zipRow).not.toContainText('Other');
 
   // Off the portal, and never offered for offline (it is not audio).
   await expect(row.getByRole('switch')).toHaveAttribute('aria-checked', 'false');

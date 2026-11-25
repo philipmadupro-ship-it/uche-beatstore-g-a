@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAW_EXTENSIONS, dawMismatchMessage, dawOf, sniffDaw, zipFirstEntryName } from './daw';
+import { DAW_EXTENSIONS, dawMismatchMessage, dawOf, dawRowInfo, sniffDaw, zipFirstEntryName } from './daw';
 import { MAX_ASSET_BYTES, assetValidationMessage, guessAssetKind, validateAssetFile } from './assets';
 import { alsFixture, flpFixture, rppFixture, zipFixture } from './mocks/daw-fixtures';
 
@@ -68,5 +68,20 @@ describe('producer upload rules', () => {
   });
   it('the unsupported message lists DAW projects', () => {
     expect(assetValidationMessage('unsupported-type')).toContain('DAW project');
+  });
+});
+
+describe('dawRowInfo', () => {
+  it('a session: kind from the name, details from the meta', () => {
+    expect(dawRowInfo('a.flp', { app: 'FL Studio', appVersion: '21.2', bpm: 140 })).toEqual({ isDaw: true, kindLabel: 'FL Studio project', detail: 'v21.2 · 140 BPM' });
+    expect(dawRowInfo('a.flp', undefined)).toEqual({ isDaw: true, kindLabel: 'FL Studio project', detail: null });
+    expect(dawRowInfo('a.als', { app: 'Ableton Live', appVersion: null, bpm: 128 }).detail).toBe('128 BPM');
+  });
+  it('a zip is a bundle only once the meta read says so', () => {
+    expect(dawRowInfo('b.zip', undefined)).toEqual({ isDaw: false, kindLabel: null, detail: null });
+    expect(dawRowInfo('b.zip', { app: 'FL Studio', appVersion: null, bpm: null })).toEqual({ isDaw: true, kindLabel: 'Bundled FL Studio project', detail: null });
+  });
+  it('an ordinary file is untouched', () => {
+    expect(dawRowInfo('ref.wav', { app: 'x', appVersion: null, bpm: null })).toEqual({ isDaw: false, kindLabel: null, detail: null });
   });
 });

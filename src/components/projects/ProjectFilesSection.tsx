@@ -23,8 +23,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, FileText, Layers, Image as ImageIcon, Lock, Music, Paperclip, Upload } from 'lucide-react';
-import { ProjectFileDawDetails } from '@/components/projects/ProjectFileDawDetails';
-import { assetsOfProject } from '@/lib/assets';
+import { ProjectFileDawDetails, useDawMetas } from '@/components/projects/ProjectFileDawDetails';
+import { dawRowInfo } from '@/lib/projects/daw';
 import { ProjectFileOffline } from '@/components/projects/ProjectFileOffline';
 import { InlineText } from '@/components/ui/InlineText';
 import { ActionMenu } from '@/components/ui/ActionMenu';
@@ -134,6 +134,8 @@ export function ProjectFilesSection({ projectId, org }: { projectId: string; org
     }
   };
 
+  const dawMetas = useDawMetas(projectId, assets ?? [], !orgId);
+
   if (!ready || assets === null) return null;
 
   const canAdd = !orgId || perms.write || perms.restricted;
@@ -205,7 +207,7 @@ export function ProjectFilesSection({ projectId, org }: { projectId: string; org
         <ul className="divide-y divide-white/[0.06]">
           {assets.map((a) => (
             <li key={a.id} className="flex items-center gap-3 py-2" data-testid={`project-file-${a.id}`}>
-              <KindIcon kind={a.kind} daw={!orgId && !!assetsOfProject([a])[0].daw} />
+              <KindIcon kind={a.kind} daw={!orgId && dawRowInfo(a.file_name, dawMetas[a.id]).isDaw} />
               <div className="min-w-0 flex-1">
                 {canEdit(a) ? (
                   <InlineText
@@ -222,8 +224,8 @@ export function ProjectFilesSection({ projectId, org }: { projectId: string; org
                   {a.uploaded_by && (
                     <span className="text-[#6DC6A4]" data-testid={`project-file-from-${a.id}`}>From {a.uploaded_by.name} · </span>
                   )}
-                  {[(!orgId && assetsOfProject([a])[0].daw?.label) || kindLabel(a.kind), formatBytes(a.size_bytes), a.file_name].filter(Boolean).join(' · ')}
-                  {!orgId && <ProjectFileDawDetails projectId={projectId} assetId={a.id} fileName={a.file_name} />}
+                  {[(!orgId && dawRowInfo(a.file_name, dawMetas[a.id]).kindLabel) || kindLabel(a.kind), formatBytes(a.size_bytes), a.file_name].filter(Boolean).join(' · ')}
+                  {!orgId && <ProjectFileDawDetails assetId={a.id} text={dawRowInfo(a.file_name, dawMetas[a.id]).detail} />}
                 </p>
               </div>
               {orgId ? (

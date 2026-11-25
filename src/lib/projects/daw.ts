@@ -109,3 +109,26 @@ export function dawMismatchMessage(ext: string): string {
   const app = DAW_EXTENSIONS[ext] ? DAW_APP_LABEL[DAW_EXTENSIONS[ext].app] : 'a DAW';
   return `That file does not look like ${app} project. Check it is the original .${ext} file.`;
 }
+
+/** What the project Files row says about a file (AUDIO-02). `meta` is the lazily fetched `/meta` answer. */
+export interface DawRowInfo {
+  /** A session, or a zip the meta read proved is a bundled session. */
+  isDaw: boolean;
+  /** Replaces the stored kind label ("Other") in the row's subtitle; null = keep the stored kind. */
+  kindLabel: string | null;
+  /** "v21.2 · 140 BPM"; null when there is nothing to add. */
+  detail: string | null;
+}
+
+export function dawRowInfo(
+  fileName: string,
+  meta: { app: string; appVersion: string | null; bpm: number | null } | null | undefined,
+): DawRowInfo {
+  const named = dawOf(fileName);
+  if (named) {
+    const detail = [meta?.appVersion ? `v${meta.appVersion}` : null, meta?.bpm != null ? `${meta.bpm} BPM` : null].filter(Boolean).join(' · ');
+    return { isDaw: true, kindLabel: named.label, detail: detail || null };
+  }
+  if (extOf(fileName) === 'zip' && meta?.app) return { isDaw: true, kindLabel: `Bundled ${meta.app} project`, detail: null };
+  return { isDaw: false, kindLabel: null, detail: null };
+}
