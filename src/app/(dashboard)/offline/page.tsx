@@ -6,6 +6,7 @@ import { CloudOff, Trash2, Music2, Wifi, WifiOff } from 'lucide-react';
 import { listCached, removeCached, clearAllCached, OfflineMeta } from '@/lib/offline/audio-cache';
 import { confirmToast } from '@/hooks/useToast';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
+import { describeCacheId } from '@/lib/assets';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -48,8 +49,8 @@ export default function OfflinePage() {
         <PageHeader
           eyebrow="Available offline"
           title="Offline"
-          description="Tracks cached locally for sessions without a reliable connection."
-          meta={`${items.length} track${items.length === 1 ? '' : 's'} · ${formatMB(totalBytes)}`}
+          description="Tracks, stems and project audio saved on this device for sessions without a reliable connection."
+          meta={`${items.length} file${items.length === 1 ? '' : 's'} · ${formatMB(totalBytes)}`}
           actions={
             <div className="flex items-center gap-3">
             <div
@@ -103,7 +104,10 @@ export default function OfflinePage() {
                   <div className="flex size-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-page)]">
                     <Music2 size={12} className="text-white" />
                   </div>
-                  <p className="truncate text-[11px] text-[var(--text-primary)]">{m.title || m.id}</p>
+                  <div className="min-w-0">
+                    <p className="truncate text-[11px] text-[var(--text-primary)]">{m.title || m.id}</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{describeCacheId(m.id).label}</p>
+                  </div>
                   <p className="font-mono text-[10px] text-[var(--text-readable)]">{formatMB(m.size)}</p>
                   <p className="hidden font-mono text-[10px] text-[var(--text-readable)] sm:block">
                     {new Date(m.cached_at).toLocaleDateString()}

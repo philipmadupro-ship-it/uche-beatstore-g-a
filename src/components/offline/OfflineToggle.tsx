@@ -3,6 +3,7 @@
 import { Download, CheckCircle2, Loader2, Trash2, AlertTriangle } from 'lucide-react';
 import { useOfflineTrack } from '@/hooks/useOfflineCache';
 import { formatOfflineSize } from '@/lib/offline/status';
+import { assetContentKey, offlineLabel } from '@/lib/assets';
 
 interface Props {
   trackId: string;
@@ -22,7 +23,7 @@ interface Props {
  * `lib/offline/status.ts#offlineStatusAnnouncement`.
  */
 export function OfflineToggle({ trackId, audioUrl, title, variant = 'button' }: Props) {
-  const { meta, isCached, downloading, progress, error, announcement, download, remove } = useOfflineTrack(trackId);
+  const { meta, isCached, isStale, downloading, progress, error, announcement, download, remove } = useOfflineTrack(trackId, assetContentKey(audioUrl));
 
   const liveRegion = (
     <span role="status" aria-live="polite" className="sr-only">
@@ -80,6 +81,22 @@ export function OfflineToggle({ trackId, audioUrl, title, variant = 'button' }: 
         >
           <Loader2 size={11} className="animate-spin" />
           Caching… {Math.round(progress * 100)}%
+        </button>
+      </>
+    );
+  }
+
+  if (isCached && isStale) {
+    // The file changed since it was saved: say so and offer the one useful action.
+    return (
+      <>
+        {liveRegion}
+        <button
+          onClick={() => download(audioUrl, title)}
+          className="flex items-center gap-2 px-3 py-2 rounded-md border border-white/10 bg-white/[0.06] text-white/80 hover:bg-white/[0.10] hover:border-white/20 text-[11px] font-medium transition-colors"
+        >
+          <AlertTriangle size={11} />
+          {offlineLabel('stale')} · Update
         </button>
       </>
     );

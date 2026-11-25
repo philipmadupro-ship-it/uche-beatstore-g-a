@@ -22,6 +22,11 @@ export interface OfflineMeta {
   title: string;
   size: number;
   cached_at: number;
+  /** AUDIO-01: short fingerprint of the file this copy was made from
+   *  (`assetContentKey`). Absent on rows saved before it existed — those read as current. */
+  contentKey?: string | null;
+  /** AUDIO-01: what was saved, for the offline page. Absent = a track's master. */
+  kind?: 'audio' | 'stem';
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -72,7 +77,9 @@ export async function cacheTrack(
   /** Called with the metas of any explicit downloads dropped to make room for
    *  this one — see `lib/offline/eviction.ts` for the policy. Best-effort UI
    *  hook; callers that don't care (e.g. bulk playlist sync) can omit it. */
-  onEvicted?: (evicted: OfflineMeta[]) => void
+  onEvicted?: (evicted: OfflineMeta[]) => void,
+  /** AUDIO-01: fingerprint + kind recorded beside the copy. */
+  extra?: { contentKey?: string | null; kind?: 'audio' | 'stem' }
 ): Promise<OfflineMeta> {
   // Inactivity guard: if the download stalls (a hung fetch or a reader that
   // never delivers another chunk), abort so the promise REJECTS instead of
@@ -119,6 +126,8 @@ export async function cacheTrack(
       title,
       size: blob.size,
       cached_at: Date.now(),
+      ...(extra?.contentKey ? { contentKey: extra.contentKey } : {}),
+      ...(extra?.kind ? { kind: extra.kind } : {}),
     };
 
     // Explicit-save cap: never evict this track's own prior copy to make room
