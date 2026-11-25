@@ -27,6 +27,7 @@ const KIND_LABEL: Record<Asset['kind'], string> = {
   stem: 'Stem',
   artwork: 'Artwork',
   document: 'Document',
+  project: 'Project file',
   other: 'File',
 };
 export function assetKindLabel(kind: Asset['kind']): string {

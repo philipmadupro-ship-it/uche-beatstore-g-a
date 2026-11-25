@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assetContentKey,
+  assetKindLabel,
   assetsOfProject,
   assetsOfTrack,
   canSaveOffline,
@@ -82,6 +83,32 @@ describe('assetsOfProject', () => {
     const [a] = assetsOfProject([view()]);
     const [b] = assetsOfProject([view({ size_bytes: 2048 })]);
     expect(a.contentKey).not.toBe(b.contentKey);
+  });
+});
+
+describe('DAW project files (AUDIO-02)', () => {
+  it('a session is kind "project": private, never playable or offline-able, served through the owner download route', () => {
+    const [a] = assetsOfProject([view({ id: 'f1', kind: 'other', label: 'Night Shift', file_name: 'Night Shift.flp', mime: 'application/octet-stream', downloadUrl: '/api/projects/p1/assets/f1/download' })]);
+    expect(a).toMatchObject({
+      id: 'project:p1:file:f1',
+      source: 'project_file',
+      kind: 'project',
+      location: 'private',
+      playable: false,
+      openUrl: '/api/projects/p1/assets/f1/download',
+      offline: 'none',
+      daw: { app: 'fl_studio', label: 'FL Studio project' },
+    });
+    expect(canSaveOffline(a)).toBe(false);
+    expect(offlineStateFor(a, null)).toBe('unsupported');
+    expect(assetKindLabel(a.kind)).toBe('Project file');
+  });
+  it('every DAW extension maps to a project asset, other files are untouched', () => {
+    for (const ext of ['flp', 'als', 'rpp', 'ptx', 'cpr']) {
+      expect(assetsOfProject([view({ kind: 'other', file_name: `s.${ext}`, mime: 'application/octet-stream' })])[0].kind).toBe('project');
+    }
+    expect(assetsOfProject([view({ kind: 'other', file_name: 'notes.xyz', mime: null })])[0]).toMatchObject({ kind: 'other' });
+    expect(assetsOfProject([view({ file_name: 'ref.wav' })])[0].daw).toBeUndefined();
   });
 });
 

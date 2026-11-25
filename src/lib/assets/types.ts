@@ -16,7 +16,8 @@
 export const ASSET_SOURCES = ['track_audio', 'track_wav', 'track_stem', 'project_file'] as const;
 export type AssetSource = (typeof ASSET_SOURCES)[number];
 
-export type AssetKind = 'audio' | 'stem' | 'artwork' | 'document' | 'other';
+/** `project` = a DAW session (FL Studio, Ableton, …; AUDIO-02). Derived from the file name, never stored. */
+export type AssetKind = 'audio' | 'stem' | 'artwork' | 'document' | 'project' | 'other';
 
 /** Where the bytes live: a public bucket / CDN, the private bucket, or the local filesystem fallback. */
 export type AssetLocation = 'public' | 'private' | 'local';
@@ -50,6 +51,8 @@ export interface Asset {
   openUrl: string | null;
   /** Filled in by `withOfflineState`; `none` until then. */
   offline: OfflineState;
+  /** Only on `project` assets: which DAW wrote it. Name-derived; nothing from inside the file. */
+  daw?: { app: string; label: string };
 }
 
 /**

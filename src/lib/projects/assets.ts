@@ -11,6 +11,8 @@
  * master) to a project and then download it through the portal.
  */
 
+import { DAW_EXTENSIONS, DAW_MIME } from './daw';
+
 export const PROJECT_ASSET_KINDS = ['reference', 'artwork', 'lyrics', 'document', 'audio', 'other'] as const;
 export type ProjectAssetKind = (typeof PROJECT_ASSET_KINDS)[number];
 
@@ -58,6 +60,9 @@ const EXT_MIME: Record<string, string> = {
   zip: 'application/zip',
   mp4: 'video/mp4',
   mov: 'video/quicktime',
+  // DAW projects (AUDIO-02): opaque downloads, so the stored MIME is octet-stream.
+  // flp / als / rpp are also checked against their signature (lib/projects/daw.ts).
+  ...Object.fromEntries(Object.keys(DAW_EXTENSIONS).map((ext) => [ext, DAW_MIME])),
 };
 
 /**
@@ -112,7 +117,7 @@ export function assetValidationMessage(error: Exclude<AssetValidation, { ok: tru
   if (error === 'empty') return 'That file is empty.';
   if (error === 'too-large') return `Files can be up to ${Math.round(MAX_ASSET_BYTES / 1024 / 1024)} MB.`;
   if (opts.org) return 'That file type is not supported. Use PDF, text, Word, spreadsheets, images, audio, MIDI, video, DAW sessions or ZIP.';
-  return 'That file type is not supported. Use PDF, text, Word, images, audio, MIDI, video or ZIP.';
+  return 'That file type is not supported. Use PDF, text, Word, images, audio, MIDI, video, a DAW project (FL Studio, Ableton, Reaper, Pro Tools, Cubase) or ZIP.';
 }
 
 /** A sensible default kind for a new upload; the producer can change it. */
