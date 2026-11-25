@@ -27,7 +27,6 @@ let stub: Awaited<ReturnType<typeof startStubSupabase>> = null;
 test.beforeAll(async () => { if (stubSupabaseConfigured()) stub = await startStubSupabase(); });
 test.afterAll(async () => { await stub?.close(); });
 test.beforeEach(async ({ page, context, baseURL }) => {
-  await page.clock.setFixedTime(NOW);
   if (stub) await context.addCookies([signInCookie(baseURL!)]);
   await page.route('**/api/activity**', (r) => r.fulfill({ json: { activity: FEED } }));
   await page.route('**/api/notifications**', (r) => r.fulfill({ json: { notifications: [], unread: 0 } }));
@@ -47,6 +46,8 @@ async function openPanel(page: Page) {
 }
 
 test('group chips, filtering, day headers', async ({ page }) => {
+  // Only this test asserts day headers; pinning Date in the others stalled the /sales landing.
+  await page.clock.setFixedTime(NOW);
   await page.goto('/library');
   const dialog = await openPanel(page);
   const chips = dialog.getByRole('group', { name: /filter activity/i });
