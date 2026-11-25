@@ -15,6 +15,7 @@ import {
   locationLabel,
   offlineCacheId,
   offlineLabel,
+  studioHref,
   withOfflineState,
   type StemRefs,
 } from '@/lib/assets';
@@ -70,6 +71,15 @@ export function TrackFilesSection({ trackId, title, audioUrl, wavUrl, stemsDone 
           return (
             <li key={a.id} className="flex items-center justify-between gap-3 py-2 text-[11px]" data-testid={`track-file-${a.source}${a.kind === 'stem' ? `-${a.id.split(':').pop()}` : ''}`}>
               <span className="min-w-0 truncate text-white/80">{a.label}</span>
+              {a.source !== 'track_audio' && studioHref(a) && (
+                <a
+                  href={studioHref(a) as string}
+                  data-testid={`track-file-studio-${a.id.split(':').slice(2).join('-')}`}
+                  className="shrink-0 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 underline-offset-4 hover:text-white hover:underline"
+                >
+                  Open in Studio
+                </a>
+              )}
               <span className="flex shrink-0 items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
                 <span>{assetKindLabel(a.kind)} · {locationLabel(a.location)}</span>
                 {word && <span className={a.offline === 'saved' ? 'text-[#6DC6A4]' : a.offline === 'stale' ? 'text-white/70' : ''}>{word}</span>}

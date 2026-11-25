@@ -6,3 +6,5 @@ export * from './from-project';
 export * from './offline';
 export * from './availability';
 export * from './resolve';
+export * from './studio';
+export * from './studio-resolve';

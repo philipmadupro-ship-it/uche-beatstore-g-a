@@ -23,6 +23,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, FileText, Image as ImageIcon, Lock, Music, Paperclip, Upload } from 'lucide-react';
+import { assetsOfProject, studioHref } from '@/lib/assets';
 import { ProjectFileOffline } from '@/components/projects/ProjectFileOffline';
 import { InlineText } from '@/components/ui/InlineText';
 import { ActionMenu } from '@/components/ui/ActionMenu';
@@ -283,7 +284,11 @@ export function ProjectFilesSection({ projectId, org }: { projectId: string; org
                   },
                   {
                     id: 'open',
-                    items: [{ id: 'open', label: 'Open in a new tab', onSelect: () => { window.open(`${a.downloadUrl}?inline=1`, '_blank', 'noopener'); } }],
+                    items: [
+                      { id: 'open', label: 'Open in a new tab', onSelect: () => { window.open(`${a.downloadUrl}?inline=1`, '_blank', 'noopener'); } },
+                      // Producer projects only; org files are not opened in the Studio.
+                      { id: 'studio', label: 'Open in Studio', hidden: !!orgId || !studioHref(assetsOfProject([a])[0]), onSelect: () => { const href = studioHref(assetsOfProject([a])[0]); if (href) window.location.assign(href); } },
+                    ],
                   },
                   { id: 'danger', danger: true, items: [{ id: 'delete', label: 'Delete', danger: true, hidden: !canEdit(a), onSelect: () => remove(a) }] },
                 ]}
