@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { audioSrc } from '@/lib/audio/url';
+import { assetContentKey } from '@/lib/assets';
+import { OfflineFirstAudio } from '@/components/studio/OfflineFirstAudio';
 import { StudioEngine, playKick, playSnare, playHat, playClap } from '@/lib/audio/engine';
 import { toast } from '@/hooks/useToast';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
@@ -658,20 +660,24 @@ export function StudioWorkstation() {
                     const url = stems?.[k];
                     if (!url) return null;
                     return (
-                      <audio
+                      <OfflineFirstAudio
                         key={`${active.id}-${k}`}
                         ref={(el) => { audioRefs.current[k] = el; }}
-                        src={audioSrc(url)}
+                        cacheId={`track:${active.id}:stem:${k}`}
+                        rawUrl={url}
+                        contentKey={assetContentKey(url)}
                         preload="auto"
                         crossOrigin="anonymous"
                       />
                     );
                   })
                 ) : (
-                  <audio
+                  <OfflineFirstAudio
                     key={active.id}
                     ref={(el) => { audioRefs.current['master'] = el; }}
-                    src={audioSrc(active.audio_url)}
+                    cacheId={active.id}
+                    rawUrl={active.audio_url}
+                    contentKey={assetContentKey(active.audio_url)}
                     preload="auto"
                     crossOrigin="anonymous"
                     onLoadedMetadata={(e) => setDuration((e.target as HTMLAudioElement).duration)}
