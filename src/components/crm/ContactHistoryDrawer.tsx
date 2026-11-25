@@ -10,26 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ActionMenu } from '@/components/ui/ActionMenu';
-
-// Module-level cache so re-opening the drawer (or opening it on
-// successive contacts in one session) doesn't refetch the whole
-// /api/tracks list every time. 60s TTL — long enough to skip the
-// duplicate cost when the user clicks through 4 contacts in 5 seconds,
-// short enough that fresh uploads land in the lookup within a minute.
-let _tracksCache: { at: number; promise: Promise<Track[]> } | null = null;
-const TRACKS_CACHE_TTL_MS = 60_000;
-
-function loadTracksCached(): Promise<Track[]> {
-  if (_tracksCache && Date.now() - _tracksCache.at < TRACKS_CACHE_TTL_MS) {
-    return _tracksCache.promise;
-  }
-  const promise = fetch('/api/tracks')
-    .then((r) => (r.ok ? r.json() : []))
-    .then((data) => (Array.isArray(data) ? data : data.tracks || []))
-    .catch(() => []);
-  _tracksCache = { at: Date.now(), promise };
-  return promise;
-}
+import { loadTracksCached } from '@/lib/crm/tracks-cache';
 
 interface Props {
   contact: Contact;

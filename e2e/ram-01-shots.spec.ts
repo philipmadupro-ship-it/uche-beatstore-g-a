@@ -1,4 +1,5 @@
 import { test, type Page } from '@playwright/test';
+import { makeContacts, makeSends } from './fixtures/crm-contacts';
 import { startStubSupabase, signInCookie, stubSupabaseConfigured } from './fixtures/stub-supabase';
 
 /**
@@ -9,34 +10,6 @@ test.skip(!process.env.RAM01_SHOTS, 'screenshot run only');
 const OUT = process.env.RAM01_SHOTS ?? '';
 const day = 86_400_000;
 const ago = (n: number) => new Date(Date.now() - n * day).toISOString();
-
-const CATS = ['artist', 'rapper', 'producer', 'engineer', 'a&r', 'label', 'manager', 'friend', 'buyer', 'press', 'other'];
-const STAGES = ['prospect', 'active', 'engaged', 'customer', 'cold', null];
-const SENDS = ['sent', 'opened', 'interested', 'negotiating', 'placed', 'pass'];
-const FIRST = ['Nova', 'Kai', 'Rio', 'Sage', 'Wren', 'Ade', 'Zuri', 'Milo', 'Ines', 'Tobi', 'Lena', 'Omar', 'Yuki', 'Bex', 'Dara'];
-const LAST = ['Vale', 'Okoro', 'Hart', 'Lind', 'Mora', 'Stone', 'Ray', 'Quinn', 'Park', 'Cruz'];
-
-export function makeContacts(n: number) {
-  return Array.from({ length: n }, (_, i) => ({
-    id: `c${String(i).padStart(4, '0')}`,
-    name: `${FIRST[i % FIRST.length]} ${LAST[Math.floor(i / FIRST.length) % LAST.length]}${i >= 150 ? ` ${i}` : ''}`,
-    email: `contact${i}@example.com`,
-    category: CATS[i % CATS.length],
-    secondary_category: i % 9 === 0 ? 'producer' : null,
-    role: null, label: null,
-    crm_status: STAGES[i % STAGES.length],
-    buyer_pipeline_status: null,
-    tags: i % 3 === 0 ? [{ tag: 'trap', category: 'custom' }] : i % 5 === 0 ? [{ tag: 'drill', category: 'custom' }, { tag: 'uk', category: 'custom' }] : [],
-    created_at: ago(200 - (i % 190)),
-  }));
-}
-export function makeSends(contacts: ReturnType<typeof makeContacts>) {
-  return contacts.flatMap((c, i) => (i % 4 === 3 ? [] : Array.from({ length: 1 + (i % 3) }, (_, k) => ({
-    id: `s${i}-${k}`, contact_id: c.id, track_ids: ['t1', 't2'], share_token: `tok${i}${k}`, message: 'Have a listen',
-    status: SENDS[(i + k) % SENDS.length], sent_at: ago((i % 40) + k * 6 + 1),
-    opened_at: (i + k) % 2 ? ago((i % 40) + k * 6) : null, link_clicked_at: null,
-  }))));
-}
 
 let stub: Awaited<ReturnType<typeof startStubSupabase>> = null;
 test.beforeAll(async () => { if (stubSupabaseConfigured()) stub = await startStubSupabase(); });
@@ -114,6 +87,25 @@ for (const { w, h } of sizes) {
       await page.getByTitle('Refresh').click();
       await page.waitForTimeout(1200);
       await shot(page, 'contacts-network-500', false);
+    });
+    test('workspace contact page', async ({ page }) => {
+      const contacts = makeContacts(24);
+      await stubApis(page, contacts);
+      const base = {
+        schemaReady: true, workspaceMode: true,
+        relationship: { stage: 'working_together', parked: null },
+        portal: { id: 'p1', token: 'tok123', url: 'http://localhost:3457/artist/tok123', password_hash: null, hasPassword: false, revoked_at: null, last_viewed_at: ago(1), previous_viewed_at: ago(5), view_count: 12, created_at: ago(40), auto_digest: false, require_sign_in: false },
+        notify: { count: 2, tracks: 2, files: 0, projects: 1 },
+        projects: [{ id: 'p1', name: 'Project 1', cover_url: null, status: 'active', description: null, link: { project_id: 'p1', role: null, in_portal: true, allow_downloads: true, can_comment: true, last_notified_at: ago(3), created_at: ago(30) }, trackCount: 2, beats: 2, songs: 0, newForArtist: 1 }],
+        beats: [], songs: [], files: [], trackFiles: [],
+        totals: { plays: 14, downloads: 2, portalVisits: 12 }, filesReady: true,
+        messages: { ready: true, unread: 0, openRequests: 0 },
+        counts: { interested: 1, selected: 0, recording: 0, recorded: 0, released: 0, passed: 0, moving: 1 },
+      };
+      await page.route('**/api/contacts/*/workspace', (route) => route.fulfill({ json: base }));
+      await page.goto(`/contacts/${contacts[1].id}`);
+      await page.waitForTimeout(2000);
+      await shot(page, 'contact-workspace');
     });
     test('contact page + send modal', async ({ page }) => {
       const contacts = makeContacts(24);

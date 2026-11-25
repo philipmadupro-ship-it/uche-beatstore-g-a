@@ -13,9 +13,9 @@
  */
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { Send } from 'lucide-react';
-import { relativeDays } from '@/components/crm/contacts-shared';
+import { ContactAvatar, relativeDays } from '@/components/crm/contacts-shared';
+import { ListContainer, ListRow } from '@/components/ui/ListRow';
 import { ROLE_SENDS, otherRoleBadge, type RoleGroup } from '@/lib/contacts/roles';
 
 export interface RoleSummary {
@@ -77,45 +77,45 @@ export function RoleSummaryStrip({ group, onSend, excludeIds, heading }: {
     {heading && (
       <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{heading} · {rows.length}</h2>
     )}
-    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid={`role-strip-${group}`}>
-      {shown.map((s) => {
-        const badge = otherRoleBadge(s.contact, false, group);
-        return (
-          <li key={s.contact.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid={`role-card-${s.contact.id}`}>
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/[0.06] text-[11px] text-white/80">
-                {s.contact.avatar_url
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={s.contact.avatar_url} alt="" className="h-full w-full object-cover" />
-                  : s.contact.name[0]?.toUpperCase()}
-              </span>
-              <span className="min-w-0 flex-1">
-                <Link href={`/contacts/${s.contact.id}`} className="block truncate text-[13px] text-white/90 hover:text-white">{s.contact.name}</Link>
-                <span className="block text-[11px] text-white/40">
-                  {s.contact.category || 'No role'}{badge ? ` · ${badge}` : ''}
-                  {s.lastSentAt ? ` · sent ${relativeDays(s.lastSentAt)}` : ''}
-                </span>
-              </span>
+    <ListContainer className="bg-[#0D0D0A]">
+      <div data-testid={`role-strip-${group}`} className="divide-y divide-white/10">
+        {shown.map((s) => {
+          const badge = otherRoleBadge(s.contact, false, group);
+          return (
+            <div key={s.contact.id} data-testid={`role-card-${s.contact.id}`}>
+              <ListRow
+                href={`/contacts/${s.contact.id}`}
+                label={`Open ${s.contact.name}`}
+                media={<ContactAvatar name={s.contact.name} />}
+                title={<span className="text-[13px] font-semibold text-white/90">{s.contact.name}</span>}
+                meta={(
+                  <span className="text-[11px] text-white/60">
+                    {s.contact.category || 'No role'}{badge ? ` · ${badge}` : ''}
+                    {s.lastSentAt ? ` · sent ${relativeDays(s.lastSentAt)}` : ''}
+                    <span className="md:hidden text-white/40"> · {facts(group, s)}</span>
+                  </span>
+                )}
+                columns={<p className="w-[260px] truncate text-[11px] text-white/60">{facts(group, s)}</p>}
+                trailing={ROLE_SENDS[group].map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => onSend(s.contact.id, preset)}
+                    disabled={!s.contact.email}
+                    aria-label={`${preset.label} to ${s.contact.name}`}
+                    title={s.contact.email ? preset.label : 'Add an email to send'}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40"
+                  >
+                    <Send size={12} aria-hidden="true" />
+                    <span className="hidden whitespace-nowrap sm:inline">{preset.label}</span>
+                  </button>
+                ))}
+              />
             </div>
-            <p className="text-[11px] text-white/60">{facts(group, s)}</p>
-            <div className="flex flex-wrap gap-2">
-              {ROLE_SENDS[group].map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => onSend(s.contact.id, preset)}
-                  disabled={!s.contact.email}
-                  title={s.contact.email ? undefined : 'Add an email to send'}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40"
-                >
-                  <Send size={11} aria-hidden="true" /> {preset.label}
-                </button>
-              ))}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+          );
+        })}
+      </div>
+    </ListContainer>
     {rows.length > CARDS_SHOWN && (
       <button type="button" onClick={() => setAll(!all)} className="mt-3 text-[11px] text-white/50 hover:text-white">
         {all ? 'Show fewer' : `Show all ${rows.length}`}

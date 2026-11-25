@@ -85,9 +85,11 @@ export function ActivityDot({ tone, onClick, active }: { tone: ActivityTone; onC
  * PATCHes /api/contacts/[id] optimistically.
  */
 export function ContactStageCell({
-  contactId, value, derivedTone, onChanged,
+  contactId, name, value, derivedTone, onChanged,
 }: {
   contactId: string;
+  /** Names the control for assistive tech when many rows each carry one. */
+  name?: string;
   value: CrmStage | null | undefined;
   derivedTone: ActivityTone;
   onChanged: (next: CrmStage | null) => void;
@@ -127,7 +129,7 @@ export function ContactStageCell({
         placeholder={`Auto · ${ACTIVITY_META[derivedTone].label}`}
         menuWidth={150}
         className={`!h-7 !py-0.5 !px-2 !text-[11px] !rounded-md border-transparent hover:border-[var(--border-hover)] ${m ? m.text : 'text-white/40'} ${!value ? 'italic' : 'font-medium'}`}
-        aria-label="CRM stage"
+        aria-label={name ? `CRM stage for ${name}` : 'CRM stage'}
       />
       {saving && <Loader2 size={10} className="animate-spin text-white/40 shrink-0" />}
     </div>

@@ -25,7 +25,11 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { SendBeatModal } from '@/components/crm/SendBeatModal';
 import { ContactTagPicker } from '@/components/crm/ContactTagPicker';
-import { ContactStageCell, KindBadge, relativeDays } from '@/components/crm/contacts-shared';
+import { ContactStageCell, relativeDays } from '@/components/crm/contacts-shared';
+import { ContactSentList } from '@/components/crm/ContactSentList';
+import { Dropdown } from '@/components/ui/Dropdown';
+import { CONTACT_CATEGORIES } from '@/lib/contacts/roles';
+import { kindHint, nextSendPreset, roleChoices, roleLine, rolePatch, tabLabelFor } from '@/lib/contacts/row-model';
 import { NudgeModal } from '@/components/crm/NudgeModal';
 import { ContactActivityTimeline } from '@/components/crm/ContactActivityTimeline';
 import type { EngagementSummary } from '@/lib/contacts/activity';
@@ -217,6 +221,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
 
   const ready = workspace && workspace.schemaReady ? workspace : null;
   const workspaceMode = !!ready?.workspaceMode;
+  const sendPreset = nextSendPreset(contact, workspaceMode);
 
   const crmNotes = (
     <>
@@ -314,22 +319,35 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                   placeholder="Name"
                 />
 
-                {/* Kind (buyer/artist/lead/contact) + lifetime value — "what is
-                    this person to me" leads the profile, per lib/contacts/kind.ts. */}
-                <div className="flex items-center gap-3 mt-2">
-                  <KindBadge kind={kind} />
+                {/* The ROLE the producer chose leads the profile. The derived kind
+                    (has been sent music / has bought) is only a quiet hint: as a
+                    badge it read like a role and contradicted the real one. */}
+                <p className="mt-2 text-[11px] text-white/60" data-testid="contact-role-line">
+                  {roleLine(contact) ?? 'No role set'}
+                  {kindHint(kind) && <span className="text-white/40"> · {kindHint(kind)}</span>}
                   {(activitySummary?.revenue ?? 0) > 0 && (
-                    <span className="text-[11px] font-mono tabular-nums text-white/50">
-                      ${(activitySummary!.revenue).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} lifetime
+                    <span className="font-mono tabular-nums text-white/40">
+                      {' · '}${(activitySummary!.revenue).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} lifetime
                     </span>
                   )}
-                </div>
-
-                <div className="flex items-center gap-1.5 mt-2 text-[11px] text-white/60">
-                  {contact.role && <span>{contact.role}</span>}
-                  {contact.role && contact.label && <span>·</span>}
-                  {contact.label && <span>{contact.label}</span>}
-                  {!contact.role && !contact.label && <span className="text-white/40">Role / Label</span>}
+                </p>
+                <div className="mt-2 w-40">
+                  <Dropdown
+                    value={contact.category ?? ''}
+                    onChange={(v) => {
+                      const patch = rolePatch(contact, v);
+                      if (!patch) return;
+                      void patchField('category', patch.category);
+                      if ('secondary_category' in patch) void patchField('secondary_category', null);
+                      toast.success(`Role set · shows under ${tabLabelFor(v)}`);
+                    }}
+                    options={[
+                      ...(contact.category && !(CONTACT_CATEGORIES as readonly string[]).includes(contact.category) ? [{ value: contact.category, label: contact.category }] : []),
+                      ...(contact.category ? [] : [{ value: '', label: 'Choose a role' }]),
+                      ...roleChoices(CONTACT_CATEGORIES).map((r) => ({ value: r.value, label: r.label })),
+                    ]}
+                    aria-label="Change role"
+                  />
                 </div>
 
                 {/* Buyer pipeline badge (store buyers only) */}
@@ -375,17 +393,20 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                   </div>
                 )}
 
+                <ContactSentList contactId={contact.id} contactName={contact.name} sends={sends} />
+
                 {/* Primary actions */}
                 <div className="mt-4 flex items-center gap-2">
                   <button
                     onClick={() => setSendModalOpen(true)}
+                    aria-label={`${sendPreset.label} to ${contact.name}`}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-white text-black text-[11px] font-medium hover:bg-white/90 active:scale-[0.98] transition-all"
                   >
-                    <Send size={12} />
-                    Send beat
+                    <Send size={12} aria-hidden />
+                    {sendPreset.label}
                   </button>
                   {needsNudge && latestSend && (
-                    <button onClick={() => setNudgeModalOpen(true)} title="Needs a nudge — last send gone cold"
+                    <button onClick={() => setNudgeModalOpen(true)} aria-label={`Nudge ${contact.name}`} title="Needs a nudge — last send gone cold"
                       className="px-3 py-2.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 transition-colors">
                       <BellRing size={12} />
                     </button>
@@ -394,8 +415,9 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                     onClick={deleteContact}
                     className="px-3 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/60 hover:text-red-400 hover:border-red-500/30 text-[11px] font-medium transition-colors"
                     title="Delete contact"
+                    aria-label={`Delete ${contact.name}`}
                   >
-                    <Trash2 size={12} />
+                    <Trash2 size={12} aria-hidden />
                   </button>
                 </div>
 
@@ -453,6 +475,8 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
       {sendModalOpen && (
         <SendBeatModal
           contact={contact}
+          initialMode={sendPreset.mode}
+          typeFilter={sendPreset.types}
           priorSentTrackIds={sends.length > 0 ? new Set(sends.flatMap((s) => s.track_ids ?? [])) : undefined}
           onClose={() => setSendModalOpen(false)}
           onSuccess={() => { setSendModalOpen(false); fetchAll(); }}

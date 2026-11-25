@@ -98,8 +98,10 @@ async function loadInitialData(): Promise<{
   }
 }
 
-export default async function ContactsPage() {
+export default async function ContactsPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { contacts, beatSends, error } = await loadInitialData();
+  const sp = (await searchParams) ?? {};
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? null;
   return (
     <DashboardLayout>
       {/* Sits above the CRM: these are people who already wanted the music
@@ -111,6 +113,8 @@ export default async function ContactsPage() {
         initialContacts={contacts}
         initialBeatSends={beatSends}
         fetchError={error}
+        initialTab={one(sp.tab)}
+        logContactId={one(sp.contact)}
       />
     </DashboardLayout>
   );

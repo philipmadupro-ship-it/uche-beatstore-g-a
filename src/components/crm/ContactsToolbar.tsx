@@ -53,7 +53,7 @@ function FilterButton({ label, badge, children, align = 'left' }: { label: strin
         <button
           ref={(el) => ref(el)}
           onClick={toggle}
-          className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium border transition-colors ${
+          className={`inline-flex shrink-0 items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-medium border transition-colors ${
             open || badge ? 'bg-white/10 border-white/30 text-white' : 'border-[var(--border)] text-white/80 hover:text-white hover:border-[var(--border-hover)]'
           }`}
         >
@@ -72,17 +72,32 @@ export function ContactsToolbar(p: Props) {
   const [segMenuOpen, setSegMenuOpen] = useState(false);
 
   return (
-    <div className="flex items-center gap-2 mb-4 flex-wrap">
-      {/* Search */}
-      <div className="relative flex-1 min-w-[180px] max-w-sm">
-        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
-        <input
-          value={p.searchQuery}
-          onChange={(e) => p.setSearchQuery(e.target.value)}
-          placeholder="Search name, role, email, tag…"
-          className="w-full h-8 bg-[var(--bg-card)] border border-[var(--border)] rounded-md pl-8 pr-3 text-[11px] text-[var(--text-primary)] placeholder:text-white/40 focus:outline-none focus:border-[var(--border-hover)] transition-colors"
-        />
+    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+      {/* Search — its own full-width row on a phone, with Add next to it so
+          the one action you reach for is never scrolled off. */}
+      <div className="flex items-center gap-2 sm:min-w-[180px] sm:max-w-sm sm:flex-1">
+        <div className="relative min-w-0 flex-1">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
+          <input
+            value={p.searchQuery}
+            onChange={(e) => p.setSearchQuery(e.target.value)}
+            placeholder="Search contacts"
+            aria-label="Search contacts by name, role, email or tag"
+            className="h-9 w-full rounded-lg border border-white/10 bg-[#0D0D0A] pl-8 pr-3 text-[11px] text-white/80 transition-colors placeholder:text-white/40 focus:border-white/30 focus:outline-none sm:h-8"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={p.onAddContact}
+          aria-label="Add contact"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/[0.10] text-white transition-colors hover:bg-white/[0.14] sm:hidden"
+        >
+          <Plus size={14} aria-hidden />
+        </button>
       </div>
+
+      {/* Filters, sort and utilities: one scrolling row on a phone, wrapping inline on desktop. */}
+      <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 no-scrollbar sm:mx-0 sm:contents sm:overflow-visible sm:px-0">
 
       {/* Category */}
       <FilterButton label="Category" badge={p.categoryFilter !== 'all' ? 1 : 0}>
@@ -145,14 +160,14 @@ export function ContactsToolbar(p: Props) {
           nothing scrolls horizontally they were clipped, not merely off-screen,
           making both actions unreachable on a phone. ml-auto only applies once
           there is room to right-align. */}
-      <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+      <div className="flex shrink-0 items-center gap-2 sm:ml-auto sm:flex-wrap">
         {/* Segments */}
         <Popover
           align="right" width={240}
           open={segMenuOpen} onOpenChange={setSegMenuOpen}
           trigger={({ open, toggle, ref }) => (
             <button ref={(el) => ref(el)} onClick={toggle}
-              className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium border transition-colors ${open || p.activeSegmentId ? 'bg-white/10 border-white/30 text-white' : 'border-[var(--border)] text-white/80 hover:text-white hover:border-[var(--border-hover)]'}`}>
+              className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-medium border transition-colors ${open || p.activeSegmentId ? 'bg-white/10 border-white/30 text-white' : 'border-[var(--border)] text-white/80 hover:text-white hover:border-[var(--border-hover)]'}`}>
               <Bookmark size={12} /> Segments <ChevronDown size={11} className={open ? 'rotate-180' : ''} />
             </button>
           )}
@@ -201,16 +216,19 @@ export function ContactsToolbar(p: Props) {
           >{p.sortDir === 'asc' ? '↑' : '↓'}</button>
         </div>
         <button onClick={p.onExport} title="Export filtered to CSV"
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium border border-[var(--border)] text-white/80 hover:text-white hover:border-[var(--border-hover)] transition-colors">
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-medium border border-[var(--border)] text-white/80 hover:text-white hover:border-[var(--border-hover)] transition-colors">
           <Download size={12} /> Export
         </button>
         <button onClick={p.onRefresh} title="Refresh" disabled={p.refreshing}
-          className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-[var(--border)] text-white/80 hover:text-white hover:border-[var(--border-hover)] transition-colors disabled:opacity-50">
+          className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-[var(--border)] text-white/80 hover:text-white hover:border-[var(--border-hover)] transition-colors disabled:opacity-50">
           <RefreshCw size={12} className={p.refreshing ? 'animate-spin' : ''} />
         </button>
-        <LiquidGlassButton onClick={p.onAddContact} active>
-          <Plus size={13} /> Add Contact
-        </LiquidGlassButton>
+        <span className="hidden sm:inline-flex">
+          <LiquidGlassButton onClick={p.onAddContact} active>
+            <Plus size={13} /> Add contact
+          </LiquidGlassButton>
+        </span>
+      </div>
       </div>
     </div>
   );
