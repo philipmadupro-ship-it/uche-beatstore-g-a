@@ -6,7 +6,7 @@ import { CloudOff, Trash2, Music2, Wifi, WifiOff } from 'lucide-react';
 import { listCached, removeCached, clearAllCached, OfflineMeta } from '@/lib/offline/audio-cache';
 import { confirmToast } from '@/hooks/useToast';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
-import { describeCacheId } from '@/lib/assets';
+import { describeCacheId, studioHrefForCacheId } from '@/lib/assets';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -107,6 +107,16 @@ export default function OfflinePage() {
                   <div className="min-w-0">
                     <p className="line-clamp-2 break-words text-[11px] text-[var(--text-primary)]">{m.title || m.id}</p>
                     <p className="break-words font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{describeCacheId(m.id).label}</p>
+                    {studioHrefForCacheId(m.id) && (
+                      <a
+                        href={studioHrefForCacheId(m.id) as string}
+                        aria-label={`Open ${m.title || m.id} in the Studio`}
+                        data-testid={`offline-studio-${m.id}`}
+                        className="mt-1 inline-block font-mono text-[10px] uppercase tracking-[0.2em] text-white/60 underline-offset-4 hover:text-white hover:underline"
+                      >
+                        Open in Studio
+                      </a>
+                    )}
                   </div>
                   <p className="font-mono text-[10px] text-[var(--text-readable)]">{formatMB(m.size)}</p>
                   <p className="hidden font-mono text-[10px] text-[var(--text-readable)] sm:block">

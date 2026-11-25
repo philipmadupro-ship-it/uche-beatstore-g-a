@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { audioSrc } from '@/lib/audio/url';
-import { assetContentKey } from '@/lib/assets';
+import { assetContentKey, shouldDecodeWaveform, STUDIO_DECODE_MAX_BYTES, type StudioSource } from '@/lib/assets';
+import { useStudioAssetSource } from '@/hooks/useStudioAssetSource';
 import { OfflineFirstAudio } from '@/components/studio/OfflineFirstAudio';
 import { StudioEngine, playKick, playSnare, playHat, playClap } from '@/lib/audio/engine';
 import { toast } from '@/hooks/useToast';
@@ -66,13 +67,50 @@ const DEFAULT_CH: ChannelState = {
   eqLow: 0, eqMid: 0, eqHigh: 0, reverb: 0, delay: 0,
 };
 
+const STUDIO_SOURCE_LABEL: Record<StudioSource['kind'], string> = {
+  project_file: 'Project file',
+  stem: 'Stem',
+  wav: 'WAV',
+};
+
+/**
+ * A stored asset as the Track the Studio's playback path already understands.
+ * Only the audio and the title are real; everything a Library track carries
+ * (BPM, key, cover, stems, arrangement, lyrics) is absent, and the panels
+ * that need a track id are not rendered for it.
+ */
+function assetAsTrack(source: StudioSource): Track {
+  return {
+    id: source.id,
+    user_id: '',
+    title: source.title,
+    type: 'beat',
+    audio_url: source.src,
+    duration_seconds: null,
+    bpm: null,
+    stems_status: 'none',
+  } as Track;
+}
+
 export function StudioWorkstation() {
   // ── Track & stem fetching ──
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loadingTracks, setLoadingTracks] = useState(true);
   const [search, setSearch] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
-  const active = useMemo(() => tracks.find((t) => t.id === activeId) || null, [tracks, activeId]);
+  // An asset opened from storage (`?asset=`, AUDIO-03) replaces a Library track for this session,
+  // until the producer picks a track in the rail.
+  const searchParams = useSearchParams();
+  const requestedAssetId = searchParams?.get('asset') ?? null;
+  const [assetDismissed, setAssetDismissed] = useState(false);
+  const assetState = useStudioAssetSource(assetDismissed ? null : requestedAssetId);
+  const assetSource: StudioSource | null = assetState.status === 'ready' ? assetState.source : null;
+  const trackActive = useMemo(() => tracks.find((t) => t.id === activeId) || null, [tracks, activeId]);
+  const active = useMemo<Track | null>(
+    () => (assetSource ? assetAsTrack(assetSource) : trackActive),
+    [assetSource, trackActive],
+  );
+  const activeKey = active?.id ?? null;
 
   // Deep-link support: /studio?track=<id> auto-loads that track once the
   // tracks list resolves. Powers the "Send to studio" action from
@@ -80,7 +118,6 @@ export function StudioWorkstation() {
   // track preselected. We only apply the param once per mount; user
   // changes via the picker should not get clobbered by a later effect
   // run from the same searchParams reference.
-  const searchParams = useSearchParams();
   const requestedTrackId = searchParams?.get('track') ?? null;
   const requestedAppliedRef = useRef(false);
   useEffect(() => {
@@ -202,7 +239,7 @@ export function StudioWorkstation() {
     setLoopOn(false);
     setLoopA(0);
     setLoopB(0);
-  }, [activeId, stems]);
+  }, [activeKey, stems]);
 
   const useStems = !!stems;
   const channelKeys: ('master' | StemKey)[] = useStems ? ['vocals', 'drums', 'bass', 'other'] : ['master'];
@@ -229,7 +266,7 @@ export function StudioWorkstation() {
       if (!eng.channels.has('pads')) eng.attachBus('pads');
     });
     return () => cancelAnimationFrame(id);
-  }, [activeId, useStems]);
+  }, [activeKey, useStems]);
 
   // Apply channel state to engine continuously
   useEffect(() => {
@@ -253,7 +290,7 @@ export function StudioWorkstation() {
     };
     channelKeys.forEach((k) => apply(k as 'master' | StemKey));
     apply('pads');
-  }, [channels, useStems, activeId]);
+  }, [channels, useStems, activeKey]);
 
   // Master + FX returns
   useEffect(() => {
@@ -289,7 +326,7 @@ export function StudioWorkstation() {
       e.mozPreservesPitch = preservePitch;
       e.webkitPreservesPitch = preservePitch;
     });
-  }, [effectiveRate, preservePitch, useStems, activeId]);
+  }, [effectiveRate, preservePitch, useStems, activeKey]);
 
   // Time / loop tick
   const leader = () => {
@@ -596,7 +633,7 @@ export function StudioWorkstation() {
             tracks={filtered}
             loading={loadingTracks}
             activeId={activeId}
-            onPick={setActiveId}
+            onPick={(id) => { setAssetDismissed(true); setActiveId(id); }}
             search={search}
             setSearch={setSearch}
           />
@@ -605,8 +642,14 @@ export function StudioWorkstation() {
         {/* Workstation */}
         <main className={active ? 'order-1 lg:order-2' : 'order-2 lg:order-2'}>
           {!active ? (
-            <div className="border border-dashed border-white/10 rounded-lg py-20 sm:py-32 text-center px-4">
+            <div className="border border-dashed border-white/10 rounded-lg py-20 sm:py-32 text-center px-4" data-testid="studio-empty">
               <Sliders size={28} className="text-white/30 mx-auto mb-4" />
+              {assetState.status === 'error' && (
+                <p role="alert" data-testid="studio-asset-error" className="text-[11px] text-[#ffb7a8] mb-3">{assetState.message}</p>
+              )}
+              {assetState.status === 'loading' && (
+                <p role="status" className="text-[11px] text-white/60 mb-3">Opening file…</p>
+              )}
               <p className="text-[13px] text-white mb-1">Pick a track to start</p>
               <p className="text-[11px] text-white/40">
                 EQ · sends · loop · live recording
@@ -637,8 +680,10 @@ export function StudioWorkstation() {
                     </p>
                     <h2 className="truncate text-[14px] font-medium text-white sm:text-[16px]">{active.title}</h2>
                     <p className="mt-1 truncate text-[10px] font-mono uppercase tracking-wider text-white/40 sm:text-[11px]">
-                      {active.bpm ? `${Math.round(active.bpm * effectiveRate)} BPM` : '— BPM'}
-                      {active.key && ` · ${active.key}${active.scale ? ' ' + active.scale : ''}`}
+                      {assetSource
+                        ? [STUDIO_SOURCE_LABEL[assetSource.kind], assetSource.from, assetSource.offlineOnly ? 'Offline copy' : null].filter(Boolean).join(' · ')
+                        : active.bpm ? `${Math.round(active.bpm * effectiveRate)} BPM` : '— BPM'}
+                      {!assetSource && active.key && ` · ${active.key}${active.scale ? ' ' + active.scale : ''}`}
                       {tempo !== 1 && ` · ${(tempo * 100).toFixed(0)}%`}
                       {!preservePitch && pitchSemis !== 0 && ` · ${pitchSemis > 0 ? '+' : ''}${pitchSemis}st`}
                       {loopOn && ' · LOOP'}
@@ -675,9 +720,9 @@ export function StudioWorkstation() {
                   <OfflineFirstAudio
                     key={active.id}
                     ref={(el) => { audioRefs.current['master'] = el; }}
-                    cacheId={active.id}
+                    cacheId={assetSource ? assetSource.cacheId : active.id}
                     rawUrl={active.audio_url}
-                    contentKey={assetContentKey(active.audio_url)}
+                    contentKey={assetSource ? assetSource.contentKey : assetContentKey(active.audio_url)}
                     preload="auto"
                     crossOrigin="anonymous"
                     onLoadedMetadata={(e) => setDuration((e.target as HTMLAudioElement).duration)}
@@ -695,6 +740,7 @@ export function StudioWorkstation() {
                   <div>
                   <StudioWaveform
                     url={active.audio_url}
+                    skipDecode={!!assetSource && !shouldDecodeWaveform(assetSource.sizeBytes)}
                     peaksUrl={active.peaks_url ?? null}
                     currentTime={currentTime}
                     duration={duration}
@@ -703,6 +749,12 @@ export function StudioWorkstation() {
                       className="rounded-xl"
                   />
                 </div>
+              )}
+
+              {assetSource && !shouldDecodeWaveform(assetSource.sizeBytes) && (
+                <p data-testid="studio-waveform-skipped" className="px-1 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+                  Waveform skipped for files over {Math.round(STUDIO_DECODE_MAX_BYTES / 1024 / 1024)} MB. Playback is unaffected.
+                </p>
               )}
 
               {/* Transport + loop + tempo/pitch — extracted to sections/StudioTransport. */}
@@ -761,7 +813,7 @@ export function StudioWorkstation() {
                   no playback rewiring (clicking a clip just seeks the
                   source track to that clip's start). Rounds 7/8 will
                   add the `arrangements` table and play-through-clips. */}
-              {active?.audio_url && (
+              {active?.audio_url && !assetSource && (
                 <StudioArrangement
                   trackId={active.id}
                   url={active.audio_url}
@@ -778,6 +830,7 @@ export function StudioWorkstation() {
                   component is self-contained: it fetches and persists via
                   /api/tracks/[id]/lyrics, so we just need to mount it with
                   the active track id. */}
+              {!assetSource && (
               <div className="border border-[#0D0D0A] rounded-lg p-5 bg-[#090907]">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -787,6 +840,7 @@ export function StudioWorkstation() {
                 </div>
                 <LyricsStudio trackId={active.id} />
               </div>
+              )}
 
               {/* Last take — extracted to sections/StudioLastTake. */}
               {lastTake && (

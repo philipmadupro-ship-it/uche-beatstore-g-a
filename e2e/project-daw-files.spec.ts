@@ -74,6 +74,19 @@ test('an uploaded FLP reopens as an FL Studio project with its metadata, off the
   await expect(row.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByTestId('project-file-offline-f1')).toHaveCount(0);
 
+  // The Studio only opens audio: a session and a bundled session have no "Open in Studio", a WAV does.
+  await page.getByRole('button', { name: 'Night Shift options' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Open in a new tab' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Open in Studio' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Glass Rain bundle options' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Open in a new tab' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Open in Studio' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Hook sketch options' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Open in Studio' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
   // Reopen: a reload shows the same.
   await page.reload();
   await expect(page.getByTestId('project-file-f1')).toContainText('FL Studio project');

@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 interface Props {
   /** Audio URL to visualize. Same shape as track.audio_url. */
   url: string | null | undefined;
+  /** Skip the whole-file decode (a file too large to decode in the page; AUDIO-03). Playback is unaffected. */
+  skipDecode?: boolean;
   /** Precomputed peaks JSON (Float[]). Skips client-side decoding. */
   peaksUrl?: string | null;
   /** 0..duration seconds. Used to render the playhead + played fill. */
@@ -50,6 +52,7 @@ interface AudioContextWindow extends Window {
 
 export function StudioWaveform({
   url,
+  skipDecode = false,
   peaksUrl,
   currentTime,
   duration,
@@ -110,6 +113,8 @@ export function StudioWaveform({
         }
       }
 
+      if (skipDecode) return;
+
       // Client-side decode fallback. We fetch the audio, decode via
       // Web Audio, and downsample channel 0 to ~512 peaks (enough for
       // a 1024px-wide canvas with 2px per bar). Decoding a full track
@@ -145,7 +150,7 @@ export function StudioWaveform({
       }
     })();
     return () => { aborted = true; };
-  }, [url, peaksUrl]);
+  }, [url, peaksUrl, skipDecode]);
 
   // ── Canvas paint ────────────────────────────────────────────────────
   useEffect(() => {

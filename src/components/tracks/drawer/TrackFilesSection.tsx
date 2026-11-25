@@ -15,6 +15,7 @@ import {
   locationLabel,
   offlineCacheId,
   offlineLabel,
+  studioHref,
   withOfflineState,
   type StemRefs,
 } from '@/lib/assets';
@@ -62,15 +63,24 @@ export function TrackFilesSection({ trackId, title, audioUrl, wavUrl, stemsDone 
 
   if (rows.length === 0) return null;
   return (
-    <section aria-label="Files" data-testid="track-files">
+    <section aria-label="Files" data-testid="track-files" className="border-b border-white/10 px-6 py-5">
       <p className={LABEL}>Files</p>
       <ul className="mt-2 divide-y divide-white/[0.06]">
         {rows.map((a) => {
           const word = offlineLabel(a.offline);
           return (
-            <li key={a.id} className="flex items-center justify-between gap-3 py-2 text-[11px]" data-testid={`track-file-${a.source}${a.kind === 'stem' ? `-${a.id.split(':').pop()}` : ''}`}>
-              <span className="min-w-0 truncate text-white/80">{a.label}</span>
-              <span className="flex shrink-0 items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
+            <li key={a.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 text-[11px]" data-testid={`track-file-${a.source}${a.kind === 'stem' ? `-${a.id.split(':').pop()}` : ''}`}>
+              <span className="min-w-0 break-words text-white/80">{a.label}</span>
+              {a.source !== 'track_audio' && studioHref(a) && (
+                <a
+                  href={studioHref(a) as string}
+                  data-testid={`track-file-studio-${a.id.split(':').slice(2).join('-')}`}
+                  className="shrink-0 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 underline-offset-4 hover:text-white hover:underline"
+                >
+                  Open in Studio
+                </a>
+              )}
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
                 <span>{assetKindLabel(a.kind)} · {locationLabel(a.location)}</span>
                 {word && <span className={a.offline === 'saved' ? 'text-[#6DC6A4]' : a.offline === 'stale' ? 'text-white/70' : ''}>{word}</span>}
               </span>
