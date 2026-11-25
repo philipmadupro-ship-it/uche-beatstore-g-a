@@ -87,10 +87,18 @@ describe('kinds', () => {
 });
 
 describe('the org allowlist', () => {
-  it('accepts sessions, video, spreadsheets and TIFF only for an org', () => {
-    for (const name of ['a.als', 'a.flp', 'a.ptx', 'a.rpp', 'a.cpr', 'a.webm', 'a.m4v', 'a.csv', 'a.xlsx', 'a.tif']) {
+  it('accepts video, spreadsheets and TIFF only for an org', () => {
+    for (const name of ['a.webm', 'a.m4v', 'a.csv', 'a.xlsx', 'a.tif']) {
       expect(validateAssetFile({ name, size: 10 }, { org: true }).ok, name).toBe(true);
       expect(validateAssetFile({ name, size: 10 }), name).toEqual({ ok: false, error: 'unsupported-type' });
+    }
+  });
+
+  it('DAW sessions are accepted by both, identically (AUDIO-02 opened them to producer projects)', () => {
+    for (const name of ['a.als', 'a.flp', 'a.ptx', 'a.rpp', 'a.cpr']) {
+      const org = validateAssetFile({ name, size: 10 }, { org: true });
+      expect(org.ok, name).toBe(true);
+      expect(validateAssetFile({ name, size: 10 }), name).toEqual(org);
     }
   });
 

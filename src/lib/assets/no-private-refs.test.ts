@@ -12,6 +12,7 @@ describe('lib/assets never outputs a private reference', () => {
         { vocals: 'r2://priv/stem.wav' },
       ),
       ...assetsOfProject([
+        { id: 'd', project_id: 'p', kind: 'other', label: 'S', file_name: 's.flp', mime: 'application/octet-stream', size_bytes: 1, position: 0, in_portal: false, portal_at: null, created_at: 'x', downloadUrl: '/api/projects/p/assets/d/download' },
         { id: 'a', project_id: 'p', kind: 'audio', label: 'L', file_name: 'f.wav', mime: 'audio/wav', size_bytes: 1, position: 0, in_portal: false, portal_at: null, created_at: 'x', downloadUrl: '/api/projects/p/assets/a/download' },
       ]),
     ];
