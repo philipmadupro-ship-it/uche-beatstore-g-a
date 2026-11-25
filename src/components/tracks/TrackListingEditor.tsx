@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import NextImage from 'next/image';
 import {
-  Loader2, Check, DollarSign, FileText, Image as ImageIcon, AlertTriangle, Activity, Globe,
+  Loader2, Check, DollarSign, FileText, Image as ImageIcon, TriangleAlert, Activity, Globe,
   Upload, ChevronDown, Calendar, RotateCcw, X,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
@@ -403,7 +403,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
               </span>
               {!canPublish && (
                 <span className="text-[9px] font-mono text-amber-500 flex items-center gap-1">
-                  <AlertTriangle size={9} /> Price required to publish
+                  <TriangleAlert size={9} /> Price required to publish
                 </span>
               )}
             </div>
@@ -544,7 +544,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
                   <span className="text-[10px] font-mono uppercase tracking-wider text-white/60">Cover Art</span>
                   {coverUrlInput
                     ? <span className="text-[9px] text-[#6DC6A4] font-mono">✓ Set</span>
-                    : <span className="text-[9px] text-amber-500 font-mono flex items-center gap-1"><AlertTriangle size={9} /> Recommended</span>}
+                    : <span className="text-[9px] text-amber-500 font-mono flex items-center gap-1"><TriangleAlert size={9} /> Recommended</span>}
                 </div>
                 <input type="url" value={coverUrlInput} onChange={(e) => setCoverUrlInput(e.target.value)}
                   onBlur={(e) => persistIfChanged('cover_url', e.target.value)} placeholder="Paste URL or click thumbnail to upload…"

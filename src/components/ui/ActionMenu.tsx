@@ -8,6 +8,7 @@ import {
   resolveSections, flattenActions, nextEnabledIndex, firstEnabledIndex,
   indexForShortcutKey, placeMenu, type MenuAction, type MenuSection,
 } from '@/lib/ui/action-menu';
+import { ICON_SIZE } from '@/lib/ui/icons';
 
 export type { MenuAction, MenuSection };
 
@@ -229,8 +230,8 @@ export function ActionMenu({
         )}
       >
         {busy
-          ? <Loader2 size={13} className="animate-spin" />
-          : triggerContent ?? <MoreHorizontal size={14} />}
+          ? <Loader2 size={ICON_SIZE.sm} className="animate-spin" aria-hidden />
+          : triggerContent ?? <MoreHorizontal size={ICON_SIZE.sm} aria-hidden />}
       </button>
 
       {open && coords && typeof document !== 'undefined' && createPortal(
@@ -296,9 +297,9 @@ export function ActionMenu({
                     >
                       <span className="grid size-3.5 shrink-0 place-items-center">
                         {action.busy
-                          ? <Loader2 size={13} className="animate-spin" />
+                          ? <Loader2 size={ICON_SIZE.sm} className="animate-spin" aria-hidden />
                           : action.checked
-                            ? <Check size={13} className="text-[#6DC6A4]" />
+                            ? <Check size={ICON_SIZE.sm} className="text-[#6DC6A4]" aria-hidden />
                             : null}
                       </span>
                       <span className="min-w-0 flex-1">

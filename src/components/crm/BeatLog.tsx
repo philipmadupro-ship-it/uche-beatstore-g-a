@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BeatSend, Contact } from '@/lib/types';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { Mail, CheckCircle, Clock, XCircle, ArrowUpRight, Music, ExternalLink } from 'lucide-react';
+import { Mail, CheckCircle2, Clock, CircleX, ArrowUpRight, Music, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
 interface BeatLogProps {
@@ -17,8 +17,8 @@ const STATUS_CONFIG: Record<string, { icon: typeof Mail; dot: string; text: stri
   opened:      { icon: Clock,       dot: 'bg-[#7aa8e8]', text: 'text-[#7aa8e8]', ring: 'ring-[#3a4a6a]',    label: 'Opened' },
   interested:  { icon: ArrowUpRight,dot: 'bg-white', text: 'text-white', ring: 'ring-white/40', label: 'Interested' },
   negotiating: { icon: Clock,       dot: 'bg-[#e8a86a]', text: 'text-[#e8a86a]', ring: 'ring-white/40', label: 'Negotiating' },
-  placed:      { icon: CheckCircle, dot: 'bg-[#6DC6A4]', text: 'text-[#6DC6A4]', ring: 'ring-[#1f5a4a]',    label: 'Placed' },
-  pass:        { icon: XCircle,     dot: 'bg-[#e88a8a]', text: 'text-[#e88a8a]', ring: 'ring-[#6a2a2a]',    label: 'Pass' },
+  placed:      { icon: CheckCircle2, dot: 'bg-[#6DC6A4]', text: 'text-[#6DC6A4]', ring: 'ring-[#1f5a4a]',    label: 'Placed' },
+  pass:        { icon: CircleX,     dot: 'bg-[#e88a8a]', text: 'text-[#e88a8a]', ring: 'ring-[#6a2a2a]',    label: 'Pass' },
 };
 
 // Fallback tags for contacts without tags

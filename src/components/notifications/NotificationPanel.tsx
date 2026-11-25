@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
-  AlertTriangle, Bell, FileUp, HandHelping, Heart, ListChecks, MessageCircle, MessageSquare,
+  TriangleAlert, Bell, FileUp, HandHelping, Heart, ListChecks, MessageCircle, MessageSquare,
   PackageX, RotateCcw, ShieldCheck, ShoppingBag, Tag,
 } from 'lucide-react';
 import {
@@ -27,7 +27,7 @@ export interface PanelNotification {
 const ICONS: Record<NotificationIcon, typeof Bell> = {
   'shopping-bag': ShoppingBag,
   'rotate-ccw': RotateCcw,
-  'alert-triangle': AlertTriangle,
+  'alert-triangle': TriangleAlert,
   'shield-check': ShieldCheck,
   tag: Tag,
   'package-x': PackageX,
@@ -125,7 +125,7 @@ export function NotificationPanel({
               className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-white/[0.03]"
             >
               <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.05]">
-                <AlertTriangle size={13} className="text-[var(--warning)]" aria-hidden />
+                <TriangleAlert size={13} className="text-[var(--warning)]" aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[11px] font-medium leading-tight text-white">

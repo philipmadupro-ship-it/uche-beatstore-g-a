@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import {
-  Send, Mail, Clock, CheckCircle, ArrowUpRight, XCircle, Music, ExternalLink, Loader2, ChevronDown,
+  Send, Mail, Clock, CheckCircle2, ArrowUpRight, CircleX, Music, ExternalLink, Loader2, ChevronDown,
 } from 'lucide-react';
 import { BeatSend, Contact, Track } from '@/lib/types';
 import { toast } from '@/hooks/useToast';
@@ -300,8 +300,8 @@ function statusConfig(status: BeatSend['status']) {
     case 'opened':      return { icon: Clock, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Opened' };
     case 'interested':  return { icon: ArrowUpRight, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Interested' };
     case 'negotiating': return { icon: Clock, color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'Negotiating' };
-    case 'placed':      return { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10', label: 'Placed' };
-    case 'pass':        return { icon: XCircle, color: 'text-red-500', bg: 'bg-red-500/10', label: 'Pass' };
+    case 'placed':      return { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-500/10', label: 'Placed' };
+    case 'pass':        return { icon: CircleX, color: 'text-red-500', bg: 'bg-red-500/10', label: 'Pass' };
     default:            return { icon: Mail, color: 'text-white/40', bg: 'bg-white/10', label: String(status) };
   }
 }

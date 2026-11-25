@@ -24,10 +24,10 @@ const PRODUCER_HUBS = [
     label: 'Catalog',
     icon: 'Library',
     items: [
-      { label: 'Library', href: '/library', icon: 'House' },
+      { label: 'Library', href: '/library', icon: 'Library' },
       { label: 'Projects', href: '/projects', icon: 'Layers' },
       { label: 'Playlists', href: '/playlists', icon: 'ListMusic' },
-      { label: 'Studio', href: '/studio', icon: 'SlidersVertical' },
+      { label: 'Studio', href: '/studio', icon: 'AudioLines' },
       { label: 'Offline', href: '/offline', icon: 'CloudOff' },
     ],
   },

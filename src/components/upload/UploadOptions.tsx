@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronDown, Settings2, X } from 'lucide-react';
+import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useUploadPreset } from '@/lib/upload/preset-store';
@@ -71,7 +71,7 @@ export function UploadOptions({ className }: { className?: string }) {
             className,
           )}
         >
-          <Settings2 size={12} aria-hidden />
+          <SlidersHorizontal size={12} aria-hidden />
           Upload options
           {count > 0 && (
             <span className="grid size-4 place-items-center rounded-full bg-white/20 text-[9px] font-bold tabular-nums text-white">{count}</span>

@@ -15,7 +15,7 @@ import { TrackCard, TRACK_ROW_GRID } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { PlaylistOfflineSync } from '@/components/offline/PlaylistOfflineSync';
-import { Loader2, Check, X, Edit2, Play, Share2, Music, Plus, Search, Tag, ListMusic, CheckSquare, ListPlus, UploadCloud } from 'lucide-react';
+import { Loader2, Check, X, Pencil, Play, Share2, Music, Plus, Search, Tag, ListMusic, CheckSquare, ListPlus, UploadCloud } from 'lucide-react';
 import { PlaylistSuggestions } from '@/components/playlists/PlaylistSuggestions';
 import { AddFromLibraryModal } from '@/components/projects/AddFromLibraryModal';
 import { Track } from '@/lib/types';
@@ -359,7 +359,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
             <div className="flex items-start gap-2">
               <h1 className="min-w-0 flex-1 break-words font-heading text-2xl font-medium leading-tight text-white">{playlist?.name}</h1>
               <button type="button" aria-label="Edit playlist title" onClick={() => setIsEditingTitle(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-white/50 hover:bg-[#0D0D0A] hover:text-white">
-                <Edit2 size={14} />
+                <Pencil size={14} />
               </button>
             </div>
           )}
@@ -406,14 +406,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                     onChange={(e) => setTempTitle(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRename()}
                   />
-                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white"><Check size={14} /></button>
-                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white/50"><X size={14} /></button>
+                  <button aria-label="Save name" onClick={handleRename} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white"><Check size={14} /></button>
+                  <button aria-label="Cancel rename" onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white/50"><X size={14} /></button>
                 </div>
               ) : (
                 <div className="group flex items-center gap-2 mb-3">
                   <h1 className="text-3xl font-medium text-white leading-none tracking-tight truncate font-heading">{playlist?.name}</h1>
-                  <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-white/50 hover:text-white transition-all">
-                    <Edit2 size={13} />
+                  <button aria-label="Rename playlist" onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-white/50 hover:text-white transition-all">
+                    <Pencil size={13} />
                   </button>
                 </div>
               )}

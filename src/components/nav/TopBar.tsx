@@ -4,8 +4,6 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import {
-  Settings,
-  Store,
   ChevronDown,
   Search,
   Bell,
@@ -13,6 +11,7 @@ import {
   X,
   User,
 } from 'lucide-react';
+import { ICONS, ICON_SIZE, ICON_STROKE } from '@/lib/ui/icons';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { ACCOUNT_GROUP, ALL_GROUPS, activeGroupFor, activeGroupIn, isItemActive, navGroupsFor, type NavGroup } from './model';
 import { OrgSwitcher } from './OrgSwitcher';
@@ -291,7 +290,7 @@ export function TopBar() {
             title="Search (⌘K)"
             aria-label="Search"
           >
-            <Search size={14} />
+            <Search size={ICON_SIZE.sm} aria-hidden />
             <span className="hidden xl:inline flex-1 text-left">Search</span>
             <kbd className="hidden xl:inline text-[9px] font-mono border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
           </button>)}
@@ -309,7 +308,7 @@ export function TopBar() {
             className="tap md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
             aria-label="Search"
           >
-            <Search size={19} />
+            <Search size={ICON_SIZE.lg} aria-hidden />
           </button>)}
 
           {/* Notifications — the panel was `absolute`, alone among the app's
@@ -332,7 +331,7 @@ export function TopBar() {
                 aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
                 title="Notifications"
               >
-                <Bell size={18} />
+                <Bell size={ICON_SIZE.lg} aria-hidden />
                 {unread > 0 && (
                   <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-white text-black text-[9px] font-black flex items-center justify-center leading-none">
                     {unread > 9 ? '9+' : unread}
@@ -364,7 +363,7 @@ export function TopBar() {
             aria-label="View public storefront"
             className="tap hidden md:flex w-9 h-9 rounded-full items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors shrink-0"
           >
-            <Store size={17} />
+            <ICONS.store size={ICON_SIZE.lg} aria-hidden />
           </Link>)}
 
           {/* Settings */}
@@ -380,7 +379,7 @@ export function TopBar() {
                 : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
             )}
           >
-            <Settings size={17} />
+            <ICONS.settings size={ICON_SIZE.lg} aria-hidden />
           </Link>)}
 
           {/* Mobile menu — on the right, because that is the edge the drawer
@@ -391,7 +390,7 @@ export function TopBar() {
             className="tap md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors order-last"
             aria-label="Open navigation menu"
           >
-            <Menu size={22} />
+            <Menu size={ICON_SIZE.lg} aria-hidden />
           </button>
 
           {/* Profile — account menu: profile + settings + sign out, so every
@@ -416,7 +415,7 @@ export function TopBar() {
                     : 'bg-white/[0.05] border-white/20 hover:border-white/30',
                 )}
               >
-                <User size={16} className={open || isItemActive('/profile', pathname) ? 'text-white' : 'text-white/60'} />
+                <User size={ICON_SIZE.md} aria-hidden className={open || isItemActive('/profile', pathname) ? 'text-white' : 'text-white/60'} />
               </button>
             )}
           >
@@ -432,7 +431,7 @@ export function TopBar() {
                     isItemActive('/profile', pathname) ? 'bg-[#0D0D0A] text-white' : 'text-white/65 hover:bg-white/[0.06] hover:text-white',
                   )}
                 >
-                  <User size={17} strokeWidth={1.75} className="shrink-0" />
+                  <User size={ICON_SIZE.md} strokeWidth={ICON_STROKE.thin} aria-hidden className="shrink-0" />
                   <span className="truncate">Profile</span>
                 </Link>
                 <Link
@@ -444,7 +443,7 @@ export function TopBar() {
                     isItemActive('/settings', pathname) ? 'bg-[#0D0D0A] text-white' : 'text-white/65 hover:bg-white/[0.06] hover:text-white',
                   )}
                 >
-                  <Settings size={17} strokeWidth={1.75} className="shrink-0" />
+                  <ICONS.settings size={ICON_SIZE.md} strokeWidth={ICON_STROKE.thin} aria-hidden className="shrink-0" />
                   <span className="truncate">Settings</span>
                 </Link>
                 </>)}
@@ -486,7 +485,7 @@ export function TopBar() {
                 className="tap w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
                 aria-label="Close menu"
               >
-                <X size={19} />
+                <X size={ICON_SIZE.lg} aria-hidden />
               </button>
             </div>
             <nav className="flex-1 px-3 py-4 overflow-y-auto">
@@ -513,7 +512,7 @@ export function TopBar() {
                               : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
                           )}
                         >
-                          <Icon size={19} strokeWidth={1.75} />
+                          <Icon size={ICON_SIZE.md} strokeWidth={ICON_STROKE.thin} aria-hidden />
                           <span className="font-medium tracking-tight">{it.label}</span>
                         </Link>
                       );
@@ -568,10 +567,10 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
               : 'text-white/60 hover:bg-[#101010] hover:text-white',
           )}
         >
-          <Icon size={18} strokeWidth={1.75} />
+          <Icon size={ICON_SIZE.md} strokeWidth={ICON_STROKE.thin} aria-hidden />
           <span>{group.label}</span>
           <ChevronDown
-            size={13}
+            size={ICON_SIZE.xs}
             aria-hidden
             className={cn('transition-transform duration-[var(--dur-fast)]', open ? 'rotate-180' : '')}
           />
@@ -599,7 +598,7 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
                   itemActive ? 'bg-[var(--surface-primary)] text-white' : 'text-white/65 hover:bg-white/[0.06] hover:text-white',
                 )}
               >
-                <ItemIcon size={17} strokeWidth={1.75} className="shrink-0" />
+                <ItemIcon size={ICON_SIZE.md} strokeWidth={ICON_STROKE.thin} aria-hidden className="shrink-0" />
                 <span className="truncate">{it.label}</span>
               </Link>
             );

@@ -6,7 +6,7 @@ import { usePlayerReactivity } from '@/hooks/usePlayerReactivity';
 import {
   Volume2, VolumeX,
   ListMusic, Music, Shuffle, Repeat, ChevronDown,
-  AlertTriangle, Loader2, Minimize2,
+  TriangleAlert, Loader2, Minimize2,
 } from 'lucide-react';
 import { AsciiCoverArt } from './AsciiCoverArt';
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';

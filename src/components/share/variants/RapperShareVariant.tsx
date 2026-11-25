@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit3 } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import type { ShareRowDownload } from '@/components/share/ShareTrackList';
 import { SharePageFrame, type ShareFrameOptions } from '@/components/share/SharePageFrame';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
@@ -122,7 +122,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
           <div className="bg-[#0e0c09] border border-white/10 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] flex-1 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/[0.04]">
               <div className="flex items-center gap-2 text-white/80">
-                <Edit3 size={12} />
+                <Pencil size={12} />
                 <span className="text-[9px] font-mono uppercase tracking-[0.25em]">Session Notepad</span>
               </div>
               <div className="flex items-center gap-3">

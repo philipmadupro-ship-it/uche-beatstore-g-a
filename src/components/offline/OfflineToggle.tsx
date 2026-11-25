@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, CheckCircle2, Loader2, Trash2, AlertTriangle } from 'lucide-react';
+import { Download, CheckCircle2, Loader2, Trash2, TriangleAlert } from 'lucide-react';
 import { useOfflineTrack } from '@/hooks/useOfflineCache';
 import { formatOfflineSize } from '@/lib/offline/status';
 
@@ -113,7 +113,7 @@ export function OfflineToggle({ trackId, audioUrl, title, variant = 'button' }: 
       </button>
       {error && (
         <div className="flex items-center gap-1 text-[10px] text-red-400">
-          <AlertTriangle size={9} />
+          <TriangleAlert size={9} />
           <span>{error}</span>
         </div>
       )}

@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useToastStore, type Toast } from '@/hooks/useToast';
-import { CheckCircle2, AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, TriangleAlert, AlertCircle, Info, X } from 'lucide-react';
+import { ICON_SIZE } from '@/lib/ui/icons';
 
 const ICONS = {
   info:    Info,
   success: CheckCircle2,
   error:   AlertCircle,
-  warning: AlertTriangle,
+  warning: TriangleAlert,
 } as const;
 
 const ACCENTS = {
@@ -77,7 +78,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       className={`toast-surface toast-enter pointer-events-auto w-full max-w-[420px] border ${accent} rounded-[20px]`}
     >
       <div className="flex items-start gap-3 p-4">
-        <Icon size={16} className={`shrink-0 mt-0.5 ${accent.split(' ').pop()}`} />
+        <Icon size={ICON_SIZE.md} aria-hidden className={`shrink-0 mt-0.5 ${accent.split(' ').pop()}`} />
         <div className="flex-1 min-w-0">
           <p className="text-[11px] font-semibold text-white leading-snug">
             {toast.title}

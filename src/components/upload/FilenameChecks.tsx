@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Check } from 'lucide-react';
+import { TriangleAlert, Check } from 'lucide-react';
 import type { TitleMetadata } from '@/lib/upload/title-metadata';
 import { filenameChecks, type FilenameCheckOption, type FilenameCheckPatch } from '@/lib/upload/filename-check';
 import type { DetectedFeatures } from '@/lib/audio/metadata-agreement';
@@ -73,7 +73,7 @@ export function FilenameChecks({
         return (
           <li key={check.id} className="text-[10px]">
             <p className="flex items-start gap-1 text-amber-300">
-              <AlertTriangle size={9} className="mt-0.5 shrink-0" aria-hidden />
+              <TriangleAlert size={9} className="mt-0.5 shrink-0" aria-hidden />
               <span>{check.message}</span>
             </p>
             {editable && (

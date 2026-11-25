@@ -2,6 +2,7 @@
 
 import { Trash2, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ICON_SIZE } from '@/lib/ui/icons';
 
 interface Action {
   label: string;
@@ -44,7 +45,7 @@ export function BatchActionBar({ count, noun, onClear, actions, busy }: Props) {
           className="flex items-center justify-center w-7 h-7 shrink-0 rounded-full text-white/60 hover:text-white hover:bg-white/[0.06] transition-colors"
           aria-label="Clear selection"
         >
-          <X size={13} />
+          <X size={ICON_SIZE.sm} aria-hidden />
         </button>
         <span className="text-[11px] font-mono uppercase tracking-wider text-white/80 px-2 shrink-0 tabular-nums">
           {count} {label}
@@ -52,7 +53,7 @@ export function BatchActionBar({ count, noun, onClear, actions, busy }: Props) {
         <div className="w-px h-5 bg-white/[0.08] mx-1 shrink-0" />
         {busy ? (
           <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-white/80 shrink-0">
-            <Loader2 size={11} className="animate-spin" />
+            <Loader2 size={ICON_SIZE.xs} className="animate-spin" aria-hidden />
             Working…
           </div>
         ) : (
@@ -68,7 +69,7 @@ export function BatchActionBar({ count, noun, onClear, actions, busy }: Props) {
                 (!a.intent || a.intent === 'default') && 'bg-white/[0.04] text-white border border-white/[0.06] hover:bg-white/[0.08] hover:border-white/[0.12]',
               )}
             >
-              {a.loading ? <Loader2 size={11} className="animate-spin" /> : a.icon}
+              {a.loading ? <Loader2 size={ICON_SIZE.xs} className="animate-spin" aria-hidden /> : a.icon}
               {a.label}
             </button>
           ))
