@@ -310,11 +310,16 @@ export function buildLicenseContract(params: {
  * editor preview: the same build as the webhook, so nothing differs but the
  * sample names. Tiers here are the producer's own, taken as validated.
  */
-export function previewContract(template: string, tiers: TierTerms[]): BuiltContract {
+/** A purchase date the way the webhook writes it: the day the contract is made. */
+export function purchaseDateLabel(now: Date = new Date()): string {
+  return now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+export function previewContract(template: string, tiers: TierTerms[], now: Date = new Date()): BuiltContract {
   const list = tiers.length ? tiers : [legacyTierTerms('lease')];
   return buildLicenseContract({
     template,
-    vars: { ...SAMPLE_VARIABLES, license_type: list.some((t) => t.is_exclusive) ? 'Exclusive' : 'Lease' },
+    vars: { ...SAMPLE_VARIABLES, purchase_date: purchaseDateLabel(now), license_type: list.some((t) => t.is_exclusive) ? 'Exclusive' : 'Lease' },
     tiers: list.map((terms) => ({ terms, source: 'preview' as const, issues: [] })),
   });
 }

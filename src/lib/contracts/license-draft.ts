@@ -8,7 +8,7 @@
  * row, and carries no buyer data (the purchase details are the sample set).
  */
 import {
-  buildLicenseContract, resolveContractTiers, scheduleStart,
+  buildLicenseContract, purchaseDateLabel, resolveContractTiers, scheduleStart,
   type TermsSource, type Verification,
 } from './license-contract';
 import { SAMPLE_VARIABLES } from './license-template';
@@ -49,6 +49,8 @@ export function buildTierDraft(input: {
   template: string | null | undefined;
   producerName?: string | null;
   producerEmail?: string | null;
+  /** the day the draft is made, as a buyer's contract would be dated (tests pass a fixed one) */
+  now?: Date;
 }): TierDraftView {
   const row = input.tierRow ?? null;
   const isExclusive = row ? row.is_exclusive === true : input.legacyId === 'exclusive';
@@ -60,6 +62,7 @@ export function buildTierDraft(input: {
     template: input.template,
     vars: {
       ...SAMPLE_VARIABLES,
+      purchase_date: purchaseDateLabel(input.now),
       license_type: tier.terms.is_exclusive ? 'Exclusive' : 'Lease',
       producer_name: input.producerName?.trim() || 'Producer',
       producer_email: input.producerEmail?.trim() || '',

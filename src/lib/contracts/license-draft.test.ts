@@ -17,6 +17,12 @@ describe('parseTierRef', () => {
 });
 
 describe('buildTierDraft', () => {
+  it('is dated the day the draft is made, like a buyer\'s contract, not a fixed sample date', () => {
+    const d = buildTierDraft({ tierRow: ROW, template: '', now: new Date(2026, 10, 25, 12) });
+    expect(d.markdown).toContain('on November 25, 2026.');
+    expect(d.markdown).not.toContain('May 27, 2026');
+    expect(buildTierDraft({ tierRow: ROW, template: '' }).markdown).toContain(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
+  });
   it('states the row, and carries nothing else of it', () => {
     const d = buildTierDraft({ tierRow: ROW, template: '', producerName: 'Uche', producerEmail: 'u@example.test' });
     expect(d.tier).toEqual({ name: 'Gold', source: 'licenses-row', issues: [] });
