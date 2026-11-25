@@ -35,6 +35,7 @@ import { toast } from '@/hooks/useToast';
 import { errorMessage } from '@/lib/errors';
 import Link from 'next/link';
 import { LicenseTemplateEditor } from '@/components/store-editor/LicenseTemplateEditor';
+import { SCHEDULE_HEADING_ERROR, hasScheduleSection } from '@/lib/contracts/license-contract';
 import { CARD_STYLE_META, VIDEO_STYLE_META } from '@/lib/share/styles';
 import { ShareTemplateStudio } from '@/components/share-templates/ShareTemplateStudio';
 import { normalizeThemeColor } from '@/lib/theme/colors';
@@ -1663,6 +1664,7 @@ export default function StoreEditorPage() {
     setSaving(true);
     try {
       // 1. Profile fields
+      const templateHasSchedule = hasScheduleSection(form.license_template_md);
       const profilePayload = {
         display_name: form.display_name || null,
         bio: form.bio || null,
@@ -1685,7 +1687,9 @@ export default function StoreEditorPage() {
         seo_title: form.seo_title || null,
         seo_description: form.seo_description || null,
         og_image_url: form.og_image_url || null,
-        license_template_md: form.license_template_md || null,
+        // Wording that carries the generated Schedule of Terms is not sent (the editor says why);
+        // everything else on this page still saves.
+        ...(templateHasSchedule ? {} : { license_template_md: form.license_template_md || null }),
         share_card_style: form.share_card_style || null,
         share_video_style: form.share_video_style || null,
         voice_tag_url: form.voice_tag_url || null,
@@ -1705,6 +1709,7 @@ export default function StoreEditorPage() {
       // storefront will not show rather than letting a visitor find out.
       const badLinks = unusableLinksWarning(form);
       if (badLinks) toast.warning(badLinks.title, badLinks.description);
+      if (templateHasSchedule) toast.warning('License contract not saved', SCHEDULE_HEADING_ERROR.replace('License contract not saved: ', ''));
 
       // 2. Persist each featured playlist's order + featured flag
       const featuredIds = new Set(featured.map((f) => f.id));
@@ -1854,7 +1859,7 @@ export default function StoreEditorPage() {
               Customise your public beatstore — changes go live instantly on save.
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1 lg:mt-1 lg:justify-end lg:pb-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-3 lg:mt-1 lg:shrink-0 lg:justify-end">
             <div className="flex shrink-0 items-center rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
               {(['design', 'content'] as const).map((mode) => (
                 <button
@@ -1862,7 +1867,7 @@ export default function StoreEditorPage() {
                   type="button"
                   aria-pressed={editorMode === mode}
                   onClick={() => setEditorMode(mode)}
-                  className={`rounded-full px-3 py-1.5 text-[11px] capitalize transition-colors ${
+                  className={`ctl-tap [--tap-y:6px] h-7 pointer-coarse:h-8 rounded-full px-3 text-[11px] capitalize transition-colors ${
                     editorMode === mode ? 'bg-white/[0.12] text-white' : 'text-white/60 hover:text-white'
                   }`}
                 >
@@ -1873,7 +1878,7 @@ export default function StoreEditorPage() {
             {/* Mobile preview toggle */}
             <button
               onClick={() => setPreviewOpen((v) => !v)}
-              className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white lg:hidden"
+              className="ctl-tap [--tap-y:4px] flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.06] bg-white/[0.04] px-3 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white lg:hidden"
             >
               {previewOpen ? <EyeOff size={12} /> : <Eye size={12} />}
               Preview
@@ -1882,12 +1887,13 @@ export default function StoreEditorPage() {
               href="/store"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white"
+              className="ctl-tap [--tap-y:4px] flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.06] bg-white/[0.04] px-3 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white"
             >
               <ExternalLink size={12} />
               View Store
             </a>
             <LiquidGlassButton
+              size="md"
               onClick={handleSave}
               disabled={saving || !saveAllowed.profile}
               title={saveAllowed.profile ? undefined : 'Your store profile did not load. Reload to try again.'}

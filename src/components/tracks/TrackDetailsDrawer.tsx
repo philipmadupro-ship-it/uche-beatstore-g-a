@@ -25,6 +25,7 @@ import { InlineText } from '@/components/ui/InlineText';
 import { InlineTagStrip, type TagGroup } from '@/components/ui/InlineTagStrip';
 import { TrackCollaboratorStrip } from '@/components/tracks/TrackCollaboratorStrip';
 import { TrackLinkedSection } from '@/components/tracks/TrackLinkedSection';
+import { TrackFilesSection } from '@/components/tracks/drawer/TrackFilesSection';
 import { TrackDeliverySection } from '@/components/tracks/drawer/TrackDeliverySection';
 import { TrackPeopleSection } from '@/components/artists/TrackPeopleSection';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
@@ -617,6 +618,10 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
               {/* Delivery — is the MP3 a lease hands over ready (or made on the
                   first download)? Own lookup: nothing stores it. */}
               <TrackDeliverySection trackId={track.id} audioUrl={track.audio_url} />
+
+              {/* Files — master, WAV and stems with where each lives and whether
+                  a current copy is saved on this device (lib/assets). */}
+              <TrackFilesSection trackId={track.id} title={track.title} audioUrl={track.audio_url} wavUrl={track.wav_url} stemsDone={track.stems_status === 'done'} />
 
               {/* Track feedback — only shows when the drawer is opened from
                   a project (projectId provided). Comments pinned to this

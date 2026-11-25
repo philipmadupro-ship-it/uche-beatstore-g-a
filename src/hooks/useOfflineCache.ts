@@ -49,7 +49,12 @@ export function useOfflineCache() {
  * word or an announcement can't drift between the two. See `lib/offline/status.ts`
  * for the status derivation and label/announcement text.
  */
-export function useOfflineTrack(trackId: string | null | undefined) {
+export function useOfflineTrack(
+  trackId: string | null | undefined,
+  /** AUDIO-01: fingerprint of the file as it is NOW. Recorded when saving, and compared on read
+   *  so a copy of an older file reports `stale`. Omit to keep the old behaviour. */
+  contentKey?: string | null,
+) {
   const [meta, setMeta] = useState<OfflineMeta | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -117,7 +122,8 @@ export function useOfflineTrack(trackId: string | null | undefined) {
               'Made room offline',
               `Removed ${evicted.length} older offline save${evicted.length === 1 ? '' : 's'}${names ? ` (${names})` : ''} to fit "${title}".`,
             );
-          }
+          },
+          { contentKey: contentKey ?? null },
         );
         setMeta(m);
       } catch (e: unknown) {
@@ -126,7 +132,7 @@ export function useOfflineTrack(trackId: string | null | undefined) {
         setDownloading(false);
       }
     },
-    [trackId]
+    [trackId, contentKey]
   );
 
   const remove = useCallback(async () => {
@@ -137,9 +143,13 @@ export function useOfflineTrack(trackId: string | null | undefined) {
     if (removedTitle) setAnnouncement(offlineRemovedAnnouncement(removedTitle));
   }, [trackId, meta]);
 
+  const isStale = !!meta && !!contentKey && !!meta.contentKey && meta.contentKey !== contentKey;
+
   return {
     meta,
     isCached,
+    /** The saved copy is of an older file than the current one (needs re-saving). */
+    isStale,
     downloading,
     progress,
     error,

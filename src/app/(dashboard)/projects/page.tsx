@@ -193,6 +193,7 @@ export default function ProjectsPage() {
           meta={`${filtered.length} project${filtered.length !== 1 ? 's' : ''}`}
           actions={(
             <LiquidGlassButton
+              size="md"
               onClick={() => setCreateOpen(true)}
             >
               <Plus size={13} />

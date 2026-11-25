@@ -23,6 +23,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, FileText, Image as ImageIcon, Lock, Music, Paperclip, Upload } from 'lucide-react';
+import { ProjectFileOffline } from '@/components/projects/ProjectFileOffline';
 import { InlineText } from '@/components/ui/InlineText';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { toast, confirmToast } from '@/hooks/useToast';
@@ -244,6 +245,7 @@ export function ProjectFilesSection({ projectId, org }: { projectId: string; org
                   <span className="hidden sm:inline">In portal</span>
                 </button>
               )}
+              {!orgId && <ProjectFileOffline file={a} />}
               <a
                 href={a.downloadUrl}
                 download

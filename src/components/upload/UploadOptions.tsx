@@ -64,7 +64,7 @@ export function UploadOptions({ className }: { className?: string }) {
           aria-expanded={open}
           aria-haspopup="true"
           className={cn(
-            'tap inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium backdrop-blur-md transition-colors',
+            'ctl-tap [--tap-y:4px] inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium backdrop-blur-md transition-colors',
             open || count > 0
               ? 'border-white/25 bg-white/[0.13] text-white'
               : 'border-white/10 bg-white/[0.04] text-white/60 hover:border-white/20 hover:text-white/80',

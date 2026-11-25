@@ -13,6 +13,7 @@ import { isInteractiveDragStartTarget, setTrackDragData } from '@/lib/dnd';
 import { SessionFitMarkers } from './SessionFitMarkers';
 import { RowWaveform } from './RowWaveform';
 import { useOfflineTrack } from '@/hooks/useOfflineCache';
+import { assetContentKey } from '@/lib/assets';
 import { offlineActionLabel } from '@/lib/offline/status';
 import { toast } from '@/hooks/useToast';
 import { gridTemplate, type LibraryColumn, type TrackWithTags } from '@/lib/library/columns';
@@ -202,7 +203,7 @@ function TrackCardImpl({
     announcement: offlineAnnouncement,
     download: downloadOffline,
     remove: removeOffline,
-  } = useOfflineTrack(track.id);
+  } = useOfflineTrack(track.id, assetContentKey(track.audio_url));
 
   const toggleOffline = async () => {
     if (isCached) {
@@ -210,9 +211,11 @@ function TrackCardImpl({
       return;
     }
     if (!track.audio_url) return;
-    const url = track.audio_url.startsWith('http')
-      ? track.audio_url
-      : `${window.location.origin}${track.audio_url}`;
+    // Hand over the stored reference as-is: `download` routes it through the
+    // owner-gated audio proxy. Prefixing the page origin onto an `r2://` master
+    // (as this used to) produced a source nothing could fetch — OfflineToggle
+    // always passed the raw reference, so the two surfaces disagreed.
+    const url = track.audio_url;
     // Errors surface through `offlineStatus`/the row's live region — see
     // useOfflineTrack, which sets its own `error` state rather than throwing.
     await downloadOffline(url, track.title);

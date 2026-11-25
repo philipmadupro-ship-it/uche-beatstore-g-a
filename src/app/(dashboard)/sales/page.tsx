@@ -258,10 +258,10 @@ export default function SalesPage() {
               </Button>
               <Link
                 href="/analytics"
-                className="tap inline-flex min-h-9 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-readable)] transition-colors hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                className="ctl-tap [--tap-y:4px] inline-flex h-9 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-card)] px-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-readable)] transition-colors hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
               >
                 Plays
-                <span className="grid size-6 place-items-center rounded-full bg-white/[0.06]" aria-hidden="true">
+                <span className="grid size-5 place-items-center rounded-full bg-white/[0.06]" aria-hidden="true">
                   <ExternalLink size={10} />
                 </span>
               </Link>
