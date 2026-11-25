@@ -4,9 +4,10 @@ import {
   CLAUSE_FLAG_LIST, MAX_CLAUSE_DEPTH, TERM_VARIABLE_LIST, type ClauseFlag,
 } from './license-terms';
 import {
-  ALL_VARIABLE_KEYS, DEFAULT_TEMPLATE_MD, TIER_AWARE_TEMPLATE_MD, fillTemplate, previewTemplate, VARIABLE_LIST,
+  ALL_VARIABLE_KEYS, DEFAULT_TEMPLATE_MD, TIER_AWARE_TEMPLATE_MD, fillTemplate, VARIABLE_LIST,
   SAMPLE_VARIABLES,
 } from './license-template';
+import { previewTemplate } from './license-contract';
 
 const OFF: Record<ClauseFlag, boolean> = {
   credit_required: false, stems_included: false, commercial_rights: false,
@@ -194,8 +195,11 @@ describe('tier-aware default + preview', () => {
     expect(excl).toContain('will not re-sell');
     expect(excl).not.toContain('prod. Uche2crazyyyy');
   });
-  it('an empty template previews as the default', () => {
-    expect(previewTemplate('  ', [legacyTierTerms('lease')])).toBe(fillTemplate(DEFAULT_TEMPLATE_MD, { ...SAMPLE_VARIABLES, ...termsVariables([legacyTierTerms('lease')], SAMPLE_VARIABLES.producer_name), license_type: 'Lease' }, termsFlags([legacyTierTerms('lease')])));
+  it('an empty template previews as the tier-aware default, with the schedule', () => {
+    const out = previewTemplate('  ', [legacyTierTerms('lease')]);
+    expect(out).toContain('Audio streams: 5,000 streams');
+    expect(out).toContain('## Schedule of Terms');
+    expect(out).not.toContain('For Lease licenses:');
   });
   it('VARIABLE_LIST is unchanged', () => {
     expect(VARIABLE_LIST).toHaveLength(9);

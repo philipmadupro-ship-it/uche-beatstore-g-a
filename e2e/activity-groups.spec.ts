@@ -9,7 +9,11 @@ import { startStubSupabase, signInCookie, stubSupabaseConfigured } from './fixtu
  * dashboard specs.
  */
 const min = 60_000;
-const ago = (m: number) => new Date(Date.now() - m * min).toISOString();
+// A fixed anchor, pinned in the browser too: rows 30 h old are only "Yesterday" after 06:00 local,
+// and before 01:30 rows 90 min old fall into yesterday as well, so the real clock made this flaky.
+const NOW = new Date();
+NOW.setHours(12, 0, 0, 0);
+const ago = (m: number) => new Date(NOW.getTime() - m * min).toISOString();
 const row = (id: string, kind: string, group: string, title: string, at: string, href: string | null, tone = 'neutral') =>
   ({ id, kind, group, tone, at, title, href });
 const FEED = [
@@ -42,6 +46,8 @@ async function openPanel(page: Page) {
 }
 
 test('group chips, filtering, day headers', async ({ page }) => {
+  // Only this test asserts day headers; pinning Date in the others stalled the /sales landing.
+  await page.clock.setFixedTime(NOW);
   await page.goto('/library');
   const dialog = await openPanel(page);
   const chips = dialog.getByRole('group', { name: /filter activity/i });

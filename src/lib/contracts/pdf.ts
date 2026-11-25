@@ -36,6 +36,12 @@ export async function renderContractPdf(markdown: string): Promise<Buffer> {
         doc.moveDown(0.4);
         continue;
       }
+      // ### Heading 3 (the Schedule of Terms' per-tier title)
+      if (line.startsWith('### ')) {
+        doc.moveDown(0.3).fontSize(12).font('Helvetica-Bold').text(line.slice(4));
+        doc.moveDown(0.1);
+        continue;
+      }
       // ## Heading 2
       if (line.startsWith('## ')) {
         doc.moveDown(0.5).fontSize(14).font('Helvetica-Bold').text(line.slice(3));

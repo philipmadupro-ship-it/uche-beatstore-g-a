@@ -12,16 +12,19 @@ const ago = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
 const item = (id: string, kind: string, group: string, title: string, at: string, href: string | null = null) =>
   ({ id, kind, group, tone: 'neutral', at, title, href });
 
-const FEED = [
+// Built after the clock is pinned (a module-level array would use the real time).
+const feed = () => [
   item('1', 'sale', 'sales', 'New sale — Night Shift ($29.00)', ago(5), '/sales'),
   item('2', 'artist_reaction', 'artists', 'Nova is interested in “Night Shift”', ago(30), '/contacts/c1?tab=beats'),
   item('3', 'upload', 'music', 'Uploaded “Cold Front”', ago(60 * 30), '/library/t2'),
 ];
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ activity: FEED }) })));
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 10, 25, 12, 0, 0));
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ activity: feed() }) })));
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('ActivityPanel', () => {
   it('offers only the groups that have rows, with counts, and filters by them', async () => {

@@ -11,7 +11,7 @@
  * keys we look for can never drift.
  */
 
-import { applyClauses, termsVariables, termsFlags, TERM_KEYS, TERM_VARIABLE_LIST, type ClauseFlag, type TermsVariables, type TierTerms } from './license-terms';
+import { applyClauses, TERM_KEYS, TERM_VARIABLE_LIST, type ClauseFlag, type TermsVariables } from './license-terms';
 
 export interface ContractVariables {
   buyer_name: string;
@@ -167,17 +167,5 @@ export function fillTemplate(
 export const SAMPLE_VARIABLES: ContractVariables = Object.fromEntries(
   VARIABLE_LIST.map((v) => [v.key, v.sample]),
 ) as unknown as ContractVariables;
-
-/** Fill a template as a purchase of `tiers` would, with sample purchase details. */
-export function previewTemplate(template: string, tiers: TierTerms[]): string {
-  const tpl = template.trim() ? template : DEFAULT_TEMPLATE_MD;
-  const producer = SAMPLE_VARIABLES.producer_name;
-  const terms = termsVariables(tiers, producer);
-  return fillTemplate(
-    tpl,
-    { ...SAMPLE_VARIABLES, ...terms, license_type: tiers.some((t) => t.is_exclusive) ? 'Exclusive' : 'Lease' },
-    termsFlags(tiers),
-  );
-}
 
 export { TERM_VARIABLE_LIST };

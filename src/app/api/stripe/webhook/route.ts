@@ -9,8 +9,10 @@ import { getStripe } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { DEFAULT_TEMPLATE_MD, fillTemplate } from '@/lib/contracts/license-template';
-import { termsFlags, termsVariables, tiersForLineItems } from '@/lib/contracts/license-terms';
+import { buildLicenseContract, resolveContractTiers } from '@/lib/contracts/license-contract';
+import { TERMS_SNAPSHOT_VERSION } from '@/lib/contracts/license-terms-snapshot';
+import { alertContractTerms } from '@/lib/store/contract-alert';
+import { createHash } from 'node:crypto';
 import { renderContractPdf } from '@/lib/contracts/pdf';
 import { uploadContractPdf } from '@/lib/storage/upload';
 import { deliverFulfillmentEmail } from '@/lib/fulfillment/email-outbox';
@@ -252,6 +254,27 @@ async function recordStorePurchaseEvent(
   } catch (err) {
     // Analytics must never make paid fulfillment fail.
     log.warn('store purchase event tracking threw', { session_id: session.id, error: errorMessage(err) });
+  }
+}
+
+const TIER_COLUMNS = 'id, name, is_exclusive, file_types, stems_included, streaming_limit, distribution_limit, commercial_rights, sync_rights, broadcast_rights, credit_required';
+
+const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
+
+/** The full tier rows for a contract, or null when they cannot be read (older schema, failed query). Never throws. */
+async function loadTierRows(
+  admin: AdminClient,
+  licenseIds: string[],
+  purchaseId: string,
+): Promise<Map<string, Record<string, unknown>> | null> {
+  if (licenseIds.length === 0) return null;
+  try {
+    const { data, error } = await admin.from('licenses').select(TIER_COLUMNS).in('id', licenseIds);
+    if (error) throw error;
+    return new Map(((data ?? []) as unknown as Array<Record<string, unknown>>).map((r) => [String(r.id), r]));
+  } catch (err) {
+    log.warn('contract tier terms unavailable, using recorded terms', { purchaseId, error: errorMessage(err) });
+    return null;
   }
 }
 
@@ -539,42 +562,48 @@ async function runFulfillment(params: {
     );
     const dominantType = hasAnyExclusive ? 'Exclusive' : 'Lease';
     const profAny = prof as Record<string, unknown> | null;
-    const templateMd = ((profAny?.license_template_md as string | null | undefined) ?? '').trim()
-      || DEFAULT_TEMPLATE_MD;
+    const templateMd = ((profAny?.license_template_md as string | null | undefined) ?? '').trim();
 
     const totalCentsForContract = Number(session.amount_total ?? 0);
     const priceLabel = `$${(totalCentsForContract / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    // Tier terms for {{streaming_limit}} and friends. Best-effort: if the extra
-    // columns cannot be read, each line falls back to its recorded terms (then
-    // the legacy ones) and the contract is still made.
-    const licenseIds = [...new Set(lineItems.map((li) => li.license_id).filter((id) => UUID_RE.test(id)))];
-    let tierRows: Map<string, Record<string, unknown>> | null = null;
-    if (licenseIds.length > 0) {
-      try {
-        const { data: tierData, error: tierErr } = await admin
-          .from('licenses')
-          .select('id, name, is_exclusive, file_types, stems_included, streaming_limit, distribution_limit, commercial_rights, sync_rights, broadcast_rights, credit_required')
-          .in('id', licenseIds);
-        if (tierErr) throw tierErr;
-        tierRows = new Map(((tierData ?? []) as Array<Record<string, unknown>>).map((r) => [String(r.id), r]));
-      } catch (err) {
-        log.warn('contract tier terms unavailable, using recorded terms', { purchaseId, error: errorMessage(err) });
-      }
-    }
-    const tiers = tiersForLineItems(lineItems, tierRows);
+    // The contract is generated ONLY from validated tier terms: the snapshot
+    // stored on the line at purchase, else the live tier row (best-effort), else
+    // the line's recorded terms, flagged. A tier that fails validation never
+    // reaches the text as a guess; it is flagged and the producer is told.
+    const needRows = lineItems.some((li) => !li.terms && UUID_RE.test(li.license_id));
+    const tierRows = needRows
+      ? await loadTierRows(admin, [...new Set(lineItems.map((li) => li.license_id).filter((id) => UUID_RE.test(id)))], purchaseId)
+      : null;
+    const tiers = resolveContractTiers(lineItems, tierRows);
     const producerName = (profAny?.display_name as string | null | undefined) || 'Producer';
-    const filled = fillTemplate(templateMd, {
-      ...termsVariables(tiers, producerName),
-      buyer_name: session.customer_details?.name || meta.buyer_email || 'Customer',
-      buyer_email: meta.buyer_email || '',
-      track_titles: orderedTitles.join(' · '),
-      license_type: dominantType,
-      purchase_date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      purchase_id: purchaseId.slice(0, 8),
-      producer_name: (profAny?.display_name as string | null | undefined) || 'Producer',
-      producer_email: (profAny?.contact_email as string | null | undefined) || '',
-      price: priceLabel,
-    }, termsFlags(tiers));
+    const built = buildLicenseContract({
+      template: templateMd,
+      vars: {
+        buyer_name: session.customer_details?.name || meta.buyer_email || 'Customer',
+        buyer_email: meta.buyer_email || '',
+        track_titles: orderedTitles.join(' \u00b7 '),
+        license_type: dominantType,
+        purchase_date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+        purchase_id: purchaseId.slice(0, 8),
+        producer_name: producerName,
+        producer_email: (profAny?.contact_email as string | null | undefined) || '',
+        price: priceLabel,
+      },
+      tiers,
+    });
+    const filled = built.text;
+    log.info('contract terms snapshot', {
+      purchaseId,
+      v: built.snapshot.v,
+      templateSource: built.snapshot.template_source,
+      templateSha256: sha256(built.snapshot.template_used),
+      contractSha256: sha256(filled),
+      tierSources: built.snapshot.tiers.map((t) => t.source),
+    });
+    if (built.alerts.length > 0) {
+      log.warn('contract terms need attention', { purchaseId, alerts: built.alerts });
+      await alertContractTerms(admin as unknown as Parameters<typeof alertContractTerms>[0], { sellerUserId: meta.seller_user_id || null, purchaseId, reasons: built.alerts });
+    }
 
     contractPdfBuffer = await renderContractPdf(filled);
     const uploadedUrl = await uploadContractPdf(purchaseId, contractPdfBuffer);
@@ -1134,6 +1163,25 @@ export async function POST(req: NextRequest) {
                 : licenseType === 'exclusive',
             };
           });
+
+          // Freeze the tier's validated terms on each line (LICENSE-04), so the
+          // contract can be regenerated or checked later whatever the producer
+          // edits afterwards. Best-effort: a line that cannot be validated simply
+          // carries no `terms` and the contract resolves it (flagged) as before.
+          try {
+            const termRows = await loadTierRows(admin, customLicenseUUIDs, 'pending');
+            const frozen = resolveContractTiers(resolvedLineItems, termRows);
+            resolvedLineItems.forEach((li, idx) => {
+              if (frozen[idx].source === 'licenses-row') {
+                li.terms = frozen[idx].terms;
+                li.terms_v = TERMS_SNAPSHOT_VERSION;
+              }
+            });
+          } catch (err) {
+            // Paid checkout: nothing here may turn into a 500 and a Stripe retry.
+            for (const li of resolvedLineItems) { delete li.terms; delete li.terms_v; }
+            log.warn('could not freeze contract terms on line items', { sessionId: session.id, error: errorMessage(err) });
+          }
 
           const trackIds = resolvedLineItems.map((i) => i.track_id);
 
