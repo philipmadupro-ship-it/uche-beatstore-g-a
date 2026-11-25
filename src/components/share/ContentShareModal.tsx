@@ -2,7 +2,7 @@
 
 import {
   X, Lock, Link2, Download, Calendar, Check, Copy, Loader2,
-  Eye, MessageSquare, Edit3, Mail, Trash2, Send, ShoppingBag, Headphones,
+  Eye, MessageSquare, Pencil, Mail, Trash2, Send, ShoppingBag, Headphones,
 } from 'lucide-react';
 import { PlaybackChoice } from '@/components/share/PlaybackChoice';
 import { Dropdown } from '@/components/ui/Dropdown';
@@ -39,7 +39,7 @@ interface Props {
 const ROLE_INFO: Record<ContentShare['role'], { label: string; help: string; icon: React.ComponentType<{ size?: number }> }> = {
   viewer:    { label: 'Viewer',    help: 'Can stream tracks',               icon: Eye },
   commenter: { label: 'Commenter', help: 'Can stream + leave comments',     icon: MessageSquare },
-  editor:    { label: 'Editor',    help: 'Reserved — same as commenter',    icon: Edit3 },
+  editor:    { label: 'Editor',    help: 'Reserved — same as commenter',    icon: Pencil },
 };
 
 function apiBase(contentType: 'project' | 'playlist' | 'track', contentId: string) {

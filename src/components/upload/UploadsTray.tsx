@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Upload, X, Pause, Play, RefreshCw, AlertTriangle, CheckCircle2,
+  Upload, X, Pause, Play, RefreshCw, TriangleAlert, CheckCircle2,
   ChevronDown, ChevronUp, Loader2, FileAudio,
 } from 'lucide-react';
 import {
@@ -274,7 +274,7 @@ function UploadRow({ u }: { u: UploadItem }) {
       {/* error/info detail */}
       {u.error && u.status !== 'success' && (
         <p className="mt-1 text-[10px] text-red-400 flex items-start gap-1">
-          <AlertTriangle size={9} className="mt-0.5 shrink-0" />
+          <TriangleAlert size={9} className="mt-0.5 shrink-0" />
           <span className="break-words">{u.error}</span>
         </p>
       )}
@@ -348,7 +348,7 @@ function StatusBadge({ u, pct }: { u: UploadItem; pct: number }) {
     case 'error':
       return (
         <span className="text-red-400 flex items-center gap-1">
-          <AlertTriangle size={9} /> failed
+          <TriangleAlert size={9} /> failed
         </span>
       );
     case 'interrupted':

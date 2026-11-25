@@ -11,7 +11,7 @@
  * left. Supabase keeps only a hash, so this is the creator's only chance to
  * copy them (doc 25).
  */
-import { CheckCircle2, Copy, XCircle } from 'lucide-react';
+import { CheckCircle2, Copy, CircleX } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { toast } from '@/hooks/useToast';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -33,7 +33,7 @@ export function TeamRosterResults({ results }: { results: StepResult[] }) {
         <ul className="divide-y divide-white/10" data-testid="wizard-results">
           {results.map((r, i) => (
             <li key={i} className="flex items-start gap-3 py-3" data-testid={r.ok ? 'result-ok' : 'result-failed'}>
-              {r.ok ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#6DC6A4]" aria-hidden="true" /> : <XCircle size={16} className="mt-0.5 shrink-0 text-[#ffb7a8]" aria-hidden="true" />}
+              {r.ok ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#6DC6A4]" aria-hidden="true" /> : <CircleX size={16} className="mt-0.5 shrink-0 text-[#ffb7a8]" aria-hidden="true" />}
               <div className="min-w-0 text-[13px] leading-relaxed">
                 <p className="break-words text-white/80">{r.label}</p>
                 <p className="text-[11px] text-white/60">{r.ok ? r.message : `${r.message} Do it in ${r.fixIn}.`}</p>

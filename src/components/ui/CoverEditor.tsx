@@ -6,6 +6,7 @@ import { ArtworkFallback } from './ArtworkFallback';
 import { confirmToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import type { ArtworkKind } from '@/lib/artwork/gradient';
+import { ICON_SIZE } from '@/lib/ui/icons';
 
 /**
  * The big square cover on a detail page — track, project or playlist.
@@ -103,7 +104,7 @@ export function CoverEditor({
       </ArtworkFallback>
 
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-        {busy ? <Loader2 size={20} className="animate-spin text-white" /> : <Camera size={20} className="text-white" />}
+        {busy ? <Loader2 size={ICON_SIZE.lg} className="animate-spin text-white" aria-hidden /> : <Camera size={ICON_SIZE.lg} className="text-white" aria-hidden />}
       </div>
 
       {src && onRemove && (
@@ -115,7 +116,7 @@ export function CoverEditor({
           aria-label="Remove cover"
           className="absolute right-2 top-2 z-10 grid size-8 place-items-center rounded-full border border-white/20 bg-black/70 text-white opacity-0 backdrop-blur-sm transition-opacity hover:border-white/40 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40"
         >
-          <ImageOff size={13} />
+          <ImageOff size={ICON_SIZE.sm} aria-hidden />
         </button>
       )}
 

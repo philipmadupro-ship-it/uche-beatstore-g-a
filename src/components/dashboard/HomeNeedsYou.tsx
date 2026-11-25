@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Check, ChevronDown, ChevronUp, Handshake, ShoppingBag, UserPlus } from 'lucide-react';
+import { TriangleAlert, Check, ChevronDown, ChevronUp, Handshake, ShoppingBag, UserPlus } from 'lucide-react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { buildActionDigest, type DigestItem, type DigestLeadRow, type DigestOfferRow, type DigestSaleRow } from '@/lib/dashboard/action-digest';
 import { buildHomeAttention, type AttentionSources, type HomeAttention, type SourceState } from '@/lib/dashboard/home-attention';
@@ -107,7 +107,7 @@ export function HomeNeedsYouView({
           </p>
         ) : (
           <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/60" role="status">
-            <AlertTriangle size={12} aria-hidden /> Couldn’t load {failed || 'what needs you'} — refresh to check
+            <TriangleAlert size={12} aria-hidden /> Couldn’t load {failed || 'what needs you'} — refresh to check
           </p>
         )}
       </section>

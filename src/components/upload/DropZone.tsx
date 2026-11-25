@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useDropzone, type FileRejection } from 'react-dropzone';
-import { AlertTriangle, Upload, CheckCircle2, Loader2, FileAudio, X } from 'lucide-react';
+import { TriangleAlert, Upload, CheckCircle2, Loader2, FileAudio, X } from 'lucide-react';
 import { analyzeAudio } from '@/lib/audio/analyze.client';
 import { useUploadManager } from '@/lib/upload/manager';
 import { uploadFileExtension, uploadRejectionMessage } from '@/lib/upload/dropzone-draft';
@@ -439,7 +439,7 @@ export function DropZone({ playlistId, onUploadSuccess, openRef, variant = 'full
                     ) : card.done ? (
                       <CheckCircle2 size={14} className="text-green-400" />
                     ) : card.analysisError ? (
-                      <AlertTriangle size={14} className="text-[#E2C16D]" />
+                      <TriangleAlert size={14} className="text-[#E2C16D]" />
                     ) : (
                       <div className={`w-2 h-2 rounded-full bg-white ${reducedMotion ? '' : 'animate-pulse'}`} />
                     )}

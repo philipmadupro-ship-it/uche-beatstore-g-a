@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {
-  Upload, GitBranch, Star, ShoppingBag, RotateCcw, AlertTriangle, Tag, PackageX, Heart,
+  Upload, GitBranch, Star, ShoppingBag, RotateCcw, TriangleAlert, Tag, PackageX, Heart,
   MessageCircle, HandHelping, FileUp, MessageSquare, Send, Eye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -17,7 +17,7 @@ import {
  */
 const ICONS: Record<ActivityIconName, React.ElementType> = {
   upload: Upload, 'git-branch': GitBranch, star: Star, 'shopping-bag': ShoppingBag, 'rotate-ccw': RotateCcw,
-  'alert-triangle': AlertTriangle, tag: Tag, 'package-x': PackageX, heart: Heart, 'message-circle': MessageCircle,
+  'alert-triangle': TriangleAlert, tag: Tag, 'package-x': PackageX, heart: Heart, 'message-circle': MessageCircle,
   'hand-helping': HandHelping, 'file-up': FileUp, 'message-square': MessageSquare, send: Send, eye: Eye,
 };
 

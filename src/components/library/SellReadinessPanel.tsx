@@ -15,7 +15,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { TriangleAlert, ChevronDown, ChevronUp } from 'lucide-react';
 import { Disclosure } from '@/components/ui/Disclosure';
 import {
   summariseReadiness,
@@ -62,7 +62,7 @@ export function SellReadinessPanel({ tracks, hasDefaultPrice }: Props) {
       tone="warning"
       title={headline}
       summary={`${summary.purchasableCount} purchasable`}
-      icon={<AlertTriangle size={13} className="text-[var(--error-text)]" aria-hidden />}
+      icon={<TriangleAlert size={13} className="text-[var(--error-text)]" aria-hidden />}
     >
       {/* Blockers first, ordered by how many beats each affects — that is the
           order in which fixing one thing pays off most. */}
