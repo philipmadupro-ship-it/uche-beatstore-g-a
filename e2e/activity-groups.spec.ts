@@ -9,7 +9,11 @@ import { startStubSupabase, signInCookie, stubSupabaseConfigured } from './fixtu
  * dashboard specs.
  */
 const min = 60_000;
-const ago = (m: number) => new Date(Date.now() - m * min).toISOString();
+// A fixed anchor, pinned in the browser too: rows 30 h old are only "Yesterday" after 06:00 local,
+// and before 01:30 rows 90 min old fall into yesterday as well, so the real clock made this flaky.
+const NOW = new Date();
+NOW.setHours(12, 0, 0, 0);
+const ago = (m: number) => new Date(NOW.getTime() - m * min).toISOString();
 const row = (id: string, kind: string, group: string, title: string, at: string, href: string | null, tone = 'neutral') =>
   ({ id, kind, group, tone, at, title, href });
 const FEED = [
@@ -23,6 +27,7 @@ let stub: Awaited<ReturnType<typeof startStubSupabase>> = null;
 test.beforeAll(async () => { if (stubSupabaseConfigured()) stub = await startStubSupabase(); });
 test.afterAll(async () => { await stub?.close(); });
 test.beforeEach(async ({ page, context, baseURL }) => {
+  await page.clock.setFixedTime(NOW);
   if (stub) await context.addCookies([signInCookie(baseURL!)]);
   await page.route('**/api/activity**', (r) => r.fulfill({ json: { activity: FEED } }));
   await page.route('**/api/notifications**', (r) => r.fulfill({ json: { notifications: [], unread: 0 } }));
