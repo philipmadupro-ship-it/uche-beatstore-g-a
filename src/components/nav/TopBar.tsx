@@ -287,7 +287,7 @@ export function TopBar() {
           {/* Search (⌘K) — desktop. /api/search is producer-only. */}
           {producerChrome && (<button
             onClick={() => openPalette(true)}
-            className="hidden md:flex items-center justify-center gap-2 size-9 xl:size-auto xl:w-56 xl:justify-start bg-white/[0.04] border border-white/10 rounded-md xl:py-1.5 xl:px-3 text-[11px] text-white/60 hover:border-white/20 hover:text-white transition-colors shrink-0"
+            className="hidden md:flex items-center justify-center gap-2 size-9 xl:size-auto xl:h-9 xl:w-56 xl:justify-start bg-white/[0.04] border border-white/10 rounded-md xl:px-3 text-[11px] text-white/60 hover:border-white/20 hover:text-white transition-colors shrink-0"
             title="Search (⌘K)"
             aria-label="Search"
           >
@@ -306,7 +306,7 @@ export function TopBar() {
           {/* Search icon — mobile (opens ⌘K palette) */}
           {producerChrome && (<button
             onClick={() => openPalette(true)}
-            className="tap md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
+            className="ctl-tap [--tap-y:2px] md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
             aria-label="Search"
           >
             <Search size={19} />
@@ -328,7 +328,7 @@ export function TopBar() {
                 onClick={toggle}
                 aria-expanded={open}
                 aria-haspopup="dialog"
-                className="tap w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors relative shrink-0"
+                className="ctl-tap [--tap-y:2px] size-8 pointer-coarse:size-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors relative shrink-0"
                 aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
                 title="Notifications"
               >
@@ -362,7 +362,7 @@ export function TopBar() {
             rel="noopener noreferrer"
             title="View public storefront"
             aria-label="View public storefront"
-            className="tap hidden md:flex w-9 h-9 rounded-full items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors shrink-0"
+            className="hidden md:flex ctl-tap [--tap-y:2px] size-8 pointer-coarse:size-10 rounded-full items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors shrink-0"
           >
             <Store size={17} />
           </Link>)}
@@ -374,7 +374,7 @@ export function TopBar() {
             title="Settings"
             aria-current={isItemActive('/settings', pathname) ? 'page' : undefined}
             className={cn(
-              'tap hidden md:flex w-9 h-9 rounded-full items-center justify-center transition-colors shrink-0',
+              'hidden md:flex ctl-tap [--tap-y:2px] size-8 pointer-coarse:size-10 rounded-full items-center justify-center transition-colors shrink-0',
               isItemActive('/settings', pathname)
                 ? 'bg-[var(--surface-primary)] text-white'
                 : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
@@ -388,7 +388,7 @@ export function TopBar() {
               reads as a mistake every time. */}
           <button
             onClick={() => setMobileOpen(true)}
-            className="tap md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors order-last"
+            className="ctl-tap [--tap-y:2px] md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors order-last"
             aria-label="Open navigation menu"
           >
             <Menu size={22} />
@@ -410,7 +410,7 @@ export function TopBar() {
                 aria-label="Open account menu"
                 title="Account"
                 className={cn(
-                  'tap flex items-center justify-center shrink-0 w-9 h-9 rounded-full border transition-colors',
+                  'flex items-center justify-center shrink-0 ctl-tap [--tap-y:2px] size-8 pointer-coarse:size-10 rounded-full border transition-colors',
                   open || isItemActive('/profile', pathname) || isItemActive('/settings', pathname)
                     ? 'bg-white/20 border-white/40'
                     : 'bg-white/[0.05] border-white/20 hover:border-white/30',
@@ -483,7 +483,7 @@ export function TopBar() {
               </span>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="tap w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
+                className="ctl-tap [--tap-y:2px] size-8 pointer-coarse:size-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
                 aria-label="Close menu"
               >
                 <X size={19} />
@@ -562,7 +562,7 @@ function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean
           aria-haspopup="dialog"
           aria-current={active ? 'page' : undefined}
           className={cn(
-            'flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium tracking-tight transition-colors',
+            'flex h-9 items-center gap-2 rounded-lg px-3 text-[11px] font-medium tracking-tight transition-colors',
             active || open
               ? 'bg-[var(--surface-primary)] text-white'
               : 'text-white/60 hover:bg-[#101010] hover:text-white',

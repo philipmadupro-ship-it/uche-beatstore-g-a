@@ -282,6 +282,21 @@
   }
 }
 
+/* ── Control hit area (UI-01) ──────────────────────────────────────────
+ * Like `.tap`, but sized per control instead of a flat 8px: the control scale
+ * in lib/ui/control-size.ts sets `--tap-y` so the padded hit area is 44px
+ * tall and no wider than the visual. Padding only the block axis keeps
+ * neighbours in a row from stealing each other's presses; stacked rows need
+ * a gap of twice `--tap-y`. */
+.ctl-tap { position: relative; }
+@media (pointer: coarse) {
+  .ctl-tap::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--tap-y, 0px) * -1) 0;
+  }
+}
+
 /* ── Range slider thumbs ≥28px for touch ──────────────────────────────
  * Native thumbs are ~12–16px and impossible to grab on a phone. Apply
  * `.range-tap` to <input type="range"> in the store filters. */

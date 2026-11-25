@@ -1854,7 +1854,7 @@ export default function StoreEditorPage() {
               Customise your public beatstore — changes go live instantly on save.
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1 lg:mt-1 lg:justify-end lg:pb-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-3 lg:mt-1 lg:shrink-0 lg:justify-end">
             <div className="flex shrink-0 items-center rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
               {(['design', 'content'] as const).map((mode) => (
                 <button
@@ -1862,7 +1862,7 @@ export default function StoreEditorPage() {
                   type="button"
                   aria-pressed={editorMode === mode}
                   onClick={() => setEditorMode(mode)}
-                  className={`rounded-full px-3 py-1.5 text-[11px] capitalize transition-colors ${
+                  className={`ctl-tap [--tap-y:6px] h-7 pointer-coarse:h-8 rounded-full px-3 text-[11px] capitalize transition-colors ${
                     editorMode === mode ? 'bg-white/[0.12] text-white' : 'text-white/60 hover:text-white'
                   }`}
                 >
@@ -1873,7 +1873,7 @@ export default function StoreEditorPage() {
             {/* Mobile preview toggle */}
             <button
               onClick={() => setPreviewOpen((v) => !v)}
-              className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white lg:hidden"
+              className="ctl-tap [--tap-y:4px] flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.06] bg-white/[0.04] px-3 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white lg:hidden"
             >
               {previewOpen ? <EyeOff size={12} /> : <Eye size={12} />}
               Preview
@@ -1882,12 +1882,13 @@ export default function StoreEditorPage() {
               href="/store"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white"
+              className="ctl-tap [--tap-y:4px] flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.06] bg-white/[0.04] px-3 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white"
             >
               <ExternalLink size={12} />
               View Store
             </a>
             <LiquidGlassButton
+              size="md"
               onClick={handleSave}
               disabled={saving || !saveAllowed.profile}
               title={saveAllowed.profile ? undefined : 'Your store profile did not load. Reload to try again.'}
