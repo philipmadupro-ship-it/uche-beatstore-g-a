@@ -11,7 +11,7 @@
  *   - /settings/licenses  (still reachable via Settings nav, redirects to store-editor or renders this)
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, Trash2, Loader2, Check, ChevronUp, ChevronDown,
   DollarSign, Globe, Music, Lock, FileText, Zap, AlertCircle,
@@ -19,6 +19,8 @@ import {
 import { toast } from '@/hooks/useToast';
 import { errorMessage } from '@/lib/errors';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
+import { LicenseAnalysisPanel } from '@/components/store/LicenseAnalysisPanel';
+import { analyzeLicenseTiers, tierDraftFromRow } from '@/lib/license/analysis';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -69,7 +71,7 @@ const LIMIT_OPTIONS: Array<{ label: string; value: number | null }> = [
 
 /* ─── Component ─────────────────────────────────────────────── */
 
-export function LicenseBuilder() {
+export function LicenseBuilder({ template = null }: { template?: string | null } = {}) {
   const [licenses, setLicenses] = useState<License[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -79,6 +81,15 @@ export function LicenseBuilder() {
   const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => { fetchLicenses(); }, []);
+
+  // The check reads the tiers as drafted, unsaved edits included.
+  const analysis = useMemo(
+    () => analyzeLicenseTiers({
+      tiers: licenses.map((l) => tierDraftFromRow({ ...l, ...drafts[l.id] } as unknown as Record<string, unknown>)),
+      template,
+    }),
+    [licenses, drafts, template],
+  );
 
   async function fetchLicenses() {
     try {
@@ -418,6 +429,8 @@ export function LicenseBuilder() {
                     })}
                   </div>
                 </div>
+
+                <LicenseAnalysisPanel tierId={l.id} analysis={analysis} />
 
                 {/* Action row */}
                 <div className="flex items-center justify-between pt-2">

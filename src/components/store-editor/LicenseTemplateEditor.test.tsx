@@ -53,11 +53,12 @@ describe('LicenseTemplateEditor', () => {
     render(<Harness initial={'Streams: {{streaming_limit}}\n{{#if credit_required}}\nCredit line\n{{/if}}'} />);
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     const text = () => screen.getByTestId('license-template-preview').textContent;
-    expect(text()).toBe('Streams: 5,000 streams\nCredit line');
+    expect(text()).toMatch(/^Streams: 5,000 streams\nCredit line\n\n## Schedule of Terms/);
     fireEvent.click(screen.getByRole('radio', { name: 'Sample exclusive' }));
-    expect(text()).toBe('Streams: Unlimited');
+    expect(text()).toMatch(/^Streams: Unlimited\n\n## Schedule of Terms/);
     fireEvent.click(screen.getByRole('radio', { name: 'Gold' }));
-    expect(text()).toBe('Streams: 250,000 streams');
+    expect(text()).toMatch(/^Streams: 250,000 streams\n\n## Schedule of Terms/);
+    expect(text()).toContain('Audio streams: 250,000 streams');
   });
 
   it('flags unknown placeholders and unclosed clauses', () => {
@@ -68,8 +69,13 @@ describe('LicenseTemplateEditor', () => {
   });
 
   it('shows no problem list for a clean template', () => {
-    render(<Harness initial={DEFAULT_TEMPLATE_MD} />);
+    render(<Harness initial={TIER_AWARE_TEMPLATE_MD} />);
     expect(screen.queryByTestId('license-template-problems')).toBeNull();
+  });
+
+  it('warns when wording contradicts the previewed tier, and says the schedule governs', () => {
+    render(<Harness initial={'Up to 9,999 audio streams.'} />);
+    expect(screen.getByTestId('license-template-problems').textContent).toMatch(/9,999 streams.*Schedule of Terms governs/);
   });
 
   it('re-measures the textarea height after chips, clause wraps and the defaults (LICENSE-01 auto-size)', () => {
