@@ -71,9 +71,10 @@ test('find a contact, read its role and what was sent, open it', async ({ page }
   await openList(page);
   const pia = row(page, 'Pia Press');
   await expect(pia).toBeVisible();
-  // The ROLE leads; the derived "sent music" kind is only a quiet hint, never an "Artist" badge.
+  // The ROLE leads; the derived "sent music" kind is only a tooltip on the sent column, never an "Artist" badge.
   await expect(pia).toContainText('Press');
-  await expect(pia).toContainText('Has been sent music');
+  await expect(pia).not.toContainText('Has been sent music');
+  await expect(pia.getByTitle('Has been sent music')).toHaveCount(1);
   await expect(pia).not.toContainText(/^Artist$/);
   await expect(pia).toContainText('2 sends · 3 tracks');
   await expect(pia).toContainText('Opened');
@@ -81,7 +82,7 @@ test('find a contact, read its role and what was sent, open it', async ({ page }
   await page.getByLabel(/Search contacts/).fill('pia');
   await expect(page.getByTestId('contact-row')).toHaveCount(1);
   // The whole row is the open target, not just the name.
-  await pia.click({ position: { x: 360, y: 12 } });
+  await pia.getByRole('link', { name: 'Open Pia Press' }).click({ position: { x: 300, y: 10 } });
   await expect(page).toHaveURL(/\/contacts\/c-press$/);
 });
 
@@ -194,3 +195,28 @@ for (const w of [1440, 390]) {
     }
   });
 }
+
+test.describe('chrome above the list at 390', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+  test('stats and Pipeline are one line, the filter row starts at Category, the sub-line has no kind hint', async ({ page }) => {
+    await stubApis(page, FIXTURE, SENDS);
+    await page.addInitScript(() => { try { localStorage.setItem('contacts.view', 'network'); } catch { /* */ } });
+    await page.goto('/contacts');
+    // Before anything is loaded or pressed, the filter row is at its start with Category fully inside the gutter.
+    const filters = page.getByRole('button', { name: /^Category/ });
+    await expect(filters).toBeVisible();
+    const start = await filters.evaluate((el) => {
+      const row = el.closest('.overflow-x-auto') as HTMLElement;
+      return { scroll: row.scrollLeft, left: el.getBoundingClientRect().left, search: (document.querySelector('input[aria-label^="Search contacts"]') as HTMLElement).getBoundingClientRect().left };
+    });
+    expect(start.scroll).toBe(0);
+    expect(Math.round(start.left)).toBe(Math.round(start.search));
+    await openList(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+    const bar = page.getByRole('button', { name: 'Send pipeline' }).locator('..');
+    expect((await bar.boundingBox())!.height).toBeLessThan(40);
+    await expect(bar).toContainText('to nudge');
+    // The kind hint is not printed in the row text (it lives in the sent column's tooltip and on the contact page).
+    await expect(row(page, 'Pia Press')).not.toContainText(/Has been sent music/i);
+  });
+});

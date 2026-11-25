@@ -602,7 +602,7 @@ export function ContactsView({
           />
 
           {allTags.length > 0 && (
-            <nav aria-label="Contact folders (tags)" className="-mx-1 mb-4 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 no-scrollbar">
+            <nav aria-label="Contact folders (tags)" className="-mx-4 mb-4 flex items-center gap-1.5 overflow-x-auto scroll-px-4 px-4 pb-1 no-scrollbar sm:-mx-1 sm:scroll-px-1 sm:px-1">
               <button
                 type="button"
                 aria-pressed={tagFilter.size === 0}

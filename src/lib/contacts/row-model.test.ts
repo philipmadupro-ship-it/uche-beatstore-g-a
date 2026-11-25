@@ -51,6 +51,12 @@ describe('summarizeSends', () => {
     expect(summarizeSends([{ sent_at: ago(1), status: 'placed', opened_at: ago(1) }], NOW).outcome).toBe('placed');
     expect(summarizeSends([{ sent_at: ago(1), status: 'pass' }], NOW).outcomeLabel).toBe('Passed');
   });
+  it('has one short word per outcome for the phone line', () => {
+    expect(summarizeSends([{ sent_at: ago(1), status: 'sent' }], NOW).outcomeShort).toBe('Unopened');
+    expect(summarizeSends([{ sent_at: ago(1), status: 'negotiating' }], NOW).outcomeShort).toBe('Talking');
+    expect(summarizeSends([{ sent_at: ago(1), status: 'interested' }], NOW).outcomeShort).toBe('Liked');
+    expect(summarizeSends([], NOW).outcomeShort).toBe('');
+  });
   it('stale means unanswered and unopened past the nudge window', () => {
     expect(summarizeSends([{ sent_at: ago(9), status: 'sent' }], NOW).stale).toBe(true);
     expect(summarizeSends([{ sent_at: ago(3), status: 'sent' }], NOW).stale).toBe(false);

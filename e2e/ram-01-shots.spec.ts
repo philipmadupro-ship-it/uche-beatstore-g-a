@@ -60,6 +60,8 @@ async function openContacts(page: Page, tab: string) {
   await page.goto('/contacts');
   await page.getByTitle('Refresh').click();
   await page.waitForTimeout(1000);
+  // Pressing Refresh on a phone scrolls the filter row; show it from its first control.
+  await page.evaluate(() => document.querySelectorAll('.overflow-x-auto').forEach((el) => { el.scrollLeft = 0; }));
   if (tab !== 'network') await page.getByRole('button', { name: TAB_NAME[tab] }).click();
   await page.waitForTimeout(800);
 }
@@ -86,6 +88,7 @@ for (const { w, h } of sizes) {
       await stubApis(page, makeContacts(500), false);
       await page.getByTitle('Refresh').click();
       await page.waitForTimeout(1200);
+      await page.evaluate(() => document.querySelectorAll('.overflow-x-auto').forEach((el) => { el.scrollLeft = 0; }));
       await shot(page, 'contacts-network-500', false);
     });
     test('workspace contact page', async ({ page }) => {

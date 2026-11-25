@@ -21,9 +21,9 @@ const PIPELINE_ROWS: [string, string][] = [
   ['sent', 'rgba(255,255,255,0.5)'],
 ];
 
-function Metric({ color, value, label }: { color: string; value: string | number; label: string }) {
+function Metric({ color, value, label, className = 'inline-flex' }: { color: string; value: string | number; label: string; className?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className={`shrink-0 items-center gap-1.5 whitespace-nowrap ${className}`}>
       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
       <span className="text-[11px] text-white font-medium tabular-nums">{value}</span>
       <span className="text-[11px] text-white/40">{label}</span>
@@ -34,14 +34,17 @@ function Metric({ color, value, label }: { color: string; value: string | number
 /** Single compact stats line. Pipeline funnel tucked behind a Popover. */
 export function ContactsStatsBar({ stats }: { stats: ContactsStats }) {
   return (
-    <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mb-5 px-1">
-      <Metric color="rgba(255,255,255,0.8)" value={stats.total.toLocaleString()} label="contacts" />
-      <span className="text-white/20">·</span>
+    <div className="mb-5 flex min-w-0 items-center gap-x-3 px-1 sm:gap-x-4">
+      {/* One line at every width. The header already counts contacts and the
+          response rate is the least useful figure, so a phone keeps the two
+          that ask for action; the rest return from sm up. */}
+      <Metric className="hidden sm:inline-flex" color="rgba(255,255,255,0.8)" value={stats.total.toLocaleString()} label="contacts" />
+      <span className="hidden text-white/20 sm:inline">·</span>
       <Metric color="#6DC6A4" value={stats.active} label="active" />
       <span className="text-white/20">·</span>
-      <Metric color="#e8a86a" value={stats.needNudge} label="need nudge" />
-      <span className="text-white/20">·</span>
-      <Metric color="#7aa8e8" value={`${stats.responseRate}%`} label="response" />
+      <Metric color="#e8a86a" value={stats.needNudge} label="to nudge" />
+      <span className="hidden text-white/20 sm:inline">·</span>
+      <Metric className="hidden sm:inline-flex" color="#7aa8e8" value={`${stats.responseRate}%`} label="response" />
 
       <Popover
         align="left"
@@ -50,11 +53,12 @@ export function ContactsStatsBar({ stats }: { stats: ContactsStats }) {
           <button
             ref={ref}
             onClick={toggle}
-            className={`ml-auto inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium border transition-colors ${
+            aria-label="Send pipeline"
+            className={`ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium transition-colors sm:px-3 ${
               open ? 'bg-white/10 border-white/30 text-white' : 'border-[var(--border)] text-white/80 hover:text-white hover:border-[var(--border-hover)]'
             }`}
           >
-            <BarChart3 size={12} /> Pipeline <ChevronDown size={11} className={open ? 'rotate-180' : ''} />
+            <BarChart3 size={12} aria-hidden /> <span className="hidden sm:inline">Pipeline</span> <ChevronDown size={11} aria-hidden className={open ? 'rotate-180' : ''} />
           </button>
         )}
       >

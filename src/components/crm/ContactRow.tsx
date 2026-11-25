@@ -107,6 +107,8 @@ export function ContactRow(p: ContactRowProps) {
   ];
 
   const lastText = summary.lastAt ? relativeDays(summary.lastAt) : null;
+  // One short word: a phone line has no room for a date after the role, and cutting mid-word helps nobody.
+  const phoneLine = summary.count > 0 ? summary.outcomeShort : null;
   const outcomeLine = summary.count > 0 ? [summary.outcomeLabel, lastText].filter(Boolean).join(' · ') : null;
 
   return (
@@ -140,9 +142,8 @@ export function ContactRow(p: ContactRowProps) {
           <span className="text-[11px] text-white/60">
             {role ?? 'No role set'}
             <span className="hidden sm:inline">{c.email ? ` · ${c.email}` : ''}</span>
-            {hint && <span className="hidden text-white/40 md:inline"> · {hint}</span>}
-            {/* Phone: the columns are hidden, so what was sent rides on this line. */}
-            <span className="md:hidden text-white/40">{outcomeLine ? ` · ${outcomeLine}` : ''}</span>
+            {/* Phone: the columns are hidden, so what was sent rides on this line, in short words. */}
+            <span className="md:hidden text-white/40">{phoneLine ? ` · ${phoneLine}` : ''}</span>
           </span>
         )}
         columns={(
@@ -156,7 +157,7 @@ export function ContactRow(p: ContactRowProps) {
                 onChanged={(next) => p.onStageChange(c.id, next)}
               />
             </div>
-            <div className={`${CONTACT_COLS.sent} min-w-0`}>
+            <div className={`${CONTACT_COLS.sent} pointer-events-auto min-w-0`} title={hint ?? undefined}>
               <p className="truncate text-[11px] text-white/80">{sentCountText(summary)}</p>
               {outcomeLine && (
                 <p className={`truncate text-[11px] ${summary.stale ? 'text-[#e8a86a]' : 'text-white/40'}`}>{outcomeLine}</p>

@@ -62,11 +62,17 @@ export interface SentSummary {
   outcome: SendOutcome;
   /** "Opened", "Not opened yet", "Interested"… empty when nothing was sent. */
   outcomeLabel: string;
+  /** One short word for a phone line: "Opened", "Unopened", "Liked", "Talking". */
+  outcomeShort: string;
   /** True when the latest send is unanswered and old enough to chase. */
   stale: boolean;
 }
 
 const STATUS_OUTCOME: Record<string, SendOutcome> = { interested: 'interested', negotiating: 'negotiating', placed: 'placed', pass: 'pass' };
+const OUTCOME_SHORT: Record<SendOutcome, string> = {
+  none: '', sent: 'Unopened', opened: 'Opened', clicked: 'Clicked', interested: 'Liked',
+  negotiating: 'Talking', placed: 'Placed', pass: 'Pass',
+};
 const OUTCOME_LABEL: Record<SendOutcome, string> = {
   none: '', sent: 'Not opened yet', opened: 'Opened', clicked: 'Clicked', interested: 'Interested',
   negotiating: 'Negotiating', placed: 'Placed', pass: 'Passed',
@@ -74,7 +80,7 @@ const OUTCOME_LABEL: Record<SendOutcome, string> = {
 
 /** What a contact has been sent, in the words a producer scans for. The latest send decides the outcome. */
 export function summarizeSends(sends: readonly SendLike[], now: number = Date.now(), nudgeAfterDays = 5): SentSummary {
-  if (sends.length === 0) return { count: 0, lastAt: null, tracks: 0, outcome: 'none', outcomeLabel: '', stale: false };
+  if (sends.length === 0) return { count: 0, lastAt: null, tracks: 0, outcome: 'none', outcomeLabel: '', outcomeShort: '', stale: false };
   let latest = sends[0];
   const tracks = new Set<string>();
   for (const s of sends) {
@@ -91,6 +97,7 @@ export function summarizeSends(sends: readonly SendLike[], now: number = Date.no
     tracks: tracks.size,
     outcome,
     outcomeLabel: OUTCOME_LABEL[outcome],
+    outcomeShort: OUTCOME_SHORT[outcome],
     stale: status === 'sent' && !latest.opened_at && age > nudgeAfterDays,
   };
 }

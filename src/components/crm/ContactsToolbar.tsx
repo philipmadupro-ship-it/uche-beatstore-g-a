@@ -97,7 +97,7 @@ export function ContactsToolbar(p: Props) {
       </div>
 
       {/* Filters, sort and utilities: one scrolling row on a phone, wrapping inline on desktop. */}
-      <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 no-scrollbar sm:mx-0 sm:contents sm:overflow-visible sm:px-0">
+      <div className="-mx-4 flex items-center gap-2 overflow-x-auto scroll-px-4 px-4 pb-0.5 no-scrollbar sm:mx-0 sm:contents sm:overflow-visible sm:px-0">
 
       {/* Category */}
       <FilterButton label="Category" badge={p.categoryFilter !== 'all' ? 1 : 0}>
